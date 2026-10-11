@@ -5,6 +5,9 @@
 //   * any method but GET / HEAD → 405 with `Allow: GET, HEAD`;
 //   * GET /healthz → JSON status (protocol `version`, release `app`, uptime, the served `build`, sockets, sessions,
 //     rooms, matches), never cached;
+//   * GET /client-build → the served client build tag;
+//   * the read-only transport routes (/ws-compression/status, /ws-compression/stats — upstream
+//     stronghold-ws-compression), declared before the static mount;
 //   * everything else → the static files (static.js).
 // A route that throws is logged and answers 500.
 
@@ -37,10 +40,11 @@ export function healthReport({ startedAt, network, registry, lobby, browserBuild
  * The request listener for `http.createServer`.
  * @param {{ serveStatic: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse,
  *             rawPath: string, query: string) => Promise<void>,
- *           health: Parameters<typeof healthReport>[0], log: object }} deps
+ *           health: Parameters<typeof healthReport>[0], log: object,
+ *           transportRoutes?: (req: import('node:http').IncomingMessage) => { status: number, headers: Record<string,string>, body: string } | null }} deps
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log }) {
+export function createRequestHandler({ serveStatic, health, log, transportRoutes }) {
   async function handleRequest(req, res) {
     const url = req.url || '/';
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
@@ -58,6 +62,12 @@ export function createRequestHandler({ serveStatic, health, log }) {
     }
     if (parts.rawPath === '/client-build') {
       sendJson(req, res, 200, { build: health.browserBuild });
+      return;
+    }
+    const readonly = transportRoutes?.(req);
+    if (readonly) {
+      res.writeHead(readonly.status, readonly.headers);
+      res.end(readonly.body);
       return;
     }
     await serveStatic(req, res, parts.rawPath, parts.query);

@@ -16,7 +16,7 @@ import { answerClientError } from './http/common.js';
 import { lanUrls, displayHost, isProcessEntry, runMain } from './http/boot.js';
 import { CombatWorkerPool } from './match/combat/pool.js';
 import { createHealthMetrics, serverLoadState, publicLoadDetails } from './healthMetrics.js';
-import { resolveWsCompression } from './wsCompression.js';
+import { resolveWsCompression, wsCompressionMode, createTransportRoutes } from './wsCompression.js';
 import { parseSnapshotHz } from './match/fields.js';
 
 export {
@@ -45,7 +45,8 @@ export function parseTrialWorkers(value) {
 export async function startServer(opts = {}) {
   const { port, host } = listenAddress(opts);
   const log = opts.log || makeLogger(!!opts.quiet);
-  const wsCompression = resolveWsCompression(opts.wsCompression ?? process.env.SP_WS_COMPRESSION ?? 'off');
+  const wsMode = wsCompressionMode(process.env, opts.wsCompression);
+  const wsCompression = resolveWsCompression(wsMode);
   const snapshotHz = parseSnapshotHz(opts.snapshotHz ?? process.env.SP_SNAPSHOT_HZ);
   const combatWorkers = parseCombatWorkers(opts.combatWorkers ?? process.env.SP_COMBAT_WORKERS);
   const trialSetting = opts.trialWorkers ?? process.env.SP_TRIAL_WORKERS;
@@ -93,7 +94,9 @@ export async function startServer(opts = {}) {
   }
   const health = { startedAt, network, registry, lobby, browserBuild, combatPool, trialPool, trialStartupFailed,
     getHealthMetrics: () => healthMetrics };
-  const server = http.createServer(createRequestHandler({ serveStatic, health, log }));
+  // The read-only transport surface (upstream stronghold-ws-compression): declared before the static mount.
+  const transportRoutes = createTransportRoutes({ mode: wsMode, sockets: () => network.connectionCount, startedAt });
+  const server = http.createServer(createRequestHandler({ serveStatic, health, log, transportRoutes }));
   server.on('clientError', answerClientError);
   const wss = attachWebSocket(server, { network, log, wsCompression });
 

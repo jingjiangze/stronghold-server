@@ -8,9 +8,9 @@ import { NET_DEFAULTS, encode, send, sendRaw } from '../server/net.js';
 import { resolveWsCompression, isCompressibleType, parseExtraCompressibleTypes, compressibleTypes, BASE_COMPRESSIBLE_TYPES, DEFAULT_EXTRA_COMPRESSIBLE_TYPES } from '../server/wsCompression.js';
 import { PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 
-// Base whitelist for this fork: the audited battle-traffic set plus the fork's own damage-board streams.
-const TYPES = ['b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result', 'm.damage'];
-// The subset the encode-once lobby path (sendEncodedToPlayer) accepts; all of them are compressible.
+// The upstream module's base whitelist (jingjiangze/stronghold-ws-compression) — the audited battle-traffic set.
+const TYPES = ['b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result'];
+// The subset the encode-once lobby path (sendEncodedToPlayer) accepts; the whitelisted ones are compressible.
 const ENCODED_TYPES = ['b.snap', 'b.ev', 'm.field', 'm.damage', 'b.damage'];
 const EXPECTED_OPTIONS = {
   // 64, not the 512 this shipped with: ws treats `threshold` as a hard off switch — below it the frame goes out
