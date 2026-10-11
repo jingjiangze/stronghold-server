@@ -8,7 +8,7 @@
     {
       "id": "modelscope",
       "base": "https://modelscope.cn/datasets/jingjiangze/Stronghold-Protocol-Assets/resolve/master/releases/v1-trial",
-      "note": "自建数据集镜像（公开）。15,979 assets + 7 fonts，逐字节校验过，Range 返 206，ACAO 可用。用 master 而不是钉 40-hex：镜像还在追加文件，钉版会让新素材在换版前不可见。"
+      "note": "自建数据集镜像（公开）。15,979 assets + 7 fonts，逐字节校验过，Range 返 206，ACAO 可用，直连比 r2 快约 3×。**不钉 40hex**（2026-10-11 决定）：镜像还在追加文件，钉死后新素材要等换版才可见；路径本身不变，可变 master 不会让同一路径指向不同内容。"
     },
     {
       "id": "r2",
