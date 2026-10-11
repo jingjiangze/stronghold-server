@@ -100,22 +100,27 @@ test('an unreadable sources file turns the jump off instead of failing requests'
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('every skin path in the committed manifest is jumpable with the shipped sources.json', () => {
+test('every path in the committed manifest is jumpable — or a fonts URL (absolute by design)', () => {
   const jump = createAssetJump({ sourcesPath: path.join(ROOT, 'deploy/stardust/ms-edge/sources.json'), log: silent });
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/assets.json'), 'utf8'));
-  const skins = manifest.skins || {};
-  assert.equal(Object.keys(skins).length, 271, '271 skins in data/assets.json');
+  assert.equal(Object.keys(manifest.skins || {}).length, 271, '271 skins in data/assets.json');
+
   const urls = [];
-  for (const rec of Object.values(skins)) {
-    for (const face of ['front', 'back']) {
-      const f = rec?.spine?.[face];
-      if (!f) continue;
-      for (const u of [f.skel, f.atlas, ...(f.textures || [])]) if (typeof u === 'string' && u) urls.push(u);
-    }
-    for (const k of ['avatar', 'portrait', 'illustration']) if (typeof rec?.[k] === 'string') urls.push(rec[k]);
-  }
-  const unique = [...new Set(urls)];
-  assert.ok(unique.length > 2000, `${unique.length} skin files`);
-  const dead = unique.filter((u) => !jump(u, '', 'GET'));
-  assert.deepEqual(dead, [], 'every skin file must 302 (a manifest path the jump rejects would 404 for players)');
+  (function walk(o) {
+    if (typeof o === 'string') urls.push(o);
+    else if (Array.isArray(o)) o.forEach(walk);
+    else if (o && typeof o === 'object') Object.values(o).forEach(walk);
+  })(manifest);
+  const rel = [...new Set(urls.filter((u) => u.startsWith('/')))];
+  const abs = [...new Set(urls.filter((u) => /^https?:\/\//.test(u)))];
+  assert.ok(rel.length > 13000, `${rel.length} relative asset paths`);
+
+  // A relative path the jump rejects (extension / shape) would 404 for every player — none may fail.
+  const dead = rel.filter((u) => { const [p, q] = u.split('?'); return !jump(p, q || '', 'GET'); });
+  assert.deepEqual(dead, [], 'every relative manifest path must 302 (tools/relativize-assets-manifest.mjs)');
+
+  // Absolute URLs stay for the fonts only: fonts.css uses root-absolute url() and must come from its own origin,
+  // and CSS is deliberately outside the jump allow-list (see deploy/stardust/ms-edge/README.md).
+  const badAbs = abs.filter((u) => !/^https:\/\/weishucdn\.jiangjiangze\.icu\/fonts\//.test(u));
+  assert.deepEqual(badAbs, [], 'absolute URLs may only be the /fonts/ files');
 });
