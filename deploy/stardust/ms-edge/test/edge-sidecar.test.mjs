@@ -180,6 +180,32 @@ test('the shipped sources.json is well formed and names a full source first', ()
   assert.equal(shipped.exceptions.get(REJECTED), shipped.byId.get('r2'));
 });
 
+// OpenI is the fastest source measured, and unusable for the browser: its ACAO is hardcoded to a
+// third-party domain and it ignores Range on binaries. So it stays reachable *only* by name —
+// a consumer that knows it does not need CORS (a direct download, a build-time fetch) can ask for
+// it, and the default path can never land there.
+test('a source outside order is reachable only when named explicitly', () => {
+  const cfg = parseSources(JSON.stringify({
+    order: ['a'],
+    sources: [
+      { id: 'a', base: 'https://a.example' },
+      { id: 'openi', base: 'https://openi.example' },
+    ],
+  }));
+  assert.equal(decide(cfg, { pathname: '/assets/x.png' }).location, 'https://a.example/assets/x.png');
+  assert.equal(
+    decide(cfg, { pathname: '/assets/x.png', query: 'sp_source=openi' }).location,
+    'https://openi.example/assets/x.png',
+  );
+});
+
+test('the shipped sources.json keeps openi out of the default order', () => {
+  const shipped = parseSources(fs.readFileSync(path.join(HERE, '..', 'sources.json'), 'utf8'));
+  assert.ok(shipped.byId.has('openi'), 'openi stays available as an explicitly named channel');
+  assert.ok(!shipped.order.includes('openi'), 'openi must never be a default target: no usable CORS');
+  assert.equal(shipped.order[0], 'modelscope', 'the CORS-clean, fastest source leads');
+});
+
 test('the extension allowlist and the path rules agree on what the tree contains', () => {
   // Guards against someone widening SEGMENT or ALLOWED_EXT into something that accepts a path
   // traversal: every rejected shape must stay rejected.
