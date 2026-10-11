@@ -17,6 +17,12 @@ import { decide, parseSources } from '../../deploy/stardust/ms-edge/edge-sidecar
 /** 排名端点（R2 上的静态 rank.json，speedcdn/weishucdn 同桶）。取不到就用 sources.json 的静态 order。 */
 export const DEFAULT_RANK_URL = 'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json';
 export const RANK_TTL_MS = 300_000;
+/**
+ * 排名里的 id → 边缘源表的 id。两边的命名不同名（CDN 侧叫 ms-dataset/ms-edge/r2-alt，边缘侧叫
+ * modelscope/r2），而且 **ms-edge 就是本容器自己**——映射成 null 表示"跳过"：否则边缘会 302 到自己，
+ * 客户端跟着无限跳。未列出的 id 按同名处理（两边同名时零配置即可用）。
+ */
+export const RANK_ID_MAP = { 'ms-dataset': 'modelscope', 'r2': 'r2', 'r2-alt': 'r2', 'ms-edge': null };
 
 export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-edge', 'sources.json');
 
@@ -48,7 +54,11 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       try {
         const res = await fetchImpl(rankUrl, { signal: AbortSignal.timeout(4000) });
         const doc = await res.json();
-        const ids = (doc?.rank || []).filter((r) => r && r.excluded !== true && r.usable !== false).map((r) => r.id).filter((id) => config.byId.has(id));
+        const mapped = (doc?.rank || [])
+          .filter((r) => r && r.excluded !== true && r.usable !== false)
+          .map((r) => (Object.prototype.hasOwnProperty.call(RANK_ID_MAP, r.id) ? RANK_ID_MAP[r.id] : r.id))
+          .filter((id) => typeof id === 'string' && id && config.byId.has(id));   // null（自身）与未知 id 一并丢掉
+        const ids = [...new Set(mapped)];
         if (ids.length) {
           const rest = config.order.filter((id) => !ids.includes(id));   // 未进榜的已配置源接在后面
           ranked = [...ids, ...rest]; rankedAt = Date.now();
