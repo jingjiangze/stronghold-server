@@ -186,7 +186,7 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
       } else if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR' || e.code === 'EISDIR' || e.code === 'ENAMETOOLONG')) {
         // A missing asset (this image carries no art) → 302 to the asset source. Local files never get here:
         // the jump only answers paths whose file is absent (server/http/asset-jump.js, same rules as the edge sidecar).
-        const jumped = assetJump ? assetJump(decoded, query, req.method) : null;
+        const jumped = assetJump ? assetJump(decoded, query, req.method, assetJump.config ? assetJump.config() : null) : null;
         if (jumped) { res.writeHead(jumped.status, jumped.headers); res.end(); return; }
         sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
       } else if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {

@@ -14,6 +14,10 @@ import path from 'node:path';
 import { ROOT, noopLog } from './config.js';
 import { decide, parseSources } from '../../deploy/stardust/ms-edge/edge-sidecar.mjs';
 
+/** 排名端点（R2 上的静态 rank.json，speedcdn/weishucdn 同桶）。取不到就用 sources.json 的静态 order。 */
+export const DEFAULT_RANK_URL = 'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json';
+export const RANK_TTL_MS = 300_000;
+
 export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-edge', 'sources.json');
 
 /**
@@ -22,7 +26,7 @@ export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-ed
  * @param {{ sourcesPath?: string, disabled?: boolean, log?: { info?: Function, warn?: Function } }} [opts]
  * @returns {(pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null}
  */
-export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog } = {}) {
+export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || DEFAULT_RANK_URL, fetchImpl = globalThis.fetch } = {}) {
   if (disabled) {
     log.info?.('[http] asset jump: disabled (SP_ASSET_JUMP=0)');
     return () => null;
@@ -35,9 +39,39 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     return () => null;
   }
   log.info?.(`[http] asset jump: on — order=${config.order.join(' > ')}, exceptions=${config.exceptions.size} (${sourcesPath})`);
+  // 动态次序：rank.json 把实测最快的源排在前面。只在**已配置的源**里取（不引入未知 id），
+  // 取不到/解析失败就沿用静态 order——排名是优化，不是依赖。
+  let ranked = null, rankedAt = 0, inflight = null;
+  function refresh() {
+    if (inflight || !rankUrl || !fetchImpl) return;
+    inflight = (async () => {
+      try {
+        const res = await fetchImpl(rankUrl, { signal: AbortSignal.timeout(4000) });
+        const doc = await res.json();
+        const ids = (doc?.rank || []).filter((r) => r && r.excluded !== true && r.usable !== false).map((r) => r.id).filter((id) => config.byId.has(id));
+        if (ids.length) {
+          const rest = config.order.filter((id) => !ids.includes(id));   // 未进榜的已配置源接在后面
+          ranked = [...ids, ...rest]; rankedAt = Date.now();
+          log.info?.(`[http] asset jump: rank → ${ranked.join(' > ')}`);
+        }
+      } catch (e) {
+        log.warn?.(`[http] asset jump: rank unavailable (${e?.message || e}) — using the static order`);
+      } finally { inflight = null; }
+    })();
+  }
+  /** 同步返回当前有效配置（后台按 TTL 刷新）：请求路径上永不等待网络。 */
+  const effective = () => {
+    if (!ranked || Date.now() - rankedAt >= RANK_TTL_MS) refresh();
+    return ranked ? { ...config, order: ranked } : config;
+  };
+  refresh();   // 启动即预热
+
   // 只把 302 交出去：其余判定（404/405/204）保持 static.js 原有的行为，避免同一个 404 有两种样子。
-  return (pathname, query, method) => {
-    const out = decide(config, { method, pathname, query });
+  /** 取（可能被 rank 覆盖过 order 的）当前配置：static.js 在每次请求前 await 一次，命中缓存时是零成本。 */
+  const jump = (pathname, query, method, cfg = null) => {
+    const out = decide(cfg || config, { method, pathname, query });
     return out.status === 302 ? { status: out.status, headers: out.headers } : null;
   };
+  jump.config = effective;
+  return jump;
 }
