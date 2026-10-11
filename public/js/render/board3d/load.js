@@ -1,6 +1,6 @@
 // render/board3d/load.js — loading of three.js and the official board art (local-client extraction, DESIGN §13/§15).
 //
-//   const THREE = await loadThree()            // '/vendor/three.module.js' (tools/vendor.mjs), null when missing
+//   const THREE = await loadThree()            // the vendored three.js ESM build (tools/vendor.mjs), null when missing
 //   const pack = await loadBoardPack(assets)   // null when the board art is not installed (→ 2D board)
 //   → { key, images: { D, N?, R?, E?, common?, commonE?, BG?, wind?, gate?, waterN?, caustics?, noise? },
 //       meshes: { crate?, blower?, bgPlane?, gate: { startDown?, startUp?, startBack?, endDown?, endUp? } },
@@ -14,7 +14,10 @@ import { resolveUvTable } from './atlas.js';
 import { parseObj } from './obj.js';
 import { fetchMaterial } from '../../materialFallback.js';
 
-export const THREE_URL = '/vendor/three.module.js';
+// Relative like every other specifier in the tree: the client can be served from a CDN under a path prefix, and a
+// root-absolute '/vendor/…' would resolve against the origin and leave that prefix. loadThree() hands this to a
+// dynamic import(), which resolves it against this module.
+export const THREE_URL = '../../../vendor/three.module.js';
 
 let threePromise = null;
 /** Dynamic import of the vendored three.js ESM build (browser only); null when unavailable. */

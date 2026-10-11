@@ -3,22 +3,22 @@
 // refresh / freeze / level / ready / reward / choice / band …), so drag & drop and every button can be
 // exercised. Combat phases stream b.snap / b.ev at 20 Hz through net._emit like the real socket.
 
-import '/js/ui/compat.js';
-import { render } from '/vendor/preact.module.js';
-import { installDeviceSupport } from '/js/ui/device.js';
-import { html, UiHosts } from '/js/ui/components.js';
-import { ToastHost, toast } from '/js/ui/toasts.js';
-import { ConnectionBanner } from '/js/ui/connBanner.js';
-import { GuideHost } from '/js/ui/guide.js';
-import { GameScreen } from '/js/screens/game.js';
-import { store, emptyMatch, selectRoute } from '/js/store.js';
-import { net, NetError } from '/js/net.js';
-import { data } from '/js/data.js';
-import { installAudio } from '/js/audio.js';
-import { settingsStore } from '/js/ui/settings.js';
-import { awayStore } from '/js/ui/matchChrome.js';
-import { GAME_FILES } from '/js/ui/gameComponents.js';
-import { PHASE, GEO } from '/shared/constants.js';
+import '../js/ui/compat.js';
+import { render } from '../vendor/preact.module.js';
+import { installDeviceSupport } from '../js/ui/device.js';
+import { html, UiHosts } from '../js/ui/components.js';
+import { ToastHost, toast } from '../js/ui/toasts.js';
+import { ConnectionBanner } from '../js/ui/connBanner.js';
+import { GuideHost } from '../js/ui/guide.js';
+import { GameScreen } from '../js/screens/game.js';
+import { store, emptyMatch, selectRoute } from '../js/store.js';
+import { net, NetError } from '../js/net.js';
+import { data } from '../js/data.js';
+import { installAudio } from '../js/audio.js';
+import { settingsStore } from '../js/ui/settings.js';
+import { awayStore } from '../js/ui/matchChrome.js';
+import { GAME_FILES } from '../js/ui/gameComponents.js';
+import { PHASE, GEO } from '../shared/constants.js';
 
 const params = new URLSearchParams(location.search);
 const SHOT = params.get('shot') === '1';

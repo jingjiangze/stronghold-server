@@ -18,6 +18,10 @@
 //
 // Traversal & dotfile protection, a directory without its trailing slash → 301, 404 page; an absent
 // data/local-assets.json is answered with an empty manifest. Files go out through files.js serveFile.
+//
+// An install whose art lives on a mirror instead of on disk (no public/fonts/) answers a missing /fonts/… request
+// with a 302 to the URL the pinned manifest names for it (asset-cdn.js) instead of a 404, so the stylesheet
+// public/index.html links still loads and the game keeps its real fonts instead of the system fallbacks.
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -25,6 +29,7 @@ import { MEDIA_PREFIX } from '../../shared/media.js';
 import { ROOT, noopLog } from './config.js';
 import { sendError, sendJson } from './common.js';
 import { MIME, GzipCache, isNotModified, serveFile } from './files.js';
+import { createAssetCdn } from './asset-cdn.js';
 import { serveMedia } from './media.js';
 import { createPackRegistry } from '../packs.js';
 import { PACKS_URL, PACK_INDEX_FILE } from '../../shared/packs.js';
@@ -51,12 +56,14 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
 /**
  * Create the static request handler.
  * @param {{ publicDir: string, dataDir: string, sharedDir: string, simDir?: string, packsDir?: string,
- *   packs?: ReturnType<typeof createPackRegistry>, log?: object }} dirs
+ *   packs?: ReturnType<typeof createPackRegistry>, assetCdn?: ReturnType<typeof createAssetCdn>, log?: object }} dirs
  *   packs: the server's pack registry (default: one over publicDir, dataDir and packsDir — ROOT/packs)
+ *   assetCdn: the /fonts/ mirror fallback (default: one over dataDir/assets.json)
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, rawPath: string, query: string) => Promise<void>}
  */
-export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog }) {
+export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, assetCdn = null, log = noopLog }) {
   const registry = packs || createPackRegistry({ publicDir, dataDir, packsDir }, { log: /** @type {any} */ (log) });
+  const cdn = assetCdn || createAssetCdn({ manifestPath: path.join(path.resolve(dataDir), 'assets.json'), log });
   const mounts = [
     { prefix: '/data/', name: 'data', dir: path.resolve(dataDir) },
     { prefix: '/shared/', name: 'shared', dir: path.resolve(sharedDir) },
@@ -145,7 +152,16 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
         res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache', 'Content-Length': EMPTY_LOCAL_ART.length });
         res.end(req.method === 'HEAD' ? undefined : EMPTY_LOCAL_ART);
       } else if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR' || e.code === 'EISDIR' || e.code === 'ENAMETOOLONG')) {
-        sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
+        // No public/fonts/ in this image (the art lives on the mirror): point the browser at the URL the pinned
+        // manifest names instead of 404-ing the stylesheet on every load. Cached as long as files.js caches the
+        // font files themselves, so the redirect does not turn into per-load traffic for the app server.
+        const cdnUrl = await cdn.fontUrl(decoded, query);
+        if (cdnUrl) {
+          res.writeHead(302, { Location: cdnUrl, 'Cache-Control': 'public, max-age=86400', 'Content-Length': 0 });
+          res.end();
+        } else {
+          sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
+        }
       } else if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
         sendError(req, res, 403, '禁止访问 · Forbidden');
       } else {
