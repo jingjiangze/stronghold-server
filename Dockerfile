@@ -54,9 +54,13 @@ FROM ${NODE_IMAGE}
 # 边缘层：nginx + lua-nginx-module 做素材的 302 分流（deploy/stardust/ms-edge/）。
 # OpenResty 官方不提供 alpine 包、也没有 Windows 构建；nginx-mod-http-lua 就是同一套
 # lua-nginx-module（OpenResty = nginx + 该模块 + LuaJIT），所以这里直接装等价组件。
-# 用 aliyun 镜像源：构建机在境内，alpine 官方源实测不可达。
-RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
- && apk add --no-cache nginx nginx-mod-http-lua lua-resty-core lua-resty-lrucache lua5.1-cjson \
+# 用 aliyun 镜像源：构建机在境内，alpine 官方源实测不可达；万一 aliyun 也不通就退回原源，
+# 不让一个镜像站的可用性把整个构建钉死。
+RUN cp /etc/apk/repositories /tmp/repos.bak \
+ && sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
+ && (apk add --no-cache nginx nginx-mod-http-lua luajit lua-resty-core lua-resty-lrucache lua5.1-cjson \
+     || { cp /tmp/repos.bak /etc/apk/repositories; \
+          apk add --no-cache nginx nginx-mod-http-lua luajit lua-resty-core lua-resty-lrucache lua5.1-cjson; }) \
  && mkdir -p /tmp/sp-edge \
  && chown -R node:node /tmp/sp-edge
 
@@ -64,6 +68,7 @@ RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 # (deploy_schema.json: port.const = 7860；8080 被平台进程占用)
 # nginx 占 7860（对外），游戏本体退到 127.0.0.1:3000（enrtypoint.sh 里导出 PORT）。
 ENV NODE_ENV=production \
+    SP_PUBLIC_PORT=7860 \
     SP_GAME_PORT=3000 \
     PORT=3000 \
     HOST=127.0.0.1
@@ -83,6 +88,14 @@ COPY deploy/stardust/ms-edge/edge.lua /app/deploy/stardust/ms-edge/edge.lua
 COPY deploy/stardust/ms-edge/sources.json /app/deploy/stardust/ms-edge/sources.json
 COPY deploy/stardust/ms-edge/entrypoint.sh /app/deploy/stardust/ms-edge/entrypoint.sh
 RUN chmod +x /app/deploy/stardust/ms-edge/entrypoint.sh
+
+# 构建期就验一次，而不是让容器上线后崩在起不来：一个坏的 nginx 配置或一段编译不过的 Lua
+# 应该让这次构建失败（旧镜像继续服务），而不是产出一个 restart 循环的镜像。
+#   luajit -e loadfile : 只编译不执行——edge.lua 顶层就调 ngx.*，执行需要 nginx 环境。
+#   nginx -t           : 解析整个配置（含 load_module）。
+# 注意 nginx -t 不读 *_by_lua_file 的内容，所以这两条缺一不可。
+RUN luajit -e "assert(loadfile('/app/deploy/stardust/ms-edge/edge.lua'))" \
+ && nginx -t -c /app/deploy/stardust/ms-edge/nginx.conf
 
 USER node
 EXPOSE 7860
