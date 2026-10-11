@@ -151,7 +151,7 @@ test('the server: GET /packs/index.json lists the packs live, GET /packs/<id>/<f
 });
 
 test('manifest: common fields, type fields, app ranges; English is a pack like any other', () => {
-  assert.deepEqual(Object.entries(PACK_TYPES).map(([k, v]) => [k, v.status]), [['lang', 'supported'], ['assets', 'planned'], ['data', 'planned']]);
+  assert.deepEqual(Object.entries(PACK_TYPES).map(([k, v]) => [k, v.status]), [['lang', 'supported'], ['assets', 'planned'], ['data', 'planned'], ['workshop', 'supported']]);
   for (const [range, v, ok] of [['>=0.2.0', '0.2.0-dev', true], ['>=0.2.0', '0.1.4', false], ['0.2.x', '0.2.7', true], ['0.2.x', '0.3.0', false],
     ['^0.2.1', '0.2.9', true], ['^0.2.1', '0.3.0', false], ['^1.2.0', '1.9.0', true], ['~0.2.1', '0.2.0', false], ['>=0.2.0 <0.3.0', '0.2.5', true],
     ['>=0.2.0 <0.3.0', '0.3.0', false], ['0.1.x || 0.2.x', '0.2.0', true], ['*', '9.9.9', true], ['', '0.0.1', true], ['0.2.0', '0.2.1', false]]) {
