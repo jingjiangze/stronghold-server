@@ -1,5 +1,5 @@
 {
-  "_comment": "边缘层的分流表。容器的 /assets/** 与 /fonts/** 按这里的顺序 302 出去，字节从不落在容器上。",
+  "_comment": "边缘层的分流表。容器的 /assets/** 与 /fonts/** 按这里的顺序 302 出去，字节从不落在容器上。镜像对应：r2 = 第一镜像（weishucdn）；openi = 第二镜像（OpenI，浏览器 CORS 不可用，仅 ?sp_source=openi 点名可达）；modelscope = 第三镜像（ModelScope 创空间）的 HTTP 运行时形态——创空间 cdn 分支本身无文件直链、只作 git 镜像，其同族数据集即本条目，也是默认 302 目标。",
   "_order_note": "这是静态顺序，不是实时测速：容器在 ModelScope 机房，玩家在全国各地，容器量出来的链路速度不代表玩家的。真正按玩家网络选最快是客户端 pick.js 的事，两者分工。客户端可用 ?sp_source=<id> 覆盖这里的顺序。",
   "_order_basis": "顺序按直连实测（本机 --noproxy，非代理）：小文件 TTFB modelscope 0.21s / r2 0.66s；855 KB 大文件 modelscope 0.26s(3.3 MB/s) / r2 1.9s(0.4 MB/s)。",
   "schemaVersion": 1,
@@ -8,7 +8,7 @@
     {
       "id": "modelscope",
       "base": "https://modelscope.cn/datasets/jingjiangze/Stronghold-Protocol-Assets/resolve/master/releases/v1-trial",
-      "note": "自建数据集镜像（公开）。15,979 assets + 7 fonts，逐字节校验过，Range 返 206，ACAO 可用，直连比 r2 快约 3×。**不钉 40hex**（2026-10-11 决定）：镜像还在追加文件，钉死后新素材要等换版才可见；路径本身不变，可变 master 不会让同一路径指向不同内容。"
+      "note": "自建数据集镜像（公开；= 第三镜像 ModelScope 创空间 的运行时入口，见本文件 _comment）。15,979 assets + 7 fonts，逐字节校验过，Range 返 206，ACAO 可用，直连比 r2 快约 3×。**不钉 40hex**（2026-10-11 决定）：镜像还在追加文件，钉死后新素材要等换版才可见；路径本身不变，可变 master 不会让同一路径指向不同内容。"
     },
     {
       "id": "r2",
