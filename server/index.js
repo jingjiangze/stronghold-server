@@ -85,13 +85,15 @@ export async function startServer(opts = {}) {
     }));
     packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
     packs.refresh(true);
-    // The asset manifest is the one file this platform's container FS re-reads slowly (a lazy-pulled mount:
-    // ~27 s per full response on the ModelScope studio, measured 2026-10-11, while every other file was fast).
-    // Read it once at boot and serve from memory — see createStaticHandler's `warm`.
+    // The asset manifest is the one file this platform's edge serves slowly (~140-270 KB/s per full response,
+    // measured 2026-10-11, while every other /data/*.json was fast) and the web client abandons the art manifest
+    // after 8 s — so the canonical URL 302s to a fresh one served from memory. See createStaticHandler's
+    // `warm` / `manifestAlias`.
     serveStatic = createStaticHandler({
       publicDir, dataDir, sharedDir, packsDir, packs, log,
       assetJump: createAssetJump({ log }),
       warm: [path.join(dataDir, 'assets.json')],
+      manifestAlias: { from: '/data/assets.json', to: '/data/assets-manifest.json', file: path.join(dataDir, 'assets.json') },
     });
     browserBuild = computeBuildTag(ROOT, publicDir);
   } catch (e) {

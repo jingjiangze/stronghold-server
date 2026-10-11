@@ -52,15 +52,19 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
  * Create the static request handler.
  * @param {{ publicDir: string, dataDir: string, sharedDir: string, simDir?: string, packsDir?: string,
  *   packs?: ReturnType<typeof createPackRegistry>, log?: object, warm?: string[],
+ *   manifestAlias?: { from: string, to: string, file: string } | null,
  *   assetJump?: ((pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null) | null }} dirs
  *   packs: the server's pack registry (default: one over publicDir, dataDir and packsDir — ROOT/packs)
  *   assetJump: missing /assets|fonts files are 302ed to the asset source (server/http/asset-jump.js) — local files still win
  *   warm: absolute paths read once at boot and then served from memory (server/http/files.js loadWarmFile);
- *         for files the container FS re-reads slowly (a lazy-pulled mount: /data/assets.json cost ~27 s per response
- *         on the ModelScope studio, 2026-10-11). The promise is exposed as `handler.warmReady`.
+ *         for files the container FS re-reads slowly. The promise is exposed as `handler.warmReady`.
+ *   manifestAlias: some edges are slow for one specific URL (measured 2026-10-11: the ModelScope studio served
+ *         /data/assets.json at ~140-270 KB/s while every other /data/*.json was fast, and the web client gives up
+ *         on the art manifest after 8 s). `from` is answered with a 302 to `to`, and `to` serves `file` from the
+ *         warm copy — the client is unchanged, only the URL spelling changes.
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, rawPath: string, query: string) => Promise<void>}
  */
-export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null, warm = [] }) {
+export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null, warm = [], manifestAlias = null }) {
   const registry = packs || createPackRegistry({ publicDir, dataDir, packsDir }, { log: /** @type {any} */ (log) });
   // Read the warm list once, off the request path: the bytes (and the gzip) stay in memory for this process' life.
   /** @type {Map<string, { raw: Buffer, gz: Buffer | null, stat: import('node:fs').Stats }>} */
@@ -75,6 +79,9 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
       log.warn?.(`[http] warm: cannot preload ${abs}: ${e?.message || e}`);
     }
   }));
+  const alias = manifestAlias && typeof manifestAlias.from === 'string' && typeof manifestAlias.to === 'string' && typeof manifestAlias.file === 'string'
+    ? { from: manifestAlias.from, to: manifestAlias.to, file: path.resolve(manifestAlias.file) }
+    : null;
   const mounts = [
     { prefix: '/data/', name: 'data', dir: path.resolve(dataDir) },
     { prefix: '/shared/', name: 'shared', dir: path.resolve(sharedDir) },
@@ -91,6 +98,20 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
     try { decoded = decodeURIComponent(rawPath); } catch { sendError(req, res, 400, '请求地址无效 · Bad request'); return; }
     if (!decoded.startsWith('/') || decoded.includes('\0') || decoded.includes('\\')) {
       sendError(req, res, 400, '请求地址无效 · Bad request');
+      return;
+    }
+    // The manifest alias (see the option's doc): 302 the canonical URL to the fresh one; serve the fresh one
+    // from the warm copy — same bytes, same ETag/range/gzip semantics as the file on disk.
+    if (alias && decoded === alias.from) {
+      res.writeHead(302, { Location: alias.to, 'Cache-Control': 'no-cache', 'Content-Length': 0 });
+      res.end();
+      return;
+    }
+    if (alias && decoded === alias.to) {
+      const entry = warmCache.get(alias.file);
+      const stat = entry ? entry.stat : await fsp.stat(alias.file).catch(() => null);
+      if (!stat || !stat.isFile()) { sendError(req, res, 404, '页面不存在 · Not found'); return; }
+      await serveFile(req, res, alias.file, stat, 'data', [path.basename(alias.file)], query, gzipCache, log, entry || null);
       return;
     }
     if (decoded === '/data.js') {

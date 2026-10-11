@@ -102,3 +102,43 @@ test('warm 缺失/读不到时不影响正常服务（回落到磁盘路径）',
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('manifestAlias：旧 URL 302 到新 URL，新 URL 从 warm 副本出（identity/gzip/304）', async () => {
+  const { dir, dataDir } = makeDir();
+  const manifestPath = path.join(dataDir, 'assets.json');
+  const handler = createStaticHandler({
+    publicDir: path.join(ROOT, 'public'), dataDir, sharedDir: path.join(ROOT, 'shared'), log: silent,
+    warm: [manifestPath],
+    manifestAlias: { from: '/data/assets.json', to: '/data/assets-manifest.json', file: manifestPath },
+  });
+  const srv = http.createServer((req, res) => {
+    const [p, q] = req.url.split('?');
+    handler(req, res, p, q || '');
+  });
+  await new Promise((resolve) => srv.listen(0, '127.0.0.1', resolve));
+  try {
+    await handler.warmReady;
+    const hop = await req(srv, '/data/assets.json');
+    assert.equal(hop.status, 302);
+    assert.equal(hop.headers.location, '/data/assets-manifest.json');
+    assert.equal(hop.body.length, 0);
+
+    const alias = await req(srv, '/data/assets-manifest.json');
+    assert.equal(alias.status, 200);
+    assert.equal(alias.body.toString('utf8'), MANIFEST);
+
+    const gz = await req(srv, '/data/assets-manifest.json', { headers: { 'accept-encoding': 'gzip' } });
+    assert.equal(gz.status, 200);
+    assert.equal(gz.headers['content-encoding'], 'gzip');
+    assert.equal(zlib.gunzipSync(gz.body).toString('utf8'), MANIFEST);
+
+    const fresh = await req(srv, '/data/assets-manifest.json', { headers: { 'if-none-match': String(alias.headers.etag) } });
+    assert.equal(fresh.status, 304);
+
+    // 没配置时旧行为不变：/data/assets.json 直接 200（前面的用例已覆盖），这里只断言 alias 有配置时也仍可读另一份数据文件
+    assert.equal((await req(srv, '/data/chess.json')).status, 404); // 临时目录里没有它 → 404（不是被 alias 规则误伤）
+  } finally {
+    srv.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
