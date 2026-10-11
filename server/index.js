@@ -8,6 +8,7 @@ import { getData, loadData } from './data.js';
 import { ROOT, listenAddress, bindCandidates, serveDirs, makeLogger, parseTrustProxy } from './http/config.js';
 import { WS_MAX_PAYLOAD, createSessionStack, attachWebSocket } from './http/websocket.js';
 import { DATA_SHIM_JS, createStaticHandler } from './http/static.js';
+import { createAssetJump } from './http/asset-jump.js';
 import { createPackRegistry } from './packs.js';
 import { MIME, COMPRESSIBLE, acceptsGzip, parseRange } from './http/files.js';
 import { BUILD_INPUTS, computeBuildTag, buildTag, resetBuildTag } from './http/buildTag.js';
@@ -83,7 +84,7 @@ export async function startServer(opts = {}) {
     }));
     packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
     packs.refresh(true);
-    serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, packs, log });
+    serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, packs, log, assetJump: createAssetJump({ log }) });
     browserBuild = computeBuildTag(ROOT, publicDir);
   } catch (e) {
     network?.close();

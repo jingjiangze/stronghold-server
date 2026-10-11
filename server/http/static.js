@@ -51,11 +51,13 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
 /**
  * Create the static request handler.
  * @param {{ publicDir: string, dataDir: string, sharedDir: string, simDir?: string, packsDir?: string,
- *   packs?: ReturnType<typeof createPackRegistry>, log?: object }} dirs
+ *   packs?: ReturnType<typeof createPackRegistry>, log?: object,
+ *   assetJump?: ((pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null) | null }} dirs
  *   packs: the server's pack registry (default: one over publicDir, dataDir and packsDir — ROOT/packs)
+ *   assetJump: missing /assets|fonts files are 302ed to the asset source (server/http/asset-jump.js) — local files still win
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, rawPath: string, query: string) => Promise<void>}
  */
-export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog }) {
+export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null }) {
   const registry = packs || createPackRegistry({ publicDir, dataDir, packsDir }, { log: /** @type {any} */ (log) });
   const mounts = [
     { prefix: '/data/', name: 'data', dir: path.resolve(dataDir) },
@@ -145,6 +147,10 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
         res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache', 'Content-Length': EMPTY_LOCAL_ART.length });
         res.end(req.method === 'HEAD' ? undefined : EMPTY_LOCAL_ART);
       } else if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR' || e.code === 'EISDIR' || e.code === 'ENAMETOOLONG')) {
+        // A missing asset (this image carries no art) → 302 to the asset source. Local files never get here:
+        // the jump only answers paths whose file is absent (server/http/asset-jump.js, same rules as the edge sidecar).
+        const jumped = assetJump ? assetJump(decoded, query, req.method) : null;
+        if (jumped) { res.writeHead(jumped.status, jumped.headers); res.end(); return; }
         sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
       } else if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
         sendError(req, res, 403, '禁止访问 · Forbidden');

@@ -51,6 +51,19 @@ Lua 只剩 `material-lb/` 两个文件。跟着走有三个具体好处：
 拿到 404。`sources.json` 的 `exceptions` 就是这张表。Stardust 的 `MATERIAL-SOURCES.md` 里
 有**同一个文件的同一条例外**，说明这是会复发的类型——**新增镜像后要核对覆盖率**。
 
+## 游戏进程内的同款跳转（平台不一定执行我们的 CMD）
+
+2026-10-11 实测：创空间按提交重建了镜像（`LastDeployConfig.ImageId = independent-service:…-<commit>-…`），
+容器在跑游戏，但 nginx **不在链路上**——`/assets` 请求直接落到游戏进程的 404。这层 nginx 能不能
+生效取决于平台怎么跑容器，跳转不该押在它上面。
+
+所以 `server/http/asset-jump.js` 在**游戏进程内**做同一件事：`static.js` 对**本机不存在**的
+`/assets|fonts` 文件回 302（本地优先——有文件仍走文件）。判定与 sidecar 共用
+`edge-sidecar.mjs` 的纯函数与同一份 `sources.json`（白名单 / 路径校验 / 例外表 / `?sp_source`），
+**没有第二份实现**；配置读不到就把自己关掉（只记日志），不会把游戏拖下水。
+环境变量：`SP_EDGE_SOURCES` 换配置、`SP_ASSET_JUMP=0` 直接关闭。
+两处先到先得：nginx 在线时它先答，nginx 缺席时游戏进程兜住。
+
 ## 文件
 
 | 文件 | 角色 |
