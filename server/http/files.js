@@ -70,6 +70,18 @@ const LONG_CACHE_DIRS = ['assets', 'fonts', 'vendor']; // first path segment und
 
 const gzipAsync = promisify(zlib.gzip);
 
+/**
+ * Read one file into memory once at boot: raw bytes plus the gzip built once (serveFile's `cached`).
+ * Used by createStaticHandler's `warm` list for files the container FS re-reads slowly.
+ * @returns {Promise<{ raw: Buffer, gz: Buffer | null, stat: import('node:fs').Stats }>}
+ */
+export async function loadWarmFile(absPath, { level = 6 } = {}) {
+  const st = await fsp.stat(absPath);
+  const raw = await fsp.readFile(absPath);
+  const gz = raw.length >= GZIP_MIN_BYTES ? await gzipAsync(raw, { level }) : null;
+  return { raw, gz, stat: st };
+}
+
 // ---------------------------------------------------------------------------------------------------
 // gzip cache (LRU by bytes)
 // ---------------------------------------------------------------------------------------------------
@@ -190,7 +202,13 @@ function cacheControlFor(ext, mountName, segments, query) {
   return 'no-cache';
 }
 
-export async function serveFile(req, res, absPath, stat, mountName, segments, query, gzipCache, log) {
+/**
+ * @param {null | { raw: Buffer, gz: Buffer | null }} [cached] bytes read once at boot (createStaticHandler's `warm`):
+ *   served from memory instead of re-reading the file. The platform's container FS can be a lazy-pulled network
+ *   mount where one large file re-reads at ~0.1 MB/s (measured 2026-10-11 on the ModelScope studio: /data/assets.json
+ *   took ~27 s per full response while every other file was fast) — a boot-time read moves that off the request path.
+ */
+export async function serveFile(req, res, absPath, stat, mountName, segments, query, gzipCache, log, cached = null) {
   const ext = path.extname(absPath).toLowerCase();
   const type = MIME[ext] || 'application/octet-stream';
   const compressible = COMPRESSIBLE.has(ext);
@@ -217,8 +235,8 @@ export async function serveFile(req, res, absPath, stat, mountName, segments, qu
 
   if (useGzip) {
     headers['Content-Encoding'] = 'gzip';
-    if (stat.size <= GZIP_CACHE_MAX_FILE) {
-      const gz = await gzipCache.get(absPath, stat);
+    const gz = cached?.gz || (stat.size <= GZIP_CACHE_MAX_FILE ? await gzipCache.get(absPath, stat) : null);
+    if (gz) {
       headers['Content-Length'] = gz.length;
       res.writeHead(200, headers);
       res.end(isHead ? undefined : gz);
@@ -248,6 +266,12 @@ export async function serveFile(req, res, absPath, stat, mountName, segments, qu
     }
   }
   headers['Content-Length'] = stat.size === 0 ? 0 : end - start + 1;
+  if (cached) {
+    res.writeHead(status, headers);
+    if (isHead || cached.raw.length === 0) { res.end(); return; }
+    res.end(cached.raw.subarray(start, end + 1));
+    return;
+  }
   res.writeHead(status, headers);
   if (isHead || stat.size === 0) { res.end(); return; }
   await streamTo(fs.createReadStream(absPath, { start, end }), res, log);

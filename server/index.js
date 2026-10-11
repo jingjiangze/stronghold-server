@@ -4,6 +4,7 @@
 // The default dual-stack bind may fall back to IPv4; explicit hosts remain literal.
 
 import http from 'node:http';
+import path from 'node:path';
 import { getData, loadData } from './data.js';
 import { ROOT, listenAddress, bindCandidates, serveDirs, makeLogger, parseTrustProxy } from './http/config.js';
 import { WS_MAX_PAYLOAD, createSessionStack, attachWebSocket } from './http/websocket.js';
@@ -84,7 +85,14 @@ export async function startServer(opts = {}) {
     }));
     packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
     packs.refresh(true);
-    serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, packs, log, assetJump: createAssetJump({ log }) });
+    // The asset manifest is the one file this platform's container FS re-reads slowly (a lazy-pulled mount:
+    // ~27 s per full response on the ModelScope studio, measured 2026-10-11, while every other file was fast).
+    // Read it once at boot and serve from memory — see createStaticHandler's `warm`.
+    serveStatic = createStaticHandler({
+      publicDir, dataDir, sharedDir, packsDir, packs, log,
+      assetJump: createAssetJump({ log }),
+      warm: [path.join(dataDir, 'assets.json')],
+    });
     browserBuild = computeBuildTag(ROOT, publicDir);
   } catch (e) {
     network?.close();

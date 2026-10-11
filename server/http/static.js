@@ -24,7 +24,7 @@ import path from 'node:path';
 import { MEDIA_PREFIX } from '../../shared/media.js';
 import { ROOT, noopLog } from './config.js';
 import { sendError, sendJson } from './common.js';
-import { MIME, GzipCache, isNotModified, serveFile } from './files.js';
+import { MIME, GzipCache, isNotModified, serveFile, loadWarmFile } from './files.js';
 import { serveMedia } from './media.js';
 import { createPackRegistry } from '../packs.js';
 import { PACKS_URL, PACK_INDEX_FILE } from '../../shared/packs.js';
@@ -51,14 +51,30 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
 /**
  * Create the static request handler.
  * @param {{ publicDir: string, dataDir: string, sharedDir: string, simDir?: string, packsDir?: string,
- *   packs?: ReturnType<typeof createPackRegistry>, log?: object,
+ *   packs?: ReturnType<typeof createPackRegistry>, log?: object, warm?: string[],
  *   assetJump?: ((pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null) | null }} dirs
  *   packs: the server's pack registry (default: one over publicDir, dataDir and packsDir — ROOT/packs)
  *   assetJump: missing /assets|fonts files are 302ed to the asset source (server/http/asset-jump.js) — local files still win
+ *   warm: absolute paths read once at boot and then served from memory (server/http/files.js loadWarmFile);
+ *         for files the container FS re-reads slowly (a lazy-pulled mount: /data/assets.json cost ~27 s per response
+ *         on the ModelScope studio, 2026-10-11). The promise is exposed as `handler.warmReady`.
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, rawPath: string, query: string) => Promise<void>}
  */
-export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null }) {
+export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null, warm = [] }) {
   const registry = packs || createPackRegistry({ publicDir, dataDir, packsDir }, { log: /** @type {any} */ (log) });
+  // Read the warm list once, off the request path: the bytes (and the gzip) stay in memory for this process' life.
+  /** @type {Map<string, { raw: Buffer, gz: Buffer | null, stat: import('node:fs').Stats }>} */
+  const warmCache = new Map();
+  const warmReady = Promise.all(warm.map(async (p) => {
+    const abs = path.resolve(p);
+    try {
+      const entry = await loadWarmFile(abs);
+      warmCache.set(abs, entry);
+      log.info?.(`[http] warm: ${abs} (${entry.raw.length} bytes${entry.gz ? `, gzip ${entry.gz.length}` : ''})`);
+    } catch (e) {
+      log.warn?.(`[http] warm: cannot preload ${abs}: ${e?.message || e}`);
+    }
+  }));
   const mounts = [
     { prefix: '/data/', name: 'data', dir: path.resolve(dataDir) },
     { prefix: '/shared/', name: 'shared', dir: path.resolve(sharedDir) },
@@ -70,7 +86,7 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
   const shimTag = `"shim-${shimBody.length.toString(16)}"`;
   const gzipCache = new GzipCache();
 
-  return async function serveStatic(req, res, rawPath, query) {
+  async function serveStatic(req, res, rawPath, query) {
     let decoded;
     try { decoded = decodeURIComponent(rawPath); } catch { sendError(req, res, 400, '请求地址无效 · Bad request'); return; }
     if (!decoded.startsWith('/') || decoded.includes('\0') || decoded.includes('\\')) {
@@ -160,6 +176,13 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
       }
       return;
     }
-    await serveFile(req, res, absPath, stat, mount.name, segments, query, gzipCache, log);
+    // Warm files are served from the boot-time copy (sizes must agree: a changed file falls back to disk).
+    const cached = warmCache.get(absPath);
+    const useCached = cached && cached.raw.length === stat.size ? cached : null;
+    await serveFile(req, res, absPath, useCached ? useCached.stat : stat, mount.name, segments, query, gzipCache, log, useCached);
   };
+
+  // Boot diagnostics and tests can await the preload; requests are served from disk until it lands.
+  serveStatic.warmReady = warmReady;
+  return serveStatic;
 }
