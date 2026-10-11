@@ -1,27 +1,40 @@
 # 创空间边缘层（ms-edge）
 
-这个目录让容器在素材请求上**只做 302**，字节从不经过容器。
+素材请求**只做 302**，字节从不经过这个容器。三个进程共用一个对外端口——这与 Stardust 的
+compose 同构（游戏 3120 / 素材解析器 3130 / 一个 nginx 在前面）。
 
 ```
-玩家 ──GET /assets/xxx──► nginx@7860 ──302──► 源（数据集 / R2）
-                              │
-                              └─ 其余一切 ──► 游戏本体 @127.0.0.1:3000
+                    ┌─ /assets/** /fonts/** ─► edge-sidecar :3130 ──302──► 源
+玩家 ──:7860──► nginx┤                                              ↑ 字节不过任何进程
+                    └─ 其余（页面/data/js/vendor/media/ws/healthz）─► 游戏 :3120
 ```
 
-## 为什么是 nginx 而不是 OpenResty
+## 为什么是 Node sidecar + 普通 nginx，而不是 nginx 的 Lua 模块
 
-OpenResty 官方不提供 alpine 包，也没有 Windows 构建。`nginx-mod-http-lua` 就是同一套
-`lua-nginx-module`（OpenResty = nginx + 该模块 + LuaJIT），所以这里直接装等价组件，
-不引一个装不上的依赖。
+Stardust 也是这么分的：素材跳转在 `openi-resolver`（一个 dependency-free 的 Node sidecar），
+Lua 只剩 `material-lb/` 两个文件。跟着走有三个具体好处：
+
+- **少一类起不来**：nginx 的 Lua 是动态模块，配置里少一行 `include /etc/nginx/modules/*.conf`
+  就会让所有 `lua_*` 变成未知指令、nginx 直接起不来。不装这个模块就没有这个失败模式。
+- **能直接测**：`node --test` 跑真实决策函数，不需要为了测 Lua 去装一个 Lua VM。
+- **后端故障有兜底**：`@sp_asset_fallback` 是 nginx 自己 `return 302`，照抄 Stardust 的
+  `@ark_proto_asset_fallback`。sidecar 挂了玩家也不会吃到错误页。
 
 ## 为什么 nginx 占 7860
 
 创空间把对外端口写死成 7860（`deploy_schema.json` 的 `port.const`），容器里没有第二个
-公网口。所以 nginx 占住 7860，游戏退到内部 3000，按路径分流。反过来（游戏占 7860、
-nginx 另开端口）在平台上没有公网口可用。
+公网口。所以 nginx 占住 7860，游戏与 sidecar 退到内部端口（`HOST=127.0.0.1`）。
+反过来（游戏占 7860、nginx 另开端口）在平台上没有公网口可用。
 
-关停语义：**任一侧退出就整体退出**，让平台重启容器——而不是留一个「前端活着、后端没了」
-的半死状态在那儿骗人（`entrypoint.sh`）。
+## 监督语义是故意不对称的
+
+`entrypoint.sh`：
+
+| 进程 | 退出后果 | 为什么 |
+|---|---|---|
+| 游戏 | 整体退出，让平台重启容器 | 没有它就没有服务 |
+| nginx | 整体退出 | 同一个理由 |
+| **sidecar** | **只记日志，继续跑** | nginx 的 fallback 还能供素材；为一个只影响「素材选哪条路」的进程去重启整个容器，会把游戏一起停掉——拿小故障换大故障 |
 
 ## 分流策略：静态顺序 + 客户端兜底
 
@@ -35,21 +48,31 @@ nginx 另开端口）在平台上没有公网口可用。
 
 数据集不是逐字节完整的：平台的**内容审核会拒收个别文件**（实测提交被平台 revert：
 `assets/skins/char_340_shwaz_snow_1/illustration.png`）。这类路径必须点名改道，否则玩家
-拿到 404。`sources.json` 的 `exceptions` 就是这张表。Stardust 的 `material-lb` 有同一张表，
-说明这是会复发的类型，不是一次性事故——**新增镜像后要核对覆盖率**。
+拿到 404。`sources.json` 的 `exceptions` 就是这张表。Stardust 的 `MATERIAL-SOURCES.md` 里
+有**同一个文件的同一条例外**，说明这是会复发的类型——**新增镜像后要核对覆盖率**。
+
+## 文件
+
+| 文件 | 角色 |
+|---|---|
+| `sources.json` | 源表与例外表（**唯一的真源**） |
+| `edge-sidecar.mjs` | 决策：路径校验、选源、302、CORS、方法限制 |
+| `nginx.conf` | 分流 + 后端故障兜底（不含任何 Lua） |
+| `render-nginx.mjs` | 构建期从 `sources.json` 渲染 `sources-nginx.conf`（定义兜底基址） |
+| `entrypoint.sh` | 三个进程的启动顺序与监督 |
+
+`render-nginx.mjs` 的原因：nginx 里有一个地方必须自己知道主源基址（fallback），而手写第二份
+会在换 release pin 时与 sidecar 漂移。nginx 没有变量赋值指令，所以常量用 `map` 表达。
 
 ## 测试
 
-决策逻辑跑在 fengari（Node 上的 Lua VM）里，直接测的是这个目录下的 `edge.lua` 本体：
-
 ```sh
-npm install fengari@0.1.5
-node test/edge.test.cjs
+node --test deploy/stardust/ms-edge/test/edge-sidecar.test.mjs
 ```
 
-`fengari` 刻意不是应用依赖：容器运行时用的是 nginx 自带的 LuaJIT，这个 VM 只是为了
-在没有 nginx 的机器上也能验证分支。注意 fengari 是 Lua 5.3、运行时是 5.1（LuaJIT），
-本文件用到的语法两者都有，但别在里面用 5.2+ 的东西。
+直接测 `edge-sidecar.mjs` 的决策函数（无 socket、无时钟）。覆盖：分流/顺序/强制源/例外改道/
+查询串逐字节保留（含「以 sp_source 结尾但不是它的键」）/路径穿越与畸形路径拒绝/方法限制/
+配置校验（非 https、`..`、未知例外目标、无可用源）/以及 shipped `sources.json` 的形状。
 
-覆盖：分流/顺序/强制源/例外改道/查询串处理（`sp_source` 剥离、`v` 保留）/拒绝 `..`、双斜杠、
-控制字符/方法限制/非素材路径放行。
+nginx 那侧有**两道同样内容的闸门**：构建期 `nginx -t`（坏了就让构建失败，旧镜像继续服务），
+运行期 `entrypoint.sh` 里再判一次（过不了就整体退回「游戏直接占 7860」）。

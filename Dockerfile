@@ -51,26 +51,28 @@ RUN node tools/vendor.mjs \
 
 # ---- 3. runtime ---------------------------------------------------------------------------------------
 FROM ${NODE_IMAGE}
-# 边缘层：nginx + lua-nginx-module 做素材的 302 分流（deploy/stardust/ms-edge/）。
-# OpenResty 官方不提供 alpine 包、也没有 Windows 构建；nginx-mod-http-lua 就是同一套
-# lua-nginx-module（OpenResty = nginx + 该模块 + LuaJIT），所以这里直接装等价组件。
+# 边缘层：普通的 nginx 做分流，素材的判定在 edge-sidecar.mjs（一个 Node 进程）里。
+# 刻意**不用** nginx 的 Lua 模块（Stardust 的 openi-resolver 也是这个形状）：那是动态模块，
+# 配置里少一行 include 就会让所有 lua_* 变成未知指令、nginx 直接起不来；换成普通 nginx
+# 就没有这个失败模式，而且那段逻辑能用 node --test 直接测。
 # 用 aliyun 镜像源：构建机在境内，alpine 官方源实测不可达；万一 aliyun 也不通就退回原源，
 # 不让一个镜像站的可用性把整个构建钉死。
 RUN cp /etc/apk/repositories /tmp/repos.bak \
  && sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
- && (apk add --no-cache nginx nginx-mod-http-lua luajit lua-resty-core lua-resty-lrucache lua5.1-cjson \
-     || { cp /tmp/repos.bak /etc/apk/repositories; \
-          apk add --no-cache nginx nginx-mod-http-lua luajit lua-resty-core lua-resty-lrucache lua5.1-cjson; }) \
+ && (apk add --no-cache nginx \
+     || { cp /tmp/repos.bak /etc/apk/repositories; apk add --no-cache nginx; }) \
  && mkdir -p /tmp/sp-edge \
  && chown -R node:node /tmp/sp-edge
 
 # ModelScope 创空间要求容器监听 0.0.0.0:7860，且端口不可改
 # (deploy_schema.json: port.const = 7860；8080 被平台进程占用)
-# nginx 占 7860（对外），游戏本体退到 127.0.0.1:3000（enrtypoint.sh 里导出 PORT）。
+# nginx 占 7860（对外）；游戏与素材解析器退到内部端口，端口号照抄 Stardust 的
+# compose（游戏 3120 / 解析器 3130），这样两边配置能逐行对照。
 ENV NODE_ENV=production \
     SP_PUBLIC_PORT=7860 \
-    SP_GAME_PORT=3000 \
-    PORT=3000 \
+    SP_GAME_PORT=3120 \
+    SP_EDGE_PORT=3130 \
+    PORT=3120 \
     HOST=127.0.0.1
 WORKDIR /app
 COPY --from=deps /app/package.json ./package.json
@@ -82,19 +84,19 @@ COPY --from=build /app/data ./data
 COPY --from=build /app/public ./public
 # research tables: read by server/sim/nodeData.js as a fallback
 COPY --from=build /app/docs/research ./docs/research
-# 边缘层：配置、分流脚本与入口。nginx.conf/sources.json 是数据，edge.lua 是决策。
+# 边缘层：配置、解析器与入口。nginx.conf / sources.json 是数据，edge-sidecar.mjs 是决策。
 COPY deploy/stardust/ms-edge/nginx.conf /app/deploy/stardust/ms-edge/nginx.conf
-COPY deploy/stardust/ms-edge/edge.lua /app/deploy/stardust/ms-edge/edge.lua
+COPY deploy/stardust/ms-edge/edge-sidecar.mjs /app/deploy/stardust/ms-edge/edge-sidecar.mjs
+COPY deploy/stardust/ms-edge/render-nginx.mjs /app/deploy/stardust/ms-edge/render-nginx.mjs
 COPY deploy/stardust/ms-edge/sources.json /app/deploy/stardust/ms-edge/sources.json
 COPY deploy/stardust/ms-edge/entrypoint.sh /app/deploy/stardust/ms-edge/entrypoint.sh
-RUN chmod +x /app/deploy/stardust/ms-edge/entrypoint.sh
 
-# 构建期就验一次，而不是让容器上线后崩在起不来：一个坏的 nginx 配置或一段编译不过的 Lua
-# 应该让这次构建失败（旧镜像继续服务），而不是产出一个 restart 循环的镜像。
-#   luajit -e loadfile : 只编译不执行——edge.lua 顶层就调 ngx.*，执行需要 nginx 环境。
-#   nginx -t           : 解析整个配置（含 load_module）。
-# 注意 nginx -t 不读 *_by_lua_file 的内容，所以这两条缺一不可。
-RUN luajit -e "assert(loadfile('/app/deploy/stardust/ms-edge/edge.lua'))" \
+# 构建期就验一次，而不是让容器上线后崩在起不来：一个坏的 nginx 配置或一份渲染不出的
+# sources.json 应该让这次构建失败（旧镜像继续服务），而不是产出一个 restart 循环的镜像。
+# 顺序要紧：先渲染 sources-nginx.conf，否则 nginx.conf 里的 include 扑空、nginx -t 必红。
+# （还有一道运行期同款检查在 entrypoint.sh：过不了就整体退回「游戏直接占 7860」。）
+RUN chmod +x /app/deploy/stardust/ms-edge/entrypoint.sh \
+ && node /app/deploy/stardust/ms-edge/render-nginx.mjs /app/deploy/stardust/ms-edge/sources-nginx.conf \
  && nginx -t -c /app/deploy/stardust/ms-edge/nginx.conf
 
 USER node

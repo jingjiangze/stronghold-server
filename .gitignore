@@ -57,6 +57,8 @@ deploy/stardust/build/
 # actual deployment receipts stay private; the public directory contains guidance only
 deploy/stardust/releases/*.json
 deploy/stardust/openi-resolver/openi-assets.json
+# rendered at build time from sources.json (render-nginx.mjs); the checked-in nginx.conf is the source
+deploy/stardust/ms-edge/sources-nginx.conf
 *.upload.checkpoint.json
 **/.openi/
 **/.modelscope/
