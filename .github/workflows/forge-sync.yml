@@ -123,9 +123,9 @@ jobs:
           SHORT=$(echo "${{ steps.probe.outputs.forge_sha }}" | cut -c1-12)
           BRANCH="forge-sync/${DATE}-${SHORT}"
           git checkout -b "${BRANCH}"
-          # 桥接目录：只放 Forge 的 Mod 契约/管理工具子集（不覆盖服务器自有文件）。
-          # 具体落地内容由阶段2定义；此处先写入基线记录与占位说明，保证 PR 可开。
-          mkdir -p mod-bridge
+          # 本工作流只做「探测 + 开 PR」：契约常量的重抽取由人执行（见 shared/forgeContract.js 的 SOURCE.md
+          # 与 _tmp/forge-server-audit/priority-and-conflict-prevention.md）。不再创建占位目录 —— 它曾指向
+          # 不存在的 mod-bridge/，等于空跑。
           cat > "${BASELINE_PATH}" <<EOF
           {
             "forgeRepo": "${FORGE_REPO}",
@@ -133,7 +133,8 @@ jobs:
             "forgeSha": "${{ steps.probe.outputs.forge_sha }}",
             "forgeTag": "${{ steps.probe.outputs.forge_tag }}",
             "syncedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "note": "自动同步候选；未覆盖服务器自有文件，仅更新 mod-bridge 与基线。"
+            "contractConstants": "shared/forgeContract.js",
+            "note": "探测候选：上游契约可能已变；请按 SOURCE.md 重跑抽取并跑漂移测试（不自动跟随）。"
           }
           EOF
           git config user.name "forge-sync[bot]"
@@ -167,10 +168,12 @@ jobs:
           - 最新 Release: ${{ steps.probe.outputs.forge_tag || '(none)' }}
           - 上次基线 SHA: ${{ steps.baseline.outputs.prev_sha || '(none)' }}
 
-          ### 处置原则
-          - 不覆盖服务器自有文件；仅更新 \`mod-bridge/\` 与基线记录。
-          - 无 Mod 时行为须与改造前一致（阶段2 验收）。
-          - 匹配系统（MatchmakeQueue）保留服务器实现，不引入 Forge 状态机。
+          ### 处置原则（优先级：上游 > mod 管理器包 > 服务器）
+          - 本 PR **只更新基线**；契约常量（\`shared/forgeContract.js\`）由人工重跑抽取，**不自动跟随**。
+          - 重抽后必跑：漂移测试 + \`i18n-packs\` / \`package\` / \`data\` 三套。
+          - **未知字段/未知声明面一律"警告不拒包"**（前向兼容）；只有"已知键但值畸形"才拒包。
+          - 不覆盖服务器自有文件；**不整拷** Forge 的同名文件（\`shared/protocol.js\`、\`shared/constants.js\`、\`server/data.js\`、\`server/index.js\`、\`server/lobby.js\`、\`server/matchmaking.js\`）。
+          - 匹配系统保留服务器实现，不引入 Forge 状态机。
           - 反馈 QQ 群已在服务器侧移除（见审计方案）。
           - 公告为大厅独立按钮。
 
