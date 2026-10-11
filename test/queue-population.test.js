@@ -7,7 +7,7 @@ import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
 import { startServer } from '../server/index.js';
 import { TestClient } from './helpers/wsClient.js';
 
-const rules = (capacity = 4, extra = {}) => ({ revivalEnabled: false, disableSharedPool: false,
+const rules = (capacity = 4, extra = {}) => ({ disableSharedPool: false,
   ...(capacity > 4 ? { playerCapacity: capacity } : {}), ...extra });
 
 function fixture(t, config = {}) {
@@ -98,7 +98,7 @@ test('two indivisible three-person parties report six waiting identities without
 });
 
 test('population isolates frozen version/difficulty/capacity pools but does not imply experimental compatibility', t => {
-  const h = fixture(t), a = h.party(2, 4), incompatible = h.party(2, 4, { revivalEnabled: true });
+  const h = fixture(t), a = h.party(2, 4), incompatible = h.party(2, 4, { disableSharedPool: true });
   const eight = h.party(3, 8), twelve = h.party(3, 12), hard = h.player(), old = h.player();
   h.join(a[0]); h.join(incompatible[0]); h.join(eight[0]); h.join(twelve[0]); h.join(hard, 'HARD');
   h.join(old, 'ABYSS');
@@ -168,7 +168,7 @@ test('population fanout aggregates once, not once per recipient; FIFO, TTL and r
   assert.ok(groups.flat().every(member => last(member).waitingCount === 72));
   assert.equal(h.queue.offers.size, 0); assert.equal(h.queue.timer, deadline);
   assertRetained(h.queue, saved);
-  assert.ok(groups.every(group => h.queue.entries.get(group[0].playerId).party.experimental.revivalEnabled === false));
+  assert.ok(groups.every(group => h.queue.entries.get(group[0].playerId).party.experimental.disableSharedPool === false));
 });
 
 test('count bursts that return to the last delivered population emit no redundant queued frame', t => {

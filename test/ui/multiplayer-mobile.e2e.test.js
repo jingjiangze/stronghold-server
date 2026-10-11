@@ -96,7 +96,7 @@ test('mobile lobby, same-pool count and every expanded roster seat remain operab
     await page.waitForFunction(() => globalThis.__SP__.store.get().queue.state === 'idle');
     guest.terminate(); guest = null; await pause(1200);
     assert.equal(await page.evaluate(() => globalThis.__SP__.store.get().queue.state), 'idle');
-    await request('room.create', { mode: 'coop', difficulty: 'NORMAL', experimental: { revivalEnabled: false, disableSharedPool: false, playerCapacity: 20 } });
+    await request('room.create', { mode: 'coop', difficulty: 'NORMAL', experimental: { disableSharedPool: false, playerCapacity: 20 } });
     for (let i = 0; i < 19; i++) await request('room.addBot');
     await tap('.room-screen button', '开始模拟'); await page.waitForSelector('.brief');
     await tap('.brief__foot button', '准备就绪'); await page.waitForSelector('.dband');

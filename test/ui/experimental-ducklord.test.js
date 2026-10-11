@@ -4,7 +4,7 @@ import { experimentalOptions, experimentalSummary, ExperimentalOptions } from '.
 import { allowedBands } from '../../public/js/screens/bandDraft.js';
 
 const walk = node => Array.isArray(node) ? node.flatMap(walk) : node?.props ? [node, ...walk(node.props.children)] : [];
-const rules = (capacity, disableDuckLord = false) => ({ revivalEnabled: true, disableSharedPool: false,
+const rules = (capacity, disableDuckLord = false) => ({ disableSharedPool: false,
   ...(capacity > 4 ? { playerCapacity: capacity } : {}), ...(disableDuckLord ? { disableDuckLord: true } : {}) });
 const control = (value, props = {}) => walk(ExperimentalOptions({ open: true, value, editable: true, ...props })).find(n => n.props.id === 'experimental-ducklord');
 

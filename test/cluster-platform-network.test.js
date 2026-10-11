@@ -26,7 +26,7 @@ class TestMatch {
   dispose() {}
 }
 const spec = roomCode => ({ roomCode, build: 'test-build', protocol: 1, seed: 1, matchNo: 1, mode: 'coop', difficulty: 'NORMAL',
-  modeId: 'mode_multi_normal', revivalEnabled: false, snapshotHz: 10, spectators: [`${roomCode}-observer`],
+  modeId: 'mode_multi_normal', snapshotHz: 10, spectators: [`${roomCode}-observer`],
   seats: [0, 1, 2, 3].map(seat => ({ seat, playerId: `${roomCode}-player${seat}`, name: `Player${seat}`, isBot: false, connected: true, loadout: null })) });
 async function until(check, ms = 2000) {
   const end = Date.now() + ms;

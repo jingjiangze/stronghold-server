@@ -90,10 +90,11 @@ export function resolveWsCompression(mode = 'off') {
 /** Message types worth compressing: the repetitive, high-volume traffic. `m.public` is the match's public
  *  state broadcast — the largest single stream a seat receives — and `m.private` is the per-player view
  *  (shop / hand / board), sent only when it changed. Both are highly repetitive ACROSS frames, which is what
- *  context takeover (above) is for. `m.damage`/`b.damage` are this fork's damage-board streams: per-player,
- *  sent on every change during a round, and equally repetitive. */
+ *  context takeover (above) is for. `m.damage` is this fork's per-player damage-board stream (sent on every
+ *  change during a round, equally repetitive). `b.damage` stays uncompressed: it is the LOW-frequency absolute
+ *  field score, not a per-change stream — the fork's own whitelist and its transport tests both leave it out. */
 export const BASE_COMPRESSIBLE_TYPES = Object.freeze([
-  'b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result', 'm.damage', 'b.damage',
+  'b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result', 'm.damage',
 ]);
 
 /**

@@ -12,7 +12,7 @@ const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
 const identifier = (v, max = 128) => typeof v === 'string' && v.length > 0 && v.length <= max && /^[A-Za-z0-9_-][A-Za-z0-9_.:-]*(?![\s\S])/.test(v);
 const integer = (v, min, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && v >= min && v <= max;
 const plain = v => !!v && typeof v === 'object' && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
-const SPEC_KEYS = ['assignmentId', 'roomCode', 'build', 'protocol', 'seed', 'matchNo', 'mode', 'difficulty', 'modeId', 'seats', 'spectators', 'revivalEnabled', 'disableSharedPool', 'experimental', 'aiPicksLast', 'snapshotHz'];
+const SPEC_KEYS = ['assignmentId', 'roomCode', 'build', 'protocol', 'seed', 'matchNo', 'mode', 'difficulty', 'modeId', 'seats', 'spectators', 'disableSharedPool', 'experimental', 'aiPicksLast', 'snapshotHz'];
 const SEAT_KEYS = ['seat', 'playerId', 'name', 'isBot', 'connected', 'loadout', 'ops', 'notOwned', 'diy', 'skins'];
 // Match's public observer contract, including the lobby's broadcast ticker/emote
 // and server-combat streams. Unknown types fail closed for observers.
@@ -105,14 +105,12 @@ export function copyAssignmentSpec(input, fallbackAssignmentId) {
     || !integer(spec.protocol, 1) || !integer(spec.seed, 0, 0xffffffff) || !integer(spec.matchNo, 1)
     || !['solo', 'coop'].includes(spec.mode) || !DIFFICULTIES.includes(spec.difficulty)
     || spec.modeId !== modeIdFor(spec.mode, spec.difficulty)
-    || (spec.revivalEnabled !== undefined && typeof spec.revivalEnabled !== 'boolean')
     || (spec.disableSharedPool !== undefined && typeof spec.disableSharedPool !== 'boolean')
     || (spec.aiPicksLast !== undefined && typeof spec.aiPicksLast !== 'boolean')
     || (spec.experimental !== undefined && (!isExperimental(spec.experimental)
-      || (spec.revivalEnabled !== undefined && spec.revivalEnabled !== (spec.mode === 'coop' && spec.experimental.revivalEnabled))
       || (spec.disableSharedPool !== undefined && spec.disableSharedPool !== spec.experimental.disableSharedPool)))
     || (spec.snapshotHz !== undefined && ![5, 10, 20].includes(spec.snapshotHz))) invalid();
-  const experimental = experimentalOptions(spec.experimental ?? { revivalEnabled: spec.revivalEnabled ?? false, disableSharedPool: spec.disableSharedPool ?? false });
+  const experimental = experimentalOptions(spec.experimental ?? { disableSharedPool: spec.disableSharedPool ?? false });
   const capacity = roomCapacity(spec.mode, experimental), roster = dataArray(spec.seats, capacity);
   if (!roster.length) invalid();
   const ids = new Set();
@@ -159,7 +157,6 @@ export function copyAssignmentSpec(input, fallbackAssignmentId) {
   return freeze({ assignmentId: spec.assignmentId, roomCode: spec.roomCode, build: spec.build, protocol: spec.protocol,
     seed: spec.seed, matchNo: spec.matchNo, mode: spec.mode, difficulty: spec.difficulty, modeId: spec.modeId,
     seats: players, spectators: [...spectators],
-    revivalEnabled: spec.mode === 'coop' && experimental.revivalEnabled,
     disableSharedPool: experimental.disableSharedPool, experimental,
     ...(spec.aiPicksLast === undefined ? {} : { aiPicksLast: spec.mode === 'coop' && spec.aiPicksLast }),
     ...(spec.snapshotHz === undefined ? {} : { snapshotHz: spec.snapshotHz }) });

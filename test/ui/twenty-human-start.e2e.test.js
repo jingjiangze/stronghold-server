@@ -101,7 +101,7 @@ test('browser start button launches twenty real human sessions with more than 64
       return session && Object.keys(session.ops || {}).length === 72;
     }, 'host preference sync');
     const request = (type, fields = {}) => page.evaluate((type, fields) => globalThis.__SP__.net.request(type, fields).then(() => true), type, fields);
-    await request('room.create', { mode: 'coop', difficulty: 'NORMAL', experimental: { revivalEnabled: false, disableSharedPool: false, playerCapacity: 20 } });
+    await request('room.create', { mode: 'coop', difficulty: 'NORMAL', experimental: { disableSharedPool: false, playerCapacity: 20 } });
     await page.waitForSelector('.room-screen');
     const roomCode = await page.evaluate(() => globalThis.__SP__.store.get().room.code);
     for (let i = 1; i < 20; i++) {

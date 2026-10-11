@@ -4,7 +4,6 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE } from '../../../shared/constants.js';
-import { REVIVAL_WINDOW_SECONDS } from './common.js';
 import { uniteSurvivors } from '../unite.js';
 import { buildResult } from '../results.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
@@ -16,7 +15,6 @@ export class MatchSettle {
     if (this.disposed || this.ended || (this.phase !== PHASE.COMBAT && this.phase !== PHASE.UNITE)) return;
     this._freezeDamage(); // before LP/death/board cleanup and fields clearing
     const relay = this._uniteRelay?.rounds.at(-1)?.plan === plan ? this._uniteRelay : null;
-    const eligible = relay ? new Set(relay.eligible) : this._revivalHelpers(plan, uniteResult);
     // Per-field results stay archived (including the earlier leaks). Helpers are unique, so merging their
     // reward/stat entries cannot overwrite another round. LP below uses only the final field's survivors.
     const combinedUnite = relay ? { ...uniteResult,
@@ -78,19 +76,17 @@ export class MatchSettle {
       this.dispatch(ps, 'onBattleResult', { result: r, lpLoss: loss, perfect: counted === 0 && r.perfect !== false, unite: combinedUnite || null });
       ps.recompute();
     }
-    this._revival = { round: this.round, eligible, windowOpen: false, deadline: 0 };
-    const canRescue = this.revivalEnabled && this.teamLp == null && this.order.some((ps) => this.revivalDonorEligible(ps));
     for (const ps of alive) {
       if (ps.lp <= 0) {
-        if (canRescue && ps.alive && !ps.revived && !ps.left) this._deferDeath(ps);
-        else this._finalizeDeath(ps);
+        ps.lp = 0;
+        ps.eliminate(this.round);
+        this.toast(ps, 'error', msg('你的目标生命值耗尽，已被淘汰'));
+        this.tickerText(msg('{name}博士的目标生命值耗尽', { name: ps.name }), FLOW_TICKER_PRIORITY);
       }
     }
     this.fields = [];
     this.watchers.clear();
-    const rescue = canRescue && this.order.some((ps) => this.revivalTargetEligible(ps));
-    this.setDeadline(rescue ? REVIVAL_WINDOW_SECONDS : DELAYS.SETTLE / 1000, () => this.afterSettle({ reason: 'window-expired' }), { silent: !rescue && this.soloUntimed });
-    if (rescue) { this._revival.windowOpen = true; this._revival.deadline = this.deadline; }
+    this.setDeadline(DELAYS.SETTLE / 1000, () => this.afterSettle(), { silent: this.soloUntimed });
     this.markPublic();
     onSettle(this); // one emote per alive AI per round (enabled by default; SP_BOT_EMOTES=0 silences it)
   }
@@ -118,10 +114,7 @@ export class MatchSettle {
     }
   }
 
-  afterSettle({ reason } = {}) {
-    // The scheduled timeout supplies its provenance: wall/monotonic clock rounding can differ by a millisecond.
-    // A forced transition without that provenance is classified from the original deadline instead.
-    this._finalizePendingDeaths({ reason });
+  afterSettle() {
     if (!this.alivePlayers().length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
     resetRoundCounters(this); // AI bot merge-counter resets each round (server/match/botEmotes.js)
     this.startRound(this.round + 1);
@@ -132,7 +125,6 @@ export class MatchSettle {
     this._freezeDamage();
     this.ended = true;
     for (const ps of this.order) this._cancelBotPrep(ps);
-    this._finalizePendingDeaths();
     if (this.runner) { try { this.runner.stop(); } catch { /* ignore */ } this.runner = null; }
     this._stopClientCombat();
     this.cancel(this._phaseTimer);

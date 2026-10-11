@@ -10,7 +10,7 @@ import { collectViolations } from '../../server/match/invariants.js';
 import { DATA, makeMatch, give, legalTileFor } from './harness.js';
 import { QUIET, phase, until } from './combat-fixtures.js';
 
-const experiment = { revivalEnabled: false, disableSharedPool: false, playerCapacity: 20 };
+const experiment = { disableSharedPool: false, playerCapacity: 20 };
 const seats = count => Array.from({ length: count }, (_, seat) => ({ seat, playerId: `p_${seat}`, name: `Capacity ${seat}`, isBot: false, connected: true }));
 async function pump(h, predicate, timeout = 10000) {
   const deadline = Date.now() + timeout;

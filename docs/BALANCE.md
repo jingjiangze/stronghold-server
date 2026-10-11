@@ -13,12 +13,12 @@ kinds / counts and routes must follow the official game; research 08 §6–§7, 
   `k` copies, no kept fly placeholders; verified against all 429 official entry × round compositions and the official
   count distribution (同盟 险境 R3 ≤ 10 enemies, R13 ≈ 37 — the old generator averaged 28 / 81);
 * stats = the PRTS per-round `enemyScale` table only (`data/config.json`, 终极 ×1.15 speed from R3);
-* leader pool = `bloodPoint[difficulty] × alive / 4` in co-op — one pool for every boss field. Since the user-approved
-  2026-10-05 change, global and all four MULTI `bossHpScale.aliveScaling` defaults are true. Count living participant
-  seats (AI included, spectators excluded) after revival settlement at **each** ordinary / hidden boss start:
-  1/2/3/4 seats give 25%/50%/75%/100%. The current pool never resizes mid-fight; hidden bosses sample afresh.
-  Explicit mode-level false keeps the full pool (training remains false); solo stays ×0.25. The proportions retain
-  their [ASSUMED] data flags; enabling the existing mechanism is not a new claim about official player-count scaling;
+* leader pool = `bloodPoint[difficulty] × the players alive` in co-op, solo × 1 (`bossHpScale.perPlayer: true` — the
+  owner's decision of 2026-10-06 adopting PR #209) — one pool for every boss field. Count living participant
+  seats (AI included, spectators excluded) at **each** ordinary / hidden boss start:
+  1/2/3/4 seats give 100%/200%/300%/400% of the data value. The current pool never resizes mid-fight; hidden bosses
+  sample afresh. `perPlayer: false` + `solo: 0.25` restore the retired fixed pool of 「保持固定血量」 (and its optional
+  × alive / 4 through `aliveScaling`);
 * leader parts and drones (DESIGN §20.10): a 剑 / 锤 / 碎铳之簧 passes every damage it takes to its leader 1:1 (PRTS "等量的
   无来源生命流失"; until 2026-10-01 half, and a 剑 / 锤 only while grounded — the dive hits [ASSUMED], the handbook says
   "被击落时"); a 胄 drone that dies (whoever kills it, DESIGN §20.13) costs 2 % of the leader's shown max HP = the pool (unchanged from v2.5; which "最大生命值" the

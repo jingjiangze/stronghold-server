@@ -5,7 +5,6 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
-import { REVIVAL_COST, REVIVAL_MIN_DONOR_LP } from './common.js';
 import { boardOrder, pieceDir } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
 import { cardView } from '../choices.js';
@@ -63,7 +62,6 @@ export class MatchViews {
   }
 
   publicView() {
-    const revivalOpen = this.revivalWindowOpen();
     const v = {
       t: 'm.public',
       ...(this.capacityExperiment ? { playerCapacity: this.playerCapacity,
@@ -98,16 +96,6 @@ export class MatchViews {
       combatMode: this.clientCombat ? 'client' : 'server',
       // solo pause (g.pause, DESIGN §14): the battle, its field clock and every deadline are frozen while true
       paused: !!this.paused,
-      revival: {
-        enabled: this.revivalEnabled,
-        cost: REVIVAL_COST,
-        minDonorLp: REVIVAL_MIN_DONOR_LP,
-        windowOpen: revivalOpen,
-        deadline: revivalOpen ? this._revival.deadline : 0,
-        matchId: this.battlePrefix,
-        round: this.round,
-        eligible: revivalOpen ? this.order.filter((ps) => this.revivalDonorEligible(ps)).map((ps) => ps.playerId) : [],
-      },
       players: this.order.map((ps) => ({
         playerId: ps.playerId,
         seat: ps.seat,
@@ -116,9 +104,6 @@ export class MatchViews {
         connected: ps.isBot || (ps.connected && !ps.left),
         alive: ps.alive,
         left: ps.left,
-        revived: ps.revived,
-        pendingDeath: ps.pendingDeath,
-        revivalUnavailableReason: ps.revivalUnavailableReason,
         lp: Math.max(0, ps.lp),
         bandId: ps.bandId,
         shopLevel: ps.shop.level,
@@ -130,7 +115,7 @@ export class MatchViews {
         // nobody can watch an eliminated player (g.watch refuses them, they have no field) and the result screen reads
         // m.result's own bonds, so their layers would only cost every m.public bytes for the rest of the match
         // (the mode-off bonds with members included, `off: true`, as in m.private — bondsMeta.offBondCounts)
-        bonds: ps.alive || ps.pendingDeath ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
+        bonds: ps.alive ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
         fieldId: this.fieldOf(ps),
         status: this.statusOf(ps),
         autoplay: ps.autoplay,

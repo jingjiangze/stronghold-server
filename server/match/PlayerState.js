@@ -149,12 +149,6 @@ export class PlayerState {
     this.isBot = !!seat.isBot;
     this.connected = this.isBot ? true : !!seat.connected;
     this.left = false;
-    /** Once-per-match rescue usage; never reset by death, round start or reconnect. */
-    this.revived = false;
-    /** Current SETTLE death awaiting rescue; holds the original state until rescued or finalized. */
-    this.pendingDeath = false;
-    /** Authority-recorded diagnostic only; never consulted by the rescue rules or reset by round start. */
-    this.revivalUnavailableReason = null;
     this.autoplay = false;
     this.alive = true;
     this.lp = 0;

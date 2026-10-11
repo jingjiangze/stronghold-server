@@ -97,20 +97,20 @@ test('fork status and experimental summaries follow a language switch with uncha
   assert.match(JSON.stringify(ConnectionStatus({ status: 'online' })), /Connected/);
   assert.equal(loadSummary({ scope: 'game', nodes: [node(13)] }).caption, 'Siracusa');
   assert.equal(loadSummary({ scope: 'cluster', nodes: [node(1), node(2)] }).caption, 'Cluster 2\/2');
-  const options = { revivalEnabled: false, disableSharedPool: false };
-  assert.equal(experimentalSummary(options), 'Rescue Off · Shared pool On');
-  assert.deepEqual(options, { revivalEnabled: false, disableSharedPool: false });
+  const options = { disableSharedPool: false };
+  assert.equal(experimentalSummary(options), 'Shared pool On');
+  assert.deepEqual(options, { disableSharedPool: false });
   assert.equal(ServerStatusModal({ open: true, clusterLoad: { scope: 'game', nodes: [node(13)] }, scope: 'game' }).props.title, 'Siracusa');
 });
 
 test('experimental switches default off and send immutable full options only when editable', () => {
-  assert.deepEqual(experimentalOptions({ revivalEnabled: 1, disableSharedPool: 'true' }), { revivalEnabled: false, disableSharedPool: false });
-  const value = { revivalEnabled: false, disableSharedPool: false }, changes = [];
+  assert.deepEqual(experimentalOptions({ revivalEnabled: 1, disableSharedPool: 'true' }), { disableSharedPool: false });
+  const value = { disableSharedPool: false }, changes = [];
   const view = ExperimentalOptions({ open: true, value, editable: true, onChange: next => changes.push(next) });
   const switches = collect(view, v => v.props?.role === 'switch');
   switches[0].props.onChange({ currentTarget: { checked: true } });
-  assert.deepEqual(changes, [{ revivalEnabled: true, disableSharedPool: false }]);
-  assert.deepEqual(value, { revivalEnabled: false, disableSharedPool: false });
+  assert.deepEqual(changes, [{ disableSharedPool: true }]);
+  assert.deepEqual(value, { disableSharedPool: false });
   for (const props of [{ editable: false }, { editable: true, busy: true }]) {
     const locked = ExperimentalOptions({ open: true, value, onChange: next => changes.push(next), ...props });
     for (const control of collect(locked, v => v.props?.role === 'switch')) {

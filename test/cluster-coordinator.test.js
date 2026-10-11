@@ -102,7 +102,7 @@ async function fixture(t, options = {}) {
     await until(() => players.every(p => p.frames.some(frame => frame.t === 'queue.state' && frame.state === 'offered')));
     for (const player of players) {
       const offer = player.frames.filter(frame => frame.t === 'queue.state' && frame.state === 'offered').at(-1);
-      await player.request('queue.accept', { ticketId: offer.ticketId, offerId: offer.offerId, revivalVote: true });
+      await player.request('queue.accept', { ticketId: offer.ticketId, offerId: offer.offerId });
     }
     await until(() => players.every(p => p.frames.some(frame => frame.t === 'queue.state' && frame.state === 'matched')));
     const room = players[0].frames.filter(frame => frame.t === 'room.state' && frame.inMatch).at(-1);

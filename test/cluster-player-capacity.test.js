@@ -14,7 +14,7 @@ import { OPERATOR_SKINS, SKIN_LIMITS } from '../shared/skins.js';
 import { LOADOUT_LIMITS, OWNERSHIP_LIMITS, DIY_LIMITS, validateC2S } from '../shared/protocol.js';
 import { PREPARE_MAX_BYTES } from '../server/cluster/rpc.js';
 
-const options = capacity => ({ revivalEnabled: false, disableSharedPool: false, playerCapacity: capacity });
+const options = capacity => ({ disableSharedPool: false, playerCapacity: capacity });
 const skin = { [OPERATOR_SKINS[0].charId]: OPERATOR_SKINS[0].id };
 const seats = size => Array.from({ length: size }, (_, seat) => ({ seat, playerId: `p${seat}`, name: `Player${seat}`, isBot: false, connected: true, skins: { ...skin } }));
 const spec = (extra = {}) => ({ assignmentId: 'capacity-assignment', roomCode: 'ABCD', build: 'capacity-build', protocol: 1,
@@ -129,7 +129,7 @@ test('GameHost capacity alone participates in immutable identity even with one h
   const input = spec({ assignmentId: 'one-large', seats: seats(1) });
   host.prepare(input);
   assert.throws(() => host.prepare({ ...input, experimental: options(16) }), e => e.code === 'ASSIGNMENT_CONFLICT');
-  const ordinary = spec({ assignmentId: 'ordinary', seats: seats(1), experimental: { revivalEnabled: false, disableSharedPool: false } });
+  const ordinary = spec({ assignmentId: 'ordinary', seats: seats(1), experimental: { disableSharedPool: false } });
   const view = host.prepare(ordinary);
   assert.equal(host.prepare({ ...ordinary, experimental: options(4) }), view);
   assert.equal(Object.hasOwn(view.experimental, 'playerCapacity'), false);
@@ -193,7 +193,7 @@ test('ended cluster public room rejects large capacity before mutating options o
   const before = structuredClone(room.toState()), seats = room.seats, replay = room.replay;
   assert.equal(f.lobby.setExperimental(players[0], { experimental: options(20) }).error, ERR.BAD_MSG);
   assert.deepEqual(room.toState(), before); assert.equal(room.seats, seats); assert.equal(room.replay, replay); assert.equal(f.calls.length, 1);
-  assert.deepEqual(f.lobby.setExperimental(players[0], { experimental: { revivalEnabled: true, disableSharedPool: true } }), { ok: true });
+  assert.deepEqual(f.lobby.setExperimental(players[0], { experimental: { disableSharedPool: true } }), { ok: true });
   assert.equal(room.capacity, 4);
 });
 

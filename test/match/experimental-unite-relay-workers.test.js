@@ -21,7 +21,7 @@ async function fixture(t, count = 8, options = {}) {
   let h;
   t.after(async () => { h?.m.dispose(); await pool.close(); });
   await pool.start();
-  h = makeMatch({ humans: count, experimental: { playerCapacity: options.capacity ?? 20, revivalEnabled: true, disableSharedPool: false },
+  h = makeMatch({ humans: count, experimental: { playerCapacity: options.capacity ?? 20, disableSharedPool: false },
     instant: false, captureFrames: false, seed: 20261008, spectators: ['observer'] }).start();
   h.toPrep(1); h.setStage('act2autochess_m04');
   const m = h.m;
@@ -87,7 +87,7 @@ test('real oneWorker eight-human relay: natural first leaks to second, fresh ses
   assert.equal(secondField.spec.spawns[0].sourcePlayerId, 'p_0');
   assert.equal(secondField.spec.spawns[0].mods.hpMul, 10);
   assert.equal(secondField.spec.stageId, m.stageId); assert.equal(secondField.spec.flags.layerGainsEnabled, false);
-  assert.deepEqual(m.order.map(p => p.lp), lpBefore); assert.equal(s.settlements(), 0); assert.equal(m._revival, null);
+  assert.deepEqual(m.order.map(p => p.lp), lpBefore); assert.equal(s.settlements(), 0);
   const ledgerBeforeLate = m.damageBoard.packet();
   const terminal = firstOutputs.find(o => o.done); assert.ok(terminal);
   firstRunner._receive(terminal); normalRunner._receive(terminal);
@@ -105,7 +105,6 @@ test('real oneWorker eight-human relay: natural first leaks to second, fresh ses
   assert.equal(m._uniteRelay.rounds.length, 2);
   assert.deepEqual(m.uniteResultView.rounds.map(r => [r.round, r.fieldId, r.through]), [[1, 'u', 1], [2, 'u:2', 1]]);
   assert.deepEqual(m.uniteResultView.helpers, ['p_1', 'p_2', 'p_3', 'p_4']);
-  assert.deepEqual([...m._revival.eligible].sort(), ['p_2', 'p_4']);
   assert.equal(m.damageBoard.fields.size, 10);
   assert.equal(m.damageBoard.packet().status, 'frozen');
   for (const p of m.order.slice(1, 5)) {
@@ -134,7 +133,6 @@ test('real oneWorker unspawned first residual preserves actual spawn mods/source
   assert.equal(m.fields[0].spec.spawns[0].sourcePlayerId, 'p_0');
   await pump(h, () => m.phase === 'SETTLE');
   assert.equal(m.order[0].stats.lpLost, 1);
-  assert.deepEqual([...m._revival.eligible].sort(), ['p_1', 'p_2', 'p_4']);
   assert.equal(m.simErrors, 0); assert.equal(m.errorCount, 0);
 });
 

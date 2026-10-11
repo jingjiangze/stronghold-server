@@ -123,7 +123,7 @@ test('v0.2.2 dense twenty-seat settings fit the prepare-only budget and reach un
     sendControl(...args) { frames.push(args); return true; } }); t.after(() => platform.close());
   const ops = Object.fromEntries(Array.from({ length: LOADOUT_LIMITS.ops }, (_, i) => [`char_${i}`, { potential: 1, cultivate: 0 }]));
   const input = spec({ seats: Array.from({ length: 20 }, (_, i) => seat(i, `p${i}`, { ops })),
-    experimental: { revivalEnabled: false, disableSharedPool: false, playerCapacity: 20 } });
+    experimental: { disableSharedPool: false, playerCapacity: 20 } });
   assert.ok(Buffer.byteLength(JSON.stringify({ id: '0'.repeat(32), op: 'prepare', payload: input })) > 64 * 1024);
   // No node was refreshed/admitted: a valid large spec must pass size preflight,
   // then fail node allocation without dispatching a request or reserving a room.

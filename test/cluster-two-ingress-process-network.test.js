@@ -183,7 +183,7 @@ async function fixture(t) {
     const offers = players.map(player => player.frames.filter(frame => frame.t === 'queue.state' && frame.state === 'offered').at(-1));
     assert.equal(new Set(offers.map(offer => offer.offerId)).size, 1, 'both processes share one coordinator offer/pool');
     for (let i = 0; i < players.length; i++) await players[i].request('queue.accept', {
-      offerId: offers[i].offerId, ticketId: offers[i].ticketId, revivalVote: false,
+      offerId: offers[i].offerId, ticketId: offers[i].ticketId,
     });
     await until(() => players.every(player => player.frames.some(frame => frame.t === 'queue.state' && frame.state === 'matched')), 'matched');
     const roomFrame = players[0].frames.filter(frame => frame.t === 'room.state' && frame.inMatch).at(-1);

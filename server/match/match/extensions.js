@@ -1,11 +1,9 @@
-// Server-authoritative Worker transport, damage ledger and room-owned experimental rescue.
-import { PHASE, ERR } from '../../../shared/constants.js';
-import { msg } from '../../../shared/i18n.js';
+// Server-authoritative Worker transport and the damage ledger.
+import { PHASE } from '../../../shared/constants.js';
 import { createDamageBoard } from '../damageBoard.js';
 import { emptyDamageRows } from '../../sim/damageBoard.js';
 import { buildBattleSpec } from '../../sim/spec.js';
 import { RemoteBattle } from '../combat/runner.js';
-import { REVIVAL_COST, REVIVAL_MIN_DONOR_LP, REVIVAL_UNAVAILABLE_REASONS, FLOW_TICKER_PRIORITY, OK, fail } from './common.js';
 
 const DAMAGE_PUBLIC_MS = 1000;
 
@@ -139,101 +137,6 @@ export class MatchExtensions {
     const spec = buildBattleSpec({ ...opts, content: this.battleContent,
       boss: this.bossPool ? { poolHp: this.bossPool.hp, poolMax: this.bossPool.maxHp } : null });
     return { remote: true, fieldId: spec.fieldId, kind: spec.kind, players, spec, battle: new RemoteBattle(spec), live: true };
-  }
-
-  _revivalHelpers(plan, uniteResult) {
-    const eligible = new Set();
-    if (!this.revivalEnabled || this.phase !== PHASE.UNITE || !plan || plan !== this.unitePlan
-      || !uniteResult || uniteResult.synthetic || !['cleared', 'timeout'].includes(uniteResult.reason)) return eligible;
-    const field = this.fields.find((f) => f.kind === 'unite' && !f.live);
-    if (!field) return eligible;
-    for (const ps of plan.helpers) {
-      const normal = this.lastResults.get(ps.playerId);
-      if (this.players.get(ps.playerId) !== ps || !field.players.includes(ps.playerId)
-        || !uniteResult.perPlayer?.[ps.playerId] || !normal || normal.synthetic || normal.perfect === false
-        || (normal.leaked || []).some((l) => l && l.counted !== false)) continue;
-      eligible.add(ps.playerId);
-    }
-    return eligible;
-  }
-
-  revivalWindowOpen() {
-    const state = this._revival;
-    return !!(this.revivalEnabled && !this.ended && !this.disposed && this.phase === PHASE.SETTLE
-      && this.teamLp == null && state && state.windowOpen && state.round === this.round && this.sched.now() < state.deadline);
-  }
-
-  revivalDonorEligible(ps) {
-    return !!(ps && !ps.isBot && !ps.left && ps.alive && Number.isFinite(ps.lp) && ps.lp >= REVIVAL_MIN_DONOR_LP
-      && this._revival?.round === this.round && this._revival.eligible.has(ps.playerId));
-  }
-
-  revivalTargetEligible(ps) { return !!(ps && ps.pendingDeath && !ps.alive && !ps.left && !ps.revived); }
-
-  _revivalDeathReason(ps) {
-    if (ps.left) return 'left';
-    if (ps.revived) return 'already-used';
-    if (!this.revivalEnabled) return 'disabled';
-    if (this.teamLp != null || this.ended || this.disposed) return 'match-ended';
-    const helpers = this.order.filter((p) => this.players.get(p.playerId) === p && !p.isBot && !p.left && p.alive
-      && this._revival?.round === this.round && this._revival.eligible.has(p.playerId));
-    if (!helpers.length) return 'no-helper';
-    return helpers.every((p) => Number.isFinite(p.lp) && p.lp < REVIVAL_MIN_DONOR_LP) ? 'donor-lp' : 'window-closed';
-  }
-
-  _deferDeath(ps) {
-    ps.revivalUnavailableReason = null;
-    ps.lp = 0;
-    ps.alive = false;
-    ps.pendingDeath = true;
-    ps.dirty();
-    this.toast(ps, 'warn', msg('你的目标生命值耗尽，等待救援'));
-  }
-
-  _finalizeDeath(ps, { round = this.round, notify = true, reason = this._revivalDeathReason(ps) } = {}) {
-    if (!ps.alive && !ps.pendingDeath) return false;
-    if (ps.revivalUnavailableReason == null) {
-      ps.revivalUnavailableReason = REVIVAL_UNAVAILABLE_REASONS.includes(reason) ? reason : 'window-closed';
-    }
-    ps.lp = 0;
-    ps.eliminate(round);
-    if (notify) {
-      this.toast(ps, 'error', msg('你的目标生命值耗尽，已被淘汰'));
-      this.tickerText(msg('{name}博士的目标生命值已耗尽', { name: ps.name }), FLOW_TICKER_PRIORITY);
-    }
-    return true;
-  }
-
-  _finalizePendingDeaths({ notify = true, reason = this.ended || this.disposed ? 'match-ended'
-    : this._revival?.deadline > 0 && this.sched.now() >= this._revival.deadline ? 'window-expired' : 'window-closed' } = {}) {
-    if (this._revival) this._revival.windowOpen = false;
-    for (const ps of this.order) if (ps.pendingDeath) this._finalizeDeath(ps, { notify, reason });
-  }
-
-  revive(ps, msg) {
-    if (!this.revivalEnabled) return fail(ERR.WRONG_PHASE, 'revival-disabled');
-    if (!this.revivalWindowOpen()) return fail(ERR.WRONG_PHASE, 'revival-window-closed');
-    if (msg.matchId !== this.battlePrefix) return fail(ERR.BAD_TARGET, 'stale-match');
-    if (!Number.isInteger(msg.round) || msg.round !== this.round) return fail(ERR.WRONG_PHASE, 'stale-round');
-    if (!ps || ps.isBot || ps.left) return fail(ERR.NOT_IN_ROOM);
-    if (!ps.alive) return fail(ERR.ELIMINATED);
-    if (!this.revivalDonorEligible(ps)) return fail(ERR.BAD_TARGET, ps.lp < REVIVAL_MIN_DONOR_LP ? 'revival-lp-insufficient' : 'revival-not-helper');
-    const target = this.players.get(msg.playerId);
-    if (target && !target.alive && !target.pendingDeath && !target.left && !target.revived) return fail(ERR.BAD_TARGET, 'revival-target-finalized');
-    if (target === ps || !this.revivalTargetEligible(target)) return fail(ERR.BAD_TARGET, 'revival-target-ineligible');
-    // Claim usage before any updates/hooks/views: another donor's duplicate request cannot spend twice.
-    target.revived = true;
-    target.alive = true;
-    target.pendingDeath = false;
-    target.revivalUnavailableReason = null;
-    target.lp = 1;
-    ps.lp -= REVIVAL_COST; // >=11 before payment: the donor always keeps at least 1 LP
-    ps.stats.lpLost += REVIVAL_COST;
-    // Bonds depend on the unchanged holdings; teammate effects read alivePlayers dynamically. No reset/reroll/hooks.
-    target.dirty();
-    ps.dirty();
-    this.markPublic();
-    return OK;
   }
 
 }

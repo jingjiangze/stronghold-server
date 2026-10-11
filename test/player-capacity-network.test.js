@@ -44,7 +44,7 @@ test('legacy clients keep ordinary rooms, but cannot join or observe expanded ro
   assert.equal((await f.hello(host, 'Modern')).t, 'welcome');
   assert.equal((await host.request('room.create', { mode: 'coop', difficulty: 'NORMAL' })).t, 'ok');
   const code = host.frames.findLast(frame => frame.t === 'room.state').code;
-  const options = { revivalEnabled: false, disableSharedPool: false, playerCapacity: 8 };
+  const options = { disableSharedPool: false, playerCapacity: 8 };
   assert.equal((await host.request('room.setExperimental', { experimental: options })).t, 'ok');
   for (const type of ['room.join', 'room.spectate']) assert.equal((await legacy.request(type, { code })).code, ERR.BAD_MSG);
   assert.equal((await legacy.request('room.create', { mode: 'coop', difficulty: 'NORMAL', experimental: options })).code, ERR.BAD_MSG);
@@ -55,7 +55,7 @@ test('legacy reconnect into an expanded room cannot replace or mutate the modern
   const f = await setup(t), modern = await f.client();
   const welcome = await f.hello(modern, 'Owner');
   await modern.request('room.create', { mode: 'coop', difficulty: 'NORMAL' });
-  await modern.request('room.setExperimental', { experimental: { revivalEnabled: false, disableSharedPool: false, playerCapacity: 20 } });
+  await modern.request('room.setExperimental', { experimental: { disableSharedPool: false, playerCapacity: 20 } });
   const legacy = await f.client(), denied = await f.hello(legacy, 'OldOwner', false, welcome.token);
   assert.equal(denied.code, ERR.BAD_MSG); assert.equal(modern.socket.readyState, WebSocket.OPEN);
   assert.equal((await modern.request('ping', { c: 1 })).t, 'pong');

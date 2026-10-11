@@ -12,8 +12,8 @@ import { botPickBand } from '../server/match/bot.js';
 import { DATA, makeMatch } from './match/harness.js';
 
 const duck = 'band_ducklord';
-const rules = (capacity = 8, disabled = true, revivalEnabled = false, disableSharedPool = false) => ({
-  revivalEnabled, disableSharedPool, ...(capacity === 4 ? {} : { playerCapacity: capacity }), ...(disabled ? { disableDuckLord: true } : {}),
+const rules = (capacity = 8, disabled = true, disableSharedPool = false) => ({
+  disableSharedPool, ...(capacity === 4 ? {} : { playerCapacity: capacity }), ...(disabled ? { disableDuckLord: true } : {}),
 });
 class RecordingMatch {
   constructor(options) { this.opts = options; }
@@ -59,7 +59,7 @@ const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve()
 test('optional duck flag has strict own boolean schema, default false, legacy normalization/key/equality and immutable snapshot', () => {
   assert.equal(DATA.bands[duck].name, '鸭爵');
   assert.deepEqual(experimentalOptions(), EXPERIMENTAL_DEFAULTS);
-  assert.equal(experimentalKey(EXPERIMENTAL_DEFAULTS), '00');
+  assert.equal(experimentalKey(EXPERIMENTAL_DEFAULTS), '0');
   for (const capacity of [4, 8, 12, 16, 20]) {
     const legacy = rules(capacity, false), off = { ...legacy, disableDuckLord: false }, on = rules(capacity);
     assert.equal(isExperimental(off), true); assert.equal(isExperimental(on), true);
@@ -110,9 +110,9 @@ test('duck flag is host-only, un-readies teammates, snapshots local launch, and 
   assert.equal(h.lobby.setExperimental(members[0], { experimental: rules(8, false) }).error, ERR.ROOM_STARTED);
 });
 
-test('all eight option triples form only compatible intact eight-capacity parties and preserve FIFO/inheritance', t => {
+test('all four option pairings form only compatible intact eight-capacity parties and preserve FIFO/inheritance', t => {
   const flags = [];
-  for (const revival of [false, true]) for (const pool of [false, true]) for (const disabled of [false, true]) flags.push(rules(8, disabled, revival, pool));
+  for (const pool of [false, true]) for (const disabled of [false, true]) flags.push(rules(8, disabled, pool));
   for (const first of flags) for (const second of flags) {
     const h = lobbyFixture(t), a = h.room(4, first), b = h.room(4, second);
     h.lobby.queue.join(a.members[0], { difficulty: 'NORMAL', party: true });

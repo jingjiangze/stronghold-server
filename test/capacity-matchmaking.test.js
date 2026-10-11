@@ -11,7 +11,7 @@ import { PLAYER_CAPACITIES, PLAYER_CAPACITY_VERSION } from '../shared/playerCapa
 import { startServer } from '../server/index.js';
 import { TestClient } from './helpers/wsClient.js';
 
-const rules = (capacity, extra = {}) => ({ revivalEnabled: false, disableSharedPool: false,
+const rules = (capacity, extra = {}) => ({ disableSharedPool: false,
   ...(capacity > 4 ? { playerCapacity: capacity } : {}), ...extra });
 class RecordingMatch {
   constructor(opts) { this.opts = opts; }
@@ -79,13 +79,13 @@ for (const capacity of PLAYER_CAPACITIES) test(`${capacity}-mode merges intact r
   const other = capacity === 4 ? 8 : 4;
   assert.equal(f.lobby.setExperimental(room.hostId === a.host.playerId ? a.host : b.host, { experimental: rules(other) }).error, ERR.BAD_MSG);
   assert.deepEqual(room.toState(), before);
-  assert.deepEqual(f.lobby.setExperimental(a.host, { experimental: rules(capacity, { revivalEnabled: true }) }), { ok: true });
+  assert.deepEqual(f.lobby.setExperimental(a.host, { experimental: rules(capacity, { disableSharedPool: true }) }), { ok: true });
   assert.equal(room.capacity, capacity);
 });
 
 test('different capacities/difficulties/flags never share an offer; lobby solo stays in four-mode', t => {
   const f = fixture(t), eight = f.party(8, 4), twelve = f.party(12, 4), twenty = f.party(20, 4);
-  const otherFlags = f.party(8, 4, { revivalEnabled: true }), otherDifficulty = f.party(8, 4, {}, 'HARD');
+  const otherFlags = f.party(8, 4, { disableSharedPool: true }), otherDifficulty = f.party(8, 4, {}, 'HARD');
   for (const group of [eight, twelve, twenty, otherFlags, otherDifficulty]) assert.deepEqual(f.join(group), { ok: true });
   assert.equal(f.lobby.queue.offers.size, 0);
   const solos = Array.from({ length: 4 }, f.player);

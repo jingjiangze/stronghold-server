@@ -59,9 +59,9 @@ function harness(t, config = {}) {
       if (session.party) seen.add(session.party);
       assert.deepEqual(queue.join(session, { difficulty: 'NORMAL', party: !!session.party }), { ok: true });
     }
-    return players.map((session) => ({ ...queue.state(session), revivalVote: false }));
+    return players.map((session) => ({ ...queue.state(session) }));
   };
-  const accept = (players, states = players.map((p) => ({ ...queue.state(p), revivalVote: false }))) =>
+  const accept = (players, states = players.map((p) => ({ ...queue.state(p) }))) =>
     players.map((session, i) => queue.accept(session, states[i]));
   const start = (players = group()) => { const states = join(players); assert.ok(accept(players, states).every((r) => r.ok)); return { players, states }; };
   const fire = () => {
@@ -109,7 +109,7 @@ function retained(h, players, original) {
     assert.equal(e.party, before.party); assert.equal(e.party.sequence, before.partySequence);
     assert.equal(session.roomCode, before.roomCode, 'friend room remains unchanged');
     assert.equal(h.queue.state(session).state, 'queued');
-    assert.equal(e.accepted, false); assert.equal(e.revivalVote, null);
+    assert.equal(e.accepted, false);
     assert.equal(Object.hasOwn(h.queue.state(session), 'allocationPending'), false);
   }
 }
@@ -150,7 +150,7 @@ test('legacy allocator returning a Promise remains a synchronous allocation erro
   retained(h, players, original); assert.equal(h.queue.offers.size, 0);
 });
 
-test('accept acknowledges votes synchronously; one deferred prepare commits then publishes before matched', async (t) => {
+test('accept acknowledges offers synchronously; one deferred prepare commits then publishes before matched', async (t) => {
   const h = harness(t), players = h.group(); h.friendParty(players.slice(0, 2));
   const states = h.join(players), original = snapshot(h.queue, players);
   h.accept(players.slice(0, 3), states.slice(0, 3));
@@ -169,8 +169,8 @@ test('accept acknowledges votes synchronously; one deferred prepare commits then
   assert.ok(players.every((p, i) => p.roomCode === original[i].roomCode), 'prepare cannot consume the original friend room');
   for (let i = 0; i < 3; i++) assert.ok(h.accept(players, states).every((r) => r.ok));
   assert.equal(h.calls.length, 1, 'repeated accept never starts a second prepare');
-  assert.deepEqual(h.queue.accept(players[0], { ...states[0], revivalVote: true }), { ok: true });
-  assert.deepEqual(h.queue.state(players[0]).experimental, { revivalEnabled: false, disableSharedPool: false });
+  assert.deepEqual(h.queue.accept(players[0], states[0]), { ok: true });
+  assert.deepEqual(h.queue.state(players[0]).experimental, { disableSharedPool: false });
   assert.equal(h.calls.length, 1);
   const ready = prepared(h, call); call.work.resolve(ready.result);
   assert.equal(ready.counts.commit, 0, 'even a resolved promise commits only after its continuation');
@@ -287,7 +287,7 @@ for (const invalid of ['available', 'version', 'network']) test(`completion rech
   assert.ok(players.slice(1).every((p) => h.queue.state(p).state === 'queued' && p.roomCode === null));
 });
 
-for (const changed of ['ticketId', 'accepted', 'entry', 'offer', 'entryVersion', 'expiresAt', 'vote', 'entryList', 'deadline']) test(`completion cannot use a changed ${changed} epoch/identity`, async (t) => {
+for (const changed of ['ticketId', 'accepted', 'entry', 'offer', 'entryVersion', 'expiresAt', 'entryList', 'deadline']) test(`completion cannot use a changed ${changed} epoch/identity`, async (t) => {
   const h = harness(t), { players } = h.start(), call = h.calls[0], ready = prepared(h, call);
   const entry = h.queue.entries.get(players[0].playerId), offer = h.queue.offers.get(call.context.offerId);
   let replacement;
@@ -295,7 +295,6 @@ for (const changed of ['ticketId', 'accepted', 'entry', 'offer', 'entryVersion',
   if (changed === 'accepted') entry.accepted = false;
   if (changed === 'entryVersion') entry.version++;
   if (changed === 'expiresAt') entry.expiresAt++;
-  if (changed === 'vote') entry.revivalVote = true;
   if (changed === 'entryList') offer.entries.reverse();
   if (changed === 'deadline') offer.deadline++;
   if (changed === 'entry') { replacement = { ...entry, ticketId: 'synthetic-replacement-ticket' }; h.queue.entries.set(players[0].playerId, replacement); }

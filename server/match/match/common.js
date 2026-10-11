@@ -29,10 +29,3 @@ export const DELAYS = Object.freeze({
  * the remake's (50 s per turn per the owner's 2026-10-10 official-play report). It is also the step's only countdown (m.public.deadline = draft.turnDeadline). × timerScale.
  */
 export const BAND_TURN_SECONDS = 50;
-
-export const REVIVAL_COST = 10;
-export const REVIVAL_MIN_DONOR_LP = 11;
-export const REVIVAL_WINDOW_SECONDS = 15;
-export const REVIVAL_UNAVAILABLE_REASONS = Object.freeze([
-  'disabled', 'no-helper', 'donor-lp', 'window-expired', 'window-closed', 'already-used', 'left', 'match-ended',
-]);

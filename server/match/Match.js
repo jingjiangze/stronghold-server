@@ -112,7 +112,7 @@
 // phase outside its battles (soloUntimed); the co-op strategy draft has ONE countdown — BAND_TURN_SECONDS per turn,
 // published as m.public.deadline — AI seats pick at once and a turn that runs out takes the highlighted strategy
 // (g.bandFocus → timeoutBand); g.unitStats answers m.unitStats: the stats the board's units start their next battle with.
-//   opts.experimental locked room revivalEnabled / disableSharedPool / optional disableDuckLord, false by default
+//   opts.experimental locked room disableSharedPool / optional disableDuckLord, false by default
 //   opts.snapshotHz   20 | 10 | 5, server snapshots only
 //   opts.clientCombat  default true (env SP_COMBAT=server → false: the legacy server-run + snapshot streaming mode)
 //   opts.verify        'off' | 'sample' | 'all' (env SP_VERIFY, default 'off'): re-simulate accepted client results
@@ -207,7 +207,7 @@ import { MatchUnite } from './match/unitePhase.js';
 import { MatchBoss } from './match/bossRounds.js';
 import { MatchSettle } from './match/settle.js';
 
-export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS, REVIVAL_UNAVAILABLE_REASONS } from './match/common.js';
+export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS } from './match/common.js';
 
 const BOT_REHEARSAL_DEFAULT = 3;
 /** Wall-clock ms of bot layout rehearsal per scheduler callback (real time; virtual time runs it in one go). */
@@ -302,9 +302,8 @@ export class Match {
     this._damageSent = new Map();
     /** Locked room-owned rules; direct engine fixtures retain the legacy option names. */
     this.experimental = experimentalOptions(opts.experimental ?? {
-      revivalEnabled: opts.revivalEnabled === true, disableSharedPool: opts.disableSharedPool === true,
+      disableSharedPool: opts.disableSharedPool === true,
     });
-    this.revivalEnabled = !this.isSolo && this.experimental.revivalEnabled;
     this.disableSharedPool = this.experimental.disableSharedPool;
     this.playerCapacity = roomCapacity(this.isSolo ? 'solo' : this.mode, this.experimental);
     this.capacityExperiment = !this.isSolo && this.playerCapacity > 4;
@@ -312,8 +311,6 @@ export class Match {
     this.disableDuckLord = this.capacityExperiment && this.experimental.disableDuckLord === true;
     this.gd.disableDuckLord = this.disableDuckLord;
     if (opts.seats.length > this.playerCapacity) throw new RangeError('Match: seats exceed room capacity');
-    /** SETTLE-only rescue state: { round, eligible: Set<playerId>, windowOpen, deadline }. */
-    this._revival = null;
     this._progressTimer = null;
     this._bossClock = null;
     this._lastPoolAt = -Infinity;

@@ -11,7 +11,7 @@ import { makeMatch, give } from './match/harness.js';
 import { collectViolations } from '../server/match/invariants.js';
 import { makeCtx } from '../server/match/effectsMeta.js';
 
-const opts = (revivalEnabled = false, disableSharedPool = false) => ({ revivalEnabled, disableSharedPool });
+const opts = (disableSharedPool = false) => ({ disableSharedPool });
 class RecordingMatch {
   constructor(options) { this.opts = options; }
   start() { this.opts.broadcast({ t: 'm.public', phase: 'INFO_CHECK', experimental: this.opts.experimental }); }
@@ -52,71 +52,76 @@ for (const value of [null, [], {}, { revivalEnabled: false }, { ...opts(), extra
     assert.ok(validateC2S({ t: 'room.setExperimental', experimental: value }));
   });
 }
-for (const revivalEnabled of [false, true]) for (const disableSharedPool of [false, true]) {
-  test(`room launch snapshots ${revivalEnabled}/${disableSharedPool} without votes`, t => {
-    const h = lobbyFixture(t), source = opts(revivalEnabled, disableSharedPool), { owner, members } = h.room(2, source);
-    source.revivalEnabled = !revivalEnabled;
-    assert.deepEqual(owner.toState().experimental, opts(revivalEnabled, disableSharedPool));
+for (const disableSharedPool of [false, true]) {
+  test(`room launch snapshots disableSharedPool=${disableSharedPool}`, t => {
+    const h = lobbyFixture(t), source = opts(disableSharedPool), { owner, members } = h.room(2, source);
+    source.disableSharedPool = !disableSharedPool;
+    assert.deepEqual(owner.toState().experimental, opts(disableSharedPool));
     assert.ok(Object.isFrozen(owner.experimental));
     h.lobby.ready(members[1], { ready: true });
     assert.deepEqual(h.lobby.start(members[0]), { ok: true });
-    assert.equal(owner.match.opts.revivalEnabled, revivalEnabled); assert.equal(owner.match.opts.disableSharedPool, disableSharedPool);
-    assert.deepEqual(owner.match.opts.experimental, opts(revivalEnabled, disableSharedPool));
+    assert.equal(owner.match.opts.disableSharedPool, disableSharedPool);
+    assert.deepEqual(owner.match.opts.experimental, opts(disableSharedPool));
     assert.equal(h.lobby.setExperimental(members[0], { experimental: opts() }).error, ERR.ROOM_STARTED);
   });
-  test(`public solos inherit ${revivalEnabled}/${disableSharedPool} from their intact party`, t => {
-    const h = lobbyFixture(t), { owner, members } = h.room(2, opts(revivalEnabled, disableSharedPool)), solos = [h.player(), h.player()];
+  test(`public solos inherit disableSharedPool=${disableSharedPool} from their intact party`, t => {
+    const h = lobbyFixture(t), { owner, members } = h.room(2, opts(disableSharedPool)), solos = [h.player(), h.player()];
     for (const solo of solos) assert.deepEqual(h.lobby.queue.join(solo, { difficulty: 'NORMAL' }), { ok: true });
     assert.deepEqual(h.lobby.queue.join(members[0], { difficulty: 'NORMAL', party: true }), { ok: true });
     const players = [...solos, ...members];
     for (const player of players) {
       const offered = h.lobby.queue.state(player);
-      assert.deepEqual(offered.experimental, opts(revivalEnabled, disableSharedPool));
+      assert.deepEqual(offered.experimental, opts(disableSharedPool));
       assert.deepEqual(h.lobby.queue.accept(player, { ticketId: offered.ticketId, offerId: offered.offerId }), { ok: true });
     }
     const matched = h.lobby.roomOf(solos[0]);
-    assert.deepEqual(matched.experimental, opts(revivalEnabled, disableSharedPool));
+    assert.deepEqual(matched.experimental, opts(disableSharedPool));
     assert.ok(owner.disposed); assert.ok(players.every(player => player.roomCode === matched.code));
   });
 }
 
+test('legacy revivalEnabled input is tolerated and dropped from canonical output', () => {
+  assert.equal(isExperimental({ revivalEnabled: false, disableSharedPool: false }), true);
+  assert.deepEqual(experimentalOptions({ revivalEnabled: false, disableSharedPool: false }), EXPERIMENTAL_DEFAULTS);
+});
+
 test('option change un-readies teammates and does not grant non-host, spectator or solo queue authority', t => {
   const h = lobbyFixture(t), { owner, members } = h.room(2), observer = h.player(), solo = h.player();
   h.lobby.spectate(observer, { code: owner.code }); h.lobby.ready(members[1], { ready: true });
-  for (const player of [members[1], observer]) assert.equal(h.lobby.setExperimental(player, { experimental: opts(true, true) }).error, ERR.NOT_HOST);
-  assert.equal(h.lobby.setExperimental(solo, { experimental: opts(true, true) }).error, ERR.NOT_IN_ROOM);
-  assert.deepEqual(h.lobby.setExperimental(members[0], { experimental: opts(true, true) }), { ok: true });
+  for (const player of [members[1], observer]) assert.equal(h.lobby.setExperimental(player, { experimental: opts(true) }).error, ERR.NOT_HOST);
+  assert.equal(h.lobby.setExperimental(solo, { experimental: opts(true) }).error, ERR.NOT_IN_ROOM);
+  assert.deepEqual(h.lobby.setExperimental(members[0], { experimental: opts(true) }), { ok: true });
   assert.equal(owner.seatOf(members[1].playerId).ready, false);
-  assert.ok(validateC2S({ t: 'queue.join', difficulty: 'NORMAL', experimental: opts(true, true) }));
-  assert.ok(validateC2S({ t: 'queue.accept', ticketId: 'ticket', offerId: 'offer', experimental: opts(true, true) }));
+  assert.ok(validateC2S({ t: 'queue.join', difficulty: 'NORMAL', experimental: opts(true) }));
+  assert.ok(validateC2S({ t: 'queue.accept', ticketId: 'ticket', offerId: 'offer', experimental: opts(true) }));
   h.lobby.ready(members[1], { ready: true });
   h.lobby.queue.join(members[0], { difficulty: 'NORMAL', party: true });
   assert.equal(h.lobby.setExperimental(members[0], { experimental: opts() }).error, ERR.QUEUED);
-  assert.deepEqual(owner.experimental, opts(true, true));
+  assert.deepEqual(owner.experimental, opts(true));
 });
 
 test('incompatible parties stay intact in the same global queue while wildcard solos fill compatible rooms', t => {
-  const h = lobbyFixture(t), a = h.room(2, opts(true, true)), b = h.room(2, opts(false, false));
+  const h = lobbyFixture(t), a = h.room(2, opts(true)), b = h.room(2, opts(false));
   h.lobby.queue.join(a.members[0], { difficulty: 'NORMAL', party: true });
   h.lobby.queue.join(b.members[0], { difficulty: 'NORMAL', party: true });
   assert.equal(h.lobby.queue.offers.size, 0); assert.equal(h.lobby.queue.size, 4);
   const solos = [h.player(), h.player()]; for (const solo of solos) h.lobby.queue.join(solo, { difficulty: 'NORMAL' });
   const offer = [...h.lobby.queue.offers.values()][0];
-  assert.deepEqual(offer.experimental, opts(true, true));
+  assert.deepEqual(offer.experimental, opts(true));
   assert.deepEqual(new Set(offer.entries.map(entry => entry.session)), new Set([...a.members, ...solos]));
   assert.ok(b.members.every(player => h.lobby.queue.state(player).state === 'queued'));
   for (const player of [...a.members, ...solos]) h.lobby.queue.accept(player, h.lobby.queue.state(player));
-  assert.deepEqual(h.lobby.roomOf(solos[0]).experimental, opts(true, true));
+  assert.deepEqual(h.lobby.roomOf(solos[0]).experimental, opts(true));
   assert.equal(h.lobby.roomOf(b.members[0]), b.owner); assert.equal(b.owner.disposed, false);
 });
 
-test('all sixteen party-option pairings only merge compatible intact rooms and preserve option FIFO', t => {
-  const flags = [opts(), opts(false, true), opts(true, false), opts(true, true)];
+test('all four party-option pairings only merge compatible intact rooms and preserve option FIFO', t => {
+  const flags = [opts(), opts(true)];
   for (const first of flags) for (const second of flags) {
     const h = lobbyFixture(t), a = h.room(2, first), b = h.room(2, second);
     h.lobby.queue.join(a.members[0], { difficulty: 'NORMAL', party: true });
     h.lobby.queue.join(b.members[0], { difficulty: 'NORMAL', party: true });
-    if (first.revivalEnabled === second.revivalEnabled && first.disableSharedPool === second.disableSharedPool) {
+    if (first.disableSharedPool === second.disableSharedPool) {
       assert.equal(h.lobby.queue.offers.size, 1);
       assert.deepEqual([...h.lobby.queue.offers.values()][0].experimental, first);
     } else {
@@ -129,9 +134,9 @@ test('all sixteen party-option pairings only merge compatible intact rooms and p
   }
 });
 
-test('failed public startup preserves both experimental flags and original party tickets', t => {
+test('failed public startup preserves experimental options and original party tickets', t => {
   class BrokenMatch extends RecordingMatch { start() { throw new Error('fixture start failure'); } }
-  const h = lobbyFixture(t, Lobby, { MatchClass: BrokenMatch }), a = h.room(2, opts(true, true)), solos = [h.player(), h.player()];
+  const h = lobbyFixture(t, Lobby, { MatchClass: BrokenMatch }), a = h.room(2, opts(true)), solos = [h.player(), h.player()];
   h.lobby.queue.join(a.members[0], { difficulty: 'NORMAL', party: true });
   for (const solo of solos) h.lobby.queue.join(solo, { difficulty: 'NORMAL' });
   const players = [...a.members, ...solos], entries = players.map(player => h.lobby.queue.entries.get(player.playerId));
@@ -139,16 +144,9 @@ test('failed public startup preserves both experimental flags and original party
   for (let i = 0; i < 3; i++) assert.deepEqual(h.lobby.queue.accept(players[i], states[i]), { ok: true });
   assert.equal(h.lobby.queue.accept(players[3], states[3]).error, ERR.INTERNAL);
   assert.equal(h.lobby.roomOf(a.members[0]), a.owner); assert.equal(a.owner.disposed, false); assert.equal(a.owner.match, null);
-  assert.deepEqual(a.owner.experimental, opts(true, true));
+  assert.deepEqual(a.owner.experimental, opts(true));
   for (let i = 0; i < players.length; i++) assert.equal(h.lobby.queue.entries.get(players[i].playerId), entries[i]);
   assert.equal(h.lobby.queue.offers.size, 0); assert.equal(h.lobby.queue.size, 4);
-});
-
-test('four solos cannot enable experimental settings via obsolete votes', t => {
-  const h = lobbyFixture(t), players = Array.from({ length: 4 }, h.player);
-  for (const player of players) h.lobby.queue.join(player, { difficulty: 'NORMAL' });
-  for (const player of players) h.lobby.queue.accept(player, { ...h.lobby.queue.state(player), revivalVote: true });
-  assert.deepEqual(h.lobby.roomOf(players[0]).experimental, EXPERIMENTAL_DEFAULTS);
 });
 
 test('cluster manual option change aborts the old actor immediately and preserves newly selected options', async t => {
@@ -158,16 +156,16 @@ test('cluster manual option change aborts the old actor immediately and preserve
     prepare(spec, context) { call = { spec, context }; return new Promise(done => { resolve = done; }); } };
   const h = lobbyFixture(t, ClusterLobby, { platform }), { owner, members } = h.room(1), pending = h.lobby.start(members[0]);
   assert.deepEqual(call.spec.experimental, opts());
-  assert.deepEqual(h.lobby.setExperimental(members[0], { experimental: opts(true, true) }), { ok: true });
+  assert.deepEqual(h.lobby.setExperimental(members[0], { experimental: opts(true) }), { ok: true });
   assert.equal(call.context.signal.aborted, true); assert.ok((await pending).error);
   resolve({ assignmentId: call.spec.assignmentId, nodeId: 'fixture-node', generation: 'fixture-generation',
     commit() { throw new Error('must not commit'); }, publish() { throw new Error('must not publish'); }, abort() { aborted++; } });
   for (let i = 0; i < 20; i++) await Promise.resolve();
-  assert.equal(aborted, 1); assert.equal(owner.match, null); assert.deepEqual(owner.experimental, opts(true, true));
+  assert.equal(aborted, 1); assert.equal(owner.match, null); assert.deepEqual(owner.experimental, opts(true));
 });
 
 for (const independent of [false, true]) test(`card pool shared=${!independent}: purchase/merge/refund/elimination use the owner stock`, t => {
-  const h = makeMatch({ humans: 2, fake: true, experimental: opts(false, independent) }), m = h.m;
+  const h = makeMatch({ humans: 2, fake: true, experimental: opts(independent) }), m = h.m;
   t.after(() => m.dispose());
   const [a, b] = m.order, id = [...m.pool.entries].find(([id, e]) => e.tier === 1 && m.gd.goldenIdOf(id) && m.gd.mergeCount(id) === 3)[0];
   assert.equal(a.pool === b.pool, !independent);
@@ -185,7 +183,7 @@ for (const independent of [false, true]) test(`card pool shared=${!independent}:
 });
 
 test('independent exhausted stock does not starve a teammate shop or chess effect pool', t => {
-  const h = makeMatch({ humans: 2, fake: true, experimental: opts(false, true) }), m = h.m;
+  const h = makeMatch({ humans: 2, fake: true, experimental: opts(true) }), m = h.m;
   t.after(() => m.dispose());
   const [a, b] = m.order, id = [...a.pool.entries.keys()][0];
   a.pool.take(id, a.pool.cap(id));
@@ -198,10 +196,10 @@ test('independent exhausted stock does not starve a teammate shop or chess effec
 });
 
 test('independent card pool full fake gameplay preserves bots, economy and per-seat stock accounting', t => {
-  const h = makeMatch({ humans: 2, bots: 2, fake: true, seed: 31, experimental: opts(false, true) });
+  const h = makeMatch({ humans: 2, bots: 2, fake: true, seed: 31, experimental: opts(true) });
   t.after(() => h.m.dispose());
   h.autoHumans().start();
-  h.onBroadcast.push(frame => { if (frame.t === 'm.public') assert.deepEqual(frame.experimental, opts(false, true)); });
+  h.onBroadcast.push(frame => { if (frame.t === 'm.public') assert.deepEqual(frame.experimental, opts(true)); });
   h.runToEnd({ maxSteps: 3e6 });
   assert.deepEqual(collectViolations(h.m), []);
   assert.equal(h.m.errorCount, 0); assert.equal(h.m.simErrors, 0);
@@ -209,7 +207,7 @@ test('independent card pool full fake gameplay preserves bots, economy and per-s
 });
 
 for (const independent of [false, true]) test(`exhausted owner stock shared=${!independent}: real shop buy and sale preserve funds and teammate copies`, t => {
-  const h = makeMatch({ humans: 2, fake: true, experimental: opts(false, independent) });
+  const h = makeMatch({ humans: 2, fake: true, experimental: opts(independent) });
   t.after(() => h.m.dispose()); h.start().toPrep();
   const m = h.m, [a, b] = m.order, id = [...a.pool.entries].find(([id, e]) => e.tier === 1 && m.gd.goldenIdOf(id) && m.gd.mergeCount(id) === 3)[0];
   const cap = a.pool.cap(id);
@@ -231,7 +229,7 @@ for (const independent of [false, true]) test(`exhausted owner stock shared=${!i
 });
 
 test('player-owned effect context draws and grants only its personal pool copies', t => {
-  const h = makeMatch({ humans: 2, fake: true, experimental: opts(false, true) }), m = h.m;
+  const h = makeMatch({ humans: 2, fake: true, experimental: opts(true) }), m = h.m;
   t.after(() => m.dispose()); const [a, b] = m.order;
   const id = [...a.pool.entries.keys()].find(id => m.gd.chess(id)?.tier === 1);
   for (let i = 0; i < a.pool.cap(id); i++) a.acquireChess(id);
@@ -243,15 +241,15 @@ test('player-owned effect context draws and grants only its personal pool copies
   assert.deepEqual(collectViolations(m), []);
 });
 
-test('GameHost validates and forwards experimental options, rejecting incoherent redundant flags', t => {
+test('GameHost validates and forwards experimental options, rejecting unknown or incoherent flags', t => {
   const host = new GameHost({ MatchClass: RecordingMatch }); t.after(() => host.close());
   const spec = { assignmentId: 'new-options', roomCode: 'TEST', build: 'fixture', protocol: 1, seed: 7, matchNo: 1,
-    mode: 'coop', difficulty: 'NORMAL', modeId: 'mode_multi_normal', revivalEnabled: true, disableSharedPool: true,
-    experimental: opts(true, true), seats: [{ seat: 0, playerId: 'p0', name: 'Fixture', isBot: false, connected: true }] };
+    mode: 'coop', difficulty: 'NORMAL', modeId: 'mode_multi_normal', disableSharedPool: true,
+    experimental: opts(true), seats: [{ seat: 0, playerId: 'p0', name: 'Fixture', isBot: false, connected: true }] };
   const view = host.prepare(spec);
-  assert.deepEqual(view.experimental, opts(true, true)); assert.equal(view.disableSharedPool, true);
-  assert.deepEqual(host.contexts.get(spec.assignmentId).match.opts.experimental, opts(true, true));
-  for (const patch of [{ revivalEnabled: false }, { disableSharedPool: false }, { experimental: { ...opts(true, true), extra: true } }, { disableSharedPool: 'true' }]) {
+  assert.deepEqual(view.experimental, opts(true)); assert.equal(view.disableSharedPool, true);
+  assert.deepEqual(host.contexts.get(spec.assignmentId).match.opts.experimental, opts(true));
+  for (const patch of [{ revivalEnabled: false }, { disableSharedPool: false }, { experimental: { ...opts(true), extra: true } }, { disableSharedPool: 'true' }]) {
     assert.throws(() => host.prepare({ ...spec, assignmentId: 'bad-options', ...patch }), error => error.code === 'INVALID_SPEC');
   }
 });

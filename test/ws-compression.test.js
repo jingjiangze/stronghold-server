@@ -9,7 +9,7 @@ import { resolveWsCompression, isCompressibleType, parseExtraCompressibleTypes, 
 import { PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 
 // Base whitelist for this fork: the audited battle-traffic set plus the fork's own damage-board streams.
-const TYPES = ['b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result', 'm.damage', 'b.damage'];
+const TYPES = ['b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result', 'm.damage'];
 // The subset the encode-once lobby path (sendEncodedToPlayer) accepts; all of them are compressible.
 const ENCODED_TYPES = ['b.snap', 'b.ev', 'm.field', 'm.damage', 'b.damage'];
 const EXPECTED_OPTIONS = {
@@ -236,7 +236,7 @@ describe('WebSocket compression policy', { concurrency: false }, () => {
 
   test('only the repetitive battle traffic is compressible', () => {
     for (const type of TYPES) assert.equal(isCompressibleType(type), true, type);
-    for (const type of ['welcome', 'hello', 'pong', 'ok', 'error', 'room.state', 'lobby.presence', 'queue.state', 'm.ticker', 'b.result', 'constructor', '__proto__', '', undefined, null, 1]) {
+    for (const type of ['welcome', 'hello', 'pong', 'ok', 'error', 'room.state', 'lobby.presence', 'queue.state', 'm.ticker', 'b.result', 'b.damage', 'constructor', '__proto__', '', undefined, null, 1]) {
       assert.equal(isCompressibleType(type), false, 'non-allowlisted type stays uncompressed');
     }
   });

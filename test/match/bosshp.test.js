@@ -11,12 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PHASE } from '../../shared/constants.js';
-import { makeMatch as makeHarnessMatch, DATA as LIVE_DATA } from './harness.js';
-import { officialBossData } from './official-boss-fixture.js';
-
-// Explicit official input: this fork intentionally retains alive/4 in its runtime config.
-const DATA = officialBossData(LIVE_DATA);
-const makeMatch = (opts = {}) => makeHarnessMatch({ ...opts, data: opts.data ?? DATA });
+import { makeMatch, DATA } from './harness.js';
 import { aggregateMods } from '../../server/sim/buffs.js';
 import { bondBb } from '../../server/sim/content/bonds/addon/battle.js';
 import { DataSource } from '../../server/sim/simdata.js';

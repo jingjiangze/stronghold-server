@@ -12,8 +12,8 @@ const OK = Object.freeze({ ok: true });
 const fail = (error, detail) => ({ error, detail });
 const id = () => randomBytes(16).toString('hex');
 // Preserve ordinary-room preference order; each pool appends any newer room-owned option keys.
-const LEGACY_OPTION_KEYS = Object.freeze([false, true].flatMap(revivalEnabled => [false, true]
-  .map(disableSharedPool => experimentalKey({ revivalEnabled, disableSharedPool }))));
+const LEGACY_OPTION_KEYS = Object.freeze([false, true]
+  .map(disableSharedPool => experimentalKey({ disableSharedPool })));
 
 // Observe cleanup/invalid async-commit rejections without logging provider data.
 function observeThenable(value) {
@@ -182,7 +182,7 @@ export class Matchmaking {
       experimental, required, sequence: ++this.sequence, entries: [] };
     unit.entries = sessions.map((member) => ({
       session: member, key: member.limitKey, ticketId: id(), difficulty, version: member.matchmakingVersion, party: unit,
-      joinedAt: now, expiresAt: now + this.opts.waitMs, sequence: unit.sequence, offerId: null, accepted: false, revivalVote: null,
+      joinedAt: now, expiresAt: now + this.opts.waitMs, sequence: unit.sequence, offerId: null, accepted: false,
     }));
     if (unit.entries.some((e) => !this.available(e.session, e))) return fail(ERR.WRONG_PHASE, 'party member unavailable');
     this.parties.set(unit.id, unit);
@@ -202,8 +202,7 @@ export class Matchmaking {
     return OK;
   }
 
-  accept(session, { ticketId, offerId, revivalVote }) {
-    if (revivalVote !== undefined && typeof revivalVote !== 'boolean') return fail(ERR.BAD_MSG, 'invalid obsolete vote');
+  accept(session, { ticketId, offerId }) {
     this.refresh(session);
     if (this.closed) return fail(ERR.WRONG_PHASE, 'matchmaking is closed');
     const e = this.entries.get(session.playerId);
@@ -222,7 +221,6 @@ export class Matchmaking {
       this.push(e);
       return OK;
     }
-    e.revivalVote = false; // Legacy bookkeeping only; no player vote selects room rules.
     e.accepted = true;
     this.pushAll(offer.entries);
     if (!offer.entries.every((x) => x.accepted)) return OK;
@@ -271,7 +269,7 @@ export class Matchmaking {
       cancelled: false, cleaned: false, completed: false, result: null,
       entries: offer.entries.map((entry) => ({ entry, session: entry.session, playerId: entry.session.playerId,
         ticketId: entry.ticketId, version: entry.version, party: entry.party, difficulty: entry.difficulty,
-        expiresAt: entry.expiresAt, sequence: entry.sequence, revivalVote: entry.revivalVote, experimental: entry.party.experimental })),
+        expiresAt: entry.expiresAt, sequence: entry.sequence, experimental: entry.party.experimental })),
     };
     offer.allocation = allocation;
     offer.deadline = Math.min(offer.deadline, this.now() + this.allocationMs);
@@ -307,7 +305,7 @@ export class Matchmaking {
           && e.party.required === allocation.required && e.party.experimental === saved.experimental
           && (!e.party.experimental || sameExperimental(e.party.experimental, offer.experimental))
           && (allocation.required <= MAX_SEATS || e.session.playerCapacityVersion === PLAYER_CAPACITY_VERSION)
-          && e.accepted === true && e.revivalVote === saved.revivalVote && e.expiresAt > now
+          && e.accepted === true && e.expiresAt > now
           && e.session.matchmakingVersion === saved.version && (e.session.limitKey || null) === (e.key || null)
           && (!inspectAvailable || this.available(e.session, e));
       });
@@ -398,7 +396,6 @@ export class Matchmaking {
       if (this.entries.get(e.session.playerId) !== e) continue;
       e.offerId = null;
       e.accepted = false;
-      e.revivalVote = null;
       if (removedParties.has(e.party) || unconfirmedParties.has(e.party)) {
         this.entries.delete(e.session.playerId);
         this.idle(e, removedParties.has(e.party) ? reason : 'unconfirmed');
@@ -480,7 +477,7 @@ export class Matchmaking {
           deadline: Math.min(this.now() + this.opts.acceptMs, ...entries.map((e) => e.expiresAt)), entries };
         this.offers.set(offer.id, offer);
         for (const party of parties) unused.delete(party);
-        for (const e of entries) { e.offerId = offer.id; e.accepted = false; e.revivalVote = null; e.reason = null; }
+        for (const e of entries) { e.offerId = offer.id; e.accepted = false; e.reason = null; }
         this.pushAll(entries);
       }
     }

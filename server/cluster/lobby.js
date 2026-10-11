@@ -24,7 +24,7 @@ const sameSet = (a, b) => a.size === b.size && [...a].every(value => b.has(value
 function matchDTO(room, seed, snapshotHz) {
   return {
     roomCode: room.code, mode: room.mode, difficulty: room.difficulty, modeId: modeIdFor(room.mode, room.difficulty),
-    revivalEnabled: room.revivalState().enabled, disableSharedPool: room.experimental.disableSharedPool,
+    disableSharedPool: room.experimental.disableSharedPool,
     experimental: room.experimental, aiPicksLast: room.mode !== 'solo' && room.aiPicksLast === true, seed, matchNo: room.matchCount + 1,
     seats: room.seats.filter(Boolean).map(s => ({ seat: s.seat, playerId: s.playerId, name: s.name,
       isBot: s.isBot, connected: s.connected, loadout: structuredClone(s.isBot ? null : s.loadout || null),
@@ -35,7 +35,7 @@ function matchDTO(room, seed, snapshotHz) {
   };
 }
 function optsDTO(opts) {
-  const fields = ['roomCode', 'mode', 'difficulty', 'modeId', 'revivalEnabled', 'disableSharedPool', 'experimental', 'aiPicksLast', 'seed', 'matchNo', 'seats', 'spectators'];
+  const fields = ['roomCode', 'mode', 'difficulty', 'modeId', 'disableSharedPool', 'experimental', 'aiPicksLast', 'seed', 'matchNo', 'seats', 'spectators'];
   const dto = Object.fromEntries(fields.map(key => [key, opts[key]]));
   if (opts.snapshotHz !== undefined) dto.snapshotHz = opts.snapshotHz;
   return dto;
@@ -270,7 +270,7 @@ export class ClusterLobby extends Lobby {
     room.source = 'matchmaking'; room.experimental = initial.experimental;
     room.ownerKeys = initial.keys; room.ownerKey = sessions[0].limitKey || null; room.hostId = sessions[0].playerId;
     room.spectators = initial.spectators.map(s => ({ ...s }));
-    room.seats = sessions.map((s, i) => ({ ...this.humanSeat(i, s), ready: true, revivalVote: this.queue.entries.get(s.playerId).revivalVote }));
+    room.seats = sessions.map((s, i) => ({ ...this.humanSeat(i, s), ready: true }));
     const stamps = new Map([...initial.oldRooms].map(old => [old, roomStamp(old)]));
     const entries = sessions.map(s => this.queue.entries.get(s.playerId));
     const tickets = entries.map(e => e.ticketId);
@@ -285,7 +285,7 @@ export class ClusterLobby extends Lobby {
         if (!sessions.every((s, i) => this.queue.entries.get(s.playerId) === entries[i] && entries[i].ticketId === tickets[i])) return false;
         const live = new Room(code, 'coop', difficulty, room.createdAt);
         live.hostId = room.hostId; live.experimental = current.experimental; live.spectators = current.spectators.map(s => ({ ...s }));
-        live.seats = sessions.map((s, i) => ({ ...this.humanSeat(i, s), ready: true, revivalVote: entries[i].revivalVote }));
+        live.seats = sessions.map((s, i) => ({ ...this.humanSeat(i, s), ready: true }));
         return isDeepStrictEqual(matchDTO(live, plan.dto.seed, this.opts.snapshotHz), plan.dto);
       } catch { return false; }
     };
@@ -346,7 +346,7 @@ export class ClusterLobby extends Lobby {
   commitPlan(plan) {
     if (plan.aborted || plan.transferred || !plan.valid()) invalid();
     plan.local = {
-      room: Object.fromEntries(['match', 'matchCtx', 'matchCount', 'matchKey', 'matchKeys', 'revivalLocked', 'replay'].map(key => [key, plan.room[key]])),
+      room: Object.fromEntries(['match', 'matchCtx', 'matchCount', 'matchKey', 'matchKeys', 'replay'].map(key => [key, plan.room[key]])),
       hostReady: plan.room.seatOf(plan.room.hostId)?.ready,
       old: [...plan.oldRooms].map(room => ({ room, disposed: room.disposed, replay: room.replay })),
       sessions: [...plan.sessions, ...plan.room.spectators.map(s => this.registry.byId(s.playerId))]

@@ -248,7 +248,7 @@ function wireNet() {
   net.on('m.field', (msg) => store.patch('match', { field: payload(msg) }));
   net.on('m.damage', (msg) => {
     const s = store.get(), view = s.match.public;
-    const damage = acceptDamageSnapshot(s.match.damage, payload(msg), view?.matchId || view?.revival?.matchId);
+    const damage = acceptDamageSnapshot(s.match.damage, payload(msg), view?.matchId);
     if (damage !== s.match.damage) store.patch('match', { damage });
   });
   net.on('m.result', (msg) => {

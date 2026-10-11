@@ -5,14 +5,14 @@ import { PLAYER_CAPACITIES, isPlayerCapacity, roomCapacity } from '../../../shar
 
 export function experimentalOptions(input) {
   const capacity = roomCapacity('coop', input);
-  return { revivalEnabled: input?.revivalEnabled === true, disableSharedPool: input?.disableSharedPool === true,
+  return { disableSharedPool: input?.disableSharedPool === true,
     ...(capacity > MAX_SEATS && input?.disableDuckLord === true ? { disableDuckLord: true } : {}),
     ...(capacity === MAX_SEATS ? {} : { playerCapacity: capacity }) };
 }
 
 export function experimentalSummary(input) {
   const options = experimentalOptions(input);
-  const summary = t('复活 {0} · 共享卡池 {1}', { 0: options.revivalEnabled ? t('开启') : tc('toggle', '关闭'), 1: options.disableSharedPool ? tc('toggle', '关闭') : t('开启') });
+  const summary = t('共享卡池 {0}', { 0: options.disableSharedPool ? tc('toggle', '关闭') : t('开启') });
   const rules = options.disableDuckLord ? `${summary} · ${t('禁用鸭爵策略')}` : summary;
   return options.playerCapacity ? t('{rules} · {n} 人模式', { rules, n: options.playerCapacity }) : rules;
 }
@@ -39,11 +39,6 @@ export function ExperimentalOptions({ open, value, mode = 'coop', source = 'priv
       class="experimental-modal" onClose=${onClose}
       actions=${html`<${Button} icon="check" onClick=${onClose}>${t('完成')}<//>`}>
     <div class="experimental-options">
-      <label class="experimental-option" for="experimental-revival">
-        <span><strong>${t('队友复活')}</strong><small>${t('符合救援条件的队友可支付 10 生命抵消死亡，每人每局一次。')}</small></span>
-        <input id="experimental-revival" type="checkbox" role="switch" checked=${options.revivalEnabled}
-          disabled=${!editable || busy} onChange=${e => change('revivalEnabled', e.currentTarget.checked)} />
-      </label>
       <label class="experimental-option" for="experimental-pool">
         <span><strong>${t('禁用共享卡池')}</strong><small>${t('每位博士使用独立卡池，不再争用同一干员库存。')}</small></span>
         <input id="experimental-pool" type="checkbox" role="switch" checked=${options.disableSharedPool}

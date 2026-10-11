@@ -122,7 +122,7 @@ Top level: `{ season, seasonName, modes, economy, lpCapPerRound, bossOvertimeAft
 |---|---|---|
 | `lpCapPerRound` | `10` | max LP lost per player per normal round |
 | `bossOvertimeAfter`, `bossOvertimeDrainPerSec` | `150`, `1` | official `bossTurnHpReduceTime`: from 150 **real** s of a boss round the merged team LP loses 1 per whole real second (`gamedata.js bossOvertimeDue`; first point at 151 s) |
-| `bossHpScale` | `{"formula":"co-op: bloodPoint[difficulty] × coop × min(alive, aliveFull) / aliveFull …","perPlayer":false,"coop":1,"solo":0.25,"soloAssumed":true,"aliveScaling":true,"aliveFull":4,"aliveAssumed":true,…}` | active Stardust fork override of upstream 0.2.0; explicit mode-level false takes precedence |
+| `bossHpScale` | `{"formula":"one pool for every boss field …","perPlayer":true,"coop":1,"solo":1,"aliveFull":4,"aliveScaling":false,"aliveAssumed":true,…}` | the pool rule (DESIGN §25.13.4): co-op `bloodPoint × the players alive`, solo × 1; `perPlayer: false` + `solo: 0.25` restore the retired fixed pool of 「保持固定血量」; an explicit mode-level key takes precedence |
 | `hiddenCore` | `{"single":350,"multi":1200,"minTeamLpExclusive":1,"difficulties":["NORMAL","HARD","ABYSS"],"checkedAfterRound":14}` | Σ activated layers must be **>** threshold and LP **>** 1 |
 | `dp` | `{"init":10,"perSec":1,"max":99}` | |
 | `unite` | `{"maxHelpers":2,"helperOrder":"unitsOnField>activeBond>undownedUnits; pair: unitsOnField>activeBond>activeLayers>undownedUnits, first = right field (PRTS 帮助)","layerGainsEnabled":false,"templates":{"1":"act1autochess_escaped_single","2":"act1autochess_escaped_multi"},…}` | 联防; `helperOrder` documents the rule `server/match/unite.js helperOrder` implements (research 08 §5; ties → seat) |
@@ -571,11 +571,11 @@ Glyph legend (`rows`):
 15. 炎佑 name in the enemy DB is `"炎佑"` with literal ASCII quotes.
 16. Research-only fields (null without `docs/research`): stage `name`, item `category/kind/family/implFormula/
     requiresBondId/rangeGrid/flavor`, bond `spec`, E2 art availability (falls back to "char has an E2 phase").
-17. [ASSUMED] content (flagged in data): 机变 family schedule and server pools, the solo leader pool factor
-    (`bossHpScale.solo` 0.25), title criteria, income cap 12, per-turn band-draft timer 30 s (`timers.bandTurn`, the
-    step's only countdown — user playtest #4), the shop-only item list (`SHOP_EXCLUDED_ITEMS`, from play), the alive / 4
-    proportion of co-op alive scaling (`bossHpScale.aliveAssumed`; enabled by user approval on 2026-10-05). The special-enemy
-    generator, the co-op leader pool (`bloodPoint`, one pool for every field) and the 联防 timing are official.
+17. [ASSUMED] content (flagged in data): 机变 family schedule and server pools, title criteria, income cap 12, per-turn
+    band-draft timer 30 s (`timers.bandTurn`, the step's only countdown — user playtest #4), the shop-only item list
+    (`SHOP_EXCLUDED_ITEMS`, from play). The special-enemy generator, the leader pool (`bloodPoint × the players alive`,
+    DESIGN §25.13.4) and the 联防 timing are official. The retired fixed pool's own factors (`bossHpScale.solo` 0.25 and
+    the alive / 4 proportion, `bossHpScale.aliveAssumed`) stay flagged inside its `perPlayer: false` branch only.
 18. **Module parts flagged `isToken`** (伺夜, 浊心斯卡蒂, 缪尔赛思, 耀骑士临光 golden) upgrade the summon only; they are
     applied to `tokens.json` variants, never to the operator's talents/trait.
 19. **Undefined enemy-database fields** (`m_defined:false`): a zero `m_value` means "never set" and falls back to the
@@ -738,8 +738,8 @@ field), 助战 borrows (`borrowCount` 20), and a player's potential / 练度 per
 
 ## Stardust 0.2.0 integration note
 
-The active fork retains its approved co-op `bloodPoint × alive / 4` and solo ×0.25
-leader pool (`perPlayer: false`, `aliveScaling: true`, `aliveFull: 4`). Upstream
-0.2.0 defaults to co-op ×alive and solo ×1; its history and counterfactual rule
-remain documented, not presented as this deployment's default. See
+The active fork follows upstream 0.2.4's leader pool: co-op `bloodPoint × alive`,
+solo ×1 (`perPlayer: true`, `coop: 1`, `solo: 1`, `aliveScaling: false`). The
+retired fixed pool of 「保持固定血量」 stays restorable through `perPlayer: false`
++ `solo: 0.25`. See
 [DESIGN.md — Stardust fork overrides](DESIGN.md#stardust-fork-overrides).

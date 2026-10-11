@@ -1,21 +1,4 @@
 /* Stardust alliance controls. Keep the existing mint tactical UI, without obscuring combat. */
-.revival-vote { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .06rem .22rem; margin: 0 .6rem .18rem; padding: .13rem .2rem; border: 1px solid var(--line-2); border-left: 3px solid var(--mint-700); background: rgba(13, 20, 17, .94); font-size: calc(.15 * var(--t)); }
-.revival-vote__title { display: flex; align-items: center; gap: .08rem; }
-.revival-vote__title > .icon { color: var(--mint-400); }
-.revival-vote__rules { color: var(--text-lo); line-height: 1.5; margin: 0; }
-.revival-vote__rules b { color: var(--text-hi); }
-.revival-vote__actions { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: .1rem; }
-.revival-vote__actions > span { margin-right: auto; }
-.revival-vote > small { grid-column: 1 / -1; color: var(--text-dim); font-size: calc(.12 * var(--t)); line-height: 1.5; }
-.team-rescue { pointer-events: auto; max-width: 2.75rem; display: flex; flex-wrap: wrap; align-items: center; gap: .04rem .12rem; padding: .1rem .12rem; color: var(--mint-400); background: rgba(13, 26, 21, .95); border-left: 2px solid var(--mint-500); font-size: .14rem; }
-.team-rescue > strong { display: flex; gap: .06rem; align-items: center; }
-.team-rescue > small { flex-basis: 100%; font-size: .12rem; color: var(--text-lo); }
-.team-rescue-action { display: flex; flex-direction: column; align-items: flex-start; gap: .02rem; margin-top: .04rem; max-width: 1.8rem; }
-.team-rescue-action > small { color: var(--text-dim); font-size: .11rem; line-height: 1.35; }
-.team-rescue-action .btn { min-height: .32rem; }
-.team__row.is-pending .team__name { color: var(--amber); }
-.pavatar__rescue { position: absolute; right: -.04rem; bottom: -.04rem; width: .28rem; height: .28rem; display: grid; place-items: center; background: var(--amber); color: var(--bg-0); }
-.pavatar__rescue .icon { width: .19rem; height: .19rem; }
 .online-players { display: inline-flex; align-items: center; gap: .06rem; color: var(--text-lo); font-size: calc(.14 * var(--t)); white-space: nowrap; }
 .online-players .icon { width: .19rem; height: .19rem; color: var(--mint-500); }
 .mode-card--match { grid-column: 1 / -1; min-height: 0; padding: .18rem .24rem; flex-direction: row; align-items: center; gap: .18rem; }
@@ -53,10 +36,6 @@
 @keyframes queue-found { from { transform: scale(.8); opacity: .4; } to { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .matchmaking .matchmaking__motion, .matchmaking .matchmaking__motion i { animation: none !important; } }
 .sp-reduced-motion .matchmaking .matchmaking__motion, .sp-reduced-motion .matchmaking .matchmaking__motion i { animation: none; }
-.matchmaking__revival { margin: .12rem 0; padding: .12rem .15rem; background: rgba(23, 36, 30, .65); border-left: 2px solid var(--mint-700); font-size: calc(.15 * var(--t)); }
-.matchmaking__revival strong { color: var(--text-hi); }
-.matchmaking__revival p { font-size: calc(.13 * var(--t)); line-height: 1.6; }
-.matchmaking__revival > span { color: var(--mint-400); }
 .room-screen > [hidden] { display: none !important; }
 .room-matching { flex: 1; min-height: 0; padding: .2rem .6rem; }
 .room-matching__team { max-width: 9rem; margin-inline: auto; }
@@ -66,14 +45,12 @@
 .room-matching__names > span { display: flex; align-items: center; gap: .06rem; color: var(--text-md); font-size: calc(.16 * var(--t)); }
 .room-matching > .matchmaking { max-width: 9rem; margin-inline: auto; }
 @media (max-width: 900px) {
-  .revival-vote { margin-inline: .22rem; grid-template-columns: minmax(0, 1fr); gap: .05rem; padding: .08rem .13rem; }
-  .revival-vote__title .micro { display: none; }
   .room-matching { padding-inline: max(.22rem, 16px); }
   .room-matching__team, .room-matching > .matchmaking { max-width: none; }
   .room-matching__team h2, .matchmaking h2 { font-size: max(calc(.28 * var(--t)), 18px); }
   .room-matching__team p, .matchmaking p { font-size: max(calc(.15 * var(--t)), 12px); }
-  .room-matching__names, .matchmaking__revival { font-size: max(calc(.15 * var(--t)), 12px); }
+  .room-matching__names { font-size: max(calc(.15 * var(--t)), 12px); }
   .matchmaking__status { font-size: max(calc(.17 * var(--t)), 13px); }
-  .matchmaking__revival p, .matchmaking > small { font-size: max(calc(.13 * var(--t)), 11px); }
+  .matchmaking > small { font-size: max(calc(.13 * var(--t)), 11px); }
   .matchmaking__actions .btn { min-height: 40px; font-size: max(calc(.18 * var(--t)), 13px); }
 }

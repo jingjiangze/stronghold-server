@@ -8,7 +8,7 @@ import { normalizeSp } from '../../public/js/ui/gameLogic/draft.js';
 import { cardPickable, ChoiceView, spTap } from '../../public/js/ui/choiceOverlay.js';
 
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8');
-const rules = capacity => ({ revivalEnabled: false, disableSharedPool: false, ...(capacity > 4 ? { playerCapacity: capacity } : {}) });
+const rules = capacity => ({ disableSharedPool: false, ...(capacity > 4 ? { playerCapacity: capacity } : {}) });
 const walk = node => Array.isArray(node) ? node.flatMap(walk) : node?.props ? [node, ...walk(node.props.children)] : [];
 const seat = (i, ready = true) => ({ seat: i, playerId: `p${i}`, name: `Capacity${i}`, ready, connected: true, isBot: false });
 
@@ -35,7 +35,7 @@ test('party queue allows every capacity mode but still requires every other huma
   }
 });
 
-test('capacity UI sends immutable full options, can restore defaults, and never changes pool or rescue toggles', () => {
+test('capacity UI sends immutable full options, can restore defaults, and never changes pool toggles', () => {
   const value = rules(4), changes = [];
   const view = ExperimentalOptions({ open: true, value, editable: true, onChange: next => changes.push(next) });
   const toggle = walk(view).find(node => node.props.id === 'experimental-multiplayer');
@@ -49,7 +49,7 @@ test('capacity UI sends immutable full options, can restore defaults, and never 
   picker.props.onChange({ currentTarget: { value: '21' } }); assert.deepEqual(changes.at(-1), rules(16));
   walk(expanded).find(node => node.props.id === 'experimental-multiplayer').props.onChange({ currentTarget: { checked: false } });
   assert.deepEqual(changes.at(-1), rules(4));
-  assert.equal(experimentalSummary(rules(20)), '复活 关闭 · 共享卡池 开启 · 20 人模式');
+  assert.equal(experimentalSummary(rules(20)), '共享卡池 开启 · 20 人模式');
   assert.deepEqual(experimentalOptions({ ...rules(4), playerCapacity: '20' }), rules(4));
 });
 
