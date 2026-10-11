@@ -51,11 +51,22 @@ RUN node tools/vendor.mjs \
 
 # ---- 3. runtime ---------------------------------------------------------------------------------------
 FROM ${NODE_IMAGE}
+# 边缘层：nginx + lua-nginx-module 做素材的 302 分流（deploy/stardust/ms-edge/）。
+# OpenResty 官方不提供 alpine 包、也没有 Windows 构建；nginx-mod-http-lua 就是同一套
+# lua-nginx-module（OpenResty = nginx + 该模块 + LuaJIT），所以这里直接装等价组件。
+# 用 aliyun 镜像源：构建机在境内，alpine 官方源实测不可达。
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
+ && apk add --no-cache nginx nginx-mod-http-lua lua-resty-core lua-resty-lrucache lua5.1-cjson \
+ && mkdir -p /tmp/sp-edge \
+ && chown -R node:node /tmp/sp-edge
+
 # ModelScope 创空间要求容器监听 0.0.0.0:7860，且端口不可改
 # (deploy_schema.json: port.const = 7860；8080 被平台进程占用)
+# nginx 占 7860（对外），游戏本体退到 127.0.0.1:3000（enrtypoint.sh 里导出 PORT）。
 ENV NODE_ENV=production \
-    PORT=7860 \
-    HOST=0.0.0.0
+    SP_GAME_PORT=3000 \
+    PORT=3000 \
+    HOST=127.0.0.1
 WORKDIR /app
 COPY --from=deps /app/package.json ./package.json
 COPY --from=deps /app/node_modules ./node_modules
@@ -66,9 +77,16 @@ COPY --from=build /app/data ./data
 COPY --from=build /app/public ./public
 # research tables: read by server/sim/nodeData.js as a fallback
 COPY --from=build /app/docs/research ./docs/research
+# 边缘层：配置、分流脚本与入口。nginx.conf/sources.json 是数据，edge.lua 是决策。
+COPY deploy/stardust/ms-edge/nginx.conf /app/deploy/stardust/ms-edge/nginx.conf
+COPY deploy/stardust/ms-edge/edge.lua /app/deploy/stardust/ms-edge/edge.lua
+COPY deploy/stardust/ms-edge/sources.json /app/deploy/stardust/ms-edge/sources.json
+COPY deploy/stardust/ms-edge/entrypoint.sh /app/deploy/stardust/ms-edge/entrypoint.sh
+RUN chmod +x /app/deploy/stardust/ms-edge/entrypoint.sh
 
 USER node
 EXPOSE 7860
+# 探的是对外那个口，因为现在 7860 是 nginx：它活着且能代理到游戏，才算这个容器健康。
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/healthz" || exit 1
-CMD ["node", "server/index.js"]
+  CMD wget -q -O /dev/null "http://127.0.0.1:7860/healthz" || exit 1
+CMD ["/app/deploy/stardust/ms-edge/entrypoint.sh"]

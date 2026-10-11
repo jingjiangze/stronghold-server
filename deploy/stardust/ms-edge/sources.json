@@ -1,0 +1,22 @@
+{
+  "_comment": "边缘层的分流表。容器的 /assets/** 与 /fonts/** 按这里的顺序 302 出去，字节从不落在容器上。",
+  "_order_note": "这是静态顺序，不是实时测速：容器在 ModelScope 机房，玩家在全国各地，容器量出来的链路速度不代表玩家的。真正按玩家网络选最快是客户端 pick.js 的事，两者分工。客户端可用 ?sp_source=<id> 覆盖这里的顺序。",
+  "schemaVersion": 1,
+  "order": ["modelscope", "r2"],
+  "sources": [
+    {
+      "id": "modelscope",
+      "base": "https://modelscope.cn/datasets/jingjiangze/Stronghold-Protocol-Assets/resolve/master/releases/v1-trial",
+      "note": "自建数据集镜像（公开）。15,979 assets + 7 fonts，逐字节校验过。用 master 而不是钉 40-hex：镜像每 6 小时同步一次，钉版会让新素材在换版前不可见。"
+    },
+    {
+      "id": "r2",
+      "base": "https://weishucdn.jiangjiangze.icu",
+      "note": "现有主源（R2 私有桶 + 自有域）。作为兜底，并且是下面 exceptions 的目标。"
+    }
+  ],
+  "_exceptions_note": "数据集不是逐字节完整的：ModelScope 的内容审核会拒收个别文件（实测拒了 char_340_shwaz_snow_1/illustration.png，提交被平台 reverted）。这些路径必须落到别的源，否则玩家拿到 404。Stardust 的 material-lb 有同一张表，说明这是会复发的类型，不是一次性事故。",
+  "exceptions": {
+    "/assets/skins/char_340_shwaz_snow_1/illustration.png": "r2"
+  }
+}
