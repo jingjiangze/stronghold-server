@@ -594,10 +594,10 @@ test('playtest6b follow-up (DESIGN §20.10–§20.13): leader HP, 直接乘算, 
   assert.match(s209, /`shared\/constants\.js BOND_LAYER_CAP = 0`/);
   assert.match(s209, /`shared\/constants\.js BOSS_HIT_LIMIT = 0`/);
   assert.match(s209, /Settled by the user \("保持固定血量"\)[^\n]*aliveScaling` is \*\*false\*\*[^\n]*Replaced on 2026-10-06 by the owner's decision[^\n]*§25\.13\.4/);
-  // The upstream record stays historical; this fork deliberately retains its approved quarter-pool rule.
-  assert.equal(DATA.config.bossHpScale.perPlayer, false, 'Stardust explicitly keeps its approved Boss rule');
-  assert.equal(DATA.config.bossHpScale.aliveScaling, true, 'co-op samples alive / 4 at each boss start');
-  assert.equal(DATA.config.bossHpScale.solo, 0.25, 'solo retains the approved quarter-pool factor');
+  // 2026-10-11 决策（D1）：上游优先，Boss 血量跟随上游 jingjiangze v0.2.4（PR #209 的按存活玩家分池规则）。
+  assert.equal(DATA.config.bossHpScale.perPlayer, true, 'follow upstream: pool per player alive at fight start (PR #209)');
+  assert.equal(DATA.config.bossHpScale.aliveScaling, false, 'the fixed pool\'s optional scaling stays off (upstream)');
+  assert.equal(DATA.config.bossHpScale.solo, 1, 'solo follows upstream (=1, not the quarter-pool factor)');
   assert.match(doc('docs/DESIGN.md'), /intentional difference from upstream 0\.2\.0/);
   assert.equal(SIM_CONST.DIRECT_BONUS_STACKING, 'add');
   assert.match(s209, /DIRECT_BONUS_STACKING = 'multiply'/);
