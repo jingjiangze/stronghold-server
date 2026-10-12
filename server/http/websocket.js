@@ -21,7 +21,7 @@ export const WS_MAX_PAYLOAD = 64 * 1024;
  * @param {{ data: object, log: object }} deps the game data the lobby's matches use, the logger
  * @returns {{ registry: SessionRegistry, lobby: Lobby, network: Network }}
  */
-export function createSessionStack(opts, { data, log, combatPool = null, trialPool = null, getLoadState, getLoadDetails }) {
+export function createSessionStack(opts, { data, log, combatPool = null, trialPool = null, getLoadState, getLoadDetails, preDispatch = null, onConnection = null }) {
   if (opts.lobbyFactory != null && typeof opts.lobbyFactory !== 'function') throw new TypeError('invalid lobby factory');
   if (opts.getClusterLoad != null && typeof opts.getClusterLoad !== 'function') throw new TypeError('invalid cluster load provider');
   const netOptions = netOptionsFrom(opts);
@@ -29,6 +29,10 @@ export function createSessionStack(opts, { data, log, combatPool = null, trialPo
   const lobbyOptions = lobbyOptionsFrom(opts);
   const createLobby = opts.lobbyFactory || (params => new Lobby(params));
   const lobby = createLobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, combatPool, trialPool, options: lobbyOptions });
+  // A pack's pre-dispatch bus (server/modBridge.js). Both stay `undefined` when no pack declared one, and Network's
+  // `onFrame` tests `typeof === 'function'` — so an install with no such pack does not enter the branch at all.
+  if (preDispatch != null) netOptions.preDispatch = preDispatch;
+  if (onConnection != null) netOptions.onConnection = onConnection;
   const network = new Network({ registry, handler: lobby, log, options: netOptions, getLoadState, getLoadDetails, getClusterLoad: opts.getClusterLoad });
   return { registry, lobby, network };
 }

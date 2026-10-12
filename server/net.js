@@ -567,6 +567,12 @@ export class Network {
     ws.on('pong', () => { conn.alive = true; if (conn.session && conn.session.ws === ws) conn.session.lastSeen = this.now(); });
     ws.on('error', (e) => { this.log.debug?.('[net] socket error', e?.code || e?.message); });
     ws.on('close', () => { try { this.onClose(conn); } catch (e) { this.log.error('[net] close handler crashed', e); } });
+    // The other half of a pack's `server.preDispatch` declaration: a hook that must say something at connection time
+    // (a challenge, a greeting) cannot wait for `hello` — that is why the bus is consulted before ping/hello above.
+    // Without such a pack this is a no-op; the bus catches a throwing hook per pack, this catches the rest.
+    if (typeof this.opts.onConnection === 'function') {
+      try { this.opts.onConnection(conn); } catch (e) { this.log.error('[net] onConnection hook crashed', e); }
+    }
   }
 
   /** @param {Connection} conn @param {object} msg */
@@ -604,6 +610,29 @@ export class Network {
     }
     const reason = validateC2S(msg);
     if (reason) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, reason)); return; }
+
+    // A pack's declared pre-dispatch hook (the mod-manager contract's `server.preDispatch`; assembled by
+    // server/modBridge.js out of server/modDispatch.js). The placement is the intersection of three constraints, and
+    // missing any one of them fails silently:
+    //   * AFTER the `Object.hasOwn(C2S, msg.t)` check and `validateC2S` above — the hook may trust the field shapes,
+    //     and a type this server does not have must be rejected as an unknown type, not delivered to a hook;
+    //   * BEFORE the `ping` / `hello` branches below — a gate's own message types are not `hello`, and the reply a
+    //     hook sends on connection often arrives before the client says hello;
+    //   * BEFORE `if (!conn.session)` ("hello required") below — after it, anything sent before hello is answered
+    //     "hello required" and the gate can never close.
+    // Returning true means the hook consumed the message (and owns the reply, which must carry the `rid` it got).
+    //
+    // With no pack declaring one, `this.opts.preDispatch` is undefined: this typeof check does not enter, no object is
+    // created, no log line is written, and no second `socket.on('message')` exists (that would double-dispatch
+    // side-effecting types like `room.create` / `g.buy`) — onFrame behaves exactly as it did without this line.
+    if (typeof this.opts.preDispatch === 'function') {
+      try {
+        if (this.opts.preDispatch(conn, msg)) return;
+      } catch (e) {
+        // The bus catches a throwing hook per pack already; this is the last line of defence for the frame handler.
+        this.log.error('[net] preDispatch hook crashed', e);
+      }
+    }
 
     if (msg.t === 'ping') {
       const pong = { t: 'pong', c: msg.c, s: now };

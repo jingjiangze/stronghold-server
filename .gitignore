@@ -68,3 +68,6 @@ deploy/stardust/**/auth-secrets/
 *.key
 *.p12
 *.pfx
+
+# --- mod state directory (server/modModules.js: <stateRoot>/mod/<packId>/) -----------------------
+var/

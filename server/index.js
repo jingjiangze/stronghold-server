@@ -14,9 +14,12 @@ import { BUILD_INPUTS, computeBuildTag, buildTag, resetBuildTag } from './http/b
 import { createRequestHandler } from './http/routes.js';
 import { answerClientError } from './http/common.js';
 import { lanUrls, displayHost, isProcessEntry, runMain } from './http/boot.js';
+import { Match } from './match/Match.js';
 import { CombatWorkerPool } from './match/combat/pool.js';
+import { loadWorkshopServer } from './modBridge.js';
 import { createHealthMetrics, serverLoadState, publicLoadDetails } from './healthMetrics.js';
 import { resolveWsCompression, wsCompressionMode, createTransportRoutes } from './wsCompression.js';
+import { announcementsUrlFrom, createAnnouncementSource } from './http/announcements.js';
 import { parseSnapshotHz } from './match/fields.js';
 
 export {
@@ -75,16 +78,33 @@ export async function startServer(opts = {}) {
     }
   }
   let registry, lobby, network, packs, serveStatic, browserBuild;
+  let workshop = null;
   const startedAt = Date.now();
   try {
-    ({ registry, lobby, network } = createSessionStack({ ...opts, snapshotHz }, {
+    packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
+    packs.refresh(true);
+    // A pack's declared server-side payload (the mod-manager contract's `server.preDispatch` / `server.modules`,
+    // server/modBridge.js). It is loaded AFTER the scan but BEFORE the session stack: what it assembles becomes two
+    // Network options and the MatchClass wrapper. A pack whose declared payload cannot be installed is dropped
+    // entirely (named in the log) rather than loading without the thing it declared.
+    workshop = await loadWorkshopServer(packs.list('workshop'), {
+      log, repoRoot: ROOT,
+      // The framework's own send helper: it carries the backpressure guard, so a pack never writes to the socket.
+      // It closes over `network`, which exists by the time a hook can possibly be called.
+      send: (conn, msg) => network?.reply(conn, msg),
+    });
+    ({ registry, lobby, network } = createSessionStack({ ...opts, MatchClass: workshop.matchClassFor(opts.MatchClass ?? Match) }, {
       data, log, combatPool, trialPool,
       getLoadState: () => serverLoadState(healthMetrics?.snapshot?.()),
       getLoadDetails: () => publicLoadDetails(healthMetrics?.snapshot?.()),
+      preDispatch: workshop.preDispatch,
+      onConnection: workshop.onConnection,
     }));
-    packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
-    packs.refresh(true);
-    serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, packs, log });
+    // The notice board's external source (server/http/announcements.js): null unless SP_ANNOUNCEMENTS_URL names
+    // one, in which case data/announcements.json on disk stays the one and only answer.
+    const announcementsUrl = announcementsUrlFrom(opts);
+    const announcements = announcementsUrl ? createAnnouncementSource({ url: announcementsUrl, log }).start() : null;
+    serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, packs, announcements, log });
     browserBuild = computeBuildTag(ROOT, publicDir);
   } catch (e) {
     network?.close();
@@ -93,7 +113,7 @@ export async function startServer(opts = {}) {
     throw e;
   }
   const health = { startedAt, network, registry, lobby, browserBuild, combatPool, trialPool, trialStartupFailed,
-    getHealthMetrics: () => healthMetrics };
+    getHealthMetrics: () => healthMetrics, modHealth: () => workshop.healthz(), modPacks: workshop.packs };
   // The read-only transport surface (upstream stronghold-ws-compression): declared before the static mount.
   const transportRoutes = createTransportRoutes({ mode: wsMode, sockets: () => network.connectionCount, startedAt });
   const server = http.createServer(createRequestHandler({ serveStatic, health, log, transportRoutes }));
@@ -147,10 +167,14 @@ export async function startServer(opts = {}) {
   const addr = server.address();
   const actualPort = typeof addr === 'object' && addr ? addr.port : port;
   const url = `http://${displayHost(boundHost)}:${actualPort}`;
+  // A pack's boot hooks run once the server is listening (server/modBridge.js); a throwing module is logged there and
+  // must never stop the server.
+  workshop.boot();
   let closing = null;
   async function close() {
     if (closing) return closing;
     closing = (async () => {
+      try { workshop.shutdown(); } catch (e) { log.error('[shutdown] workshop module', e); }
       try { healthMetrics?.dispose(); } catch (e) {
         try { log.warn?.('[health] performance disposal failed', e); } catch { /* diagnostic only */ }
       }

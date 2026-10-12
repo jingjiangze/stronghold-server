@@ -74,6 +74,21 @@ export const CLIENT_REQUIRES = Object.freeze(['serviceWorker', 'cacheStorage', '
 
 /** `server.modules[*].uses`, the mount points (Forge L384). */
 export const SERVER_MODULE_USES = Object.freeze(['boot', 'shutdown', 'matchClass', 'healthz']);
+/** The closed field set of one `server.modules[*]` entry (Forge L386). */
+export const SERVER_MODULE_FIELDS = Object.freeze(['id', 'entry', 'uses', 'write']);
+/** How many server modules one pack may declare (Forge L388). */
+export const MAX_SERVER_MODULES = 8;
+/** A server module is ESM the SERVER loads: the browser and the battle sim never do (Forge L390). */
+export const SERVER_MODULE_EXT = '.mjs';
+/** A `server.modules[*].id` — the same pattern upstream calls RECORD_ID_RE (Forge L165), exported under that name. */
+export const RECORD_ID_RE = /^[A-Za-z0-9_\-.:]{1,64}$/;
+/** `/healthz`: how many fields and how many bytes one pack may contribute (Forge server/modModules.js L136). */
+export const HEALTHZ_LIMITS = Object.freeze({ fields: 12, bytes: 2048 });
+
+/** `server.preDispatch`: the closed field set (Forge L338) and the module extension (Forge L411). */
+export const PRE_DISPATCH_FIELDS = Object.freeze(['module', 'policy', 'intercepts']);
+export const PRE_DISPATCH_MODULE_EXT = '.mjs';
+
 /** The registry classes of `server.meta.registers` (Forge L400). */
 export const META_KEY_CLASSES = Object.freeze(['garrison', 'band', 'bond', 'item', 'choice', 'effect', 'global']);
 /** `routes[*].cache`, the three cache semantics (Forge L414). */

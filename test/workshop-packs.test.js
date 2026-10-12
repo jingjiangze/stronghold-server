@@ -80,11 +80,26 @@ test('workshop: the type default is only for folder packs — an explicit type s
 });
 
 test('workshop: an unknown top-level field and an unknown face warn — they never refuse the pack (forward compat)', () => {
-  const { manifest, problems, warnings } = norm({ id: 'wsdemo', name: 'N', variants: [1, 2], server: { preDispatch: { module: 's/x.mjs' } } });
+  const { manifest, problems, warnings } = norm({ id: 'wsdemo', name: 'N', variants: [1, 2] });
   assert.deepEqual(problems, []);
   assert.ok(manifest, 'a pack with unknown keys still loads');
   assert.ok(warnings.some((w) => w.includes('"variants"') && w.includes('PACK_UNKNOWN_FIELD')), warnings.join(' | '));
-  assert.ok(warnings.some((w) => w.includes('"server" is declared but this server does not apply it')), warnings.join(' | '));
+  // `server` is a CLOSED block: L3 loads it, so an unknown member refuses the pack (Forge SERVER_UNKNOWN_FIELD, L771)
+  // and `server: {}` refuses too (SERVER_EMPTY_MEMBER, L776). Forward compatibility lives in the MEMBER LIST growing,
+  // not in silently ignoring a member this layer does not load — a typo'd `preDispatchh` must not ship as a no-op gate.
+  const complete = { module: 's/x.mjs', policy: 's/p.json', intercepts: ['m.chat'] };
+  const { manifest: m2, problems: p2, warnings: w2 } = norm({
+    id: 'wsdemo', name: 'N', variants: [1, 2], server: { preDispatch: complete },
+  });
+  assert.deepEqual(p2, [], 'a complete declared member loads');
+  assert.ok(m2, 'a pack with unknown keys still loads');
+  assert.deepEqual(m2.server.preDispatch, complete, 'the declared preDispatch survives normalization');
+  assert.ok(w2.some((w) => w.includes('"variants"') && w.includes('PACK_UNKNOWN_FIELD')), w2.join(' | '));
+  const unknownMember = norm({ id: 'wsdemo', name: 'N', server: { preDispatch: complete, scheduler: {} } });
+  assert.equal(unknownMember.manifest, null, 'an unknown member of the closed server block refuses');
+  assert.ok(unknownMember.problems.some((p) => p.includes('"scheduler" is not a declared field')), unknownMember.problems.join(' | '));
+  const emptyServer = norm({ id: 'wsdemo', name: 'N', server: {} });
+  assert.equal(emptyServer.manifest, null, 'server: {} says nothing and is refused');
 });
 
 test('workshop: a KNOWN field with a malformed value refuses the pack (a broken pack, not a newer one)', () => {
@@ -109,6 +124,18 @@ test('workshop: a KNOWN field with a malformed value refuses the pack (a broken 
     ['skins not an array', { skins: {} }, /"skins" must be an array/],
     ['overrides not an array', { overrides: 'bosses:x' }, /"overrides" must be an array/],
     ['support not an array', { support: 'chess_a' }, /"support" must be an array/],
+    ['server preDispatch not an object', { server: { preDispatch: 'x.mjs' } }, /"server\.preDispatch" must be an object/],
+    ['server preDispatch module not .mjs', { server: { preDispatch: { module: 'x.js', policy: 'p.json', intercepts: ['m.chat'] } } }, /server\.preDispatch\.module must be a "\.mjs" file/],
+    ['server preDispatch policy not .json', { server: { preDispatch: { module: 'x.mjs', policy: 'p.txt', intercepts: ['m.chat'] } } }, /server\.preDispatch\.policy must name a \.json file/],
+    ['server preDispatch intercepts empty', { server: { preDispatch: { module: 'x.mjs', policy: 'p.json', intercepts: [] } } }, /server\.preDispatch\.intercepts must be a non-empty array/],
+    ['server preDispatch module escapes', { server: { preDispatch: { module: '../x.mjs', policy: 'p.json', intercepts: ['m.chat'] } } }, /is not a path inside the pack folder/],
+    ['server modules not an array', { server: { modules: {} } }, /"server\.modules" must be an array/],
+    ['server modules empty', { server: { modules: [] } }, /"server\.modules" must declare at least one module/],
+    ['server modules too many', { server: { modules: Array.from({ length: 9 }, (_, i) => ({ id: `m${i}`, entry: 's/a.mjs', uses: ['boot'] })) } }, /at most 8 modules per pack/],
+    ['server module uses empty', { server: { modules: [{ id: 'm', entry: 's/a.mjs', uses: [] }] } }, /\.uses must be a non-empty array of mount points/],
+    ['server module unknown use', { server: { modules: [{ id: 'm', entry: 's/a.mjs', uses: ['reboot'] }] } }, /not a mount point this layer knows/],
+    ['server module entry not .mjs', { server: { modules: [{ id: 'm', entry: 's/a.js', uses: ['boot'] }] } }, /\.entry must be a pack-relative "\.mjs" path/],
+    ['server module duplicate id', { server: { modules: [{ id: 'm', entry: 's/a.mjs', uses: ['boot'] }, { id: 'm', entry: 's/b.mjs', uses: ['boot'] }] } }, /is declared twice/],
   ];
   for (const [label, manifest, re] of bad) {
     const { manifest: m, problems } = norm({ id: 'wsdemo', name: 'N', ...manifest });
@@ -215,9 +242,11 @@ test('workshop: the two submitted packs map to the expected faces and routes', {
 // -------------------------------------------------------------------------------------------------------------------
 // the vendored contract stays honest (drift)
 
-/** The literal text of `export const <name> = …` in the Forge source (comments skipped, brackets balanced), or undefined. */
+/** The literal text of `const <name> = …` (exported or not) in a source, comments skipped and brackets balanced. */
 function upstreamLiteral(src, name) {
-  const m = new RegExp(`export const ${name}\\s*=\\s*`).exec(src);
+  // Upstream declares most contract constants as plain `const` next to the code that enforces them; only some are
+  // exported. Both spellings are the same contract, and vendoring one means re-exporting it — so look for either.
+  const m = new RegExp(`^(?:export )?const ${name}\\s*=\\s*`, 'm').exec(src);
   if (!m) return undefined;
   const start = m.index + m[0].length;
   let depth = 0; let str = null; let esc = false; let i = start;
@@ -235,21 +264,37 @@ function upstreamLiteral(src, name) {
 }
 
 test('workshop: the vendored Forge contract matches the upstream checkout, both ways', { skip: !fs.existsSync(FORGE) ? `${FORGE} not present` : false }, () => {
-  const src = fs.readFileSync(FORGE, 'utf8');
+  // A few constants do not live in shared/workshop.js: they are declared next to the code that enforces them. Each
+  // names the upstream file it came from, so "re-extract" still means one lookup (MOD-BRIDGE.SOURCE.md lists them).
+  const ELSEWHERE = {
+    HEALTHZ_LIMITS: path.resolve(ROOT, '..', 'Stronghold-Protocol-Forge', 'server', 'modModules.js'),
+  };
+  const sources = new Map([[FORGE, fs.readFileSync(FORGE, 'utf8')]]);
+  const srcOf = (file) => {
+    if (!sources.has(file)) sources.set(file, fs.readFileSync(file, 'utf8'));
+    return sources.get(file);
+  };
   // (a) every vendored constant still exists upstream and is byte-for-byte the same value
   for (const [name, value] of Object.entries(vendored)) {
+    const file = ELSEWHERE[name] || FORGE;
+    const src = srcOf(file);
     const literal = upstreamLiteral(src, name);
-    assert.ok(literal !== undefined, `upstream no longer defines ${name} — re-extract (shared/forgeContract.SOURCE.md)`);
+    assert.ok(literal !== undefined, `upstream no longer defines ${name} — re-extract (${path.basename(file)})`);
     const upstream = Function(`"use strict"; return (${literal});`)();
     if (value instanceof RegExp) assert.equal(String(value), String(upstream), `${name} changed upstream`);
     else assert.deepEqual(value, upstream, `${name} changed upstream — re-extract (shared/forgeContract.SOURCE.md)`);
   }
-  // (b) upstream must not have grown a pure-data `export const` we do not vendor (a new contract constant to decide about)
-  const names = [...src.matchAll(/^export const ([A-Za-z_$][\w$]*)\s*=/gm)].map((m) => m[1]);
+  // (b) upstream must not have grown a pure-data `export const` we do not vendor (a new contract constant to decide
+  // about). NOTE: deliberately `export const` only. Upstream declares ~30 more contract constants as plain `const`
+  // (ASSETS_FIELDS, CLIENT_PANEL_FIELDS, META_FIELDS, BATTLE_FIELDS, ROOM_FIELDS, ROUTE_FIELDS …) — all of them belong
+  // to faces this server does not apply yet (L2 data / L4 client), so vendoring them now would be dead weight. They are
+  // listed as PENDING in _tmp/forge-server-audit/l3-preDispatch-audit.md and this check must widen when those land.
+  const forge = srcOf(FORGE);
+  const names = [...forge.matchAll(/^export const ([A-Za-z_$][\w$]*)\s*=/gm)].map((m) => m[1]);
   const missing = [];
   for (const name of names) {
     if (name in vendored) continue;
-    const literal = upstreamLiteral(src, name);
+    const literal = upstreamLiteral(forge, name);
     if (literal === undefined || literal.includes('=>') || /\bfunction\b/.test(literal)) continue; // a function, not data
     missing.push(name);
   }

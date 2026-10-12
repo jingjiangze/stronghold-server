@@ -41,6 +41,8 @@ import { SOURCE_LANG, canonicalLang, isLangCode, languageName, langFields } from
 import {
   PACK_FIELDS as WORKSHOP_FIELDS, WORKSHOP_CONTENT_FILES, ROUTE_CACHE_POLICIES, CLIENT_PANEL_SLOTS,
   ART_TABLES, ART_SPINE_URLS, ART_SPINE_LISTS,
+  SERVER_MEMBERS, PRE_DISPATCH_FIELDS, PRE_DISPATCH_MODULE_EXT,
+  SERVER_MODULE_USES, SERVER_MODULE_FIELDS, SERVER_MODULE_EXT, RECORD_ID_RE, MAX_SERVER_MODULES,
 } from './forgeContract.js';
 
 export const PACK_INDEX_VERSION = 1;
@@ -148,7 +150,9 @@ export function appVersionMatches(range, version = APP_VERSION) {
  *   compatible: boolean, authors: string[], credits: string, license: string, files: Record<string, string>,
  *   lang?: string, base?: string|null, fallback?: string[], complete?: boolean, machineTranslated?: boolean,
  *   numberUnits?: string[]|null,
- *   declared?: string[], faces?: string[], routes?: { path: string, file: string, cache: string }[] }} PackManifest
+ *   declared?: string[], faces?: string[], routes?: { path: string, file: string, cache: string }[],
+ *   server?: { preDispatch?: { module: string, policy: string, intercepts: string[] },
+ *     modules?: { id: string, entry: string, uses: string[], write: boolean }[] } }} PackManifest
  */
 
 /**
@@ -349,6 +353,113 @@ function workshopFields(m, ctx, out) {
     }
   }
 
+  // ---- server: the declared server-side payload (L3; validated here, loaded by server/modBridge.js) ------------
+  // Nothing of this face becomes a `files` role: a `.mjs` server module is loaded by Node and must never be served to
+  // a browser, so the pack's servable file table stays exactly what the read-only faces named.
+  // What is judged here is the DECLARATION's shape (closed fields, closed enumerations, paths inside the pack, the
+  // module extension). Two things cannot be judged here and are judged by the loader instead, on purpose:
+  //   * whether `intercepts` names a type of the protocol THIS server runs — shared/packs.js is imported by the
+  //     browser too (public/js/ui/lang.js), and shared/protocol.js is the server's installed catalogue, not a constant;
+  //     Forge solves the same split by INJECTING `c2s` into its gate (server/modGate.js `preDispatchIssues({ c2s })`),
+  //     which is exactly what server/modBridge.js does here.
+  //   * whether the module imports and whether it exports a factory — only a dynamic import knows.
+  if (m.server !== undefined) {
+    if (!isObj(m.server)) problems.push('"server" must be an object: { preDispatch?, modules?, … }');
+    else {
+      // `server` is a CLOSED block upstream: an unknown member is `SERVER_UNKNOWN_FIELD` and refuses (Forge L771-773),
+      // unlike an unknown top-level field, which only warns. The reason is the same as for `intercepts`: a member this
+      // layer does not load is invisible, and a pack author who typed `preDispatchh` must hear it, not ship a silent
+      // no-op gate. Forward compatibility inside the block comes from the member list growing, not from ignoring typos.
+      for (const key of Object.keys(m.server)) {
+        if (SERVER_MEMBERS.includes(key)) continue;
+        problems.push(`server: "${key}" is not a declared field (${SERVER_MEMBERS.join(', ')})`);
+      }
+      // "not one member written" is judged from the list itself, so adding a member cannot silently skip this check
+      // (Forge L776-778). `server: {}` says nothing and is refused rather than ignored.
+      if (SERVER_MEMBERS.every((k) => m.server[k] === undefined)) {
+        problems.push(`"server" must declare at least one member (${SERVER_MEMBERS.join(', ')}) — an empty object says nothing`);
+      }
+      /** @type {Record<string, unknown>} */
+      const server = {};
+      const pre = m.server.preDispatch;
+      if (pre !== undefined) {
+        if (!isObj(pre)) problems.push(`"server.preDispatch" must be an object: { ${PRE_DISPATCH_FIELDS.join(', ')} }`);
+        else {
+          for (const key of Object.keys(pre)) {
+            if (!PRE_DISPATCH_FIELDS.includes(key)) warnings.push(`server.preDispatch: "${key}" is not a declared field (${PRE_DISPATCH_FIELDS.join(', ')}) — ignored`);
+          }
+          let ok = true;
+          for (const key of ['module', 'policy']) {
+            const rel = pre[key];
+            if (typeof rel !== 'string' || !rel) { problems.push(`server.preDispatch.${key} is required`); ok = false; continue; }
+            if (!isPackPath(rel)) { problems.push(`server.preDispatch.${key}: "${rel}" is not a path inside the pack folder`); ok = false; continue; }
+            if (key === 'module' && !rel.endsWith(PRE_DISPATCH_MODULE_EXT)) {
+              problems.push(`server.preDispatch.module must be a "${PRE_DISPATCH_MODULE_EXT}" file — the server loads it, the browser does not`);
+              ok = false;
+            }
+            if (key === 'policy' && !rel.endsWith('.json')) { problems.push('server.preDispatch.policy must name a .json file'); ok = false; }
+          }
+          if (!Array.isArray(pre.intercepts) || !pre.intercepts.length) {
+            problems.push('server.preDispatch.intercepts must be a non-empty array of message types (a hook that intercepts nothing gates nothing)');
+            ok = false;
+          } else if (pre.intercepts.some((t) => typeof t !== 'string' || !t)) {
+            problems.push('server.preDispatch.intercepts must be an array of message type names');
+            ok = false;
+          }
+          // `intercepts` is NOT checked against the protocol here (see the comment above): server/modGate.js does it
+          // with the catalogue this server actually runs, and a type it does not have refuses the whole pack rather
+          // than silently dropping one entry.
+          if (ok) server.preDispatch = { module: pre.module, policy: pre.policy, intercepts: [...pre.intercepts] };
+        }
+      }
+      const mods = m.server.modules;
+      if (mods !== undefined) {
+        if (!Array.isArray(mods)) problems.push('"server.modules" must be an array of { id, entry, uses, write? }');
+        else if (!mods.length) problems.push('"server.modules" must declare at least one module (drop the key instead of sending [])');
+        else if (mods.length > MAX_SERVER_MODULES) problems.push(`"server.modules": at most ${MAX_SERVER_MODULES} modules per pack (got ${mods.length})`);
+        else {
+          /** @type {{ id: string, entry: string, uses: string[], write: boolean }[]} */
+          const list = [];
+          const seen = new Set();
+          for (const [i, mod] of mods.entries()) {
+            if (!isObj(mod)) { problems.push(`server.modules[${i}] must be an object: { id, entry, uses, write? }`); continue; }
+            for (const key of Object.keys(mod)) {
+              if (!SERVER_MODULE_FIELDS.includes(key)) warnings.push(`server.modules[${i}]: "${key}" is not a module field (${SERVER_MODULE_FIELDS.join(', ')}) — ignored`);
+            }
+            if (typeof mod.id !== 'string' || !RECORD_ID_RE.test(mod.id)) { problems.push(`server.modules[${i}].id: "${String(mod.id)}" is not a valid module id`); continue; }
+            if (seen.has(mod.id)) { problems.push(`server.modules: "${mod.id}" is declared twice (one id, one module)`); continue; }
+            seen.add(mod.id);
+            if (!isPackPath(mod.entry) || !mod.entry.endsWith(SERVER_MODULE_EXT)) {
+              problems.push(`server.modules["${mod.id}"].entry must be a pack-relative "${SERVER_MODULE_EXT}" path — the server loads it, the browser and the battle sim never do`);
+              continue;
+            }
+            if (!Array.isArray(mod.uses) || !mod.uses.length) {
+              problems.push(`server.modules["${mod.id}"].uses must be a non-empty array of mount points (one of: ${SERVER_MODULE_USES.join(', ')})`);
+              continue;
+            }
+            const unknown = mod.uses.filter((u) => !SERVER_MODULE_USES.includes(u));
+            if (unknown.length) {
+              problems.push(`server.modules["${mod.id}"].uses: ${unknown.map((u) => `"${String(u)}"`).join(', ')} — not a mount point this layer knows (one of: ${SERVER_MODULE_USES.join(', ')})`);
+              continue;
+            }
+            if (new Set(mod.uses).size !== mod.uses.length) { problems.push(`server.modules["${mod.id}"].uses lists the same mount point twice`); continue; }
+            if (mod.write !== undefined && typeof mod.write !== 'boolean') { problems.push(`server.modules["${mod.id}"].write must be true or false`); continue; }
+            // The closed enumeration's order, not the author's writing order: the declaration must not depend on it.
+            list.push({ id: mod.id, entry: mod.entry, uses: SERVER_MODULE_USES.filter((u) => mod.uses.includes(u)), write: mod.write === true });
+          }
+          if (list.length) {
+            list.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+            server.modules = list;
+          }
+        }
+      }
+      if (Object.keys(server).length) {
+        out.server = server;
+        for (const key of Object.keys(server)) faceSet.add(`server.${key}`);
+      }
+    }
+  }
+
   // ---- assets: the resource container + its flat file table (pack-root relative, Forge isSafeRelativePath) ------
   if (m.assets !== undefined) {
     if (!isObj(m.assets)) problems.push('"assets" must be an object: { container, manifest, serverPolicy?, verify? }');
@@ -409,11 +520,11 @@ function workshopFields(m, ctx, out) {
   }
 
   // ---- faces this layer does NOT apply: registered as metadata + a warning, never a refusal --------------------
-  // (the data merge is L2, the server-side code is L3, the client injection is L4 — the audit's layer table.)
+  // (the data merge is L2, the client injection is L4 — the audit's layer table; `server` left this list with L3.)
   // `layer` and `combat` are pack METADATA (a layer letter, a boolean), not faces to apply: they are registered
   // above like any other declared field and must not produce an "not applied" warning on every real pack.
-  const UNAPPLIED = ['server', 'overrides', 'operators', 'support', 'playtest', 'voices', 'voiceLangs', 'bondIcons', 'itemIcons'];
-  const EXPECT = { server: 'object', overrides: 'array', operators: 'object', support: 'array', playtest: 'object', voices: 'object', voiceLangs: 'object', bondIcons: 'object', itemIcons: 'object' };
+  const UNAPPLIED = ['overrides', 'operators', 'support', 'playtest', 'voices', 'voiceLangs', 'bondIcons', 'itemIcons'];
+  const EXPECT = { overrides: 'array', operators: 'object', support: 'array', playtest: 'object', voices: 'object', voiceLangs: 'object', bondIcons: 'object', itemIcons: 'object' };
   for (const key of UNAPPLIED) {
     if (m[key] === undefined) continue;
     const want = EXPECT[key];

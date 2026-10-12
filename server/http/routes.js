@@ -20,20 +20,26 @@ const MAX_URL_LENGTH = 4096;
 /**
  * The GET /healthz body.
  * @param {{ startedAt: number, network: import('../net.js').Network, registry: import('../net.js').SessionRegistry,
- *           lobby: import('../lobby.js').Lobby }} health
+ *           lobby: import('../lobby.js').Lobby,
+ *           modHealth?: () => Record<string, Record<string, string|number|boolean|null>> }} health
  */
-export function healthReport({ startedAt, network, registry, lobby, browserBuild, combatPool, trialPool, trialStartupFailed, getHealthMetrics }) {
+export function healthReport({ startedAt, network, registry, lobby, browserBuild, combatPool, trialPool, trialStartupFailed, getHealthMetrics, modHealth }) {
   const combat = combatPool ? { backend: 'workers', scope: 'server-streaming', ...combatPool.stats() } : { backend: 'inline', workers: 0 };
   const ok = !combatPool || (combat.status === 'ready' && combat.ready > 0);
   const trial = trialPool ? { backend: 'workers', scope: 'bot-rehearsal', ...trialPool.stats() }
     : { backend: 'inline', scope: 'bot-rehearsal', workers: 0, status: trialStartupFailed ? 'degraded' : 'disabled' };
-  return {
+  const report = {
     ok, version: PROTOCOL_VERSION, app: APP_VERSION, uptimeSec: Math.round((Date.now() - startedAt) / 1000),
     build: browserBuild,
     sockets: network.connectionCount, sessions: registry.size, ...lobby.stats(),
     maxRooms: lobby.opts.maxRooms, combat, trial,
     performance: getHealthMetrics?.()?.snapshot() ?? PERFORMANCE_UNAVAILABLE,
   };
+  // A pack's /healthz contributions (server/modBridge.js), grouped by pack id. With no pack mounting `healthz` this is
+  // empty and the KEY IS OMITTED: a clean install's /healthz body must not grow a field.
+  const mods = modHealth?.() ?? null;
+  if (mods && Object.keys(mods).length) report.modHealth = mods;
+  return report;
 }
 
 /**
