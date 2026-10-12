@@ -11,7 +11,7 @@ import { collectViolations } from '../../server/match/invariants.js';
 import { makeMatch, DATA } from './harness.js';
 import { makeBattle, chessRec } from '../helpers/battleHarness.js';
 
-const rules = (capacity = 20, extra = {}) => ({ revivalEnabled: false, disableSharedPool: false, playerCapacity: capacity, ...extra });
+const rules = (capacity = 20, extra = {}) => ({ disableSharedPool: false, playerCapacity: capacity, ...extra });
 const forced = family => ({ ...DATA, choices: { ...DATA.choices, schedule: { ...DATA.choices.schedule,
   mode_multi_normal: { ...DATA.choices.schedule.mode_multi_normal, rounds: { ...DATA.choices.schedule.mode_multi_normal.rounds,
     3: { ...DATA.choices.schedule.mode_multi_normal.rounds[3], families: [{ family, weight: 1 }] } } } } } });

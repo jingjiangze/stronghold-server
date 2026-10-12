@@ -8,7 +8,7 @@ import { TestClient } from './helpers/wsClient.js';
 import { ERR, MATCHMAKING_VERSION } from '../shared/constants.js';
 import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
 
-const options = capacity => ({ revivalEnabled: false, disableSharedPool: false, playerCapacity: capacity });
+const options = capacity => ({ disableSharedPool: false, playerCapacity: capacity });
 for (const capacity of [4, 8, 12, 16, 20]) for (const family of capacity === 4 ? ['supply'] : ['bounty', 'supply', 'shop', 'tactic']) {
   test(`actual ${capacity}-mode humans choose ${family}, resume during selection and enter a real Worker`, { timeout: 30000 }, async t => {
     class RuleMatch extends Match {

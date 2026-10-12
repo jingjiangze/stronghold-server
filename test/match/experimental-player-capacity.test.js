@@ -11,7 +11,7 @@ import { GameData } from '../../server/match/gamedata.js';
 import { DATA, makeMatch, give, giveItem, legalTileFor } from './harness.js';
 import { planUnite } from '../../server/match/unite.js';
 
-const exp = (playerCapacity = 20, extra = {}) => ({ revivalEnabled: false, disableSharedPool: false, playerCapacity, ...extra });
+const exp = (playerCapacity = 20, extra = {}) => ({ disableSharedPool: false, playerCapacity, ...extra });
 const seats = count => Array.from({ length: count }, (_, seat) => ({ seat, playerId: `p_${seat}`, name: `P${seat}`, isBot: false, connected: true }));
 const own = ps => [...ps.board.values(), ...ps.hand, ...ps.temp].filter(p => p?.kind === 'chess');
 const clean = m => {
@@ -200,23 +200,6 @@ test('only experimental >4-alive Boss HP and strict hidden threshold scale; defa
       assert.equal(hiddenEligible(gd, { layerSum: threshold + 1, teamLp: 1, aliveCount: count, experimental: true }), false);
     }
   }
-});
-
-test('twenty-seat revival keeps LP>=11/pay10/once and the unchanged target holdings', t => {
-  const h = makeMatch({ humans: 20, experimental: exp(20, { revivalEnabled: true }), fake: true, seed: 777 }).start();
-  const m = h.m; t.after(() => m.dispose()); h.toPrep(1);
-  const donor = m.order[0], target = m.order.at(-1);
-  const before = { hand: target.hand.slice(), board: new Map(target.board), funds: target.funds, layers: { ...target.layers } };
-  m.phase = 'SETTLE';
-  m._revival = { round: m.round, eligible: new Set([donor.playerId]), windowOpen: true, deadline: m.sched.now() + 10000 };
-  target.alive = false; target.pendingDeath = true; target.lp = 0;
-  const intent = { matchId: m.battlePrefix, round: m.round, playerId: target.playerId };
-  donor.lp = 10; assert.equal(m.revive(donor, intent).error, 'BAD_TARGET');
-  donor.lp = 11; assert.deepEqual(m.revive(donor, intent), { ok: true });
-  assert.equal(donor.lp, 1); assert.equal(target.lp, 1); assert.equal(target.revived, true);
-  assert.deepEqual({ hand: target.hand, board: target.board, funds: target.funds, layers: target.layers }, before);
-  assert.equal(m.revive(donor, intent).error, 'BAD_TARGET'); assert.equal(donor.lp, 1);
-  assert.deepEqual(collectViolations(m), []);
 });
 
 test('twenty seats still get just one original-map unite field with <=2 helpers and all leaker sources', t => {

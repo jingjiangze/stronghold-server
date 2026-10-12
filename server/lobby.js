@@ -199,7 +199,6 @@ export class Room {
     /** @type {{ live: boolean, ended: boolean, disposed: boolean, match: any } | null} */
     this.matchCtx = null;
     this.matchCount = 0;
-    this.revivalLocked = null;
     this.source = 'private';
     // Public rooms charge every participant's network, not a rotating/randomly selected host alone.
     this.ownerKeys = null;
@@ -243,10 +242,6 @@ export class Room {
   /** Humans that have not departed, in seat order. @returns {Seat[]} */
   activeHumans() { return this.seats.filter((s) => s && !s.isBot && !s.left); }
 
-  revivalState() {
-    return { enabled: this.mode === 'coop' && this.experimental.revivalEnabled };
-  }
-
   /** `room.state` frame (DESIGN §8.1) plus `inMatch`. */
   toState() {
     return {
@@ -259,9 +254,8 @@ export class Room {
       inMatch: !!this.match,
       source: this.source,
       experimental: { ...this.experimental },
-      revival: this.revivalState(),
       seats: this.seats.map((s) => (s
-        ? { seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left, revivalVote: s.isBot ? null : s.revivalVote ?? null }
+        ? { seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left }
         : null)),
       spectators: this.spectators.map((s) => ({ playerId: s.playerId, name: s.name, connected: s.connected })),
     };
@@ -451,7 +445,6 @@ export class Lobby {
       case 'room.join': return this.join(session, msg);
       case 'room.leave': return this.leave(session);
       case 'room.ready': return this.ready(session, msg);
-      case 'room.voteRevival': return this.voteRevival(session, msg);
       case 'room.setExperimental': return this.setExperimental(session, msg);
       case 'queue.join': return this.queue.join(session, msg);
       case 'queue.cancel': return this.queue.cancel(session, msg);
@@ -662,8 +655,6 @@ export class Lobby {
     }
     return OK;
   }
-
-  voteRevival() { return fail(ERR.BAD_MSG, 'revival voting was replaced by room experimental options'); }
 
   setExperimental(session, { experimental }) {
     if (!isExperimental(experimental)) return fail(ERR.BAD_MSG);
@@ -948,7 +939,7 @@ export class Lobby {
     // Spectators follow the intact parties as observers, never seats/voters or charged participant networks.
     room.spectators = spectators.map((s) => ({ ...s }));
     room.seats = sessions.map((s, i) => ({
-      ...this.humanSeat(i, s), ready: true, revivalVote: this.queue.entries.get(s.playerId).revivalVote,
+      ...this.humanSeat(i, s), ready: true,
     }));
     const result = this.startMatch(room, room.ownerKey, keys, { deferPublish: true });
     if (result.error) return result;
@@ -1043,7 +1034,6 @@ export class Lobby {
   /** @param {Room} room @param {string | null} [key] per-network limit key of the starter */
   startMatch(room, key = null, keys = null, { deferPublish = false } = {}) {
     if (!room.validCapacity() || !this.capacityClients(room)) return fail(ERR.BAD_MSG);
-    const revival = room.revivalState();
     const host = room.seatOf(room.hostId);
     if (host) host.ready = true;
     const seats = room.seats.filter(Boolean).map((s) => ({
@@ -1078,7 +1068,6 @@ export class Lobby {
         mode: room.mode,
         difficulty: room.difficulty,
         modeId: modeIdFor(room.mode, room.difficulty),
-        revivalEnabled: revival.enabled,
         disableSharedPool: room.experimental.disableSharedPool,
         experimental: room.experimental,
         // 「AI 队友最后选择」 (GitHub #338): fixed for the match
@@ -1113,7 +1102,6 @@ export class Lobby {
       room.matchCtx = ctx;
       room.matchKey = key;
       room.matchKeys = keys;
-      room.revivalLocked = Object.freeze(revival);
       room.replay = null;
       room.matchCount++;
       this.log.info(`[lobby] ${room.code} match #${room.matchCount} starting (${room.mode}/${room.difficulty}, ${seats.length} seats, seed ${seed})`);
@@ -1126,7 +1114,7 @@ export class Lobby {
       if (deferPublish && (ctx.ended || room.match !== match)) throw new Error('public match ended during startup');
     } catch (e) {
       this.log.error(`[lobby] ${room.code} match failed to start`, e);
-      if (room.matchCtx === ctx) { room.match = null; room.matchCtx = null; room.matchKey = null; room.matchKeys = null; room.revivalLocked = null; }
+      if (room.matchCtx === ctx) { room.match = null; room.matchCtx = null; room.matchKey = null; room.matchKeys = null; }
       this.disposeMatchCtx(ctx);
       if (!deferPublish) this.broadcastState(room);
       return fail(ERR.INTERNAL, 'match failed to start');
@@ -1151,7 +1139,6 @@ export class Lobby {
     room.matchCtx = null;
     room.matchKey = null;
     room.matchKeys = null;
-    room.revivalLocked = null;
     room.replay = this.buildReplay(room, ctx);
     setImmediate(() => this.disposeMatchCtx(ctx));
     this.log.info(`[lobby] ${room.code} match #${room.matchCount} ended`);
@@ -1160,7 +1147,6 @@ export class Lobby {
       if (!s || s.isBot) continue;
       if (s.left) { room.seats[i] = null; continue; }
       s.ready = false;
-      s.revivalVote = null;
       if (!s.connected) this.startGrace(room, s);
     }
     for (const s of room.spectators) if (!s.connected) this.startGrace(room, s);
@@ -1360,7 +1346,7 @@ export class Lobby {
   humanSeat(idx, session) {
     return {
       seat: idx, playerId: session.playerId, name: session.name, isBot: false, ready: false, connected: session.connected, left: false,
-      loadout: session.loadout || null, revivalVote: null,
+      loadout: session.loadout || null,
       ops: session.ops || null,
       notOwned: session.notOwned || null,
       diy: session.diy || null,
@@ -1456,7 +1442,6 @@ export class Lobby {
     room.matchCtx = null;
     room.matchKey = null;
     room.matchKeys = null;
-    room.revivalLocked = null;
     room.replay = null;
     for (const s of room.seats) {
       if (!s || s.isBot) continue;

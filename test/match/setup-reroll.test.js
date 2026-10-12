@@ -101,7 +101,7 @@ test('four humans must agree; rerolls the entire official setup and stock, prese
 for (const capacity of [4, 8, 12, 16, 20]) for (const independent of [false, true]) {
   test(`setup reroll replaces every ${capacity}-seat ${independent ? 'independent' : 'shared'} pool atomically`, t => {
     const h = makeMatch({ humans: capacity, seed: 123, difficulty: 'HARD', experimental: {
-      revivalEnabled: false, disableSharedPool: independent, ...(capacity > 4 ? { playerCapacity: capacity } : {}),
+      disableSharedPool: independent, ...(capacity > 4 ? { playerCapacity: capacity } : {}),
     } }).start();
     t.after(() => h.m.dispose());
     const m = h.m, groups = m.poolGroups, playerPools = m.playerPools;

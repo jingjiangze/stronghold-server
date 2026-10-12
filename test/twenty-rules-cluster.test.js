@@ -11,7 +11,7 @@ import { ERR } from '../shared/constants.js';
 import { until } from './match/combat-fixtures.js';
 
 const channel = () => ({ messages: [], send(m) { this.messages.push(m); return true; }, sendEncoded(t, bytes) { this.messages.push(JSON.parse(bytes)); return true; }, close() {} });
-const options = capacity => ({ revivalEnabled: false, disableSharedPool: false, playerCapacity: capacity });
+const options = capacity => ({ disableSharedPool: false, playerCapacity: capacity });
 const repeatMatch = family => class extends Match {
   constructor(opts) {
     const choices = opts.data.choices, mode = choices.schedule.mode_multi_normal;

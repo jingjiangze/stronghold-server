@@ -5,17 +5,22 @@ import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { startServer } from '../server/index.js';
 import { NET_DEFAULTS, encode, send, sendRaw } from '../server/net.js';
-import { resolveWsCompression, isCompressibleType } from '../server/wsCompression.js';
+import { resolveWsCompression, isCompressibleType, parseExtraCompressibleTypes, compressibleTypes, BASE_COMPRESSIBLE_TYPES, DEFAULT_EXTRA_COMPRESSIBLE_TYPES } from '../server/wsCompression.js';
 import { PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 
-const TYPES = ['b.snap', 'b.ev', 'm.field', 'm.damage'];
+// The upstream module's base whitelist (jingjiangze/stronghold-ws-compression) — the audited battle-traffic set.
+const TYPES = ['b.snap', 'b.ev', 'm.field', 'm.public', 'm.private', 'm.result'];
+// The subset the encode-once lobby path (sendEncodedToPlayer) accepts; the whitelisted ones are compressible.
+const ENCODED_TYPES = ['b.snap', 'b.ev', 'm.field', 'm.damage', 'b.damage'];
 const EXPECTED_OPTIONS = {
-  threshold: 512,
-  serverNoContextTakeover: true,
+  // 64, not the 512 this shipped with: ws treats `threshold` as a hard off switch — below it the frame goes out
+  // with rsv1 clear, i.e. not deflated at all — and step ④ shrank the hot m.public frame under 512.
+  threshold: 64,
   clientNoContextTakeover: true,
-  serverMaxWindowBits: 12,
   concurrencyLimit: 8,
   zlibDeflateOptions: { level: 6, memLevel: 5 },
+  // `serverNoContextTakeover` and `serverMaxWindowBits` are deliberately ABSENT (context takeover on, zlib's
+  // 15-bit default window): declaring either makes ws reject — HTTP 400, no connection — some client offers.
 };
 
 function spySocket(bufferedAmount = 0) {
@@ -206,26 +211,52 @@ async function withModeEnv(value, run) {
 }
 
 describe('WebSocket compression policy', { concurrency: false }, () => {
-  test('off by default; on has exactly the bounded PMD options', () => {
+  test('off by default; on is the shipped set; safe is the bounded fallback', () => {
     assert.equal(resolveWsCompression(), false);
     assert.equal(resolveWsCompression('off'), false);
-    assert.deepEqual(resolveWsCompression('on'), EXPECTED_OPTIONS);
+    const on = resolveWsCompression('on');
+    assert.deepEqual(on, EXPECTED_OPTIONS);
+    assert.ok(!('serverNoContextTakeover' in on), 'context takeover stays undeclared (negotiated), not pinned');
+    assert.ok(!('serverMaxWindowBits' in on), 'the window stays undeclared (zlib default 15), not pinned');
+    assert.ok(Object.isFrozen(on), 'the option set is shared, so it must not be mutable');
+    const safe = resolveWsCompression('safe');
+    assert.equal(safe.serverNoContextTakeover, true, 'the fallback turns context takeover off');
+    assert.ok(!('serverMaxWindowBits' in safe), 'the fallback must not pin a window either');
+    assert.equal(safe.threshold, 64, 'the threshold fix is not part of the fallback');
   });
 
   test('invalid modes reject without reflecting untrusted input', () => {
     const marker = 'synthetic-untrusted-mode-marker';
-    for (const value of [marker, '', 'gzip', true, 1, null, { toString: () => marker }]) {
+    for (const value of [marker, '', 'gzip', 'ON', 'true', true, 1, null, { toString: () => marker }]) {
       let caught;
       try { resolveWsCompression(value); } catch (error) { caught = error; }
       assertRedacted(caught, marker);
     }
   });
 
-  test('only the four battle-state types are compressible', () => {
+  test('only the repetitive battle traffic is compressible', () => {
     for (const type of TYPES) assert.equal(isCompressibleType(type), true, type);
-    for (const type of ['welcome', 'hello', 'pong', 'ok', 'error', 'room.state', 'lobby.presence', 'queue.state', 'm.public', 'm.private', 'm.result', 'b.damage', 'b.result', 'constructor', '__proto__', '', undefined, null, 1]) {
+    for (const type of ['welcome', 'hello', 'pong', 'ok', 'error', 'room.state', 'lobby.presence', 'queue.state', 'm.ticker', 'b.result', 'b.damage', 'constructor', '__proto__', '', undefined, null, 1]) {
       assert.equal(isCompressibleType(type), false, 'non-allowlisted type stays uncompressed');
     }
+  });
+
+  test('the extra-type switch: unset takes the default, none is the one-word rollback', () => {
+    assert.deepEqual(parseExtraCompressibleTypes(undefined), DEFAULT_EXTRA_COMPRESSIBLE_TYPES);
+    assert.deepEqual([...DEFAULT_EXTRA_COMPRESSIBLE_TYPES], ['b.start']);
+    assert.deepEqual(parseExtraCompressibleTypes('none'), []);
+    assert.deepEqual(parseExtraCompressibleTypes('NONE'), []);
+    assert.deepEqual(parseExtraCompressibleTypes(''), []);
+    assert.deepEqual([...parseExtraCompressibleTypes('b.start, m.ticker ,b.start')], ['b.start', 'm.ticker']);
+    // The BASE set never moves with the switch — that is what makes the rollback a rollback and not a reset.
+    assert.deepEqual([...BASE_COMPRESSIBLE_TYPES], TYPES);
+  });
+
+  test('b.start is compressed by default now, and the resolved list is observable', () => {
+    assert.equal(isCompressibleType('b.start'), true, 'the default extra list must be live in this process');
+    const list = compressibleTypes();
+    assert.ok(list.includes('b.start'));
+    for (const t of BASE_COMPRESSIBLE_TYPES) assert.ok(list.includes(t), t);
   });
 
   test('sendRaw explicitly opts out unless compress is literally true', () => {
@@ -240,14 +271,14 @@ describe('WebSocket compression policy', { concurrency: false }, () => {
   });
 
   test('send uses the allowlist, including a large synthetic credential-bearing welcome', () => {
-    for (const type of [...TYPES, 'welcome', 'm.private', 'room.state', 'b.damage']) {
+    for (const type of [...TYPES, 'b.start', 'welcome', 'room.state']) {
       const ws = spySocket();
       const msg = type === 'welcome'
         ? { t: type, token: '0'.repeat(32), padding: 'synthetic-welcome-only-'.repeat(100) }
         : fixture(type);
       assert.ok(Buffer.byteLength(encode(msg)) > 512);
       assert.equal(send(ws, msg), true);
-      assert.equal(ws.calls[0].compress, TYPES.includes(type));
+      assert.equal(ws.calls[0].compress, TYPES.includes(type) || type === 'b.start');
       assert.equal(ws.calls[0].callback, 'function');
     }
   });
@@ -281,21 +312,27 @@ describe('WebSocket compression policy', { concurrency: false }, () => {
 });
 
 describe('native WebSocket compression through the complete server', { concurrency: false }, () => {
-  for (const [mode, support, compressed] of [['on', true, true], ['off', true, false], ['on', false, false]]) {
+  for (const [mode, support, compressed] of [['on', true, true], ['safe', true, true], ['off', true, false], ['on', false, false]]) {
     test(`${mode}, client PMD ${support ? 'supported' : 'unsupported'}: hello, native negotiation and real large frames`, { timeout: 10000 }, async (t) => {
       const { srv, connect } = await boot(t, { wsCompression: mode });
       const client = await connect(support);
       assert.equal(client.ws.extensions, compressed ? 'permessage-deflate' : '');
       if (compressed) {
-        assert.match(client.extensionHeader, /(?:^|;)\s*server_no_context_takeover(?:;|$)/);
+        // Context takeover and the window are deliberately NOT pinned (see server/wsCompression.js): the client's
+        // no-context-takeover offer still must be honoured, and the server must not advertise a window it pins.
         assert.match(client.extensionHeader, /(?:^|;)\s*client_no_context_takeover(?:;|$)/);
-        assert.match(client.extensionHeader, /(?:^|;)\s*server_max_window_bits=12(?:;|$)/);
+        if (mode === 'safe') {
+          assert.match(client.extensionHeader, /(?:^|;)\s*server_no_context_takeover(?:;|$)/, 'safe turns server context takeover off');
+        } else {
+          assert.ok(!/server_no_context_takeover/.test(client.extensionHeader), 'context takeover stays negotiated');
+        }
+        assert.ok(!/server_max_window_bits/.test(client.extensionHeader), 'the window stays undeclared');
       } else assert.equal(client.extensionHeader, '');
       const welcome = await hello(client);
       const room = await roomFor(srv, client);
       let sequence = 0;
-      // These are the real encode-once lobby paths used for snapshots and events.
-      for (const type of [...TYPES, 'b.damage']) {
+      // These are the real encode-once lobby paths; sendEncodedToPlayer accepts exactly this subset.
+      for (const type of ENCODED_TYPES) {
         const msg = fixture(type, ++sequence), text = encode(msg), rawBytes = Buffer.byteLength(text);
         assert.equal(srv.lobby.sendEncodedToPlayer(room, welcome.playerId, type, text), true);
         const result = await receivedFrame(client, type, sequence);
@@ -305,10 +342,14 @@ describe('native WebSocket compression through the complete server', { concurren
         if (shouldCompress) assert.ok(result.frame.wireBytes < rawBytes * 0.5, 'actual PMD wire bytes are below half the synthetic JSON size');
         else assert.equal(result.frame.payloadBytes, rawBytes);
       }
-      // Broadcast encoding has its own sendRaw path and must preserve the same policy.
+      // Broadcast encoding has its own sendRaw path and must preserve the same policy. m.public is the match
+      // broadcast and the largest single stream a seat receives, so it must be compressed on this path too.
       const broadcast = fixture('b.ev', ++sequence);
       srv.lobby.broadcastRoom(room, broadcast);
       assert.equal((await receivedFrame(client, 'b.ev', sequence)).frame.rsv1, compressed);
+      const pubBroadcast = fixture('m.public', ++sequence);
+      srv.lobby.broadcastRoom(room, pubBroadcast);
+      assert.equal((await receivedFrame(client, 'm.public', sequence)).frame.rsv1, compressed, 'm.public is compressed on the broadcast path');
       // Do not let the 512-byte threshold mask a welcome-policy regression.
       const largeWelcome = { t: 'welcome', testSequence: ++sequence, token: '0'.repeat(32), padding: 'synthetic-welcome-only-'.repeat(100) };
       assert.equal(send(client.serverWs, largeWelcome), true);
@@ -316,9 +357,13 @@ describe('native WebSocket compression through the complete server', { concurren
       assert.equal(largeResult.frame.rsv1, false);
       assert.equal(largeResult.frame.payloadBytes, Buffer.byteLength(encode(largeWelcome)));
       const small = { t: 'b.snap', testSequence: ++sequence, tick: 1, units: [] };
-      assert.ok(Buffer.byteLength(encode(small)) < 512);
+      assert.ok(Buffer.byteLength(encode(small)) < 64, 'the fixture frame is under the 64 B threshold');
       assert.equal(srv.lobby.sendEncodedToPlayer(room, welcome.playerId, 'b.snap', encode(small)), true);
-      assert.equal((await receivedFrame(client, 'b.snap', sequence)).frame.rsv1, false, 'small allowlisted frames stay below the threshold');
+      // ws consults `threshold` only when no-context-takeover was negotiated (sender.js: params check): `on` leaves
+      // context takeover on, so the floor is not applied and the frame is deflated; `safe` declares it and the
+      // 64 B floor keeps the tiny frame raw. `off` is raw either way.
+      const smallRsv1 = (await receivedFrame(client, 'b.snap', sequence)).frame.rsv1;
+      assert.equal(smallRsv1, compressed && mode === 'on', `small frame rsv1 under ${mode} -> ${smallRsv1}`);
       client.transmit({ t: 'ping', c: 42, rid: 102 });
       assert.equal((await client.waitFor('pong', (msg) => msg.rid === 102)).msg.c, 42);
     });
@@ -328,6 +373,7 @@ describe('native WebSocket compression through the complete server', { concurren
     const cases = [
       ['unset defaults off', undefined, {}, false],
       ['environment enables PMD', 'on', {}, true],
+      ['environment safe enables PMD', 'safe', {}, true],
       ['option off overrides environment on', 'on', { wsCompression: 'off' }, false],
       ['option on overrides environment off', 'off', { wsCompression: 'on' }, true],
     ];
@@ -338,6 +384,35 @@ describe('native WebSocket compression through the complete server', { concurren
         assert.equal(client.ws.extensions, enabled ? 'permessage-deflate' : '');
         await hello(client);
       }));
+    }
+  });
+
+  test('neither on nor safe rejects a client offer (a rejected offer is HTTP 400, not a degraded connection)', { timeout: 20000 }, async (t) => {
+    // ws's acceptAsServer REJECTS an offer when the server pins serverNoContextTakeover=false or a window larger
+    // than the client's, and a rejected upgrade aborts the handshake with 400 — the client cannot connect at all.
+    // Declaring neither option means "negotiate", so every one of these clients still connects.
+    const WebSocketLib = (await import('ws')).default;
+    for (const mode of ['on', 'safe']) {
+      await t.test(mode, async (subtest) => {
+        const { srv } = await boot(subtest, { wsCompression: mode });
+        const offers = [
+          ['browser: client_max_window_bits', { threshold: 0 }],
+          ['asks server_no_context_takeover', { threshold: 0, serverNoContextTakeover: true }],
+          ['asks server_max_window_bits=12', { threshold: 0, serverMaxWindowBits: 12 }],
+          ['asks for less than 15', { threshold: 0, serverMaxWindowBits: 9 }],
+          ['asks for both', { threshold: 0, serverNoContextTakeover: true, serverMaxWindowBits: 12 }],
+        ];
+        for (const [label, perMessageDeflate] of offers) {
+          const c = new WebSocketLib(`ws://127.0.0.1:${srv.port}/ws`, { perMessageDeflate });
+          const outcome = await new Promise((resolve) => {
+            c.on('open', () => resolve('open'));
+            c.on('unexpected-response', (_req, res) => resolve(`HTTP ${res.statusCode}`));
+            c.on('error', (e) => resolve(`error: ${e.message}`));
+          });
+          assert.equal(outcome, 'open', `${mode} / ${label} -> ${outcome}`);
+          try { c.terminate(); } catch { /* already gone */ }
+        }
+      });
     }
   });
 

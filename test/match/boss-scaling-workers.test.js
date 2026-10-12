@@ -32,7 +32,7 @@ async function fixture(t, { count = 3, hidden = false, speed = 2, smallPool = fa
   if (smallPool) {
     // Only this test checkpoint lowers the base pool for a quick real-content victory; scaling still happens in Match.
     m.gd.raw = { ...m.gd.raw, bosses: { ...m.gd.raw.bosses,
-      [id]: { ...m.gd.boss(id), bloodPoint: { NORMAL: 40000 } } } };
+      [id]: { ...m.gd.boss(id), bloodPoint: { NORMAL: 10000 } } } };
   }
   for (const ps of m.order) {
     ps.lp = 40; ps.bandId = 'band_bldsk'; ps.round = m.round;
@@ -40,7 +40,7 @@ async function fixture(t, { count = 3, hidden = false, speed = 2, smallPool = fa
     if (hidden) ps.lpAtFinal = ps.lp;
   }
   if (hidden) { m.hiddenReached = true; m.teamLp = count * 40; }
-  return { m, pool, expected: Math.round(m.gd.boss(id).bloodPoint.NORMAL * count / 4), errors, ended };
+  return { m, pool, expected: Math.round(m.gd.boss(id).bloodPoint.NORMAL * count), errors, ended };
 }
 
 function assertInitial(m, runner, out, expected) {
@@ -63,7 +63,7 @@ function assertInitial(m, runner, out, expected) {
 }
 
 for (const hidden of [false, true]) for (const count of [1, 2, 3, 4]) {
-  test(`serverWorker ${hidden ? 'hidden' : 'ordinary'} Boss: ${count} living seats start with ${count * 25}% HP`, { timeout: 15_000 }, async (t) => {
+  test(`serverWorker ${hidden ? 'hidden' : 'ordinary'} Boss: ${count} living seats start with ${count}× the data pool`, { timeout: 15_000 }, async (t) => {
     const { m, pool, expected, errors } = await fixture(t, { count, hidden });
     m.startFinalAssault(hidden);
     const runner = m.runner;
@@ -103,7 +103,7 @@ for (const hidden of [false, true]) {
     assert.equal(m.outcome.victory, true);
     assert.equal(m.outcome.hiddenCleared, hidden);
     assert.ok(fields.every(f => f.players.length === 2), 'two real pair fields, including the AI seat');
-    assert.equal(shared.maxHp, 40000, 'four seats: 100% of the test-only 40000 base');
+    assert.equal(shared.maxHp, 40000, 'four seats: 4 × the test-only 10000 base');
     assert.equal(shared.hp, 0);
     const effects = outputs.flatMap((out) => out.effects || []).filter((effect) => effect.type === 'bossDamage');
     assert.ok(effects.length > 1, 'real content produced multiple ordered damage deltas');

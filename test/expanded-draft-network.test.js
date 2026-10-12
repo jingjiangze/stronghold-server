@@ -7,7 +7,7 @@ import { TestClient } from './helpers/wsClient.js';
 import { MATCHMAKING_VERSION } from '../shared/constants.js';
 import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
 
-const rules = { revivalEnabled: false, disableSharedPool: false, playerCapacity: 20 };
+const rules = { disableSharedPool: false, playerCapacity: 20 };
 for (const family of ['bounty', 'supply', 'shop', 'tactic']) test(`actual twenty-human ${family} draft reuses six options and every manual choice then advances without timeout`, { timeout: 20000 }, async t => {
   class DraftMatch extends Match {
     constructor(opts) {

@@ -6,10 +6,7 @@ import { GameData } from '../../server/match/gamedata.js';
 import { buildNormalWave, setupMatchWaves } from '../../server/match/waves.js';
 import { computeBonds } from '../../server/match/bondsMeta.js';
 import { createRng } from '../../server/sim/rng.js';
-import { DATA as LIVE_DATA } from './harness.js';
-import { officialBossData } from './official-boss-fixture.js';
-
-const DATA = officialBossData(LIVE_DATA);
+import { DATA } from './harness.js';
 import {
   CURVES, planBoard, applyBoard, makeMatch, runNormal, runBoss, withoutTuning, waveNeeds, summarizeNormal,
 } from '../../tools/balance.mjs';

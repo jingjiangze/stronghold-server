@@ -6,7 +6,7 @@ import { createTicketAuthority } from '../server/cluster/tickets.js';
 import { AllocationError } from '../server/cluster/directory.js';
 
 const spec = (roomCode = 'ABCD', extra = {}) => ({ roomCode, build: 'test-build', protocol: 1, seed: 1, matchNo: 1, mode: 'coop',
-  difficulty: 'NORMAL', modeId: 'mode_multi_normal', revivalEnabled: false, snapshotHz: 10, spectators: [],
+  difficulty: 'NORMAL', modeId: 'mode_multi_normal', snapshotHz: 10, spectators: [],
   seats: [0, 1, 2, 3].map(seat => ({ seat, playerId: `${roomCode}-p${seat}`, name: `Player${seat}`, isBot: false, connected: true, loadout: null })), ...extra });
 function peer(nodeId) {
   const state = { nodeId, key: randomBytes(32), generation: `${nodeId}-generation`, ready: true, playersReady: true, actors: new Map(), calls: [], failures: new Map(), closed: false };

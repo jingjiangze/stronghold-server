@@ -8,7 +8,7 @@ import { planUnite, planUniteRelay, uniteSurvivors } from '../../server/match/un
 import { FakeBattle } from './fakeBattle.js';
 import { makeMatch, give, legalTileFor, checkInvariants } from './harness.js';
 
-const experiment = { playerCapacity: 20, revivalEnabled: true, disableSharedPool: false };
+const experiment = { playerCapacity: 20, disableSharedPool: false };
 const enemyKey = 'enemy_1007_slime';
 const pp = (leaked = [], extra = {}) => ({ leaked, perfect: !leaked.some(l => l.counted !== false), killed: 0,
   total: leaked.length, coins: 0, damageDealt: 0, healingDone: 0, layerGains: {}, unitsEnd: [], unitStats: [], ...extra });
@@ -116,13 +116,12 @@ for (const when of ['normal-start', 'qualification']) test(`eight threshold uses
   settle(h); assert.equal(h.ps('p_0').lp, 18);
 });
 
-test('no first residual: no second field, reserves never become donors, result metadata records only actual first field', t => {
+test('no first residual: no second field, result metadata records only actual first field', t => {
   const h = fixture(t, { firstLeft: 0 }), m = h.m;
   first(h); settle(h);
   assert.equal(h.ps('p_0').lp, 20); assert.equal(m._uniteRelay.rounds.length, 1);
   assert.equal(m.uniteResultView.through, 0);
   assert.deepEqual(m.uniteResultView.helpers, ['p_1', 'p_2']);
-  assert.equal(m._revival.eligible.has('p_3'), false); assert.equal(m._revival.eligible.has('p_4'), false);
 });
 
 for (const candidates of [0, 1]) test(`only ${candidates} unused qualified helper(s): no empty/repeated helper, final settle still once`, t => {
@@ -140,7 +139,7 @@ test('second helper qualification excludes departure, synthetic, counted leaks a
   m.onLeave('p_3'); m.lastResults.get('p_4').synthetic = true;
   m.lastResults.get('p_5').leaked.push(leak('p_5')); m.lastResults.get('p_6').perfect = false;
   second(h); assert.deepEqual(m.unitePlan.helpers.map(p => p.playerId), ['p_7']);
-  settle(h); assert.equal(m._revival.eligible.has('p_3'), false); assert.equal(m._revival.eligible.has('p_4'), false);
+  settle(h);
 });
 
 test('source ledger: leaks + unspawned residuals, unknown/noncounted enemies, mods and bounty remain source-owned', t => {
@@ -183,26 +182,6 @@ test('synthetic second result charges only first residual, never restores origin
   assert.equal(m._uniteRelay.rounds[1].result.synthetic, true);
   assert.equal(m.uniteResultView.through, 2); assert.equal(h.ps('p_0').lp, 18);
   assert.equal(h.ps('p_1').pendingFunds, 4);
-  assert.equal(m._revival.eligible.has('p_3'), false);
-});
-
-test('relay death/rescue only after final LP: actual leak-free participants qualify, reserves/leaky participants do not', t => {
-  const h = fixture(t, { targetLp: 1 }), m = h.m;
-  first(h); assert.equal(h.ps('p_0').alive, true); assert.equal(h.ps('p_0').pendingDeath, false);
-  second(h); assert.equal(h.ps('p_0').alive, true); assert.equal(m._revival, null);
-  settle(h);
-  assert.equal(h.ps('p_0').pendingDeath, true);
-  assert.equal(m._revival.eligible.has('p_1'), false, 'helper whose half leaked cannot pay');
-  assert.equal(m._revival.eligible.has('p_3'), false, 'second-round leaking helper cannot pay');
-  assert.deepEqual([...m._revival.eligible].sort(), ['p_2', 'p_4']);
-  assert.equal(m._revival.eligible.has('p_5'), false, 'perfect reserve never participated');
-  const request = { t: 'g.revive', playerId: 'p_0', round: 1, matchId: m.battlePrefix };
-  assert.equal(m.handle('p_1', request).detail, 'revival-not-helper');
-  assert.equal(m.handle('p_5', request).detail, 'revival-not-helper');
-  assert.deepEqual(m.handle('p_4', request), { ok: true });
-  assert.equal(h.ps('p_4').lp, 10); assert.equal(h.ps('p_0').lp, 1);
-  assert.equal(m.handle('p_2', request).detail, 'revival-target-ineligible');
-  assert.equal(h.ps('p_2').lp, 20);
 });
 
 test('twenty seats preserve independent high-seat residual sources and final per-leaker losses', t => {
@@ -262,7 +241,7 @@ test('second-round downed/HP/SP carry and skins are original helper-owned, never
   settle(h); assert.equal(m.uidSeq, uidBefore);
 });
 
-test('legacy headless relay waits natural field release; precomputed results cannot start round two or rescue early', t => {
+test('legacy headless relay waits natural field release; precomputed results cannot start round two', t => {
   const h = fixture(t, { clientCombat: true, clients: false, instant: false, targetLp: 1 }), m = h.m;
   for (const p of m.order) p.connected = false;
   m.startCombat();
@@ -271,11 +250,11 @@ test('legacy headless relay waits natural field release; precomputed results can
   h.run(() => m.phase === PHASE.UNITE);
   const f1 = m.fields[0]; h.run(() => !!f1.result);
   assert.equal(f1.done, false); assert.equal(m.unitePlan.uniteRound, 1);
-  assert.equal(m._uniteRelay.rounds.length, 0); assert.equal(h.ps('p_0').alive, true); assert.equal(m._revival, null);
+  assert.equal(m._uniteRelay.rounds.length, 0); assert.equal(h.ps('p_0').alive, true);
   second(h); const f2 = m.fields[0]; h.run(() => !!f2.result);
   assert.equal(f2.done, false); assert.equal(m._uniteRelay.rounds.length, 1);
   assert.equal(h.ps('p_0').lp, 1); assert.equal(h.settlements(), 0);
-  settle(h); assert.equal(h.ps('p_0').pendingDeath, true);
+  settle(h); assert.equal(h.ps('p_0').alive, false);
 });
 
 test('legacy late first-round results/progress cannot mutate round-two authority or residual counts', t => {

@@ -238,10 +238,10 @@ for (const hidden of [false, true]) {
     assertFullResults(worker);
     assert.deepEqual(worker, inline);
     assert.equal(worker.state.boss.hp, 0);
-    assert.equal(worker.state.boss.maxHp, 200);
+    assert.equal(worker.state.boss.maxHp, 800, 'four living seats: 4 × the scenario 200 pool');
     assert.ok(worker.state.teamLp > 0);
     const credited = worker.state.players.reduce((sum, p) => sum + p.stats.bossDamage, 0);
-    assert.ok(Math.abs(credited - 200) < 1e-7, 'shared pool damage is credited once, not once per mirrored field');
+    assert.ok(Math.abs(credited - 800) < 1e-7, 'shared pool damage is credited once, not once per mirrored field');
     await until(() => pair.every((h) => h.m.ended), 'victory reaches RESULT');
     const summaries = pair.map((h) => {
       assert.equal(h.ended.length, 1);
@@ -256,9 +256,9 @@ for (const hidden of [false, true]) {
   });
 }
 
-test('workers: real unite carries operator/summon state and reached layers, then preserves pending-death rescue settlement', { timeout: 15_000 }, async (t) => {
+test('workers: real unite carries operator/summon state and reached layers identically inline vs worker', { timeout: 15_000 }, async (t) => {
   const pool = await realPool(t, 1);
-  const pair = [fixture(t, { humans: 2, revivalEnabled: true }), fixture(t, { pool, humans: 2, revivalEnabled: true })];
+  const pair = [fixture(t, { humans: 2 }), fixture(t, { pool, humans: 2 })];
   const completions = [];
   for (const { m } of pair) {
     const [target, donor] = m.order;
@@ -306,14 +306,9 @@ test('workers: real unite carries operator/summon state and reached layers, then
   assert.ok(pp.unitsEnd.some((u) => u.defId === 'token_10030_mlyss_wtrman'), 'worker retains the summon end state');
   for (const { m, logs } of pair) {
     const [target, donor] = m.order;
-    assert.equal(target.pendingDeath, true);
-    assert.ok(target.board.size > 0, 'pending death has not returned or wiped holdings');
+    assert.equal(target.alive, false, 'a counted leak at 1 LP eliminates the seat at settlement');
+    assert.equal(target.lp, 0);
     assert.equal(donor.layers.sargonShip, 15, 'normal layer gains settle only once');
-    assert.equal(m.publicView().revival.windowOpen, true);
-    assert.deepEqual(m.publicView().revival.eligible, [donor.playerId]);
-    assert.deepEqual(m.handle(donor.playerId, { t: 'g.revive', playerId: target.playerId, matchId: m.battlePrefix, round: m.round }), { ok: true });
-    assert.equal(target.lp, 1); assert.equal(target.pendingDeath, false); assert.equal(target.alive, true);
-    assert.equal(donor.lp, 1);
     assert.deepEqual(logs.errors, []);
   }
 });
@@ -1066,7 +1061,7 @@ test('workers: a real WS spectator receives encoded live/resync frames without p
   const room = srv.lobby.getRoom(roomState.code), m = room.match;
   assert.equal(m.order.length, 1);
   assert.equal(m.soloUntimed, true, 'a spectator does not make a second human player');
-  assert.equal(m.revivalEnabled, false);
+  assert.equal(m.opts.disableSharedPool, false);
   m.wave = { ...m.wave, timeLimit: 90, spawns: [{ ...m.wave.spawns[0], time: 0.2, count: 1, interval: 0 }] };
   const encoded = [], send = m.opts.sendEncoded;
   m.opts.sendEncoded = (pid, type, wire) => { encoded.push({ pid, type, wire }); return send(pid, type, wire); };
@@ -1077,7 +1072,6 @@ test('workers: a real WS spectator receives encoded live/resync frames without p
   assert.ok(m.runner instanceof WorkerFieldRunner);
   assert.equal(m.players.has(observer.id), false);
   assert.ok(m.fields.every((f) => !f.players.includes(observer.id)));
-  assert.equal((await observer.request({ t: 'g.revive', playerId: host.id, round: 1, matchId: m.battlePrefix })).code, 'SPECTATOR');
   await observer.terminate();
   const resumed = await connect('观战', observer.token);
   assert.equal(resumed.id, observer.id);

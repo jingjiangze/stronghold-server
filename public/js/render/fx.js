@@ -37,7 +37,7 @@
 //
 // The bodies live in public/js/render/fx/*.js. Every name this file exported before the split is
 // re-exported below, so existing imports keep working. speeds.js is imported first: its dynamic
-// import('/sim/constants.js') is the module's one init side effect, as it was at the top of this file.
+// import of the sim's constants is the module's one init side effect, as it was at the top of this file.
 
 export { setSimProjectileSpeeds, projSpeed } from './fx/speeds.js';
 export { SHOT_HEIGHT, bodyZ } from './fx/camera.js';

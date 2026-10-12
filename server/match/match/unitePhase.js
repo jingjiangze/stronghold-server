@@ -16,7 +16,7 @@ import { onStartUnite } from '../botEmotes.js';
 export class MatchUnite {
   startUnite(plan) {
     if (this.capacityExperiment && !this.alivePlayers().length) { this.settle(null, null); return; }
-    if (plan.uniteRound === 1) this._uniteRelay = { rounds: [], eligible: new Set() };
+    if (plan.uniteRound === 1) this._uniteRelay = { rounds: [] };
     if (plan.uniteRound && !this.clientCombat) plan.battleId = `${this.battlePrefix}.${this.round}.${++this._battleSeq}.relay${plan.uniteRound}`;
     if (this.clientCombat) { this._startUniteClient(plan); return; }
     this.phase = PHASE.UNITE;
@@ -152,12 +152,6 @@ export class MatchUnite {
       const survivors = res && !res.synthetic ? uniteSurvivors(plan, res) : new Map(plan.notReentered);
       if (!res || res.synthetic) for (const l of plan.leaked) {
         survivors.set(l.sourcePlayerId, (survivors.get(l.sourcePlayerId) || 0) + 1);
-      }
-      const eligible = this._revivalHelpers(plan, res);
-      for (const pid of eligible) {
-        const pp = res.perPlayer[pid];
-        // Leak records belong to the helper's half; sourcePlayerId remains the original leaker billed for LP.
-        if (pp.perfect !== false && !(pp.leaked || []).some((l) => l && l.counted !== false)) this._uniteRelay.eligible.add(pid);
       }
       this._uniteRelay.rounds.push({ plan, result: res, survivors,
         view: { round: plan.uniteRound, fieldId: field.fieldId,

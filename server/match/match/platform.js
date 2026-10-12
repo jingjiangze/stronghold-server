@@ -172,7 +172,7 @@ export class MatchPlatform {
   _quit(ps) {
     this._cancelBotPrep(ps);
     this.maybeEndInfo();
-    if (!ps.alive && !ps.pendingDeath) return;
+    if (!ps.alive) return;
     const phase = this.phase;
     const d = this.draft;
     if (phase === PHASE.BAND_DRAFT && d && !d.picks[ps.playerId]) {
@@ -194,7 +194,8 @@ export class MatchPlatform {
         try { f.battle.forceEnd('left'); } catch (e) { this.reportError('quit forceEnd', e); }
       }
     }
-    this._finalizeDeath(ps, { round: passedRound, notify: false, reason: 'left' });
+    ps.lp = 0;
+    ps.eliminate(passedRound);
     this.tickerText(msg('{name}博士中途退出了模拟', { name: ps.name }), FLOW_TICKER_PRIORITY);
     if (this.bossWaves && (phase === PHASE.ROUND_START || phase === PHASE.SP_DRAFT || phase === PHASE.PREP)) {
       // before the boss fight: pair the players left again (the prep preview shows the new partner / template); a
@@ -218,7 +219,6 @@ export class MatchPlatform {
   dispose() {
     if (this.disposed) return;
     this._freezeDamage(false);
-    this._finalizePendingDeaths({ notify: false, reason: 'match-ended' });
     this.disposed = true;
     for (const ps of this.order) this._cancelBotPrep(ps);
     if (this.runner) { try { this.runner.stop(); } catch { /* ignore */ } }

@@ -261,9 +261,6 @@
 .lobby-screen .matchmaking__actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .1rem; margin-bottom: 0; }
 .lobby-screen .matchmaking.is-offered .matchmaking__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .lobby-screen .matchmaking__help { font-size: calc(.15 * var(--t)); }
-.lobby-screen .matchmaking__revival { margin-block: .1rem; display: flex; align-items: baseline; flex-wrap: wrap; gap: .04rem .1rem; }
-.lobby-screen .matchmaking__revival p { margin: 0; }
-.lobby-screen .matchmaking__revival > span { flex-basis: 100%; }
 .lobby-screen .matchmaking__count { margin-left: auto; font-size: calc(.15 * var(--t)); color: var(--text-lo); font-weight: 400; }
 .lobby-screen .matchmaking h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .08rem; }
 .lobby-screen .matchmaking--compact:not(.is-active) > header,

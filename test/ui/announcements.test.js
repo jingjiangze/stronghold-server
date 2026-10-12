@@ -120,7 +120,7 @@ test('announcements omit contacts and infrastructure; the lobby owns the copyabl
 
 test('topmost modal traps and restores focus and compact matching explains room-owned experimental rules', () => {
   const modal = source('../../public/js/ui/components.js'), matching = source('../../public/js/ui/matchmaking.js');
-  const experimental = source('../../public/js/ui/experimental.js'), revival = source('../../public/js/ui/revival.js');
+  const experimental = source('../../public/js/ui/experimental.js');
   assert.match(modal, /aria-label=\$\{ariaLabel\}/);
   assert.match(modal, /if \(!topmost\(\)\) return/);
   assert.match(modal, /else if \(e\.key === 'Tab'\)/); assert.match(modal, /prevFocus\?\.focus/);
@@ -129,6 +129,5 @@ test('topmost modal traps and restores focus and compact matching explains room-
   assert.match(matching, /\$\{t\(MATCHING_RULES\)\}<\/p><p class="modal__text">\$\{t\(EXPERIMENTAL_RULES\)\}/);
   assert.match(matching, /未完成确认者不自动回队/); assert.match(matching, /单人匹配跟随所加入房间/);
   assert.doesNotMatch(matching, /revivalVote|开启复活并确认|赞成开启/);
-  assert.match(experimental, /title=\$\{t\('实验性选项'\)\}/); assert.match(experimental, /revivalEnabled/); assert.match(experimental, /disableSharedPool/);
-  assert.match(revival, /me\.lp >= 11/); assert.match(revival, /至少 11 生命，可支付 10 点救援/);
+  assert.match(experimental, /title=\$\{t\('实验性选项'\)\}/); assert.doesNotMatch(experimental, /revivalEnabled/); assert.match(experimental, /disableSharedPool/);
 });

@@ -4,12 +4,7 @@
 // (DESIGN §25.13.4, server/match/gamedata.js bossPoolShareOf).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeMatch as makeHarnessMatch, DATA as LIVE_DATA } from './harness.js';
-import { officialBossData } from './official-boss-fixture.js';
-
-// Reference PR209 behavior uses official inputs; fork alive/4 coverage lives in finalAssault/boss-scaling-workers.
-const DATA = officialBossData(LIVE_DATA);
-const makeMatch = (opts = {}) => makeHarnessMatch({ ...opts, data: opts.data ?? DATA });
+import { makeMatch, DATA } from './harness.js';
 import { GameData } from '../../server/match/gamedata.js';
 import { bossPoolHp, SharedBossPool } from '../../server/match/finalAssault.js';
 import { makeBattle } from '../helpers/battleHarness.js';

@@ -43,7 +43,7 @@ import { C2S, validateC2S, normalizeServerLoad, normalizeLoadDetails } from '../
 import { normalizeClusterLoad } from '../shared/cluster-load.js';
 import { ERR, ERR_TEXT, PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
-import { isCompressibleType } from './wsCompression.js';
+import { isCompressibleType, transportStats } from './wsCompression.js';
 import { moderateName } from '../shared/names.js';
 export { sanitizeName } from '../shared/names.js';
 
@@ -290,9 +290,14 @@ export function sendRaw(ws, data, { droppable = false, compress = false } = {}) 
   if (!ws || ws.readyState !== WS_OPEN || typeof data !== 'string') return false;
   try {
     const queued = ws.bufferedAmount;
-    if (queued > NET_DEFAULTS.hardBufferBytes) { ws.terminate(); return false; }
-    if (droppable && queued > NET_DEFAULTS.snapDropBytes) return false;
-    ws.send(data, { compress: compress === true }, onSendDone);
+    if (queued > NET_DEFAULTS.hardBufferBytes) { transportStats.countTerminated(); ws.terminate(); return false; }
+    // Skipping happens BEFORE ws.send on purpose: with context takeover a frame that entered the deflate
+    // context and was then not delivered would desynchronize the client's inflate context (see
+    // server/ws-compression/plumbing.mjs).
+    if (droppable && queued > NET_DEFAULTS.snapDropBytes) { transportStats.countSkipped(); return false; }
+    const wantCompress = compress === true;
+    ws.send(data, { compress: wantCompress }, onSendDone);
+    transportStats.countSent(Buffer.byteLength(data, 'utf8'), wantCompress);
     return true;
   } catch {
     return false;

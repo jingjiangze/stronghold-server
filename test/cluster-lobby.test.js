@@ -60,7 +60,7 @@ function harness(t, options = {}) {
       if (room) seen.add(room);
       assert.deepEqual(lobby.queue.join(session, { difficulty: 'NORMAL', party: !!room }), { ok: true });
     }
-    return players.map(s => ({ ...lobby.queue.state(s), revivalVote: false }));
+    return players.map(s => ({ ...lobby.queue.state(s) }));
   };
   const accept = (players, states) => players.forEach((session, i) => assert.deepEqual(lobby.queue.accept(session, states[i]), { ok: true }));
   const complete = (index = calls.length - 1, overrides = {}) => {
@@ -141,9 +141,9 @@ test('public 2+1+1 party commits only prepared DTO and publishes room state befo
   assert.equal(h.lobby.spectatorAliases.size, 0, 'pending preparation must not bind a party alias');
   const call = h.calls[0], spec = call.spec;
   assert.deepEqual(Object.keys(spec).sort(), ['assignmentId', 'build', 'protocol', 'roomCode', 'mode', 'difficulty', 'modeId',
-    'revivalEnabled', 'disableSharedPool', 'experimental', 'aiPicksLast', 'seed', 'matchNo', 'seats', 'spectators'].sort());
+    'disableSharedPool', 'experimental', 'aiPicksLast', 'seed', 'matchNo', 'seats', 'spectators'].sort());
   assert.equal(spec.aiPicksLast, false, 'public all-human room starts with its explicit default AI option');
-  assert.equal(spec.seed, 123456); assert.equal(spec.matchNo, 1); assert.equal(spec.revivalEnabled, false);
+  assert.equal(spec.seed, 123456); assert.equal(spec.matchNo, 1); assert.equal(spec.disableSharedPool, false);
   assert.deepEqual(spec.seats[0].loadout, { synthetic_unit: { skill: 1, module: null } });
   assert.deepEqual(spec.spectators, [observer.playerId]); assert.ok(call.context.isCurrent());
   for (const session of players) h.lobby.queue.accept(session, states[players.indexOf(session)]);
@@ -172,7 +172,7 @@ for (const changed of ['loadout', 'observer', 'network', 'experimental']) test(`
   if (changed === 'loadout') { players[0].loadout = { synthetic_unit: { skill: 2, module: null } }; old.seatOf(players[0].playerId).loadout = players[0].loadout; }
   if (changed === 'observer') h.lobby.spectate(h.player(), { code: old.code });
   if (changed === 'network') players[0].limitKey = 'changed-network';
-  if (changed === 'experimental') h.lobby.queue.offers.get(states[0].offerId).experimental = { revivalEnabled: true, disableSharedPool: true };
+  if (changed === 'experimental') h.lobby.queue.offers.get(states[0].offerId).experimental = { disableSharedPool: true };
   const done = h.complete(); await flush();
   assert.deepEqual(done.counts, { commit: 0, publish: 0, abort: 1 });
   assert.equal(h.lobby.spectatorAliases.size, 0);
@@ -254,10 +254,10 @@ test('manual friend room enforces host/readiness and locks experimental rules be
   const h = harness(t), players = h.group().slice(0, 3), room = h.privateRoom(players);
   h.lobby.ready(players[1], { ready: false });
   assert.equal(h.lobby.start(players[1]).error, ERR.NOT_HOST); assert.equal(h.lobby.start(players[0]).error, ERR.NOT_READY);
-  h.lobby.setExperimental(players[0], { experimental: { revivalEnabled: true, disableSharedPool: false } });
+  h.lobby.setExperimental(players[0], { experimental: { disableSharedPool: true } });
   for (const p of players.slice(1)) h.lobby.ready(p, { ready: true });
-  const promise = h.lobby.start(players[0]); assert.equal(h.calls[0].spec.revivalEnabled, true);
-  h.complete(); assert.deepEqual(await promise, { ok: true }); assert.equal(room.revivalLocked.enabled, true);
+  const promise = h.lobby.start(players[0]); assert.equal(h.calls[0].spec.disableSharedPool, true);
+  h.complete(); assert.deepEqual(await promise, { ok: true }); assert.equal(room.experimental.disableSharedPool, true);
 });
 
 for (const cancellation of ['disconnect', 'leave', 'timeout', 'shutdown', 'loadout']) test(`manual ${cancellation} cancels bounded prepare and late cleanup cannot start the old room`, async t => {
@@ -377,18 +377,18 @@ for (const layout of [[2, 2], [3, 1], [4]]) test(`remote public ${layout.join('+
     at += size;
   }
   for (const old of oldRooms) {
-    h.lobby.setExperimental(h.registry.byId(old.hostId), { experimental: { revivalEnabled: true, disableSharedPool: false } });
+    h.lobby.setExperimental(h.registry.byId(old.hostId), { experimental: { disableSharedPool: true } });
     for (const seat of old.activeHumans()) if (seat.playerId !== old.hostId) h.lobby.ready(h.registry.byId(seat.playerId), { ready: true });
   }
   const states = h.queue(players);
   h.accept(players, states);
-  assert.equal(h.calls[0].spec.revivalEnabled, true);
+  assert.equal(h.calls[0].spec.disableSharedPool, true);
   const done = h.complete(); await flush();
   assert.deepEqual(done.counts, { commit: 1, publish: 1, abort: 0 });
   const room = h.lobby.roomOf(players[0]); assert.ok(room.match); assert.equal(h.lobby.rooms.size, 1);
   assert.ok(oldRooms.every(old => old.disposed && !h.lobby.rooms.has(old.code)));
   assert.ok(observers.every(s => s.roomCode === room.code));
-  assert.deepEqual([...room.ownerKeys], ['synthetic-network']); assert.equal(room.revivalLocked.enabled, true);
+  assert.deepEqual([...room.ownerKeys], ['synthetic-network']); assert.equal(room.experimental.disableSharedPool, true);
   assert.equal(h.localMatches(), 0); assert.equal(h.seeds(), 1);
 });
 

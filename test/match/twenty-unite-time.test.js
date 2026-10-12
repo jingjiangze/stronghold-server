@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeMatch } from './harness.js';
 
-const rules = capacity => ({ playerCapacity: capacity, revivalEnabled: false, disableSharedPool: false });
+const rules = capacity => ({ playerCapacity: capacity, disableSharedPool: false });
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 function fixture(t, { count = 20, capacity = 20, mode = 'coop', clientCombat = false, base = 60, speed = 2, relay = false } = {}) {
   const h = makeMatch({ humans: count, mode, experimental: rules(capacity), fake: true, instant: false, clientCombat, clients: false, seed: 9017 }).start();

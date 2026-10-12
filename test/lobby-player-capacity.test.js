@@ -7,7 +7,7 @@ import { PLAYER_CAPACITIES, PLAYER_CAPACITY_VERSION } from '../shared/playerCapa
 import { startServer } from '../server/index.js';
 import { TestClient } from './helpers/wsClient.js';
 
-const options = capacity => ({ revivalEnabled: false, disableSharedPool: false, ...(capacity === undefined ? {} : { playerCapacity: capacity }) });
+const options = capacity => ({ disableSharedPool: false, ...(capacity === undefined ? {} : { playerCapacity: capacity }) });
 class RecordingMatch {
   constructor(opts) { this.opts = opts; }
   start() {}
@@ -149,9 +149,9 @@ test('ended public matchmaking rooms cannot become expanded friend rooms; ordina
     assert.equal(room.seats, seats); assert.equal(room.experimental, experimental); assert.equal(room.replay, replay);
     assert.deepEqual(room.toState(), before); assert.equal(players[0].messages.length, messages);
   }
-  assert.deepEqual(f.lobby.setExperimental(players[0], { experimental: { revivalEnabled: true, disableSharedPool: true, playerCapacity: 4 } }), { ok: true });
+  assert.deepEqual(f.lobby.setExperimental(players[0], { experimental: { disableSharedPool: true, playerCapacity: 4 } }), { ok: true });
   assert.equal(room.capacity, 4); assert.equal(room.seats.length, 4); assert.equal(room.seats[1].ready, false);
-  assert.deepEqual(room.experimental, { revivalEnabled: true, disableSharedPool: true });
+  assert.deepEqual(room.experimental, { disableSharedPool: true });
 });
 
 test('actual native WS twenty-seat room rejects overflow/legacy resume without replacing compatible socket', async t => {

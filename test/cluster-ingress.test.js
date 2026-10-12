@@ -90,7 +90,7 @@ async function fixture(t) {
     return result;
   };
   const input = { roomCode: 'ABCD', build: 'test-build', protocol: 1, mode: 'coop', modeId: 'mode_multi_normal', difficulty: 'NORMAL',
-    seed: 1, matchNo: 1, snapshotHz: 10, revivalEnabled: false,
+    seed: 1, matchNo: 1, snapshotHz: 10,
     seats: [{ seat: 0, playerId: 'p1', name: 'Player1', isBot: false, connected: true, loadout: null }], spectators: ['watcher'] };
   const publish = staged => {
     staged.commit();

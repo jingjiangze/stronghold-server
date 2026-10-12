@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeMatch } from './harness.js';
 
 for (const capacity of [8, 12, 16, 20]) test(`virtual human driver reuses six options in ${capacity}-mode without waiting for timeouts`, t => {
-  const h = makeMatch({ humans: capacity, experimental: { revivalEnabled: false, disableSharedPool: false, playerCapacity: capacity } });
+  const h = makeMatch({ humans: capacity, experimental: { disableSharedPool: false, playerCapacity: capacity } });
   t.after(() => h.m.dispose());
   const m = h.m;
   m.round = 3;

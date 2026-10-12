@@ -12,7 +12,7 @@ const NODE = 'game-a', BUILD = 'test-build';
 const seat = (seat, playerId, extra = {}) => ({ seat, playerId, name: playerId, isBot: false, connected: true, ...extra });
 const spec = extra => ({ assignmentId: 'allocation-a', roomCode: 'ABCD', build: BUILD, protocol: 1, seed: 7, matchNo: 1,
   mode: 'coop', difficulty: 'NORMAL', modeId: 'mode_multi_normal', seats: [seat(0, 'p1'), seat(2, 'p2')],
-  spectators: ['s1'], revivalEnabled: true, snapshotHz: 10, ...extra });
+  spectators: ['s1'], snapshotHz: 10, ...extra });
 const code = expected => error => error?.code === expected;
 const turn = () => new Promise(resolve => setImmediate(resolve));
 

@@ -26,7 +26,6 @@ import { EmoteBubble } from './emotes.js';
 import { STATUS_META, sortedPlayers, teamFrameIds } from './gameLogic.js';
 import { MissTag, uniteRemaining } from './hud.js';
 import { localAsset } from '../data.js';
-import { ReviveAction, RevivalNotice } from './revival.js';
 import { t } from '../../../shared/i18n.js';
 import { uniteRelayKey } from '../battle/observe.js';
 import { teamPanelLayout } from './teamLayout.js';
@@ -129,7 +128,6 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
   const players = sortedPlayers(pub);
   const expanded = players.length > 4;
   const panelRef = useRef(null);
-  const noticeRef = useRef(null);
   const headerRef = useRef(null);
   const [layout, setLayout] = useState(() => teamPanelLayout(players.length, 0));
   useEffect(() => {
@@ -138,9 +136,8 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
     const measure = () => {
       if (!panel) return;
       const css = getComputedStyle(panel);
-      const notice = noticeRef.current?.getBoundingClientRect().height || 0;
       const header = headerRef.current?.getBoundingClientRect().height || 0;
-      const height = panel.clientHeight - (parseFloat(css.paddingTop) || 0) - (parseFloat(css.paddingBottom) || 0) - notice - header;
+      const height = panel.clientHeight - (parseFloat(css.paddingTop) || 0) - (parseFloat(css.paddingBottom) || 0) - header;
       const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 40;
       const width = panel.clientWidth - (parseFloat(css.paddingLeft) || 0) - (parseFloat(css.paddingRight) || 0);
       const next = teamPanelLayout(players.length, height, root, width, document.documentElement.classList.contains('sp-coarse'));
@@ -149,10 +146,9 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
     measure();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
     if (panel) observer?.observe(panel);
-    if (noticeRef.current) observer?.observe(noticeRef.current);
     window.addEventListener('resize', measure);
     return () => { observer?.disconnect(); window.removeEventListener('resize', measure); };
-  }, [expanded, players.length, pub?.revival?.windowOpen, rosterOpen]);
+  }, [expanded, players.length, rosterOpen]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
     return () => cancelAnimationFrame(frame);
@@ -196,11 +192,10 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
         <${Icon} name="users" /><span>${t('同盟成员')}</span><b class="num">${players.length}</b><${Icon} name="chevronRight" />
       </button>
     </div>
-    <div ref=${noticeRef} class="team__notice"><${RevivalNotice} pub=${pub} /></div>
     <div class="team__players" id="team-roster" hidden=${!rosterOpen}>${players.map((p) => {
       const self = p.playerId === myId;
-      const status = p.pendingDeath ? 'rescue' : p.alive === false ? 'dead' : p.status;
-      const meta = p.pendingDeath ? { ...STATUS_META.deciding, text: t('等待救援') } : STATUS_META[status] || STATUS_META.acting;
+      const status = p.alive === false ? 'dead' : p.status;
+      const meta = STATUS_META[status] || STATUS_META.acting;
       const watched = teammateFieldShown(watching, p);
       const bubble = bubbles?.get(p.playerId);
       const offline = p.connected === false && !p.isBot;
@@ -209,7 +204,7 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
       const title = observe ? (self ? (observe.observing ? t('返回战场') : t('你自己')) : t('查看 {name} 的战场', { name: p.name })) : (self ? t('查看自己的阵地') : t('查看 {name} 的阵地', { name: p.name }));
       const lp = rowLp(p, pub, self ? selfLive : null, { uniteLocal, cap });
       const inTeam = team.has(p.playerId);
-      return html`<div key=${p.playerId} data-seat=${p.seat} class=${cx('team__row', self && 'is-self', inTeam && 'is-team', watched && 'is-watched', p.alive === false && !p.pendingDeath && 'is-dead', p.pendingDeath && 'is-pending', open && 'is-open')}>
+      return html`<div key=${p.playerId} data-seat=${p.seat} class=${cx('team__row', self && 'is-self', inTeam && 'is-team', watched && 'is-watched', p.alive === false && 'is-dead', open && 'is-open')}>
         <button type="button" class="team__btn" onClick=${() => click(p, self)} onDblClick=${(e) => dblClick(e, p, self)} title=${inTeam && !self ? `${title} · ${t('与你在同一战场')}` : title} aria-label=${title} aria-expanded=${observe && !self ? String(open) : undefined}>
           <${PlayerAvatar} player=${p} self=${self} />
           ${inTeam ? html`<span class=${cx('team__frame', !frameArt && 'team__frame--plain')} style=${frameArt ? `--frame:url("${frameArt}")` : undefined} aria-hidden="true"></span>` : null}
@@ -232,7 +227,6 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
             <//>
             ${watched && !self ? html`<span class="team__eye" title=${t('正在查看')}><${GIcon} name="eye" /></span>` : null}
           </div>
-          <${ReviveAction} pub=${pub} myId=${myId} target=${p} compact=${expanded} />
           ${open ? html`<button type="button" class="btn btn--primary btn--sm team__ob"
             onClick=${() => { setOpenPid(null); onWatch(p); }}><span class="btn__label">${t('前往查看')}</span></button>` : null}
           ${back ? html`<button type="button" class="btn btn--secondary btn--sm team__back"

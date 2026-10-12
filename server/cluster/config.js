@@ -87,7 +87,7 @@ export async function loadClusterConfig(file) {
     return { ...config, nodes };
   }
   if (!exact(config, ['role', 'host', 'port', 'coordinatorUrl', 'nodes', 'origins'], ['wsCompression', 'trustProxy'])
-    || !upstream(config.coordinatorUrl) || config.wsCompression !== undefined && !['on', 'off'].includes(config.wsCompression)
+    || !upstream(config.coordinatorUrl) || config.wsCompression !== undefined && !['on', 'off', 'safe'].includes(config.wsCompression)
     || config.trustProxy !== undefined && !['auto', true, false].includes(config.trustProxy)
     || !Array.isArray(config.origins) || !config.origins.length) fail('INVALID_CONFIG');
   for (const origin of config.origins) {

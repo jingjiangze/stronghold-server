@@ -11,7 +11,7 @@ const seat = (seat, playerId, extra = {}) => ({ seat, playerId, name: playerId, 
 const spec = (extra = {}) => ({ assignmentId: 'assignment-1', roomCode: 'ABCD', build: 'test-build', protocol: 1,
   seed: 71, matchNo: 1, mode: 'coop', difficulty: 'NORMAL', modeId: 'mode_multi_normal',
   seats: [seat(0, 'p1'), seat(2, 'p2'), seat(3, 'ai_1', { isBot: true })], spectators: ['s1'],
-  revivalEnabled: true, snapshotHz: 10, ...extra });
+  snapshotHz: 10, ...extra });
 const channel = () => ({ sent: [], encoded: [], closed: [],
   send(msg) { this.sent.push(msg); return true; },
   sendEncoded(type, data) { this.encoded.push([type, data]); return true; },
@@ -121,7 +121,7 @@ test('assignment spec keeps seat/loadout data, borrows pools, and never supplies
   assert.strictEqual(matches[0].opts.trialPool, trialPool);
   assert.strictEqual(matches[0].opts.data, data);
   for (const key of ['registry', 'assignmentId', 'build', 'protocol']) assert.equal(Object.hasOwn(matches[0].opts, key), false, key);
-  assert.equal(matches[0].opts.revivalEnabled, true);
+  assert.equal(matches[0].opts.disableSharedPool, false);
   assert.equal(matches[0].opts.snapshotHz, 10);
   assert.equal(matches[0].opts.clientCombat, false, 'host remains server-authoritative without an environment setting');
 });
@@ -170,7 +170,7 @@ test('all supplied spec fields participate in duplicate-prepare conflict detecti
   const { host, prepare } = fixture(t);
   prepare();
   for (const extra of [{ seed: 72 }, { matchNo: 2 }, { build: 'other' }, { protocol: 2 }, { roomCode: 'EFGH' },
-    { spectators: [] }, { snapshotHz: 5 }, { revivalEnabled: false },
+    { spectators: [] }, { snapshotHz: 5 },
     { seats: [seat(0, 'p1'), seat(2, 'p2', { connected: false }), seat(3, 'ai_1', { isBot: true })] },
     { mode: 'coop', difficulty: 'HARD', modeId: 'mode_multi_hard' }]) {
     assert.throws(() => host.prepare(spec(extra)), isCode('ASSIGNMENT_CONFLICT'));

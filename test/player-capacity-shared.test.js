@@ -5,7 +5,7 @@ import { MAX_PLAYER_CAPACITY, MAX_DRAFT_CARDS, PLAYER_CAPACITIES, PLAYER_CAPACIT
 import { EXPERIMENTAL_DEFAULTS, isExperimental, experimentalOptions, sameExperimental, experimentalKey } from '../shared/experimental.js';
 import { RESULT_LIMITS, validateC2S } from '../shared/protocol.js';
 
-const rules = () => ({ revivalEnabled: false, disableSharedPool: false });
+const rules = () => ({ disableSharedPool: false });
 
 test('ordinary capacity and result-player budget stay distinct from the experimental maximum', () => {
   assert.equal(MAX_SEATS, 4); assert.equal(MAX_PLAYER_CAPACITY, 20); assert.equal(MAX_DRAFT_CARDS, 22);
@@ -24,16 +24,16 @@ test('ordinary capacity and result-player budget stay distinct from the experime
   }
 });
 
-test('default canonical rules retain the original two-field shape and immutable independent copies', () => {
+test('default canonical rules retain the canonical single-flag shape and immutable independent copies', () => {
   assert.deepEqual(EXPERIMENTAL_DEFAULTS, rules());
   const plain = experimentalOptions(rules()), explicit = experimentalOptions({ ...rules(), playerCapacity: 4 });
   assert.deepEqual(plain, rules()); assert.deepEqual(explicit, rules());
   assert.ok(Object.isFrozen(plain)); assert.ok(Object.isFrozen(explicit));
-  assert.equal(sameExperimental(plain, explicit), true); assert.equal(experimentalKey(explicit), '00');
+  assert.equal(sameExperimental(plain, explicit), true); assert.equal(experimentalKey(explicit), '0');
   for (const capacity of PLAYER_CAPACITIES.slice(1)) {
     const input = { ...rules(), playerCapacity: capacity }, parsed = experimentalOptions(input);
     assert.notEqual(parsed, input); assert.ok(Object.isFrozen(parsed)); assert.deepEqual(parsed, input);
-    assert.equal(experimentalKey(parsed), `00:${capacity}`);
+    assert.equal(experimentalKey(parsed), `0:${capacity}`);
     assert.equal(sameExperimental(plain, parsed), false);
     input.playerCapacity = 4; assert.equal(parsed.playerCapacity, capacity);
   }

@@ -18,6 +18,10 @@
 //
 // Traversal & dotfile protection, a directory without its trailing slash → 301, 404 page; an absent
 // data/local-assets.json is answered with an empty manifest. Files go out through files.js serveFile.
+//
+// An install whose art lives on a mirror instead of on disk (no public/fonts/) answers a missing /fonts/… request
+// with a 302 to the URL the pinned manifest names for it (asset-cdn.js) instead of a 404, so the stylesheet
+// public/index.html links still loads and the game keeps its real fonts instead of the system fallbacks.
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -25,6 +29,7 @@ import { MEDIA_PREFIX } from '../../shared/media.js';
 import { ROOT, noopLog } from './config.js';
 import { sendError, sendJson } from './common.js';
 import { MIME, GzipCache, isNotModified, serveFile, loadWarmFile } from './files.js';
+import { createAssetCdn } from './asset-cdn.js';
 import { serveMedia } from './media.js';
 import { createPackRegistry } from '../packs.js';
 import { PACKS_URL, PACK_INDEX_FILE } from '../../shared/packs.js';
@@ -50,12 +55,13 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
 
 /**
  * Create the static request handler.
- * @param {{ publicDir: string, dataDir: string, sharedDir: string, simDir?: string, packsDir?: string,
  *   packs?: ReturnType<typeof createPackRegistry>, log?: object, warm?: string[],
  *   manifestAlias?: { from: string, to: string, file: string } | null,
+ *   assetCdn?: ReturnType<typeof createAssetCdn>,
  *   assetJump?: ((pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null) | null }} dirs
  *   packs: the server's pack registry (default: one over publicDir, dataDir and packsDir — ROOT/packs)
  *   assetJump: missing /assets|fonts files are 302ed to the asset source (server/http/asset-jump.js) — local files still win
+ *   assetCdn: the /fonts/ mirror fallback (default: one over dataDir/assets.json); the SECOND chance, after assetJump
  *   warm: absolute paths read once at boot and then served from memory (server/http/files.js loadWarmFile);
  *         for files the container FS re-reads slowly. The promise is exposed as `handler.warmReady`.
  *   manifestAlias: some edges are slow for one specific URL (measured 2026-10-11: the ModelScope studio served
@@ -64,8 +70,9 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
  *         warm copy — the client is unchanged, only the URL spelling changes.
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, rawPath: string, query: string) => Promise<void>}
  */
-export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null, warm = [], manifestAlias = null }) {
+export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog, assetJump = null, warm = [], manifestAlias = null, assetCdn = null }) {
   const registry = packs || createPackRegistry({ publicDir, dataDir, packsDir }, { log: /** @type {any} */ (log) });
+  const cdn = assetCdn || createAssetCdn({ manifestPath: path.join(path.resolve(dataDir), 'assets.json'), log });
   // Read the warm list once, off the request path: the bytes (and the gzip) stay in memory for this process' life.
   /** @type {Map<string, { raw: Buffer, gz: Buffer | null, stat: import('node:fs').Stats }>} */
   const warmCache = new Map();
@@ -186,9 +193,24 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
       } else if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR' || e.code === 'EISDIR' || e.code === 'ENAMETOOLONG')) {
         // A missing asset (this image carries no art) → 302 to the asset source. Local files never get here:
         // the jump only answers paths whose file is absent (server/http/asset-jump.js, same rules as the edge sidecar).
+        //
+        // ORDER MATTERS ON THIS BRANCH. assetJump is the deployment's own mechanism: it reads the SAME source table the
+        // edge sidecar reads (deploy/stardust/ms-edge/sources.json) and it is what makes the relativized
+        // data/assets.json work — the browser asks this container for /assets/… and gets sent to a source, instead of
+        // the manifest carrying an absolute CDN URL that bypasses the edge entirely. So it answers first, and the
+        // manifest-driven /fonts fallback (asset-cdn.js, kept for installs that wire no jump) is the second chance.
         const jumped = assetJump ? assetJump(decoded, query, req.method, assetJump.config ? assetJump.config() : null) : null;
         if (jumped) { res.writeHead(jumped.status, jumped.headers); res.end(); return; }
-        sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
+        // No public/fonts/ in this image (the art lives on the mirror): point the browser at the URL the pinned
+        // manifest names instead of 404-ing the stylesheet on every load. Cached as long as files.js caches the
+        // font files themselves, so the redirect does not turn into per-load traffic for the app server.
+        const cdnUrl = await cdn.fontUrl(decoded, query);
+        if (cdnUrl) {
+          res.writeHead(302, { Location: cdnUrl, 'Cache-Control': 'public, max-age=86400', 'Content-Length': 0 });
+          res.end();
+        } else {
+          sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
+        }
       } else if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
         sendError(req, res, 403, '禁止访问 · Forbidden');
       } else {

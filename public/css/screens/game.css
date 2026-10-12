@@ -312,7 +312,6 @@
 /* ---- team panel ------------------------------------------------------------------------------------------- */
 .team { position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: none; }
 .team__row { position: relative; display: flex; align-items: center; gap: .1rem; pointer-events: auto; }
-.team__notice:empty { display: none; }
 .team__players { display: flex; flex-direction: column; gap: .14rem; }
 /* Readable multiplayer rows keep all seats reachable in their own bounded scroller. */
 .team__header { flex: none; pointer-events: auto; }

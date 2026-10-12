@@ -256,7 +256,6 @@ export class MatchPhases {
 
   startRound(r) {
     this._freezeDamage(false); // PREP retains the completed scope; never reset scores when boards change.
-    this._finalizePendingDeaths(); // also protects forced/cancelled transitions that bypass afterSettle
     this.phase = PHASE.ROUND_START;
     this.round = r;
     this.fields = [];
@@ -265,7 +264,6 @@ export class MatchPhases {
     this.unitePlan = null;
     this._normalAliveCount = 0;
     this._uniteRelay = null;
-    this._revival = null;
     this.uniteResultView = null;
     this.sp = null;
     this.wave = null;

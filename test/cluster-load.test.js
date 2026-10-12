@@ -135,7 +135,7 @@ async function gameFixture(t, extra = {}) {
   const clients = [];
   t.after(async () => { for (const socket of clients) socket.terminate(); rpc.close(); await node.close(); });
   const assignment = { assignmentId: 'test-allocation', roomCode: 'ABCD', build: BUILD, protocol: 1, seed: 7, matchNo: 1,
-    mode: 'solo', difficulty: 'NORMAL', modeId: 'mode_single_normal', revivalEnabled: false, snapshotHz: 10,
+    mode: 'solo', difficulty: 'NORMAL', modeId: 'mode_single_normal', snapshotHz: 10,
     spectators: [], seats: [{ seat: 0, playerId: 'player-one', name: 'Fixture', isBot: false, connected: true, loadout: null }] };
   const connect = async () => {
     await rpc.call('prepare', assignment);

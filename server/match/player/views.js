@@ -64,8 +64,6 @@ export class PlayerViews {
       playerId: this.playerId,
       seat: this.seat,
       alive: this.alive,
-      pendingDeath: this.pendingDeath,
-      revivalUnavailableReason: this.revivalUnavailableReason,
       lp: this.lp,
       funds: this.funds,
       bandId: this.bandId,
