@@ -114,8 +114,8 @@ test('today\'s update rewrites the content and apology while preserving cumulati
 test('announcements omit contacts and infrastructure; the lobby owns the copyable group number', () => {
   const entries = parseAnnouncements(JSON.parse(source('../../data/announcements.json')));
   const text = entries.flatMap(entry => entry.paragraphs).join('\n');
-  assert.doesNotMatch(text, /QQ|群号|815818430|2225664821|coordinator|ingress|Worker|WireGuard|ModelScope|OpenI|\b\d{1,3}(?:\.\d{1,3}){3}\b/);
-  assert.match(source('../../public/js/ui/lobbyFeedback.js'), /FEEDBACK_GROUP = '815818430'/);
+  assert.doesNotMatch(text, /QQ|群号|293032860|2225664821|coordinator|ingress|Worker|WireGuard|ModelScope|OpenI|\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+  assert.match(source('../../public/js/ui/lobbyFeedback.js'), /FEEDBACK_GROUP = '293032860'/);
 });
 
 test('topmost modal traps and restores focus and compact matching explains room-owned experimental rules', () => {
