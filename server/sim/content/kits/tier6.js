@@ -109,6 +109,7 @@ import { rotateOffset } from '../../dir.js';
 import { bodyDist, bodyInKeys, bodyInRadius, bodyKeys } from '../../body.js';
 import { hasHp } from '../../damage.js';
 import { summonToken, TOKEN_IDS } from '../tokens.js';
+import { hypot, powi } from '../../detmath.js';
 
 // ------------------------------------------------------------------------------------------------------------------
 // helpers
@@ -259,7 +260,7 @@ function bestTile(battle, tiles) {
   let best = tiles[0], bd = Infinity;
   for (const t of tiles) {
     let d = Infinity;
-    for (const e of en) d = Math.min(d, Math.hypot(e.x - t[1], e.y - t[0]));
+    for (const e of en) d = Math.min(d, hypot(e.x - t[1], e.y - t[0]));
     if (d < bd - 1e-9) { bd = d; best = t; }
   }
   return best;
@@ -792,7 +793,7 @@ function lureGoal(battle, unit, e) {
   for (const [dr, dc] of AROUND8) {
     const r = unit.tileR + dr, c = unit.tileC + dc;
     if (!battle.grid.groundPassable(r, c)) continue;
-    const d = Math.hypot(e.x - c, e.y - r);
+    const d = hypot(e.x - c, e.y - r);
     if (d < bd - 1e-9) { bd = d; goal = [r, c]; }
   }
   return goal;
@@ -1091,7 +1092,7 @@ function pasngr(bb, chess, def) {
     for (let i = 0; i < count && prev; i++) {
       hit.add(prev.id);
       battle.fx('lightning', { x: prev.x, y: prev.y, id: prev.id, src: unit.id });
-      battle.dealDamage(unit, prev, { amount: unit.s.atk * scale * Math.pow(1 - num(ch.falloff, 0.15), i), type: 'arts', isSkill: true, isAttack: true, tags: ['skill', 'storm'] });
+      battle.dealDamage(unit, prev, { amount: unit.s.atk * scale * powi(1 - num(ch.falloff, 0.15), i), type: 'arts', isSkill: true, isAttack: true, tags: ['skill', 'storm'] });
       if (slug > 0 && prev.alive) battle.applyStatus(prev, 'sluggish', { duration: slug, source: unit });
       let best = null, bd = Infinity;
       for (const x of battle.foesInRadius(prev.x, prev.y, ch.radius || CHAIN_RADIUS)) {
@@ -2865,7 +2866,7 @@ function whitw2(bb, chess, def) {
             if (d.t) taken.add(d.t);
           }
           if (!d.t) continue;
-          const dx = d.t.x - d.x, dy = d.t.y - d.y, dist = Math.hypot(dx, dy), step = speed * dt;
+          const dx = d.t.x - d.x, dy = d.t.y - d.y, dist = hypot(dx, dy), step = speed * dt;
           if (dist <= step) { d.x = d.t.x; d.y = d.t.y; } else { d.x += (dx / dist) * step; d.y += (dy / dist) * step; }
           if (d.locked !== d.t && bodyInRadius(d.t, d.x, d.y, R)) {
             d.locked = d.t;

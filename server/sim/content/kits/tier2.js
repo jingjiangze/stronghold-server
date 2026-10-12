@@ -22,6 +22,7 @@ import {
   tinmanKit, batMod,
 } from './tier1.js';
 import { releaseSkillSummon } from '../tokens.js';
+import { hypot } from '../../detmath.js';
 
 /** Largest element gauge of a unit (every element — 侵蚀 included: the bosses' attacks fill it on operators). */
 const elemLoad = (a) => Math.max(a.elem.burn, a.elem.neural, a.elem.necrosis, a.elem.apoptosis, a.elem.erosion ?? 0);
@@ -700,7 +701,7 @@ export default {
           const mn = num(tb.min_dist), mx = num(tb.max_dist, 4), ds = num(tb.damage_scale);
           onHitBy(battle, unit, ({ target, dmg }) => {
             if (!dmg.isAttack) return;
-            const d = Math.hypot(target.x - unit.x, target.y - unit.y);
+            const d = hypot(target.x - unit.x, target.y - unit.y);
             dmg.amount *= 1 + ds * (mx > mn ? Math.max(0, Math.min(1, (d - mn) / (mx - mn))) : 1);
           });
         }
