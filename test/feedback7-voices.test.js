@@ -99,8 +99,8 @@ test('settings 语音语言: canonical Chinese/Japanese/English with Chinese def
   assert.equal(sanitizeSettings({ voiceLang: 'en' }).voiceLang, 'en');
   assert.equal(sanitizeSettings({ voiceLang: 'kr' }).voiceLang, 'cn', 'unsupported dub falls back to Chinese');
   const ui = fs.readFileSync(path.join(ROOT, 'public/js/ui/settings.js'), 'utf8');
-  assert.match(ui, /<\$\{LanguageSettings\}/, 'one shared language control, not a second Japanese-only selector');
-  assert.match(ui, /setVoiceLanguage\(next\.voiceLang\)/, 'explicit compatible settings API updates the canonical preference');
+  assert.match(ui, /<\$\{LangToggle\}/, 'the interface language is the shared switch (upstream 0.2.5)');
+  assert.match(ui, /VOICE_LANGS\.map\(/, 'the dub is a radio over VOICE_LANGS (中文 / 日本語)');
   for (const code of ['en', 'ja', 'ko', 'zh-TW']) {
     const pack = readJson(`public/i18n/${code}.json`);
     assert.ok(typeof pack['语音语言'] === 'string' && pack['语音语言'] && pack['语音语言'] !== '语音语言', `${code}: 语音语言`);

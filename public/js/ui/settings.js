@@ -18,12 +18,11 @@ import { useLayoutEffect, useRef, useState } from '../../vendor/hooks.module.js'
 import { html, Modal, Button, Icon, MicroLabel } from './components.js';
 import { GIcon } from './gameComponents.js';
 import { createStore, useStore, loadPref, savePref, store } from '../store.js';
-import { sanitizeSettings, HOTKEY_ACTIONS, DEFAULT_HOTKEYS, hotkeyLabel, rebindHotkey, isDefaultHotkeys, captureHotkey, TEXT_SIZES } from './gameLogic.js';
+import { sanitizeSettings, HOTKEY_ACTIONS, DEFAULT_HOTKEYS, hotkeyLabel, rebindHotkey, isDefaultHotkeys, captureHotkey, VOICE_LANGS, TEXT_SIZES } from './gameLogic.js';
 import { audio } from '../audio.js';
 import { openGuide } from './guide.js';
 import { detectFeatures } from './device.js';
-import { LanguageSettings } from './languageSettings.js';
-import { voiceLanguageStore, setVoiceLanguage } from './voiceLanguage.js';
+import { LangToggle, machineTranslationNote } from './lang.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
 import { errorCount, currentBattle, diagnosticsText } from '../diag.js';
 import { copyText } from './clipboard.js';
@@ -31,7 +30,7 @@ import { copyText } from './clipboard.js';
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 /** Settings store: { bgm, sfx, voice, voiceLang, voiceOverrides, muted, damageNumbers, quality, textSize, keys }. */
-export const settingsStore = createStore(sanitizeSettings({ ...loadPref('settings', null), voiceLang: voiceLanguageStore.get().language }));
+export const settingsStore = createStore(sanitizeSettings(loadPref('settings', null)));
 
 /**
  * 设置 →「文字大小」: put the step on <html data-text> — css/theme.css turns it into the text root `--t`
@@ -55,16 +54,10 @@ audio.setVolumes(settingsStore.get());
 audio.setVoiceLang(settingsStore.get().voiceLang, settingsStore.get().voiceOverrides);
 // before the first render (main.js boot renders after its imports ran): the stored step is on screen without a flash
 applyTextSize(settingsStore.get().textSize);
-// Keep the upstream settings field as a mirror, never a second independently selected dub.
-voiceLanguageStore.subscribe(({ language }) => {
-  if (settingsStore.get().voiceLang !== language) settingsStore.set({ voiceLang: language });
-});
 
 /** @param {Partial<ReturnType<typeof sanitizeSettings>>} patch */
 export function updateSettings(patch) {
-  const next = sanitizeSettings({ ...settingsStore.get(), ...patch });
-  if (Object.hasOwn(patch ?? {}, 'voiceLang')) setVoiceLanguage(next.voiceLang);
-  settingsStore.set(next);
+  settingsStore.set(sanitizeSettings({ ...settingsStore.get(), ...patch }));
 }
 
 /** Preact hook: current settings. */
@@ -101,6 +94,11 @@ const QUALITY = [['high', N_('高')], ['medium', N_('中')], ['low', N_('低')]]
  * raise the text root `--t` (css/theme.css) and with it every readable font-size; the board and the HUD's boxes stay.
  */
 const TEXT_SCALES = [['sm', N_('小')], ['md', N_('中')], ['lg', N_('大')], ['xl', N_('特大')]];
+/**
+ * 语音语言: each dub named in its own language, like the interface language switch (ui/lang.js) — the owner's
+ * 「中文 / 日本語」 (2026-10-08); VOICE_LANGS order.
+ */
+const VOICE_LANG_NAMES = { cn: '中文', jp: '日本語' }; // i18n-ignore
 /** The rebindable shortcuts' names (msgids), by action. */
 const HOTKEY_NAMES = { refresh: N_('刷新商店'), freeze: N_('冻结 / 解冻商店'), levelUp: N_('升级调度中心'), retreat: N_('撤退选中干员'),
   sell: N_('出售选中干员'), ready: N_('准备就绪 / 暂停（独立模拟）') };
@@ -242,13 +240,25 @@ export function SettingsModal({ open, onClose }) {
   const s = useSettings();
   const [tested, setTested] = useState(false);
   const [touchUi] = useState(() => detectFeatures().coarse && !detectFeatures().fine);
+  const mtNote = machineTranslationNote(); // a pack marked as machine translation says so under the switch
   return html`<${Modal} open=${open} onClose=${onClose} title=${t('设置')} micro="SETTINGS" width="7.4rem"
                         actions=${html`<${Button} variant="secondary" icon="book" class="set-guide" onClick=${() => openGuide(0)}>${t('玩法说明')}<//>
                         <${Button} variant="primary" icon="check" onClick=${onClose}>${t('完成')}<//>`}>
     <div class="set-list">
-      <${LanguageSettings} />
+      <div class="set-row">
+        <span class="set-row__label">${t('语言')}<${MicroLabel}>LANGUAGE<//></span>
+        <${LangToggle} class="set-lang" />
+      </div>
+      ${mtNote ? html`<p class="set-hint set-lang-note" data-testid="lang-mt-note">${mtNote}</p>` : null}
       <${Slider} label=${t('背景音乐')} micro="BGM" icon="play" value=${s.bgm} onInput=${(v) => updateSettings({ bgm: v })} />
       <${Slider} label=${t('干员语音')} micro="VOICE" icon="mic" value=${s.voice} onInput=${(v) => updateSettings({ voice: v })} />
+      <div class="set-row">
+        <span class="set-row__label">${t('语音语言')}<${MicroLabel}>VOICE LANGUAGE<//></span>
+        <div class="set-seg" role="radiogroup" aria-label=${t('语音语言')} data-testid="voice-lang">
+          ${VOICE_LANGS.map((id) => html`<button key=${id} type="button" role="radio" aria-checked=${s.voiceLang === id ? 'true' : 'false'}
+            lang=${id === 'jp' ? 'ja' : 'zh'} class=${s.voiceLang === id ? 'is-on' : ''} onClick=${() => updateSettings({ voiceLang: id })}>${VOICE_LANG_NAMES[id]}</button>`)}
+        </div>
+      </div>
       <${Slider} label=${t('音效')} micro="SFX" icon="signal" value=${s.sfx}
                  onInput=${(v) => { updateSettings({ sfx: v }); if (!tested) { setTested(true); setTimeout(() => setTested(false), 400); audio.sfx('click'); } }} />
       <${Toggle} label=${t('静音')} micro="MUTE" value=${s.muted} onChange=${(v) => updateSettings({ muted: v })} />
@@ -281,11 +291,12 @@ export function SettingsModal({ open, onClose }) {
  * The 设置 button of the lobby and the room (GitHub #238 — before it the settings were reachable only from the title
  * screen and a running match): the twin of the 玩法说明 button (ui/guide.js GuideButton), with the settings modal behind it
  * (mounted only while open). The same modal as the title screen's and the match's: nothing in it is match-only.
- * @param {{ class?: string, size?: 'sm'|'md'|'lg'|'xl', variant?: string, label?: string }} props
+ * `square`: the gear alone (the lobby's top bar), the name stays title / aria-label — like GuideButton's.
+ * @param {{ class?: string, size?: 'sm'|'md'|'lg'|'xl', variant?: string, label?: string, square?: boolean }} props
  */
-export function SettingsButton({ class: cls, size = 'sm', variant = 'ghost', label = t('设置') }) {
+export function SettingsButton({ class: cls, size = 'sm', variant = 'ghost', label = t('设置'), square = false }) {
   const [open, setOpen] = useState(false);
-  return html`<${Button} variant=${variant} size=${size} class=${cx('settings-btn', cls)} onClick=${() => setOpen(true)}
-      title=${t('设置')} aria-label=${t('设置')} data-testid="settings-btn"><${GIcon} name="gear" class="btn__icon" />${label}<//>
+  return html`<${Button} variant=${variant} size=${size} square=${square} class=${cx('settings-btn', cls)} onClick=${() => setOpen(true)}
+      title=${t('设置')} aria-label=${t('设置')} data-testid="settings-btn"><${GIcon} name="gear" class="btn__icon" />${square ? null : label}<//>
     ${open ? html`<${SettingsModal} open=${true} onClose=${() => setOpen(false)} />` : null}`;
 }

@@ -4,8 +4,7 @@
 //   bgm { lobby, prep, combat, combatAlts?: [ {intro?, loop}, … ], boss: { intro?, loop } },
 //   bossBgm { [bossId]: { intro?, loop } },
 //   voice { [charId]: { start, faceEnemy, select, place, skill1…skill4, squad, squadFirst, result*, gacha } },
-//   voiceByLang { cn, jp, en }: listener-selected lines, with voice as the Chinese fallback,
-//   voiceJp is the compatible Japanese-only manifest alias.
+//   voiceJp { [charId]: { …the same slots } } (the Japanese dub, settings 语音语言 日本語; see voiceLine),
 //   sfx.ui { click, buy, sell, refresh, freeze, levelup, merge, equip, ready, timer, yourTurn, … },
 //   sfx.battle { deploy, tokenDeploy, charDie, tokenDie?, enemyDie, enemyHit, heal, killCoin, … },
 //   sfx.units { [charId|tokenId|enemyId]: { attack?, hit?, skill?, die?, born?, mix?: { [role]: { p?, vol? } } } }.
@@ -27,8 +26,9 @@
 //   operators, then fires dozens of skills, so they run on their own channel (own gain, settings 干员语音) through
 //   VoiceGate: one line at a time, a global gap, a per-unit per-slot cooldown, and a higher-priority line taking the
 //   channel over — the official scheduling of `audio_data.json battleVoice.voiceTypeOptions` (a tap's 选中 line skips
-//   the gap: VOICE_TAP_SLOTS). CN/JP/EN follow the listener preference independently of the interface language;
-//   a missing or failed selected-language line falls back to Chinese. `audio.voiceJp` remains a compatible JP alias.
+//   the gap: VOICE_TAP_SLOTS). Two dubs: 中文 `audio.voice` (default) and 日本語 `audio.voiceJp` (settings 语音语言, not
+//   tied to the interface language; the owner's request of 2026-10-08 「全套的日配语音」) — a JP line the manifest or the
+//   host lacks falls back to the Chinese one (voiceLine).
 // - Battle SFX from `b.ev` tuples (`handleBattleEvents`): at most MAX_VOICES concurrent unit sounds, at most
 //   MAX_PER_URL overlapping copies of one sound (the official banks' maxSoundAllowed 2), a per-unit cooldown and a
 //   per-URL minimum gap (SfxLimiter), so a 60-unit fight stays listenable. A `['skill', id, 1]` that arrives before its
@@ -68,8 +68,6 @@
 import { sanitizeVoiceOverrides, voiceLangFor } from './voicePrefs.js';
 import { PHASE } from '../../shared/constants.js';
 import { mediaUrl } from './media.js';
-import { fetchMaterial } from './materialFallback.js';
-import { normalizeVoiceLanguage, voiceCandidates } from './voiceLanguage.js';
 
 const MAX_VOICES = 8;
 const UNIT_COOLDOWN_MS = 160;
@@ -497,8 +495,6 @@ export class VoiceGate {
  * missing path with 200 + the SPA's index.html instead, and fetching *that* would fail to decode as silently as a
  * 404 would — so the fallback looks at the declared type too.
  *
- * Object-storage providers also serve valid recordings as application/octet-stream or binary/octet-stream.
- * Those replies still have to pass Web Audio decoding; they should not trigger a second request to the raw URL.
  * A response that declares no type at all is not treated as wrong: absence of a header is not evidence of an HTML
  * page, and fetch stubs / minimal hosts legitimately omit it.
  * @param {{ ok?: boolean, headers?: { get?: (n: string) => string | null } }} res
@@ -506,7 +502,7 @@ export class VoiceGate {
 function isAudioResponse(res) {
   if (!res || !res.ok) return false;
   const type = res.headers?.get?.('content-type');
-  return !type || /^\s*audio\//i.test(type) || /^\s*(?:application|binary)\/octet-stream\s*(?:;|$)/i.test(type);
+  return !type || /^\s*audio\//i.test(type);
 }
 export class AudioManager {
   /**
@@ -529,11 +525,11 @@ export class AudioManager {
     this.voiceGate = new VoiceGate();
     this.voiceNode = null;    // { src, gain, url, token } of the line on air
     this.voiceToken = 0;
-    this.voiceLanguage = 'cn';
     this.bondCueNode = null;
     this.bondCueToken = 0;
     this.bondCueScope = null;
     this.voiceOverrides = {};
+    this.voiceLang = 'cn';    // settings 语音语言: 'cn' (audio.voice) | 'jp' (audio.voiceJp, falling back to audio.voice)
     this.startVoiceDone = false; // 行动出发 of this field (the first operator deployed says it)
     this.uiVoices = 0;
     this.wantBgm = null;      // desired key (kept while locked)
@@ -660,15 +656,6 @@ export class AudioManager {
     try { console.warn(`[audio] ${key} unavailable`, err?.message || err || ''); } catch { /* ignore */ }
   }
 
-  /** Change only the listener's voice channel; stale decodes must not start in the old language. */
-  setVoiceLanguage(language) {
-    const next = normalizeVoiceLanguage(language);
-    if (next === this.voiceLanguage) return false;
-    this.voiceLanguage = next;
-    this._stopVoice();
-    return true;
-  }
-
   /**
    * Set channel volumes (0..1) and mute.
    * @param {{ bgm?: number, sfx?: number, voice?: number, muted?: boolean }} v
@@ -685,17 +672,14 @@ export class AudioManager {
     if (this.volumes.muted || this.volumes.sfx <= 0) this.stopBondCue();
   }
 
-  /** Compatible upstream name, backed by the same CN/JP/EN listener preference. */
-  get voiceLang() { return this.voiceLanguage; }
+  /**
+   * The voice dub (settings 语音语言): 'jp' plays `audio.voiceJp`, anything else `audio.voice` (中文, the default). The
+   * line on air finishes in its own dub; the next one follows the setting.
+   * @param {string} lang
+   */
   setVoiceLang(lang, overrides = this.voiceOverrides) {
-    const next = sanitizeVoiceOverrides(overrides);
-    const ids = Object.keys(next);
-    const overridesChanged = ids.length !== Object.keys(this.voiceOverrides).length
-      || ids.some((id) => next[id] !== this.voiceOverrides[id]);
-    this.voiceOverrides = next;
-    const languageChanged = this.setVoiceLanguage(lang);
-    if (overridesChanged && !languageChanged) this._stopVoice();
-    return languageChanged || overridesChanged;
+    this.voiceLang = lang === 'jp' ? 'jp' : 'cn';
+    this.voiceOverrides = sanitizeVoiceOverrides(overrides);
   }
 
   _applyVolumes() {
@@ -722,29 +706,22 @@ export class AudioManager {
     }
     const p = (async () => {
       try {
-        const decode = async res => {
-          if (!isAudioResponse(res)) {
-            try { void res.body?.cancel?.().catch(() => {}); } catch { /* unusable audio */ }
-            throw Object.assign(new Error('audio response unavailable'), { badAudioType: true });
-          }
-          const ab = await res.arrayBuffer();
-          const buf = await new Promise(resolve => {
-            try {
-              const r = this.ctx.decodeAudioData(ab, resolve, () => resolve(null));
-              if (r && typeof r.then === 'function') r.then(resolve, () => resolve(null));
-            } catch { resolve(null); }
-          });
-          if (!buf) throw new Error('audio decode failed');
-          return buf;
-        };
-        // Keep the extension-less route, including its one OpenI retry. Static hosts without /media/ retain
-        // their original-URL compatibility attempt, but cannot trigger a second OpenI retry for the same audio.
+        // Extension-less URL first so download managers leave the BGM alone; a host without /media/ still works.
         const media = mediaUrl(url);
-        try { return await fetchMaterial(media, decode); }
-        catch (err) {
-          if (media === url || !(err?.status === 404 || err?.badContentType || err?.badAudioType)) throw err;
-          return await fetchMaterial(url, decode, { fallback: false });
+        let res = await fetch(media);
+        if (media !== url && !isAudioResponse(res)) {
+          // Drop the unusable response (404, or a 200 that is really index.html) before trying the original URL.
+          try { await res.body?.cancel?.(); } catch { /* the fallback request matters more than draining this one */ }
+          res = await fetch(url);
         }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const ab = await res.arrayBuffer();
+        return await new Promise((resolve) => {
+          try {
+            const r = this.ctx.decodeAudioData(ab, resolve, () => resolve(null));
+            if (r && typeof r.then === 'function') r.then(resolve, () => resolve(null));
+          } catch { resolve(null); }
+        });
       } catch (err) {
         this._warn(url, err);
         return null;
@@ -996,9 +973,11 @@ export class AudioManager {
   // ---- operator battle voice ----------------------------------------------------------------------------------
 
   /**
-   * Play a listener-language line with Chinese fallback (a slot with several lines draws one at random).
-   * Callers are battle events/settlement, or the detail panel opening on a tapped operator in any phase.
-   * VoiceGate keeps one line at a time, a global gap, per-unit cooldown and higher-priority takeover.
+   * Play an operator's battle line (`audio.voice[charId][slot]`, or `audio.voiceJp` when the 语音语言 setting is 日本語 —
+   * voiceLine; a slot with several lines draws one at random).
+   * Every caller is a running battle's own event stream or its settlement, except 选中干员: the detail panel opening on
+   * an operator the player tapped, in every phase (ui/detailPanel.js `voice`; the owner's request of 2026-10-08). The
+   * line must pass VoiceGate: one at a time, a global gap, a per-unit cooldown, higher priority wins.
    * @param {string} charId e.g. 'char_263_skadi'
    * @param {'start'|'faceEnemy'|'select'|'place'|'skill1'|'skill2'|'skill3'|'skill4'|'squad'|'squadFirst'
    *   |'resultFour'|'resultThree'|'resultTwo'|'resultLose'|'gacha'} slot
@@ -1009,24 +988,25 @@ export class AudioManager {
     try {
       if (!this.ctx || !this.voiceGain || this.volumes.muted || this.volumes.voice <= 0) return false;
       if (typeof charId !== 'string' || typeof slot !== 'string') return false;
-      const language = voiceLangFor(charId, this.voiceLanguage, this.voiceOverrides);
-      const [url, ...fallback] = voiceCandidates(this.getManifest(), charId, slot, language);
-      if (!url) return false;
+      // the chosen dub's line (settings 语音语言), with the Chinese file of the same name as its fallback (voiceLine)
+      const line = voiceLine(this.getManifest()?.audio, charId, slot, voiceLangFor(charId, this.voiceLang, this.voiceOverrides));
+      if (!line) return false;
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const verdict = this.voiceGate.request(slot, o.unitKey ?? null, now);
       if (verdict === 'drop') return false;
       if (verdict === 'preempt') this._stopVoice();
       this.voiceGate.start(slot, o.unitKey ?? null, now);
       const token = ++this.voiceToken;
-      this._playVoice(url, token, o.volume, fallback);
+      this._playVoice(line.url, token, o.volume, line.fallback);
       return true;
     } catch (err) { this._warn('voice', err); return false; }
   }
 
-  /** Fetch/decode and start one voice line through the voice channel. */
-  _playVoice(url, token, volume, fallback = []) {
-    // Legacy JP callers pass one URL; the canonical multilingual path passes a bounded list.
-    if (!Array.isArray(fallback)) fallback = typeof fallback === 'string' && fallback !== url ? [fallback] : [];
+  /**
+   * Fetch/decode and start one voice line through the voice channel. `fallback`: the line to play instead when this one
+   * cannot be loaded (a JP file the host lacks → the Chinese file of the same name; voiceLine) — same token, same gate.
+   */
+  _playVoice(url, token, volume, fallback = null) {
     // `token` is the line's own `voiceToken`. Every deferred step below — the decode, a failed fetch, `onended` and the
     // safety timer — can land AFTER this line was taken over or stopped: `voiceToken` has moved on and the channel then
     // belongs to the line that replaced it. So each step re-checks its token and, when it is stale, touches NOTHING:
@@ -1034,8 +1014,8 @@ export class AudioManager {
     // a stale callback free the channel the NEW line had just taken, and the next line walked in on top of it (review
     // on #73).
     const failed = () => {
-      if (token !== this.voiceToken) return;
-      if (fallback.length && this.ctx && this.voiceGain) this._playVoice(fallback[0], token, volume, fallback.slice(1));
+      if (token !== this.voiceToken) return;   // taken over / stopped meanwhile: not ours to release
+      if (fallback && fallback !== url && this.ctx && this.voiceGain) this._playVoice(fallback, token, volume);
       else this.voiceGate.release();
     };
     this._buffer(url).then((buf) => {
@@ -1253,10 +1233,7 @@ export function installAudio(deps) {
   try {
     manifestGetter = typeof deps?.getManifest === 'function' ? deps.getManifest : manifestGetter;
     audio.install();
-    if (deps?.settings) {
-      audio.setVolumes(deps.settings);
-      if (typeof deps.settings.voiceLang === 'string') audio.setVoiceLang(deps.settings.voiceLang, deps.settings.voiceOverrides);
-    }
+    if (deps?.settings) { audio.setVolumes(deps.settings); audio.setVoiceLang(deps.settings.voiceLang, deps.settings.voiceOverrides); }
     if (typeof deps?.subscribe === 'function' && typeof deps?.getState === 'function') {
       const sync = (s) => {
         try {

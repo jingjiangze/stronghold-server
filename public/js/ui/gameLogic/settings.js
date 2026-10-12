@@ -10,8 +10,8 @@ import { DEFAULT_HOTKEYS, sanitizeHotkeys } from './shortcuts.js';
 // ---- settings ------------------------------------------------------------------------------------------------------
 
 /**
- * The listener's CN/JP/EN voice preference, mirrored from the shared language control.
- * Missing selected-language lines fall back to Chinese; the interface language is independent.
+ * The operator voice dubs (settings 语音语言): 'cn' 中文 (`audio.voice`, the default) and 'jp' 日本語 (`audio.voiceJp`,
+ * falling back to the Chinese line it lacks — public/js/audio.js voiceLine). Not tied to the interface language.
  */
 
 

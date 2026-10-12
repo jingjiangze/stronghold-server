@@ -365,16 +365,13 @@ describe('operator battle voice', () => {
       a._stopVoice();
       a.setVoiceLang('kr');
       assert.equal(a.voiceLang, 'cn', 'no other dub: anything but jp is 中文');
-      // The fork keeps one CN/JP/EN control and mirrors it into the compatible upstream settings field.
+      // Upstream 0.2.5's voice control (owner 2026-10-08): the interface language is the shared LangToggle, the dub is
+      // a radio over VOICE_LANGS, and audio.setVoiceLang clamps anything but 'jp' to 中文.
       const settings = readFileSync(path.join(ROOT, 'public/js/ui/settings.js'), 'utf8');
-      const control = readFileSync(path.join(ROOT, 'public/js/ui/languageSettings.js'), 'utf8');
-      assert.match(settings, /voiceLanguageStore\.subscribe\(/);
-      assert.match(settings, /setVoiceLanguage\(next\.voiceLang\)/);
+      assert.match(settings, /<\$\{LangToggle\}/);
+      assert.match(settings, /VOICE_LANGS\.map\(/);
       assert.doesNotMatch(settings, /audio\.setVoiceLang\(s\.voiceLang\)/, 'a volume edit must not reset the selected dub');
       assert.match(settings, /audio\.setVoiceLang\(s\.voiceLang, s\.voiceOverrides\)/);
-      assert.match(settings, /<\$\{LanguageSettings\}/);
-      assert.match(control, /t\('干员配音'\)/);
-      assert.match(control, /setVoiceLanguage\(option\.code\)/);
     } finally {
       globalThis.fetch = origFetch;
     }
@@ -439,28 +436,28 @@ describe('operator battle voice', () => {
     }
   });
 
-  for (const language of ['cn', 'jp', 'en']) test(`listener voice language ${language} selects its own URL without changing unit identity`, async () => {
-    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3' } }, voiceByLang: {
-      cn: { char_a: { place: '/cn/line.mp3' } }, jp: { char_a: { place: '/jp/line.mp3' } }, en: { char_a: { place: '/en/line.mp3' } },
-    } } };
+  for (const [language, url] of [['cn', '/cn/line.mp3'], ['jp', '/jp/line.mp3'], ['en', '/cn/line.mp3']]) test(`listener voice language ${language} plays that dub (anything but jp is 中文) without changing unit identity`, async () => {
+    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3' } },
+      voiceJp: { char_a: { place: '/jp/line.mp3' } } } };
     const a = new AudioManager({ win: fw.win, getManifest: () => vm });
-    a.install(); fw.fire('pointerdown'); a.setVoiceLanguage(language);
+    a.install(); fw.fire('pointerdown'); a.setVoiceLang(language);
     a._buffer = async () => ({ duration: 1.5 });
     assert.equal(a.voice('char_a', 'place', { unitKey: 1 }), true);
     await new Promise(resolve => setTimeout(resolve, 10));
-    assert.equal(a.voiceNode.url, `/${language}/line.mp3`);
+    assert.equal(a.voiceNode.url, url);
     const bgm = { loopUrl: '/bgm.mp3' }; a.bgm = bgm;
     const volumes = { ...a.volumes }, token = a.voiceToken;
-    assert.equal(a.setVoiceLanguage(language), false); assert.equal(a.voiceToken, token, 'same preference does not interrupt');
-    a.setVoiceLanguage(language === 'cn' ? 'jp' : 'cn');
-    assert.equal(a.voiceNode, null); assert.equal(a.bgm, bgm); assert.deepEqual(a.volumes, volumes);
+    a.setVoiceLang(language);
+    assert.equal(a.voiceToken, token, 'same preference does not interrupt');
+    a.setVoiceLang(language === 'cn' ? 'jp' : 'cn');
+    assert.equal(a.bgm, bgm); assert.deepEqual(a.volumes, volumes);
   });
 
   test('missing or failed listener-language lines fall back to Chinese without freeing the voice gate early', async () => {
     const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3', skill1: '/cn/skill.mp3' } },
-      voiceByLang: { jp: { char_a: { place: '/jp/line.mp3' } } } } };
+      voiceJp: { char_a: { place: '/jp/line.mp3' } } } };
     const a = new AudioManager({ win: fw.win, getManifest: () => vm });
-    a.install(); fw.fire('pointerdown'); a.setVoiceLanguage('jp'); a.voiceGate = new VoiceGate({ gapMs: 0 });
+    a.install(); fw.fire('pointerdown'); a.setVoiceLang('jp'); a.voiceGate = new VoiceGate({ gapMs: 0 });
     const asked = [];
     a._buffer = async url => { asked.push(url); return url.startsWith('/jp/') ? null : { duration: 1.5 }; };
     assert.equal(a.voice('char_a', 'place', { unitKey: 1 }), true);
@@ -478,9 +475,8 @@ describe('operator battle voice', () => {
   });
 
   test('changing language during decoding prevents the old line and its fallback from taking the new channel', async () => {
-    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3' } }, voiceByLang: {
-      jp: { char_a: { place: '/jp/line.mp3' } }, en: { char_a: { place: '/en/line.mp3' } },
-    } } };
+    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3' } },
+      voiceJp: { char_a: { place: '/jp/line.mp3' } } } };
     const a = new AudioManager({ win: fw.win, getManifest: () => vm });
     a.install(); fw.fire('pointerdown'); a.voiceGate = new VoiceGate({ gapMs: 0 });
     const urls = []; let releaseOld;
@@ -488,13 +484,13 @@ describe('operator battle voice', () => {
       urls.push(url);
       return url.startsWith('/jp/') ? new Promise(resolve => { releaseOld = resolve; }) : Promise.resolve({ duration: 1.5 });
     };
-    a.setVoiceLanguage('jp'); assert(a.voice('char_a', 'place', { unitKey: 1 }));
-    a.setVoiceLanguage('en'); assert(a.voice('char_a', 'place', { unitKey: 2 }));
+    a.setVoiceLang('jp'); assert(a.voice('char_a', 'place', { unitKey: 1 }));
+    a.setVoiceLang('cn'); assert(a.voice('char_a', 'place', { unitKey: 2 }));
     await new Promise(resolve => setTimeout(resolve, 10));
     const gate = a.voiceGate.playing, node = a.voiceNode;
     releaseOld(null); await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(urls, ['/jp/line.mp3', '/en/line.mp3']);
-    assert.equal(a.voiceNode, node); assert.equal(a.voiceNode.url, '/en/line.mp3'); assert.equal(a.voiceGate.playing, gate);
+    assert.deepEqual(urls, ['/jp/line.mp3', '/cn/line.mp3']);
+    assert.equal(a.voiceNode, node); assert.equal(a.voiceNode.url, '/cn/line.mp3'); assert.equal(a.voiceGate.playing, gate);
   });
 
   test('voice: a stale callback never frees the channel the newest line holds (review on #73)', async () => {
@@ -803,7 +799,7 @@ describe('AudioManager', () => {
 
   for (const type of ['application/octet-stream', 'binary/octet-stream']) test(`failed ${type} voice decoding still falls back to Chinese`, async () => {
     const fw = fakeWindow(), cn = '/assets/audio/voice/cn/char_a/cn_001.mp3', jp = '/assets/audio/voice/jp/char_a/cn_001.mp3', urls = [];
-    const vm = { audio: { voice: { char_a: { place: cn } }, voiceByLang: { cn: { char_a: { place: cn } }, jp: { char_a: { place: jp } } } } };
+    const vm = { audio: { voice: { char_a: { place: cn } }, voiceJp: { char_a: { place: jp } } } };
     const origFetch = globalThis.fetch;
     globalThis.fetch = async url => {
       urls.push(url);
@@ -811,7 +807,7 @@ describe('AudioManager', () => {
     };
     try {
       const a = new AudioManager({ win: fw.win, getManifest: () => vm, random: () => 0 });
-      a.install(); fw.fire('pointerdown'); a.setVoiceLanguage('jp'); a.voiceGate = new VoiceGate({ gapMs: 0 });
+      a.install(); fw.fire('pointerdown'); a.setVoiceLang('jp'); a.voiceGate = new VoiceGate({ gapMs: 0 });
       a.ctx.decodeAudioData = (body, ok, fail) => new Uint8Array(body)[0] === 1 ? fail(new Error('invalid recording')) : ok({ duration: 1.5 });
       assert.equal(a.voice('char_a', 'place', { unitKey: 1 }), true);
       await new Promise(resolve => setTimeout(resolve, 10));
