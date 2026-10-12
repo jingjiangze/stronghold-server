@@ -37,8 +37,9 @@
 //                      in its range counts for 「范围内没有敌人」 (the owner's decision of 2026-10-08 from the official game,
 //                      GitHub #316; asleep, untargetable and flying ones stay out: raidGroundEnemy): on a free tile of a board of its field
 //                      (Battle.onFieldBoard: its own or a teammate's on the same field — the two-helper 联防 field and a
-//                      pair field open both halves, the owner's decision of 2026-10-07; never a boss field's hand /
-//                      临时整备区 rows, never the empty other half of a lone 联防 helper or a solo boss field — community
+//                      pair field open both halves, the owner's decision of 2026-10-07; #475 also opens an empty half
+//                      for multiplayer boss/hidden Raid only, approved 2026-10-10; never a boss field's hand /
+//                      临时整备区 rows, never the empty other half of a lone 联防 helper or a single-mode boss field — community
 //                      reports of 2026-10-06, items 40 and 16.3) its position may be deployed
 //                      on from which its range covers that enemy (GitHub issue #51 [ASSUMED]: the first of the 8 most
 //                      advanced that has such a tile; none → it stays and the next poll looks again, never a jump that
@@ -68,6 +69,8 @@ import { canTargetEnemy, enemyStealthed, extendedGrid } from '../../../targeting
 import { normDir, rotateOffset, localOrder, localBefore } from '../../../dir.js';
 import { bodyKeys, bodyInKeys } from '../../../body.js';
 import { isHpLoss } from '../../../damage.js';
+import { BOSS_ROW_OFFSET } from '../../../constants.js';
+import { GEO } from '../../../../../shared/constants.js';
 import {
   num, bondRecord, buffParams, bondTier, bondLayers, isMember, isElite, isGroundOp, onField, playerOps, passiveBuff,
   fxOn, N4, N8, directMods, COLS,
@@ -272,6 +275,16 @@ function raidReach(u) {
   return out;
 }
 
+/** #475: multiplayer boss/hidden Raid may use an absent partner's deployment half (maintainer-approved, §29.13).
+ * Keep this exception local to Raid: onFieldBoard/onOwnBoard still describe actual players' deployment regions.
+ */
+function raidBoard(battle, r, c) {
+  if (battle.onFieldBoard(r, c)) return true;
+  return battle.modeId?.startsWith('mode_multi_') && (battle.kind === 'boss' || battle.kind === 'hidden')
+    && r >= GEO.FIELD.r0 + BOSS_ROW_OFFSET && r <= GEO.FIELD.r1 + BOSS_ROW_OFFSET
+    && c >= GEO.FIELD.c0 && c <= COLS - 1 - GEO.FIELD.c0;
+}
+
 /**
  * Landing tile [row, col] of a jump to enemy `e`, or null: a tile from which the member's range (`reach`, raidReach)
  * covers the enemy's body (a huge enemy: any tile it occupies — body.js), within RAID_SEARCH tiles (Chebyshev) of the
@@ -305,7 +318,7 @@ function raidTile(battle, u, e, reach) {
     for (let i = 0; i < reach.length; i += 2) {
       const r = br - reach[i], c = bc - reach[i + 1], dr = r - er, dc = c - ec;
       if (Math.abs(dr) > RAID_SEARCH || Math.abs(dc) > RAID_SEARCH) continue;
-      if (!battle.grid.inRect(r, c) || !battle.onFieldBoard(r, c) || !battle.grid.canStand(r, c, { ranged }) || battle.isReservedTile(r, c)) continue;
+      if (!battle.grid.inRect(r, c) || !raidBoard(battle, r, c) || !battle.grid.canStand(r, c, { ranged }) || battle.isReservedTile(r, c)) continue;
       const t = r * COLS + c;
       const p = path && battle.grid.tile(r, c).pass === 'ALL' && (path.has(t) || body.includes(t)) ? 0 : 1;   // its block applies
       const d = Math.max(Math.abs(dr), Math.abs(dc)) + 0.01 * (Math.abs(dr) + Math.abs(dc));
