@@ -30,6 +30,9 @@ Stardust 命中 73 文件。零命中意味着"上游根本没有这块东西"�
 > 是一条死的静态 import 链。缺了这四个 `.mjs`（+ 4 个 LICENSE）**启动直接崩溃**，
 > 且无法用环境变量绕过。Dockerfile 里那两段 COPY 不能删。
 > 注意：只要 `name-*.mjs`，不需要 `auth/server.mjs`、登录页、口令文件。
+> **2026-10-12（R13 去掉）**：`moderateName` 的**调用点已删**——net.js 的 hello 只做
+> `sanitizeName` 合法性判定（NFKC/去控制符/≤12 字），词典审核改由工坊 mod `name-guard`
+> （`server.preDispatch` 拦 hello）承担；链与 COPY 仍必须保留（缺则崩）。
 
 ### 2. 战斗 / 对局
 
@@ -84,7 +87,7 @@ serviceTelemetry…）、`public/js/render/materialLoader.js`、`public/css/scre
 ## 模型空间部署侧的取舍（2 vCPU / 8G / 单容器 / 端口 7860）
 
 **必需保留**
-1. `deploy/stardust/auth/name-*.mjs` + 4 LICENSE —— 缺了崩溃
+1. `deploy/stardust/auth/name-*.mjs` + 4 LICENSE —— 缺了崩溃（静态链需要；服务器已不再调用其中的审核）
 2. `PORT=7860`（原 3000，创空间硬约束）
 3. `data/assets.json` 与 `public/assets/` 必须配对
 

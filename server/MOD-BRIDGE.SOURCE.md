@@ -50,7 +50,9 @@ server has its own loader (`server/packs.js` + `server/modBridge.js`), so only t
   its own pack scan and (L2, later) its own merge.
 - `server/data.js`, `server/match/metaPack.js`, `server/battlePack.js`, `server/roomPack.js` — the `server.meta` /
   `server.battle` / `server.room` faces. Out of scope for L3 here.
-- Anything that would replace this server's own logic: matchmaking, the combat worker pool, `moderateName`.
+- Anything that would replace this server's own logic: matchmaking, the combat worker pool. (Nickname screening is
+  deliberately NOT on that list anymore: R13's `moderateName` call site was removed 2026-10-12, and the screening is
+  provided by the `name-guard` workshop pack through the vendored `preDispatch` surface — see CONFLICTS.md.)
 
 ## Local adaptation
 

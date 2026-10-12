@@ -44,8 +44,8 @@ import { normalizeClusterLoad } from '../shared/cluster-load.js';
 import { ERR, ERR_TEXT, PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
 import { isCompressibleType, transportStats } from './wsCompression.js';
-import { moderateName } from '../shared/names.js';
-export { sanitizeName } from '../shared/names.js';
+import { sanitizeName } from '../shared/names.js';
+export { sanitizeName };
 
 /** Tunables (all overridable through the Network / SessionRegistry constructors). */
 export const NET_DEFAULTS = Object.freeze({
@@ -704,9 +704,10 @@ export class Network {
     }
     // Validate before looking up a reconnect token, detaching another socket or mutating a session.
     // A legacy rejected name keeps its identity/token intact until the owner submits a valid name.
-    const checked = moderateName(msg.name);
-    if (!checked.ok) { this.reply(conn, errorMsg(ERR.NAME_REJECTED, rid, checked.reason)); return; }
-    const name = checked.name;
+    // Only the legal form is enforced here: R13 dictionary screening belongs to the workshop mod
+    // `name-guard` (server.preDispatch on hello) now, so sensitive names are accepted server-side.
+    const name = sanitizeName(msg.name);
+    if (!name) { this.reply(conn, errorMsg(ERR.NAME_REJECTED, rid, 'invalid_name')); return; }
     if (msg.playerCapacityVersion != null && msg.playerCapacityVersion !== PLAYER_CAPACITY_VERSION) {
       this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'player capacity version mismatch'));
       return;

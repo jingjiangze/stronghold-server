@@ -253,22 +253,23 @@ async function startNetwork(t) {
   return { registry, network, publicNames, logs, connect };
 }
 
-test('real WebSocket repeated/reconnect rejected hellos cannot rename, seize or publicly echo a session', async t => {
+test('real WebSocket repeated/reconnect illegal-name hellos cannot rename, seize or publicly echo a session', async t => {
   const { registry, publicNames, logs, connect } = await startNetwork(t);
   const owner = await connect();
   const welcome = await owner.hello('阿米娅');
   const session = registry.byId(welcome.playerId), oldSocket = session.ws;
   session.roomCode = 'ABCD';
-  const repeated = await owner.request({ t: 'hello', name: 'ＦＵＣＫ' });
+  const repeated = await owner.request({ t: 'hello', name: '\u200b' });
   assert.equal(repeated.code, ERR.NAME_REJECTED);
-  assert.equal(repeated.detail, 'sensitive');
+  assert.equal(repeated.detail, 'invalid_name');
   assert.equal(Object.hasOwn(repeated, 'name'), false);
   assert.equal(session.name, '阿米娅');
   assert.equal(session.token, welcome.token);
   assert.equal(session.roomCode, 'ABCD');
   const contender = await connect();
-  const rejected = await contender.request({ t: 'hello', name: '傻​逼', token: welcome.token });
+  const rejected = await contender.request({ t: 'hello', name: '\u202e\u200b', token: welcome.token });
   assert.equal(rejected.code, ERR.NAME_REJECTED);
+  assert.equal(rejected.detail, 'invalid_name');
   assert.strictEqual(session.ws, oldSocket);
   assert.equal(owner.isOpen, true);
   assert.equal((await owner.request({ t: 'ping', c: 1 })).t, 'pong');
@@ -284,35 +285,28 @@ test('real WebSocket repeated/reconnect rejected hellos cannot rename, seize or 
   assert.deepEqual(publicNames, ['阿米娅', '凯尔希']);
 });
 
-test('real WebSocket political rejection preserves the connected identity and never publishes rejected values', async t => {
-  const { registry, publicNames, logs, connect } = await startNetwork(t);
-  const owner = await connect(), welcome = await owner.hello('Amiya');
-  const session = registry.byId(welcome.playerId), socket = session.ws;
+test('real WebSocket accepts previously screened names now that R13 lives in the workshop mod', async t => {
+  const { publicNames, logs, connect } = await startNetwork(t);
   const term = politicalWords.find(word => word.length >= 2 && word.length <= 5);
-  const challenger = await connect();
-  const rejected = await challenger.request({ t: 'hello', token: welcome.token, name: [...term].join('.') });
-  assert.equal(rejected.code, ERR.NAME_REJECTED);
-  assert.equal(rejected.detail, 'sensitive');
-  assert.equal(Object.hasOwn(rejected, 'name'), false);
-  assert.strictEqual(session.ws, socket);
-  assert.equal(session.name, 'Amiya');
-  assert.equal(session.token, welcome.token);
-  assert.deepEqual(publicNames, ['Amiya']);
+  const client = await connect();
+  const welcome = await client.hello([...term].join('.'));
+  assert.equal(welcome.name, [...term].join('.'), 'dictionary words are no longer rejected server-side');
+  const normalized = await connect();
+  assert.equal((await normalized.hello(' Ａｍｉｙａ ')).name, 'Amiya', 'NFKC normalization and trimming still apply');
+  assert.deepEqual(publicNames, [[...term].join('.'), 'Amiya']);
   assert.deepEqual(logs, []);
-  const repaired = await challenger.hello('凯尔希', welcome.token);
-  assert.equal(repaired.playerId, welcome.playerId);
-  assert.equal(repaired.resumed, true);
 });
 
 test('invalid legacy name keeps its disconnected session until an explicit valid-name resume', async t => {
   const { registry, publicNames, connect } = await startNetwork(t);
-  const legacy = registry.create('fuck'); // Emulates an existing session minted before moderation.
+  const legacy = registry.create('\u200b\u200b'); // Emulates a stored name that fails today's legality check.
   legacy.roomCode = 'ABCD';
   const client = await connect();
   const rejected = await client.request({ t: 'hello', name: legacy.name, token: legacy.token });
   assert.equal(rejected.code, ERR.NAME_REJECTED);
+  assert.equal(rejected.detail, 'invalid_name');
   assert.strictEqual(registry.byToken(legacy.token), legacy);
-  assert.equal(legacy.name, 'fuck');
+  assert.equal(legacy.name, '\u200b\u200b');
   assert.equal(legacy.ws, null);
   assert.equal(legacy.connected, false);
   assert.deepEqual(publicNames, []);
