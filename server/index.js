@@ -22,6 +22,7 @@ import { loadWorkshopServer } from './modBridge.js';
 import { createHealthMetrics, serverLoadState, publicLoadDetails } from './healthMetrics.js';
 import { resolveWsCompression, wsCompressionMode, createTransportRoutes } from './wsCompression.js';
 import { announcementsUrlFrom, createAnnouncementSource } from './http/announcements.js';
+import { oauthConfigFrom, createOauthRoutes } from './http/oauth.js';
 import { parseSnapshotHz } from './match/fields.js';
 
 export {
@@ -128,7 +129,14 @@ export async function startServer(opts = {}) {
     getHealthMetrics: () => healthMetrics, modHealth: () => workshop.healthz(), modPacks: workshop.packs };
   // The read-only transport surface (upstream stronghold-ws-compression): declared before the static mount.
   const transportRoutes = createTransportRoutes({ mode: wsMode, sockets: () => network.connectionCount, startedAt });
-  const server = http.createServer(createRequestHandler({ serveStatic, health, log, transportRoutes }));
+  // "log in with ModelScope" (server/http/oauth.js). The platform injects OAUTH_CLIENT_ID / OAUTH_CLIENT_SECRET
+  // into this container when the studio's OAuth setting is on, and STUDIO_HOST is the callback it registered, so
+  // the server — not an operator — is the only place that can build a valid authorize link. With none of those
+  // set, `createOauthRoutes` owns no path and makes no request.
+  const oauth = oauthConfigFrom(process.env);
+  if (oauth) log.info?.('[oauth] ModelScope login enabled: /auth/login');
+  const oauthRoutes = createOauthRoutes({ config: oauth, log });
+  const server = http.createServer(createRequestHandler({ serveStatic, health, log, transportRoutes, oauthRoutes }));
   server.on('clientError', answerClientError);
   const wss = attachWebSocket(server, { network, log, wsCompression });
 

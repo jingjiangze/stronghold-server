@@ -47,10 +47,14 @@ export function healthReport({ startedAt, network, registry, lobby, browserBuild
  * @param {{ serveStatic: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse,
  *             rawPath: string, query: string) => Promise<void>,
  *           health: Parameters<typeof healthReport>[0], log: object,
- *           transportRoutes?: (req: import('node:http').IncomingMessage) => { status: number, headers: Record<string,string>, body: string } | null }} deps
+ *           transportRoutes?: (req: import('node:http').IncomingMessage) => { status: number, headers: Record<string,string>, body: string } | null,
+ *           oauthRoutes?: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse,
+ *             rawPath: string, query: string) => Promise<boolean> }} deps
+ *   oauthRoutes: "log in with ModelScope" (server/http/oauth.js). It answers true when it owned the request; a
+ *   server with no OAuth configured passes a function that always answers false, so nothing changes for it.
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log, transportRoutes }) {
+export function createRequestHandler({ serveStatic, health, log, transportRoutes, oauthRoutes }) {
   async function handleRequest(req, res) {
     const url = req.url || '/';
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
@@ -76,6 +80,9 @@ export function createRequestHandler({ serveStatic, health, log, transportRoutes
       res.end(readonly.body);
       return;
     }
+    // "log in with ModelScope" (server/http/oauth.js): it claims its two paths and the root's ?code= callback,
+    // and answers false for everything else so an unconfigured install is served exactly as before.
+    if (oauthRoutes && await oauthRoutes(req, res, parts.rawPath, parts.query)) return;
     await serveStatic(req, res, parts.rawPath, parts.query);
   }
 
