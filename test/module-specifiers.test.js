@@ -33,16 +33,21 @@ function jsFiles(dir) {
 }
 
 /** Root-absolute module specifiers under a tree, as `relpath:line: spec`. */
+/** Upstream's dev sim-check page (0.2.5, public/dev/sim-check.html) is served at the site root and imports
+ * `/js/...` and `/shared/...` at runtime on purpose: those resolve against the deployment root, not the module. */
+const ROOT_ABSOLUTE_EXEMPT = new Set(['public/dev/sim-check.js']);
+
 function rootAbsoluteSpecifiers(root, trees = TREES) {
   const found = [];
   for (const tree of trees) {
     let files;
     try { files = jsFiles(join(root, tree)); } catch { continue; }
     for (const abs of files) {
+      const rel = abs.slice(root.length + 1).split('\\').join('/');
+      if (ROOT_ABSOLUTE_EXEMPT.has(rel)) continue;
       const src = readFileSync(abs, 'utf8');
       for (const hit of findSpecifiers(src)) {
         if (hit.spec.startsWith('/')) {
-          const rel = abs.slice(root.length + 1).split('\\').join('/');
           found.push(`${rel}:${hit.line}: ${hit.spec}`);
         }
       }

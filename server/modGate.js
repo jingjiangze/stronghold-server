@@ -6,7 +6,7 @@
 // server/modBridge.js), so only the two pure judgements are lifted out — `preDispatchIssues` (the files) and
 // `validateHookPolicy` (the module's opinion of its own policy file). Both are pure: no imports beyond fs / path / C2S.
 //
-// Why load-time at all (upstream's own reason, DESIGN §28.13.3): a pack that declares an admission gate and loads
+// Why load-time at all (upstream's own reason, MOD-SURFACE.md §13.3 in the Forge repo): a pack that declares an admission gate and loads
 // without one is a server whose operator believes the gate is shut while every entry message reaches the lobby. Every
 // failure below is a property of the FILES, so it is decidable before the pack is listed.
 //
@@ -68,7 +68,7 @@ export function preDispatchIssues(pack, packDir, { c2s = C2S } = {}) {
  * 数据格式（`version` / `files` 是钩子的方言）。所以「策略文件的**内部形状**是坏的」这一格，装载期判不出来。
  * 没有这道自检时，唯一的信号是工厂在**每个连接**上抛异常，而工厂抛异常的姿态是「这条连接上这个钩子不存在，
  * 消息照常分发」（`server/modDispatch.js` 文件头）—— 也就是「包看着装好了、闸门其实一条都没拦」，正是
- * DESIGN §28.13.3 要消灭的那一类失败。
+ * MOD-SURFACE.md §13.3（Forge 仓）要消灭的那一类失败。
  *
  * 有了它，一份用不了的策略与「策略不是 JSON 对象」得到**同一个结局**：点名拒绝（`PREDISPATCH_BAD_POLICY`）并把
  * 这个包移出已加载集合（`dropUnavailablePreDispatchPacks`）。

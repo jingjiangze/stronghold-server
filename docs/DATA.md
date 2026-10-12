@@ -111,7 +111,7 @@ Top level: `{ season, seasonName, modes, economy, lpCapPerRound, bossOvertimeAft
 | `equipPerChess`, `maxArtsPerRound` | `2`, `2` | |
 | `poolCopies[tier]` + `poolCopiesOverrides` | `{"1":12,"2":14,"3":18,"4":16,"5":8,"6":5}`, `{"chess_char_6_11_a":4}` (缪尔赛思) | shared pool copies per base chess |
 | `goldenCopies`, `mergeCount`, `mergeCountOverrides`, `itemMergeCount` | `3`, `3`, `{"chess_char_2_11_a":2}` (风丸), `2` | |
-| `rewardOffer` | `{"count":3,"tierOffset":1,"maxTier":6,"price":0,…}` | merge reward: 3 **different** free chess of tier `min(shopLevel+1,6)` (a short tier tops up from the tier below; `PlayerState.pushRewardOffer`, user playtest #6 item 19) |
+| `rewardOffer` | `{"count":3,"tierOffset":1,"maxTier":6,"price":0,…}` | merge reward: 3 **different** free chess of tier `min(shopLevel+1,6)` (a short tier tops up from the tier below; the player's stocked 自选 of that tier joins the roll, DESIGN §30.23; `PlayerState.pushRewardOffer`, user playtest #6 item 19) |
 | `handFillOrder` | `"rightToLeft"` | |
 | `shopOdds` | `{"model":"copyWeighted",…}` | [ASSUMED] roll model |
 | `borrowCount`, `fallbackBondId`, `defaultBandId`, `defaultStartLp` | `20`, `"emptyShip"`, `"band_bldsk"`, `28` | |
@@ -640,8 +640,9 @@ prototype. Built by `tools/build-data.mjs buildBackups`; `shared/standIn.js` com
 `shared/diy.js` adds the 自选 rules on top. The sim fields both (docs/SIM.md §12). Played since 0.2.0: the player fills
 the four slots on the 自选编队 tab (`room.diy { picks }`, docs/PLAYING.md §3; shared/protocol.js checkDiyPicks keeps the
 legal picks), the match takes the picks the seat had at its start (`PlayerState.diy`), and each slotted piece is sold in
-that player's shop only — its own stock (the tier's pool copies, 8 / 5 [ASSUMED]), from the 调度中心 level `shopLevel`,
-none when every bond of it is banned this match — and is the operator for every rule of that player (its data view:
+that player's shop only — its own stock (the tier's pool copies, 8 / 5 [ASSUMED]). The ordinary shop draws it from the
+调度中心 level `shopLevel`; the promotion reward draws 自选 of the reward tier, one shop level earlier (DESIGN §30.23).
+It has no stock when every bond of it is banned this match, and it is the operator for every rule of that player (its data view:
 server/match/player/diy.js, docs/META.md §3). The rules in the data (activity_table act2autochess `charShopChessDatas`; PRTS 卫戍协议, 卫戍协议：盟约
 下半/PRTS盟约记录):
 
@@ -743,3 +744,12 @@ solo ×1 (`perPlayer: true`, `coop: 1`, `solo: 1`, `aliveScaling: false`). The
 retired fixed pool of 「保持固定血量」 stays restorable through `perPlayer: false`
 + `solo: 0.25`. See
 [DESIGN.md — Stardust fork overrides](DESIGN.md#stardust-fork-overrides).
+
+### Acquisition subsets corrected in 0.2.5 (§30.2)
+
+`tools/build-data.mjs` owns the measured Rockrock/Flametail subset weights from
+[路标月报#2](https://www.bilibili.com/video/BV1eLXXBqEgF/). Rockrock: ordinary hammer 10; tremble, undying, haste,
+burn hammers 2 each; limited accelerator 1; shield drone and laser emitter 4 each. Flametail: Wild Mane 10,
+Ashlock 10, Fartooth 3. Rebuild `choices.json` offline; these weights do not exempt draws from shared availability.
+The runtime derives unlimited fixed-gift families from `SERVER_GAIN_EQUIP`; this is a grant-source exemption,
+not a zero-occupancy flag or a manually maintained second list in generated data.

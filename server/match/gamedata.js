@@ -102,6 +102,10 @@ export class GameData {
     const chess = this.raw.chess && typeof this.raw.chess === 'object' ? this.raw.chess : {};
     this._chess = chess;
     this._items = this.raw.items && typeof this.raw.items === 'object' ? this.raw.items : {};
+    // Fixed operator gifts are unlimited outputs, but every produced normal/advanced item still occupies 1/2 copies
+    // (card-pool experiment BV1eLXXBqEgF, maintainer-confirmed 2026-10-11). Random subset gifts are not exempt.
+    this._fixedGiftItems = new Set(Object.values(this.raw.garrisons || {})
+      .filter(g => g.effectKey === 'SERVER_GAIN_EQUIP').map(g => g.bbStr?.chess).filter(id => this._items[id]));
     this._bonds = this.raw.bonds && typeof this.raw.bonds === 'object' ? this.raw.bonds : {};
     /** visible, shop-eligible base (normal) chess ids */
     this.visibleChess = Object.keys(chess).filter((id) => {
@@ -307,6 +311,17 @@ export class GameData {
     const v = pc && typeof pc === 'object' ? pc[tier] : undefined;
     return Number.isInteger(v) && v >= 0 ? v : (DEFAULTS.poolCopies[tier] ?? 10);
   }
+
+  /** Whether a fixed trait gift may be produced beyond stock (including the advanced version of that item). */
+  /** Normal equipment copies in the shared pool; effect-only items have no shop stock limit. */
+  itemPoolCopies(id) {
+    const base = this.baseIdOf(id), rec = this.item(base);
+    if (!rec || !isShopItem(rec)) return null;
+    const count = this.economy.itemPoolCopiesOverrides?.[base] ?? this.economy.itemPoolCopies?.[rec.tier];
+    return Number.isInteger(count) && count >= 0 ? count : null;
+  }
+
+  isUnlimitedGiftItem(id) { return this._fixedGiftItems.has(this.baseIdOf(id)); }
 
   /** Copies needed to merge (0 = never merges: golden chess). */
   mergeCount(id) {
