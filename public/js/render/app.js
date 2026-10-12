@@ -848,7 +848,7 @@ export async function createFieldView(host, options = {}) {
    * The reserve medic and a boss pair's partner pieces: read-only 'm:<uid>' views. These are not movable prep pieces;
    * only the owner's prepMapChars may be picked for inspection. Rebuild when body, tile or facing changes.
    */
-  function syncMates(units) {
+  function syncReadOnlyPrepUnits(units) {
     const keep = new Set();
     for (const u of units) {
       const info = u && Number.isInteger(u.uid) ? renderInfo({ ...u, id: `m:${u.uid}` }) : null;

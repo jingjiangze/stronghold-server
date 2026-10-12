@@ -23,10 +23,20 @@ import { fetchMaterial } from '../../materialFallback.js';
 export const THREE_URL = '../../../vendor/three.module.js';
 
 let threePromise = null;
+let threeFailures = 0;
 /** Dynamic import of the vendored three.js ESM build (browser only); null when unavailable. */
 export function loadThree(url = THREE_URL) {
   if (!threePromise) {
-    threePromise = import(/* @vite-ignore */ url).then((m) => (m && m.WebGLRenderer ? m : null), () => null);
+    // Browsers also cache failed module imports. Two bounded retry URLs permit a transient download failure to
+    // recover; clearing only our promise would keep receiving that same cached rejection without another request.
+    if (threeFailures >= 3) return Promise.resolve(null);
+    const source = new URL(url, import.meta.url);
+    if (threeFailures) source.searchParams.set('sp-retry', String(threeFailures));
+    const pending = import(/* @vite-ignore */ source.href).then((m) => (m && m.WebGLRenderer ? m : null), () => null).then((m) => {
+      if (!m && threePromise === pending) { threePromise = null; threeFailures++; }
+      return m;
+    });
+    threePromise = pending;
   }
   return threePromise;
 }
