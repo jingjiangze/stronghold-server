@@ -175,7 +175,12 @@ test('the shipped sources.json is well formed and names a full source first', ()
   const shipped = parseSources(fs.readFileSync(path.join(HERE, '..', 'sources.json'), 'utf8'));
   assert.ok(shipped.order.length >= 2, 'expected a primary and at least one fallback');
   const primary = shipped.byId.get(shipped.order[0]);
-  assert.match(primary, /^https:\/\/modelscope\.cn\/datasets\//);
+  // "Full" is the point of this assertion, not a particular vendor: the leading source is the one that
+  // carries the whole tree. 2026-10-13 the user moved the lead to the R2 mirror (weishucdn) — the dataset
+  // mirror is missing a platform-rejected file and (until the local-art gap closes) some of `assets/local`,
+  // so it is explicitly the *second* source now.
+  assert.match(primary, /^https:\/\/(weishucdn|speedcdn)\.jiangjiangze\.icu$/);
+  assert.equal(shipped.order[1], 'modelscope', 'the dataset mirror is the fallback, not the lead');
   // The one platform-rejected file must stay routed away from the dataset mirror.
   assert.equal(shipped.exceptions.get(REJECTED), shipped.byId.get('r2'));
 });
@@ -203,7 +208,11 @@ test('the shipped sources.json keeps openi out of the default order', () => {
   const shipped = parseSources(fs.readFileSync(path.join(HERE, '..', 'sources.json'), 'utf8'));
   assert.ok(shipped.byId.has('openi'), 'openi stays available as an explicitly named channel');
   assert.ok(!shipped.order.includes('openi'), 'openi must never be a default target: no usable CORS');
-  assert.equal(shipped.order[0], 'modelscope', 'the CORS-clean, fastest source leads');
+  // The lead is r2/weishucdn per the 2026-10-13 user instruction (内容最全优先); the CORS-clean dataset
+  // mirror still has to be present and second — what this line protects is "the default path is CORS-clean",
+  // and both of these are.
+  assert.deepEqual(shipped.order, ['r2', 'modelscope'],
+    'default order = complete R2 mirror first, dataset mirror second (user instruction 2026-10-13)');
 });
 
 test('the extension allowlist and the path rules agree on what the tree contains', () => {
