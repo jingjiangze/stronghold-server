@@ -57,7 +57,7 @@ export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-ed
  * @param {{ sourcesPath?: string, disabled?: boolean, log?: { info?: Function, warn?: Function } }} [opts]
  * @returns {(pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null}
  */
-export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || '', rankUrls = null, fetchImpl = globalThis.fetch } = {}) {
+export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || '', rankUrls = null, fetchImpl = globalThis.fetch, healthIntervalMs = process.env.SP_ASSET_HEALTH === '0' ? 0 : Number(process.env.SP_ASSET_HEALTH_INTERVAL_MS || 60_000) } = {}) {
   if (disabled) {
     log.info?.('[http] asset jump: disabled (SP_ASSET_JUMP=0)');
     return () => null;
@@ -168,22 +168,118 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       .finally(() => existProbing.delete(key));
   };
 
-  // 只把 302 交出去：其余判定（404/405/204）保持 static.js 原有的行为，避免同一个 404 有两种样子。
+  // ---- 源健康缓存：让 302 顺延到「下一个还能用的源」 -----------------------------------------------------
+  // 与存在性缓存**正交**，别混成一个：这里只回答「这个源现在通不通」，不管它有没有某个文件。
+  //   status < 400（**含 403/404**）    = 通（域名/节点活着；缺某个文件是存在性缓存的事，在这判 down 会误杀
+  //                                     一个只是缺某文件的镜像）
+  //   status >= 500 / 网络错 / 超时     = 不通 → 本轮不进候选，302 顺延到下一个源
+  // **不做「太慢就降权」**：延迟阈值随网络抖动来回翻，会把 302 变成抖动源；ms 只记录、供诊断。
+  const HEALTH_INTERVAL_MS = healthIntervalMs;
+  const HEALTH_TTL_MS = Number(process.env.SP_ASSET_HEALTH_TTL_MS || 3 * 60_000);
+  const HEALTH_PATH = process.env.SP_ASSET_HEALTH_PATH || '/assets/char/avatar/char_003_kalts.png';
+  const HEALTH_TIMEOUT_MS = 4000;
+  const health = new Map();          // 源 id → { v: 'ok' | 'down', at, ms, status|error }
+  const healthProbing = new Set();
+  let healthSkips = 0;
+  const knownDown = (id) => {
+    const h = health.get(id);
+    return !!h && h.v === 'down' && Date.now() - h.at < HEALTH_TTL_MS;
+  };
+  /** 对**固定健康路径**做一次 HEAD（可达性判定，口径见上）。可 await（诊断/测试用），也可 fire-and-forget。 */
+  const probeHealth = (id, base) => {
+    if (healthProbing.has(id) || !base || !fetchImpl) return Promise.resolve(health.get(id) ?? null);
+    healthProbing.add(id);
+    const t0 = Date.now();
+    return Promise.resolve()
+      .then(() => fetchImpl(base + HEALTH_PATH, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) }))
+      .then((r) => {
+        const v = { v: r.status >= 500 ? 'down' : 'ok', at: Date.now(), ms: Date.now() - t0, status: r.status };
+        health.set(id, v);
+        if (v.v === 'down') log.warn?.(`[http] asset jump: source ${id} answered ${r.status} on ${HEALTH_PATH} — the next source will be used`);
+        return v;
+      })
+      .catch((e) => {
+        const v = { v: 'down', at: Date.now(), ms: Date.now() - t0, error: String(e?.message || e).slice(0, 80) };
+        health.set(id, v);
+        log.warn?.(`[http] asset jump: source ${id} unreachable (${v.error}) — the next source will be used`);
+        return v;
+      })
+      .finally(() => healthProbing.delete(id));
+  };
+  // 常驻循环（与 server/upstreamWatch.js 同一范式）：每轮探**所有已配置源**，所以一个源挂掉/恢复都会在
+  // 一个间隔内被发现，不需要任何 GitHub/CF 定时器。`unref()` 保证它不吊住进程退出（测试友好）。
+  const healthTimer = HEALTH_INTERVAL_MS > 0
+    ? setInterval(() => { for (const id of config.order) probeHealth(id, config.byId.get(id)); }, HEALTH_INTERVAL_MS)
+    : null;
+  healthTimer?.unref?.();
+  if (healthTimer) for (const id of config.order) probeHealth(id, config.byId.get(id));   // 启动即预热
+
+  /**
+   * 顺延链的最后一跳：给定源 id，返回**指向同一路径**的后备绝对地址（复用 decide 的同一套实现，
+   * 靠 `?sp_source=<id>` 点名 —— 不在这里另写一份拼 URL 的规则）。取不到就返回 null。
+   */
+  const altUrl = (conf, id, pathname, query) => {
+    const q = new URLSearchParams(query || '');
+    q.set('sp_source', id);
+    const out = decide(conf, { method: 'GET', pathname, query: q.toString() });
+    return out.status === 302 && out.location ? out.location : null;
+  };
   /** 取（可能被 rank 覆盖过 order 的）当前配置：static.js 在每次请求前 await 一次，命中缓存时是零成本。 */
   const jump = (pathname, query, method, cfg = null) => {
     const conf = cfg || config;
     const order = Array.isArray(conf.order) ? conf.order : [];
+    // 两条剔除线：①「这个源没有这个文件」（存在性）②「这个源现在不可达」（健康，本轮新增）。
+    const down = order.filter((id) => knownDown(id));
     const skip = new Set(order.filter((id) => knownMiss(id, pathname)));
-    let out = decide(conf, { method, pathname, query, skip: skip.size ? skip : null });
-    // 全部候选都被判过「没这个文件」→ 退回主源兜底（给客户 302 比给 404 好），并让缓存继续刷新
-    if (out.status !== 302 && skip.size) out = decide(conf, { method, pathname, query });
+    for (const id of down) skip.add(id);
+    // 点名一个**已知不可达**的源，等于点名到一个死链 —— 这时把点名降级为"偏好"：按顺序顺延，
+    // 而不是照办给玩家一个打不开的地址。（点名一个只是缺这个文件的源，仍然照办。）
+    let q = query;
+    if (query && down.length) {
+      const named = new URLSearchParams(query).get('sp_source');
+      if (named && down.includes(named)) {
+        q = stripSourceParam(query);
+        log.info?.(`[http] asset jump: named source ${named} is unreachable — falling through by order`);
+      }
+    }
+    let out = decide(conf, { method, pathname, query: q, skip: skip.size ? skip : null });
+    // 全部候选都被剔除（缺件 / 不可达）→ 退回不带 skip 的主源兜底（给客户 302 比给 404 好），并让缓存继续刷新
+    if (out.status !== 302 && skip.size) out = decide(conf, { method, pathname, query: q });
     if (out.status !== 302) return null;
     const chosen = order.find((id) => conf.byId.get(id) && String(out.location).startsWith(conf.byId.get(id)));
     if (chosen) probeExist(chosen, conf.byId.get(chosen), pathname, query);
-    return { status: out.status, headers: out.headers };
+    if (down.length) {
+      healthSkips += down.length;
+      log.info?.(`[http] asset jump: skip(health) ${down.join(',')} → ${chosen || out.location}`);
+    }
+    // 后备清单（客户端侧的顺延）：生效顺序去掉已选中的、去掉已知不可达的，最多 3 条。
+    // 标准 `Link: rel="alternate"` + 一个傻瓜头（我们的 pick.js / APK 更容易直接读），两头都给；
+    // 不解析这两个头的客户端完全不受影响。
+    const headers = { ...out.headers };
+    const alts = order
+      .filter((id) => id !== chosen && !down.includes(id) && conf.byId.get(id))
+      .slice(0, 3)
+      .map((id) => altUrl(conf, id, pathname, query))
+      .filter(Boolean);
+    if (alts.length) {
+      headers.Link = alts.map((u) => `<${u}>; rel="alternate"`).join(', ');
+      headers['X-SP-Fallbacks'] = alts.join(',');
+    }
+    return { status: out.status, headers };
   };
   /** 诊断用：存在性缓存的规模与其中「已判缺件」的条数（/sp-edge/status 会带上）。 */
   jump.exists = () => ({ size: exists.size, known: [...exists.values()].filter((e) => e.v === 'miss').length });
+  /** 诊断用：每个源的健康判定 + 因为健康被顺延掉的次数（/sp-edge/status 会带上）。 */
+  jump.health = () => ({
+    sources: Object.fromEntries([...health].map(([id, v]) => [id, { ...v }])),
+    byHealth: healthSkips,
+    cfg: { intervalMs: HEALTH_INTERVAL_MS, ttlMs: HEALTH_TTL_MS, path: HEALTH_PATH },
+  });
+  /** 立刻把所有源探一遍并等到结果（线上排查/测试用；正常请求路径不需要它）。 */
+  jump.checkHealth = async () => {
+    await Promise.all(config.order.map((id) => probeHealth(id, config.byId.get(id))));
+    return jump.health();
+  };
   jump.config = effective;
   /**
    * Read-only status for the deployment's own diagnostics: what the jump knows (sources, rank) and, on demand, a
@@ -198,6 +294,8 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       jumpEnabled: true, sourcesPath,
       // 存在性缓存：size = 记录条数，known = 其中已判「该源没有这个文件」的条数（302 会避开这些源）
       exists: typeof jump.exists === 'function' ? jump.exists() : null,
+      // 源健康：每个源当前通不通，以及因为健康被顺延掉的次数（byHealth）
+      health: typeof jump.health === 'function' ? jump.health() : null,
     };
     if (!probe) return out;
     const head = async (u) => {

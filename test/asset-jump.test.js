@@ -198,6 +198,113 @@ test('rank fetch falls through to the next url when the first one fails', async 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// ── ② 顺延链：一个域用不了了，就返回下一个域（全部在容器内，不涉及 CF / 盒子）──────────────────────
+const HEALTH_PATH = '/assets/char/avatar/char_003_kalts.png';   // 与 asset-jump.js 的默认健康路径一致
+const THREE = { schemaVersion: 1, order: ['a', 'b', 'c'],
+  sources: [{ id: 'a', base: 'https://a.example' }, { id: 'b', base: 'https://b.example' }, { id: 'c', base: 'https://c.example' }] };
+
+/** 假的素材源：健康（固定路径）与存在性（任意路径）返回可编程状态；rank 返回空（走静态 order）。 */
+function fakeSources(healthStatus = {}, missing = []) {
+  const calls = [];
+  const impl = async (url, init = {}) => {
+    const u = new URL(url);
+    const id = u.host.split('.')[0];
+    if (init.method === 'HEAD') {
+      if (u.pathname === HEALTH_PATH) {
+        const st = healthStatus[id] ?? 200;
+        calls.push(`health ${id} ${st}`);
+        return { ok: st < 400, status: st };
+      }
+      const st = missing.includes(id + u.pathname) ? 404 : 200;
+      calls.push(`exist ${id} ${st}`);
+      return { ok: st < 400, status: st };
+    }
+    calls.push('rank');
+    return { ok: true, status: 200, json: async () => ({ rank: [] }) };
+  };
+  return { impl, calls };
+}
+
+test('a source that answers 5xx is skipped — the jump falls through to the next domain', async () => {
+  const dir = tmpdir();
+  const { impl } = fakeSources({ a: 503 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  try {
+    await jump.checkHealth();
+    assert.equal(jump.health().sources.a.v, 'down');
+    assert.equal(jump.health().sources.b.v, 'ok');
+    // 生效顺序仍是 a > b > c，但 a 已知不可达 ⇒ 302 顺延到 b
+    assert.equal(jump.config().order[0], 'a');
+    assert.equal(jump('/assets/x.png', '', 'GET', jump.config()).headers.Location, 'https://b.example/assets/x.png');
+    assert.equal(jump('/assets/x.png', '', 'GET', jump.config()).headers['X-SP-Fallbacks'], 'https://c.example/assets/x.png');
+    assert.ok(jump.health().byHealth >= 1, '被健康顺延掉的次数要被记下来');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('an unreachable source (network error / timeout) is also skipped', async () => {
+  const dir = tmpdir();
+  const boom = async (url, init = {}) => {
+    const u = new URL(url);
+    if (init.method === 'HEAD' && u.pathname === HEALTH_PATH && u.host.startsWith('a.')) throw new Error('ETIMEDOUT');
+    if (init.method === 'HEAD') return { ok: true, status: 200 };
+    return { ok: true, status: 200, json: async () => ({ rank: [] }) };
+  };
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: boom, healthIntervalMs: 0 });
+  try {
+    await jump.checkHealth();
+    assert.equal(jump.health().sources.a.v, 'down');
+    assert.equal(jump('/assets/x.png', '', 'GET', jump.config()).headers.Location, 'https://b.example/assets/x.png');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('reachability is not file presence: a 404 on the health path must NOT demote the source', async () => {
+  const dir = tmpdir();
+  const { impl } = fakeSources({ a: 404 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  try {
+    await jump.checkHealth();
+    assert.equal(jump.health().sources.a.v, 'ok', '403/404 说明域名活着，只是没有这个文件');
+    assert.equal(jump('/assets/x.png', '', 'GET', jump.config()).headers.Location, 'https://a.example/assets/x.png');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('every source unreachable → still 302 to the primary (never 404/503)', async () => {
+  const dir = tmpdir();
+  const { impl } = fakeSources({ a: 503, b: 503, c: 503 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  try {
+    await jump.checkHealth();
+    const res = jump('/assets/x.png', '', 'GET', jump.config());
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.Location, 'https://a.example/assets/x.png', 'fail-open: 主源兜底');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('naming an unreachable source falls through by order instead of handing out a dead link', async () => {
+  const dir = tmpdir();
+  const { impl } = fakeSources({ a: 503 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  try {
+    await jump.checkHealth();
+    const res = jump('/assets/x.png', 'sp_source=a&v=2', 'GET', jump.config());
+    assert.equal(res.headers.Location, 'https://b.example/assets/x.png?v=2', '点名降级为偏好，顺延下一个域');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the fallback list follows the effective order, excludes the chosen source, and never self-links', async () => {
+  const dir = tmpdir();
+  const { impl } = fakeSources();
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  try {
+    await jump.checkHealth();
+    const res = jump('/assets/x.png', 'v=7', 'GET', jump.config());
+    assert.equal(res.headers.Location, 'https://a.example/assets/x.png?v=7');
+    assert.equal(res.headers['X-SP-Fallbacks'], 'https://b.example/assets/x.png?v=7,https://c.example/assets/x.png?v=7');
+    assert.match(res.headers.Link, /^<https:\/\/b\.example\/assets\/x\.png\?v=7>; rel="alternate", <https:\/\/c\.example\/assets\/x\.png\?v=7>; rel="alternate"$/);
+    assert.ok(!res.headers['X-SP-Fallbacks'].includes('https://a.example'), '自己不在后备里');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('an unreadable sources file turns the jump off instead of failing requests', () => {
   const dir = tmpdir();
   try {
