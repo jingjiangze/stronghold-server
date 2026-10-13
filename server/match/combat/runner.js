@@ -8,6 +8,14 @@ import { damageFrame, emptyDamageRows } from '../../sim/damageBoard.js';
 export const MAX_WORKER_ADVANCE_TICKS = 32;
 const TERMINAL_SNAPSHOT_RETRY_MS = 1000;
 
+/** The pace in game-seconds per wall-second: the match's effective speed when it has one (促融共竞 halves it until both
+ * 倍速 switches are on), else its raw gameSpeed (lightweight test stubs), else the default. */
+const paceOf = (m) => {
+  if (Number.isFinite(m.effGameSpeed) && m.effGameSpeed > 0) return m.effGameSpeed;
+  if (Number.isFinite(m.gameSpeed) && m.gameSpeed > 0) return m.gameSpeed;
+  return GAME_SPEED;
+};
+
 /** Read-only view of the last accepted worker state, not a resumable simulation snapshot. */
 export class RemoteBattle {
   constructor(spec) {
@@ -105,7 +113,7 @@ export class WorkerFieldRunner {
     try {
       this.inflight = true;
       this.session = this.m.combatPool.create({ specs: this.fields.map((f) => f.spec), boss: this.boss,
-        wireFrames: true, coalesceFrames: true, damageBoard: true, snapshotHz: this.m.snapshotHz, gameSpeed: this.m.effGameSpeed }, {
+        wireFrames: true, coalesceFrames: true, damageBoard: true, snapshotHz: this.m.snapshotHz, gameSpeed: paceOf(this.m) }, {
         onFailure: (e) => this._fail(e),
       });
       this.session.ready.then((out) => this._receive(out, true), (e) => this._fail(e));
@@ -149,7 +157,7 @@ export class WorkerFieldRunner {
     const now = this.m.sched.now();
     const dt = Math.max(0, now - this.last);
     this.last = now;
-    const speed = Number.isFinite(this.m.effGameSpeed) && this.m.effGameSpeed > 0 ? this.m.effGameSpeed : GAME_SPEED;
+    const speed = paceOf(this.m);
     // Active time remains owed even while the parent/worker queue is delayed. The phase hard cap bounds this
     // scalar debt; the command budget below bounds work/frames and preserves fair FIFO turns, not elapsed time.
     if (this.ready && !this.m.paused && !this.held) this.acc = Math.min(this.acc + dt / 1000 * speed, Math.max(0, HARD_CAP_SECONDS - this.time));

@@ -113,13 +113,13 @@
 .speedbtn__lamp { width: .13rem; height: .13rem; border-radius: 50%; background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .45); }
 .speedbtn__lamp.is-lit { background: #66b8ff; border-color: #cfe8ff; box-shadow: 0 0 .12rem rgba(102, 184, 255, .9); }
 .speedbtn__lamp.is-partner.is-lit { background: #4fd07a; border-color: #c8f4d8; box-shadow: 0 0 .12rem rgba(79, 208, 122, .9); }
-.speedbtn__x { font-family: var(--font-num); font-size: .16rem; line-height: 1; }
+.speedbtn__x { font-family: var(--font-num); font-size: calc(.16 * var(--t)); line-height: 1; }
 .speedbtn.is-on { background: var(--mint-500); border-color: var(--mint-400); color: var(--text-on-mint); box-shadow: 0 0 .22rem rgba(23, 249, 183, .45); }
 .speedbtn.is-busy { opacity: .6; }
 .cooppill {
   display: inline-flex; align-items: center; height: .38rem; padding: 0 .14rem; flex: none;
   background: rgba(10, 14, 12, .88); border: 1px solid rgba(242, 242, 242, .6); color: #fff;
-  font-size: .15rem; white-space: nowrap; box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
+  font-size: calc(.15 * var(--t)); white-space: nowrap; box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
 }
 .cooppill:hover:not(:disabled) { background: rgba(255, 255, 255, .14); border-color: #fff; }
 .cooppill.is-primary { background: var(--mint-500); border-color: var(--mint-400); color: var(--text-on-mint); }
@@ -128,7 +128,7 @@
 .coopask {
   display: inline-flex; align-items: center; gap: .08rem; padding: .05rem .1rem; flex: none;
   background: rgba(10, 14, 12, .92); border: 1px solid rgba(242, 242, 242, .5); color: #fff;
-  font-size: .15rem; white-space: nowrap; box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
+  font-size: calc(.15 * var(--t)); white-space: nowrap; box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
 }
 .coopask b { font-weight: 600; }
 
@@ -141,7 +141,7 @@
 }
 .marktool__kind {
   display: flex; align-items: center; gap: .08rem; min-width: 1rem; height: .38rem; padding: 0 .14rem;
-  background: transparent; border: 1px solid transparent; color: #fff; font-size: .15rem; white-space: nowrap;
+  background: transparent; border: 1px solid transparent; color: #fff; font-size: calc(.15 * var(--t)); white-space: nowrap;
 }
 .marktool__kind::before { content: ''; width: .14rem; height: .14rem; }
 .marktool__kind.is-mark::before { background: #ffd45a; }
