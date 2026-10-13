@@ -8,7 +8,9 @@ import { makeMatch } from './harness.js';
 import { makeBattle, chessRec, enemyRec } from '../helpers/battleHarness.js';
 import { PHASE, ERR, MATCH_STYLES } from '../../shared/constants.js';
 
-const cujong = (o = {}) => makeMatch({ mode: 'cujong', difficulty: 'football', humans: 2, ...o });
+// the placeholder-project loop tests run on 'fortress' (no football content): P3's 阵地足球 stamps/balls have their own
+// suite (test/match/cujong-football.test.js), these keep the project-agnostic main loop under test
+const cujong = (o = {}) => makeMatch({ mode: 'cujong', difficulty: 'fortress', humans: 2, ...o });
 const leak = (n, common = 0) => ({
   leaked: [...Array(n).fill({ counted: true }), ...Array(common).fill({ counted: true, common: true })],
   perfect: n + common === 0, coins: 0, layerGains: {}, killed: 0, damageDealt: 0,
@@ -178,10 +180,12 @@ test('styles buff the owner in the sim: 基础 +10 % ATK, 攻坚 +20 ASPD, 控�
   }];
   const build = (styleId, extra = {}) => makeBattle({ defs, players: players(styleId), content: 'full', seed: 7, ...extra });
   const plain = build(null);
+  // P6: a style now also carries its 携带物 (styles.js CARRIES; their exact numbers live in test/sim/carries.test.js) —
+  // 基础's cheer adds +20 % ATK for the opening window and 攻坚's drink +100 ASPD, so the totals compose:
   const basic = build('basic');
-  assert.ok(Math.abs(basic.unit(1).s.atk / plain.unit(1).s.atk - 1.1) < 0.005, '基础: +10 % ATK');
+  assert.ok(Math.abs(basic.unit(1).s.atk / plain.unit(1).s.atk - 1.3) < 0.005, '基础: +10 % ATK (style) +20 % (carry)');
   const off = build('offensive');
-  assert.equal(off.unit(1).s.aspd - plain.unit(1).s.aspd, 20, '攻坚: +20 ASPD');
+  assert.equal(off.unit(1).s.aspd - plain.unit(1).s.aspd, 120, '攻坚: +20 (style) +100 (carry) ASPD');
   // 控制: a status applied by the owner's operator lasts ×2.5
   const dis = makeBattle({
     defs: { ...defs, enemies: { enemy_styleprobe: enemyRec({ key: 'enemy_styleprobe', hp: 1e7, speed: 0 }) } },

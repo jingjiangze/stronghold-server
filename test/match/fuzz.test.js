@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateC2S, C2S } from '../../shared/protocol.js';
-import { ERR, EMOTES, MAX_SEATS } from '../../shared/constants.js';
+import { ERR, EMOTES, MATCH_STYLES, MAX_SEATS } from '../../shared/constants.js';
 import { createRng } from '../../server/sim/rng.js';
 import { DATA, makeMatch, checkInvariants } from './harness.js';
 
@@ -26,6 +26,8 @@ function randomIntent(rng, m, ps) {
   switch (t) {
     case 'g.infoReady': return { t, setupRevision: m.setupRevision ?? 0 };
     case 'g.rerollVote': return { t, voteId: m.setupVote?.id ?? 1 + rng.int(10), agree: rng() < 0.5 };
+    // 促融共竞 比赛风格: the schema is a whitelist (MATCH_STYLES), so only a valid id keeps the fuzz contract
+    case 'g.matchStyle': return { t, styleId: rng.pick(MATCH_STYLES) };
     case 'g.band': return { t, bandId: rng() < 0.8 ? rng.pick(BANDS) : rng.pick(['constructor', '__proto__', 'band_x', 'a'.repeat(64)]) };
     case 'g.buy': return { t, slot: rng.int(16) };
     case 'g.sell': case 'g.destroy': return { t, uid: uid() };
@@ -34,6 +36,12 @@ function randomIntent(rng, m, ps) {
     case 'g.art': return { t, itemUid: uid(), row: rng.int(19), col: rng.int(21) };
     case 'g.reward': case 'g.choice': return { t, idx: rng.int(6) };
     case 'g.ready': return { t, ready: rng() < 0.4 };
+    // P6 合作交互 (whitelist-ish shapes ⇒ only valid values keep the fuzz contract)
+    case 'g.pauseVote': return { t, voteId: 1 + rng.int(10), agree: rng() < 0.5 };
+    case 'g.fundAsk': return { t };
+    case 'g.fundAnswer': return { t, askId: 1 + rng.int(10), accept: rng() < 0.5 };
+    case 'g.mark': return { t, row: rng.int(19), col: rng.int(21), kind: rng.pick(['mark', 'note', 'retreat']) };
+    case 'g.speed': return { t, on: rng() < 0.5 };
     case 'g.emote': return { t, id: rng.pick(EMOTES) };
     case 'g.watch': return { t, fieldId: rng.pick(['n:p_0', 'n:p_1', 'n:ai_0', 'u', 'b1', 'b2', 'zz', '']) };
     case 'g.autoplay': return { t, on: rng() < 0.05 };

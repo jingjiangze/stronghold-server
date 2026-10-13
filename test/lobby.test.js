@@ -1960,7 +1960,7 @@ describe('heartbeat and shutdown', () => {
 // ---------------------------------------------------------------------------------------------------
 
 describe('match stub (server/match/Match.js)', () => {
-  const STATUSES = ['acting', 'ready', 'deciding', 'combat', 'done', 'helping', 'left', 'dead'];
+  const STATUSES = ['acting', 'ready', 'deciding', 'combat', 'done', 'helping', 'left', 'dead', 'reviving'];
   const mk = (over = {}) => {
     const out = { sent: [], bc: [], ended: [] };
     const m = new Match({

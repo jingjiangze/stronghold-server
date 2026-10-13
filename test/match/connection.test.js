@@ -7,7 +7,7 @@ import { StubMatch } from '../../server/match/StubMatch.js';
 import { DATA, makeMatch, checkInvariants, give, giveItem, chessOfTier } from './harness.js';
 import { bossPoolHp } from '../../server/match/finalAssault.js';
 
-const STATUSES = ['acting', 'ready', 'deciding', 'combat', 'done', 'helping', 'left', 'dead'];
+const STATUSES = ['acting', 'ready', 'deciding', 'combat', 'done', 'helping', 'left', 'dead', 'reviving'];
 
 test('constructor validation mirrors the stub; start() sends the first m.public and one m.private per human', () => {
   assert.throws(() => new Match({ seats: [] }), TypeError);
