@@ -107,11 +107,16 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
         return { url: u, status: r.status, ms: Date.now() - t0 };
       } catch (e) { return { url: u, error: String(e?.message || e), ms: Date.now() - t0 }; }
     };
-    const first = effective().order[0];
-    out.probes = await Promise.all([
-      first ? head(config.byId.get(first) + '/assets/char/avatar/char_003_kalts.png') : null,
-      head(probeUrl),
-    ].filter(Boolean));
+    // Fixed probe list (never a caller-supplied URL: this endpoint must not be an SSRF pivot): every configured
+    // source's avatar, plus the upstream endpoints a listener would need.
+    const targets = [
+      ...effective().order.map((id) => config.byId.get(id) + '/assets/char/avatar/char_003_kalts.png'),
+      probeUrl,
+      'https://github.com/sganggs/Stronghold-Protocol/releases',
+      'https://raw.githubusercontent.com/sganggs/Stronghold-Protocol/master/package.json',
+      'https://ghfast.top/https://raw.githubusercontent.com/sganggs/Stronghold-Protocol/master/package.json',
+    ];
+    out.probes = await Promise.all([...new Set(targets)].map(head));
     return out;
   };
   return jump;
