@@ -361,7 +361,12 @@ test('consumed party code across independent ingresses admits a late observer to
 });
 
 for (const signal of ['SIGTERM', 'SIGKILL']) {
-  test(`${signal} of one ingress process does not terminate the other ingress, surviving clients or match owner; lost clients resume there`, { timeout: 20000 }, async t => {
+  // POSIX-only for SIGTERM: Windows has no catchable SIGTERM for a child process — child.kill('SIGTERM') calls
+  // TerminateProcess, so the ingress's graceful shutdown never runs and the child exits { code: null, signal: 'SIGTERM' }.
+  // SIGKILL is the same shape on both platforms (a forced kill), so only the SIGTERM variant skips here.
+  const skipSignal = signal === 'SIGTERM' && process.platform === 'win32'
+    && 'Windows cannot deliver SIGTERM to a child as a catchable signal (TerminateProcess, not a graceful shutdown)';
+  test(`${signal} of one ingress process does not terminate the other ingress, surviving clients or match owner; lost clients resume there`, { timeout: 20000, skip: skipSignal }, async t => {
     const f = await fixture(t), group = await f.match(), failed = f.entries[0], survivor = f.entries[1];
     const observer = await f.join('SurviveObs', 1);
     await observer.request('room.spectate', { code: group.room.code });

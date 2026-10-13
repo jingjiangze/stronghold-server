@@ -86,7 +86,7 @@ test('an incomplete offline metadata import refuses publication instead of silen
   await assert.rejects(prepareSkins({ sourceDir: join(root, 'sources'), modelSource: 'metadata', catalogue: [skin], manifestPath: path, assetRoot: join(root, 'assets') }), /incomplete metadata/);
   assert.equal(readFileSync(path, 'utf8'), prior);
 });
-test('offline source files through a symlink cannot escape the isolated source directory', async t => {
+test('offline source files through a symlink cannot escape the isolated source directory', { skip: process.platform === 'win32' && 'symlink() needs Developer Mode / admin on Windows (EPERM)' }, async t => {
   const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-link-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const manifestPath = join(root, 'assets.json'), source = join(root, 'sources'), external = join(root, 'outside');
   const prior = JSON.stringify({ chars: { [skin.charId]: {} }, stats: {} }); writeFileSync(manifestPath, prior); mkdirSync(source); mkdirSync(external);

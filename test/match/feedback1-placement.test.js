@@ -192,7 +192,9 @@ test('#9 hand and temp full: a re-orientation that would push 狼群 out is refu
   const toasts = [];
   const toast = m.toast.bind(m);
   m.toast = (p, kind, text) => { toasts.push(renderMessage(text)); return toast(p, kind, text); }; // string or msg()
-  const golden = Object.keys(DATA.items).find((id) => DATA.items[id].isGolden && DATA.items[id].itemType === 'EQUIP');
+  // Fill the storage with a fixed operator gift: it may legitimately exceed its stock (invariants.js item cap), so
+  // force-stowing it is a legal state, unlike an arbitrary shop equip whose held copies may never pass its cap.
+  const golden = Object.keys(DATA.items).find((id) => DATA.items[id].isGolden && DATA.items[id].itemType === 'EQUIP' && m.gd.isUnlimitedGiftItem(id));
   while (ps.hand.includes(null)) giveItem(m, ps, golden);
   while (ps.temp.includes(null)) giveItem(m, ps, golden, 'temp');
   // facing LEFT would leave (11,5) outside her range and the wolf has nowhere to go: refused, nothing changes

@@ -23,11 +23,15 @@ test('per-character override survives persistence; deletion restores the current
 });
 test('English per-character preferences remain independent of the three-language global control', () => {
   const settings = sanitizeSettings({ voiceLang: 'en', voiceOverrides: { [a]: 'jp', [b]: 'en' } });
+  assert.equal(settings.voiceLang, 'en', 'the settings model still offers English');
   const manager = new AudioManager();
   manager.setVoiceLang(settings.voiceLang, settings.voiceOverrides);
   assert.equal(voiceLangFor(a, manager.voiceLang, manager.voiceOverrides), 'jp');
   assert.equal(voiceLangFor(b, manager.voiceLang, manager.voiceOverrides), 'en');
-  assert.equal(voiceLangFor('unknown', manager.voiceLang, manager.voiceOverrides), 'en');
+  // upstream 0.2.5's runtime has two dubs: setVoiceLang folds a global 'en' to 中文 (audio.test.js maps 'en' → the
+  // Chinese line), so 'unknown' follows the runtime global; the per-character override above is untouched by the fold.
+  assert.equal(manager.voiceLang, 'cn');
+  assert.equal(voiceLangFor('unknown', manager.voiceLang, manager.voiceOverrides), 'cn');
   manager.setVoiceLang('cn');
   assert.equal(voiceLangFor(b, manager.voiceLang, manager.voiceOverrides), 'en');
 });

@@ -64,6 +64,8 @@ export const CLIENT_WRAP_COMPONENTS = Object.freeze([
 ]);
 /** Wrap modes (Forge L283). */
 export const CLIENT_WRAP_MODES = Object.freeze(['wrap', 'replace']);
+/** A pack channel name (`client.panels[].messages` / `server.modules[].channels`, Forge L294): a lower-case slug. */
+export const PACK_CHANNEL_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 /** The data tables a panel may read (Forge L309). */
 export const CLIENT_PANEL_DATA_TABLES = Object.freeze([
   'chess', 'bonds', 'items', 'bands', 'enemies', 'bosses',
@@ -75,9 +77,11 @@ export const CLIENT_REQUIRES = Object.freeze(['serviceWorker', 'cacheStorage', '
 /** `server.modules[*].uses`, the mount points (Forge L384). */
 export const SERVER_MODULE_USES = Object.freeze(['boot', 'shutdown', 'matchClass', 'healthz']);
 /** The closed field set of one `server.modules[*]` entry (Forge L386). */
-export const SERVER_MODULE_FIELDS = Object.freeze(['id', 'entry', 'uses', 'write']);
+export const SERVER_MODULE_FIELDS = Object.freeze(['id', 'entry', 'uses', 'write', 'channels']);
 /** How many server modules one pack may declare (Forge L388). */
 export const MAX_SERVER_MODULES = 8;
+/** How many receive channels one server module may declare (`server.modules[].channels`, Forge L394, DESIGN §28.23). */
+export const MAX_SERVER_MODULE_CHANNELS = 8;
 /** A server module is ESM the SERVER loads: the browser and the battle sim never do (Forge L390). */
 export const SERVER_MODULE_EXT = '.mjs';
 /** A `server.modules[*].id` — the same pattern upstream calls RECORD_ID_RE (Forge L165), exported under that name. */

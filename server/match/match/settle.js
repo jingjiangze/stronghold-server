@@ -12,7 +12,10 @@ import { onSettle, resetRoundCounters } from '../botEmotes.js';
 
 export class MatchSettle {
   settle(plan, uniteResult) {
-    if (this.disposed || this.ended || (this.phase !== PHASE.COMBAT && this.phase !== PHASE.UNITE)) return;
+    // Re-entry guard only: a round that already settled (phase SETTLE) must not charge LP twice. Production callers
+    // (combat.js / unitePhase.js) always arrive from COMBAT or UNITE; upstream's settle() carries no phase restriction
+    // and the touch-retained test forces an elimination from PREP, so no phase is excluded here.
+    if (this.disposed || this.ended || this.phase === PHASE.SETTLE) return;
     this._freezeDamage(); // before LP/death/board cleanup and fields clearing
     const relay = this._uniteRelay?.rounds.at(-1)?.plan === plan ? this._uniteRelay : null;
     // Per-field results stay archived (including the earlier leaks). Helpers are unique, so merging their

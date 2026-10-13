@@ -3,8 +3,8 @@
 //
 // With HOST unset the server binds '::' (Node leaves ipv6Only off, so one socket answers IPv6 and IPv4).
 // That default is the only host retried, and only on EAFNOSUPPORT / EADDRNOTAVAIL / EINVAL. An explicit HOST,
-// including 0.0.0.0 and 127.0.0.1, is tried once. The local URL brackets an IPv6 literal. The image stays on
-// 0.0.0.0 until an alpine boot of the fallback has actually been run.
+// including 0.0.0.0 and 127.0.0.1, is tried once. The local URL brackets an IPv6 literal. The image pins the game
+// to IPv4 loopback (127.0.0.1) behind the ms-edge nginx — never the dual-stack `::` (deploy/stardust/ms-edge/).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,7 +36,7 @@ test('the listen entry points default to ::, and the image stays on IPv4', () =>
   assert.match(doc('scripts/launch.mjs'), /process\.env\.HOST \|\| '::'/);
   assert.match(doc('tools/doctor.mjs'), /process\.env\.HOST \|\| '::'/);
   assert.match(doc('README.md'), /\| `HOST` \| `::` \|/);
-  assert.match(doc('Dockerfile'), /HOST=0\.0\.0\.0/);
+  assert.match(doc('Dockerfile'), /HOST=127\.0\.0\.1/);
   assert.doesNotMatch(doc('Dockerfile'), /HOST=::/);
 });
 

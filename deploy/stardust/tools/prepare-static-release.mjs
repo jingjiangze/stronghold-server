@@ -4,7 +4,7 @@
 // Verify copied/staged output: node deploy/stardust/tools/prepare-static-release.mjs --verify <directory>
 import { createHash } from 'node:crypto';
 import { chmod, copyFile, lstat, mkdir, readdir, readFile, realpath, rm, utimes, writeFile } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -49,7 +49,7 @@ async function regular(path) {
 // Check ancestors as well as the final file; e.g. node_modules/preact must not be a symlink.
 async function readInput(root, rel) {
   for (let p = dirname(join(root, rel)); p !== root; p = dirname(p)) {
-    if (!p.startsWith(root + '/')) fail(`Input escapes source: ${rel}`);
+    if (!p.startsWith(root + sep)) fail(`Input escapes source: ${rel}`);
     if (!(await lstat(p)).isDirectory()) fail(`Input parent is not a regular directory: ${p}`);
   }
   await regular(join(root, rel));
@@ -166,7 +166,7 @@ export async function prepareStaticRelease({ source = REPO, output, release, sou
   if (!output) fail('A NEW output directory is required');
   source = resolve(source); output = resolve(output);
   if (await realpath(source) !== source) fail('Source path must not traverse symlinks');
-  if (output === source || output.startsWith(source + '/') && !output.startsWith(join(source, 'deploy/stardust/build') + '/')) {
+  if (output === source || output.startsWith(source + sep) && !output.startsWith(join(source, 'deploy/stardust/build') + sep)) {
     fail('Keep staged output outside the source, or under ignored deploy/stardust/build/');
   }
   // All source prerequisites are read/validated before creating output.

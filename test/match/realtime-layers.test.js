@@ -60,7 +60,9 @@ test('engine: cumulative gains cross the DTO boundary without snapshots or watch
   t.after(() => engine.dispose());
   const out = engine.advance(6);
   assert.equal(out.done, false);
-  assert.deepEqual(out.frames, []);
+  // An unwatched live field still carries its one-off opening panel (cached for a later watcher's entry), but no
+  // periodic snapshot/meta: the gains below cross on out.fields[].layerGains, not on a frame.
+  assert.ok(out.frames.every((f) => f.startMeta && !f.snapshot && !f.meta), 'only the opening panel crosses, no unwatched snapshots');
   const live = engine.fields[0].battle._perPlayer[ps.playerId].layerGains;
   assert.ok(live.kazimierzShip > 0);
   assert.deepEqual(out.fields[0].layerGains, { [ps.playerId]: live });

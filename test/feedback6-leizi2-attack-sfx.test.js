@@ -25,6 +25,10 @@ import { pickModeAttacks, skillModeLetter, SLOT_MODE_LETTER } from '../tools/ass
 const P = (f) => `player/${f.startsWith('p_imp') ? 'p_imp' : 'p_atk'}/${f}.mp3`;
 const LEIZI2 = 'char_1043_leizi2';
 const manifest = JSON.parse(readFileSync(new URL('../data/assets.json', import.meta.url), 'utf8'));
+// The committed manifest is the weishucdn one: every asset URL carries a cache-busting `?v=` (a deliberate fork
+// feature). The mode convention is about the FILE NAME, not the URL, so the manifest URLs are compared / read bare.
+const bare = (u) => String(u).replace(/\?[^]*$/, '');
+const bareMap = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, bare(v)]));
 
 /** 司霆惊蛰's own banks, exactly as excel/audio_data.json lists them. */
 const LEIZI2_BANKS = new Map([
@@ -77,18 +81,18 @@ test('skillModeLetter / SLOT_MODE_LETTER: 技能1 / 2 / 3 = _d / _h / _s (+ digi
 test('the committed manifest carries her three mode attacks under the skill indexes', () => {
   const u = manifest.audio.sfx.units[LEIZI2];
   assert.equal(u.attack, undefined, 'she has no normal-mode attack bank — that was the silent attack');
-  assert.deepEqual(u.attacks, {
+  assert.deepEqual(bareMap(u.attacks), {
     0: '/assets/audio/sfx/player/p_atk/p_atk_lzxqlkl_d1.mp3',
     1: '/assets/audio/sfx/player/p_atk/p_atk_lzxqlkl_h2.mp3',
     2: '/assets/audio/sfx/player/p_atk/p_atk_lzxqlkl_s.mp3',
   });
   // her activation sounds (the other half of the chain) name the same modes: _d / _h / _s for 技能1 / 2 / 3
-  assert.deepEqual(u.skills, {
+  assert.deepEqual(bareMap(u.skills), {
     0: '/assets/audio/sfx/player/p_skill/p_skill_lzxqlkl_d.mp3',
     1: '/assets/audio/sfx/player/p_skill/p_skill_lzxqlkl_h.mp3',
     2: '/assets/audio/sfx/player/p_skill/p_skill_lzxqlkl_s.mp3',
   });
-  assert.equal(u.hit, '/assets/audio/sfx/player/p_imp/p_imp_lzxqlkl_n.mp3', 'her normal impact is untouched');
+  assert.equal(bare(u.hit), '/assets/audio/sfx/player/p_imp/p_imp_lzxqlkl_n.mp3', 'her normal impact is untouched');
 });
 
 test('every manifest unit with both tables agrees with the mode convention (d / h / s = 技能1 / 2 / 3)', () => {
@@ -98,7 +102,7 @@ test('every manifest unit with both tables agrees with the mode convention (d / 
     if (!u?.attacks || !u?.skills) continue;
     both++;
     for (const [i, url] of Object.entries(u.attacks)) {
-      const a = skillModeLetter(url);
+      const a = skillModeLetter(bare(url));
       assert.ok(a, `${id}: attacks[${i}] is a skill-mode file (${url})`);
       assert.equal(a, SLOT_MODE_LETTER[i], `${id}: attacks[${i}] is 技能${Number(i) + 1} (the _${a} mode)`);
     }
@@ -113,7 +117,7 @@ test('no operator takes a skill-mode file as its normal attack or impact (commun
     for (const kind of ['attack', 'hit']) {
       const url = u?.[kind];
       if (typeof url !== 'string') continue;
-      assert.equal(skillModeLetter(url), null, `${id}.${kind} = ${url} is a skill mode's file`);
+      assert.equal(skillModeLetter(bare(url)), null, `${id}.${kind} = ${url} is a skill mode's file`);
     }
   }
 });

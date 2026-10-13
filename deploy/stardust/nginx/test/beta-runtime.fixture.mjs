@@ -2,11 +2,16 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { WebSocketServer } from '/app/node_modules/ws/wrapper.mjs';
 import { createGate, makeSecrets, signToken, SESSION_TTL } from '../../auth/server.mjs';
 
+// `node --test` runs every file under a test/ directory. This file is the isolated Node24 container entrypoint
+// fixture (it imports the container-only /app/node_modules/ws and starts servers), not a test: when the test
+// runner discovers it there is nothing to run and the container-only import must not be attempted. The real
+// container run sets FIXTURE_DIR and is unaffected (the runner sets NODE_TEST_CONTEXT, the container does not).
+if (!process.env.NODE_TEST_CONTEXT) {
 const dir = process.env.FIXTURE_DIR;
 if (!dir || process.versions.node.split('.')[0] !== '24') throw new Error('Node24 isolated fixture required');
+const { WebSocketServer } = await import('/app/node_modules/ws/wrapper.mjs');
 const ORIGIN = 'https://ark-proto-beta.stardust.matce.cn';
 const nodeRoot = path.join(dir, 'node-app');
 const observations = [];
@@ -79,3 +84,4 @@ async function stop() {
 }
 process.once('SIGTERM', stop); process.once('SIGINT', stop);
 console.log('Node24 Beta bounded fixture ready; candidate auth is read-only working tree, not image source.');
+}

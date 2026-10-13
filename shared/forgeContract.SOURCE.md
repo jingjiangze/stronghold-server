@@ -10,8 +10,8 @@ have (`./support.js`, `./kitImports.js`, …) and therefore cannot be copied who
 - Repository: `https://github.com/jingjiangze/Stronghold-Protocol-Forge-mirror-archive.git` (local checkout:
   `../Stronghold-Protocol-Forge`)
 - File: `shared/workshop.js`
-- Commit extracted from: `878d70638f0febefee310de3796122bc93d01b8c`
-  (`fix(mod-xie): 标题页入口不再压住「开始」按钮（真浏览器检查发现）`, 2026-10-10)
+- Commit extracted from: `df567fe07c9257b0ef3ff1fde4522396ea8a2fcf`
+  (`feat(mod-layer): 包通道进对局 —— server.modules[].channels + Match.handlePackMsg（DESIGN §28.23）`, 2026-10-10)
 - Command: `git -C ../Stronghold-Protocol-Forge rev-parse HEAD`
 
 ## Extracted constants (line in `shared/workshop.js` at that commit)
@@ -33,22 +33,26 @@ have (`./support.js`, `./kitImports.js`, …) and therefore cannot be copied who
 | `CLIENT_PANEL_REPEATABLE` | 266 |
 | `CLIENT_WRAP_COMPONENTS` | 279 |
 | `CLIENT_WRAP_MODES` | 283 |
+| `PACK_CHANNEL_RE` | 294 |
 | `CLIENT_PANEL_DATA_TABLES` | 309 |
 | `CLIENT_REQUIRES` | 314 |
 | `SERVER_MODULE_USES` | 384 |
-| `META_KEY_CLASSES` | 400 |
-| `ROUTE_CACHE_POLICIES` | 414 |
-| `SERVER_MEMBERS` | 759 |
-| `SKIN_FIELDS` | 1130 |
-| `SKIN_ID_RE` | 1133 |
-| `ART_TABLES` | 1135 |
-| `ART_SPINE_URLS` | 1155 |
-| `ART_SPINE_LISTS` | 1156 |
-| `ART_SPINE_PASSTHROUGH` | 1157 |
-| `OVERRIDE_REPLACE_KEYS` | 2134 |
-| `OVERRIDE_KEYED_LISTS` | 2163 |
+| `SERVER_MODULE_FIELDS` | 386 |
+| `MAX_SERVER_MODULES` | 388 |
+| `MAX_SERVER_MODULE_CHANNELS` | 394 |
+| `META_KEY_CLASSES` | 406 |
+| `ROUTE_CACHE_POLICIES` | 420 |
+| `SERVER_MEMBERS` | 791 |
+| `SKIN_FIELDS` | 1162 |
+| `SKIN_ID_RE` | 1165 |
+| `ART_TABLES` | 1167 |
+| `ART_SPINE_URLS` | 1187 |
+| `ART_SPINE_LISTS` | 1188 |
+| `ART_SPINE_PASSTHROUGH` | 1189 |
+| `OVERRIDE_REPLACE_KEYS` | 2182 |
+| `OVERRIDE_KEYED_LISTS` | 2211 |
 
-`UNIT_REQUIRED_FIELDS` (L49) is deliberately NOT vendored: it holds predicate functions, not data. `byPackId` (L2077)
+`UNIT_REQUIRED_FIELDS` (L49) is deliberately NOT vendored: it holds predicate functions, not data. `byPackId` (L2125)
 is a comparator function, not a constant.
 
 ## How to re-extract (when the drift test is red)

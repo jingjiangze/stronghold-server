@@ -28,6 +28,9 @@ import { pickModeAttacks, pickModeHits, skillModeLetter, SLOT_MODE_LETTER } from
 const P = (f) => `player/${f.startsWith('p_imp') ? 'p_imp' : 'p_atk'}/${f}.mp3`;
 const CHEN3 = 'char_1050_chen3';
 const manifest = JSON.parse(readFileSync(new URL('../data/assets.json', import.meta.url), 'utf8'));
+// The committed manifest is the weishucdn one: every asset URL carries a cache-busting `?v=` (a deliberate fork
+// feature). The mode convention is about the FILE NAME, not the URL, so the manifest URLs are compared / read bare.
+const bare = (u) => String(u).replace(/\?[^]*$/, '');
 
 /** 赤刃明霄陈's own banks, exactly as excel/audio_data.json lists them. */
 const CHEN3_BANKS = new Map([
@@ -65,12 +68,12 @@ test('pickModeHits: only ON_ABILITY_HIT banks, and a mode without one keeps the 
 
 test('the committed manifest: her S3 swing and impact are the `_s` pair, her normal pair is untouched', () => {
   const u = manifest.audio.sfx.units[CHEN3];
-  assert.equal(u.attack, '/assets/audio/sfx/player/p_atk/p_atk_hljdswd_n.mp3', '普通攻击的挥砍');
-  assert.equal(u.hit, '/assets/audio/sfx/player/p_imp/p_imp_hljdswd_n.mp3', '普通攻击的命中');
-  assert.equal(u.attacks?.['2'], '/assets/audio/sfx/player/p_atk/p_atk_hljdswd_s.mp3', 'S3 的挥砍');
-  assert.equal(u.hits?.['2'], '/assets/audio/sfx/player/p_imp/p_imp_hljdswd_s.mp3', 'S3 的斩击（命中）');
-  assert.equal(u.attacks?.['0'], '/assets/audio/sfx/player/p_atk/p_atk_hljdfswd_d.mp3', '技能1 的挥砍');
-  assert.equal(u.hits?.['0'], '/assets/audio/sfx/player/p_imp/p_imp_hljdrfswd_d.mp3', '技能1 的命中');
+  assert.equal(bare(u.attack), '/assets/audio/sfx/player/p_atk/p_atk_hljdswd_n.mp3', '普通攻击的挥砍');
+  assert.equal(bare(u.hit), '/assets/audio/sfx/player/p_imp/p_imp_hljdswd_n.mp3', '普通攻击的命中');
+  assert.equal(bare(u.attacks?.['2']), '/assets/audio/sfx/player/p_atk/p_atk_hljdswd_s.mp3', 'S3 的挥砍');
+  assert.equal(bare(u.hits?.['2']), '/assets/audio/sfx/player/p_imp/p_imp_hljdswd_s.mp3', 'S3 的斩击（命中）');
+  assert.equal(bare(u.attacks?.['0']), '/assets/audio/sfx/player/p_atk/p_atk_hljdfswd_d.mp3', '技能1 的挥砍');
+  assert.equal(bare(u.hits?.['0']), '/assets/audio/sfx/player/p_imp/p_imp_hljdrfswd_d.mp3', '技能1 的命中');
 });
 
 test('every manifest unit with a hits table agrees with the mode convention (d / h / s = 技能1 / 2 / 3)', () => {
@@ -79,7 +82,7 @@ test('every manifest unit with a hits table agrees with the mode convention (d /
   for (const [id, u] of Object.entries(units)) {
     for (const [i, url] of Object.entries(u?.hits || {})) {
       n++;
-      const letter = skillModeLetter(url);
+      const letter = skillModeLetter(bare(url));
       assert.ok(letter, `${id}: hits[${i}] is a skill-mode file (${url})`);
       assert.equal(letter, SLOT_MODE_LETTER[i], `${id}: hits[${i}] is 技能${Number(i) + 1} (the _${letter} mode)`);
     }
@@ -96,7 +99,7 @@ test('no operator takes a skill-mode file as its normal attack or impact (commun
       const url = u?.[kind];
       if (typeof url !== 'string') continue;
       n++;
-      assert.equal(skillModeLetter(url), null, `${id}.${kind} = ${url} is a skill mode's file`);
+      assert.equal(skillModeLetter(bare(url)), null, `${id}.${kind} = ${url} is a skill mode's file`);
     }
   }
   assert.ok(n > 300, `${n} normal attack / impact entries checked`);

@@ -19,6 +19,7 @@
 
 import crypto from 'node:crypto';
 import { noopLog } from './config.js';
+import { t } from '../../shared/i18n.js';
 
 /** The provider's discovery document (ADR: fetched, cached; the literal fallback is the measured document). */
 const DEFAULT_PROVIDER = 'https://www.modelscope.cn';
@@ -191,16 +192,16 @@ export function createOauthRoutes({ config, log = noopLog, fetchImpl = globalThi
 
     try {
       const profile = await complete(req, q);
-      const who = profile ? (profile.name || profile.nickname || profile.sub || '(无名)') : '(令牌已换取，但 /userinfo 没有返回)';
+      const who = profile ? (profile.name || profile.nickname || profile.sub || t('(无名)')) : t('(令牌已换取，但 /userinfo 没有返回)');
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
         'Set-Cookie': `${STATE_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
       });
-      res.end(page('已通过魔搭登录', `<p>身份：<b>${esc(who)}</b></p><p style="opacity:.7">登录已经打通到 OAuth 换 token + /userinfo。把身份接到游戏会话上还没有做（那是产品决定）。</p>`));
+      res.end(page(t('已通过魔搭登录'), t('<p>身份：<b>{0}</b></p><p style="opacity:.7">登录已经打通到 OAuth 换 token + /userinfo。把身份接到游戏会话上还没有做（那是产品决定）。</p>', { 0: esc(who) })));
     } catch (e) {
       log.warn?.(`[oauth] callback failed: ${e?.message || e}`);
       res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(page('登录失败', `<p>${esc(e?.message || e)}</p>`));
+      res.end(page(t('登录失败'), `<p>${esc(e?.message || e)}</p>`));
     }
     return true;
   };

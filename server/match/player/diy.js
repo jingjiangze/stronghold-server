@@ -58,13 +58,15 @@ export class DiyStock {
 
   has(baseId) { return this.entries.has(baseId); }
   cap(baseId) { return this.entries.get(baseId)?.cap ?? 0; }
-  left(baseId) { return this.entries.get(baseId)?.left ?? 0; }
+  left(baseId) { return Math.max(0, this.entries.get(baseId)?.left ?? 0); }
 
-  /** Take up to n copies; returns the number taken (0 for a base id without stock). */
-  take(baseId, n = 1) {
+  /** Take up to n copies; returns the number taken (0 for a base id without stock). `overdraw` mirrors the shared
+   *  pool (pool.js SharedPool.take): an operator card already shown in the shop or a reward can still be taken after
+   *  exhaustion and overdraws (a negative raw left, the debt — GitHub #498). */
+  take(baseId, n = 1, { overdraw = false } = {}) {
     const e = this.entries.get(baseId);
     if (!e || !(n > 0)) return 0;
-    const k = Math.min(e.left, Math.floor(n));
+    const k = overdraw ? Math.floor(n) : Math.min(Math.max(0, e.left), Math.floor(n));
     e.left -= k;
     return k;
   }

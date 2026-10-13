@@ -21,6 +21,9 @@ const manifest = JSON.parse(readFileSync(path.join(ROOT, 'data', 'assets.json'),
 const asked = (urls, raw) => urls.includes(mediaUrl(raw)) || urls.includes(raw);
 /** 这个 manifest 地址被请求了几次。 */
 const askedCount = (urls, raw) => urls.filter((u) => u === mediaUrl(raw) || u === raw).length;
+// 清单（上游 weishucdn v0.2.4）给每条地址都烘进了一个缓存破坏参数 `?v=v0.2.4-…`（这是分叉的既定特性，不从清单里剥掉）。
+// 断言某个文件「就是它」时按去掉 query 的路径比，才既锁死资源路径、又不被那串版本号误伤。
+const bare = (u) => String(u).split('?')[0];
 
 describe('bgm selection', () => {
   test('route and phase → key', () => {
@@ -329,8 +332,8 @@ describe('operator battle voice', () => {
     assert.deepEqual(voiceLine({ voice: audioM.voice }, 'char_a', 'place', 'jp'), { url: '/a/voice/cn/char_a/cn_023.mp3', fallback: null }, 'a manifest without voiceJp');
     // the real manifest: every operator with a Chinese line has its Japanese twin
     const real = voiceLine(manifest.audio, 'char_263_skadi', 'select', 'jp', () => 0);
-    assert.match(real.url, /^\/assets\/audio\/voice\/jp\/char_263_skadi\/cn_021\.mp3$/);
-    assert.equal(real.fallback, '/assets/audio/voice/cn/char_263_skadi/cn_021.mp3');
+    assert.equal(bare(real.url), '/assets/audio/voice/jp/char_263_skadi/cn_021.mp3');
+    assert.equal(bare(real.fallback), '/assets/audio/voice/cn/char_263_skadi/cn_021.mp3');
 
     // the manager: the setting picks the tree; a JP file the host lacks (404) plays the Chinese one, holding the channel
     const fw = fakeWindow();
@@ -943,7 +946,7 @@ describe('impact sounds (user playtest #4 item 6)', () => {
     try {
       // 她的技能形态（_s）文件：这条断言要盯住它们一个都没响，所以先确认音效表里真的有 _s ——
       // 否则集合为空，断言会永远成立、形同虚设。
-      const ownSkill = Object.values(manifest.audio.sfx.units[AGOAT2]).filter((x) => typeof x === 'string' && /_s\.mp3$/.test(x));
+      const ownSkill = Object.values(manifest.audio.sfx.units[AGOAT2]).filter((x) => typeof x === 'string' && /_s\.mp3(?:\?|$)/.test(x));
       assert.ok(ownSkill.length > 0, '前提：她的音效表里确实有 _s（技能形态）文件');
       a.handleBattleEvents([['atk', 1, 2, 'orb'], ['heal', 2, 300], ['dmg', 2, 120, 'phys'], ['dmg', 2, 80, 'arts']]);
       await settle();
@@ -1019,7 +1022,7 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
   test('司霆惊蛰 S3: her attack rings the S3 mode\'s file while the skill runs, and only then', async () => {
     const u = manifest.audio.sfx.units[LEIZI2];
     assert.equal(u.attack, undefined, '前提：她没有普通形态的攻击音（这正是那次「没有音效」）');
-    assert.ok(u.attacks['2'] && /_s\.mp3$/.test(u.attacks['2']), '前提：清单带 S3 形态的攻击音');
+    assert.ok(u.attacks['2'] && /_s\.mp3(?:\?|$)/.test(u.attacks['2']), '前提：清单带 S3 形态的攻击音');
     const { a, urls, settle, restore } = await rig([
       { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2 }, { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
     ]);
@@ -1085,7 +1088,7 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
 
   test('赤刃明霄陈 S3: 挥砍与斩击都用 S3 的 `_s` 对，技能外回到普通 `_n` 对', async () => {
     const u = manifest.audio.sfx.units[CHEN3];
-    assert.ok(u.attacks['2'] && u.hits['2'] && /_s\.mp3$/.test(u.attacks['2']) && /_s\.mp3$/.test(u.hits['2']), '前提：清单带 S3 的挥砍与斩击');
+    assert.ok(u.attacks['2'] && u.hits['2'] && /_s\.mp3(?:\?|$)/.test(u.attacks['2']) && /_s\.mp3(?:\?|$)/.test(u.hits['2']), '前提：清单带 S3 的挥砍与斩击');
     const { a, urls, settle, restore } = await rig([
       { id: 1, side: 'ally', kind: 'chess', spine: CHEN3, skillIndex: 2 }, { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
     ]);
@@ -1157,7 +1160,7 @@ describe('漏怪 sound', () => {
     try {
       const url = manifest.audio.sfx.battle.leak;
       assert.ok(url, '前提：清单里有 sfx.battle.leak');
-      assert.match(url, /b_ui_alarmenter\.mp3$/, '就是原版关卡里怪进蓝门那一声');
+      assert.match(url, /b_ui_alarmenter\.mp3(?:\?|$)/, '就是原版关卡里怪进蓝门那一声');
       a.handleBattleEvents([['leak', 7]]);
       await settle();
       assert.ok(asked(urls, url), `漏怪 plays ${url}`);

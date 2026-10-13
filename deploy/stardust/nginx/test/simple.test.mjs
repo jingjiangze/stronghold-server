@@ -24,6 +24,9 @@ const binary = process.env.NGINX_BIN;
 const enabled = process.env.SIMPLE_NGINX_SMOKE === '1' && !!binary;
 const lua = process.env.NGINX_HAS_LUA === '1';
 const presenceBlock = /    location = \/_server\/presence \{\n        content_by_lua_block \{[\s\S]*?\n        \}\n    \}/;
+// The vhost templates are LF in the repository (.gitattributes: `*.conf text eol=lf`); a stale Windows
+// checkout may still hold CRLF, so normalise before the line-based expectations below.
+const readConfig = async name => (await fs.readFile(path.join(configDir, name), 'utf8')).replace(/\r\n/g, '\n');
 async function freePort() {
   const server = net.createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port; await new Promise(resolve => server.close(resolve)); return port;
@@ -40,7 +43,7 @@ async function stopChild(child) {
 }
 
 test('simple configuration has only three direct targets and exact legacy compatibility', async () => {
-  const text = await fs.readFile(path.join(configDir, 'ark-proto.conf'), 'utf8');
+  const text = await readConfig('ark-proto.conf');
   assert.deepEqual([...text.matchAll(/server 127\.0\.0\.1:(\d+);/g)].map(match => Number(match[1])).sort(), [3120, 3130, 3141]);
   assert.match(text, /upstream ark_proto_game_backend/);
   assert.doesNotMatch(text, /gateway|rolling|3110|3111|3190|\[A-Za-z0-9\]/i);
@@ -48,7 +51,7 @@ test('simple configuration has only three direct targets and exact legacy compat
   assert.match(text, /location = \/vendor\/hooks\.module\.js \{[\s\S]*?proxy_pass http:\/\/ark_proto_game_backend;/);
   assert.match(text, /location \/_release\/ \{ return 404; \}/);
   assert.match(text, presenceBlock);
-  const entry = await fs.readFile(path.join(configDir, 'entry-location.conf'), 'utf8');
+  const entry = await readConfig('entry-location.conf');
   assert.match(entry, /proxy_pass http:\/\/ark_proto_game_backend/);
   assert.doesNotMatch(entry, /auth_request off/);
 });
@@ -57,7 +60,7 @@ for (const [profile, name, upstream, statusPath] of [
   ['formal', 'ark-proto.conf', 'ark_proto_game_backend', '/_ark_single_status'],
   ['beta', 'ark-proto-beta.conf', 'ark_beta_game_backend', '/_ark_beta_status'],
 ]) test(profile + ' exact anonymous health uses only the existing HTTP target without changing native diagnosis', async () => {
-  const text = await fs.readFile(path.join(configDir, name), 'utf8');
+  const text = await readConfig(name);
   const start = text.indexOf('    location = /healthz {');
   assert.ok(start >= 0);
   const route = text.slice(start, text.indexOf('\n    }', start) + 6);
@@ -158,7 +161,7 @@ for (const profile of ['formal', 'beta']) test('REAL ' + profile + ' template TL
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=health-local.test',
     '-keyout', path.join(dir, 'key.pem'), '-out', path.join(dir, 'cert.pem')], { stdio: 'ignore', timeout: 10000 });
   await fs.writeFile(path.join(dir, 'localcode-locations.conf'), '');
-  let text = await fs.readFile(path.join(configDir, beta ? 'ark-proto-beta.conf' : 'ark-proto.conf'), 'utf8');
+  let text = await readConfig(beta ? 'ark-proto-beta.conf' : 'ark-proto.conf');
   text = text.replace(beta ? '10.253.77.2:3220' : '127.0.0.1:3120', '127.0.0.1:' + backend.address().port)
     .replace(beta ? '127.0.0.1:3241' : '127.0.0.1:3141', '127.0.0.1:' + auth.address().port)
     .replace(beta ? '127.0.0.1:3230' : '127.0.0.1:3130', '127.0.0.1:' + assets.address().port)

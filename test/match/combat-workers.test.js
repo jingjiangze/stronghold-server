@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { startServer, parseCombatWorkers, parseTrialWorkers } from '../../server/index.js';
 import { Lobby } from '../../server/lobby.js';
 import { NET_DEFAULTS } from '../../server/net.js';
+import { isCompressibleType } from '../../server/wsCompression.js';
 import { Match } from '../../server/match/Match.js';
 import { FieldRunner, emptyPerPlayer } from '../../server/match/fields.js';
 import { VirtualScheduler } from '../../server/match/scheduler.js';
@@ -992,7 +993,7 @@ test('workers: encoded transport preserves room/seat admission, connection and b
   for (const [type, wire] of Object.entries(wires)) {
     assert.equal(send(type), true);
     assert.equal(sent.at(-1), wire, 'the original wire string is passed unchanged');
-    assert.equal(sendOptions.at(-1).compress, type !== 'b.damage', 'only allowlisted encoded battle types opt into compression');
+    assert.equal(sendOptions.at(-1).compress, isCompressibleType(type), 'only allowlisted encoded battle types opt into compression');
   }
   const accepted = sent.length;
   assert.equal(send('b.snap', 'outsider'), false);

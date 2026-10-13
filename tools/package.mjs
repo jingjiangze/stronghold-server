@@ -101,6 +101,11 @@ export const RUNTIME_DIRS = ['server/', 'shared/', 'data/', 'public/', 'packs/']
 export const STARDUST_NAME_RUNTIME = ['name-policy.mjs', 'name-dictionary.mjs', 'name-sensitive-dictionary.mjs',
   'name-filter-vendor.mjs', 'name-filter-node.mjs', 'NAME-DICTIONARY-LICENSE.txt', 'NAME-FILTER-LICENSE.txt',
   'NAME-CATEGORIES-LICENSE.txt', 'NAME-POLITICAL-LICENSE.txt'].map((f) => `deploy/stardust/auth/${f}`);
+/** Deploy runtime the shipped server itself imports: `server/http/asset-jump.js` imports the edge sidecar's shared
+ * decision functions, so that one file must ship (by exact path — never the ms-edge directory or its config). */
+export const STARDUST_EDGE_RUNTIME = ['deploy/stardust/ms-edge/edge-sidecar.mjs'];
+/** Every `deploy/` path the player package ships: exact files only, never a directory. */
+export const STARDUST_RUNTIME = [...STARDUST_NAME_RUNTIME, ...STARDUST_EDGE_RUNTIME];
 /** Written into the stage, never taken from the checkout: the pack index of the shipped packs. */
 export const GENERATED_PACK_INDEX = 'packs/index.json';
 /** Whether shipped files include a content pack (then the stage gets GENERATED_PACK_INDEX). @param {string[]} files */
@@ -151,7 +156,7 @@ export function isRefused(rel) {
   const base = parts[parts.length - 1];
   if (base === '.env' || base.startsWith('.env.')) return true;
   if (parts.some((s) => s.startsWith('.venv'))) return true;
-  if ((p === 'deploy' || p.startsWith('deploy/')) && !STARDUST_NAME_RUNTIME.includes(p)) return true;
+  if ((p === 'deploy' || p.startsWith('deploy/')) && !STARDUST_RUNTIME.includes(p)) return true;
   return REFUSE.some((r) => p === r || p.startsWith(`${r}/`));
 }
 
@@ -171,7 +176,7 @@ export function isPlayerFile(rel) {
   if (NOT_TRACKED_SHIP.some((d) => p.startsWith(d))) return false;
   if (RUNTIME_DIRS.some((d) => p.startsWith(d)) || PLAYER_TOOL_DIRS.some((d) => p.startsWith(d))) return true;
   return ROOT_FILES.includes(p) || PLAYER_DOCS.includes(p) || RUNTIME_RESEARCH.includes(p) || PLAYER_SCRIPTS.includes(p) || PLAYER_TOOLS.includes(p)
-    || STARDUST_NAME_RUNTIME.includes(p);
+    || STARDUST_RUNTIME.includes(p);
 }
 
 /**

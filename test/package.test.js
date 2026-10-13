@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  FOLDER, REFUSE, RUNTIME_RESEARCH, STARDUST_NAME_RUNTIME, build, entryProblems, isRefused, listTree,
+  FOLDER, REFUSE, RUNTIME_RESEARCH, STARDUST_NAME_RUNTIME, STARDUST_RUNTIME, build, entryProblems, isRefused, listTree,
   packageOutIsUnsafe, plan, playerPackageJson, rewritePlayerDoc, resolveSpecifier, scanFiles, selectTracked,
 } from '../tools/package.mjs';
 
@@ -38,6 +38,9 @@ const ENV = { SP_PACKAGE_SCAN_USER: '0', SP_PACKAGE_SCAN_NAMES: 'plantedname' };
 const STARDUST_MODERATION = ['name-policy.mjs', 'name-dictionary.mjs', 'name-sensitive-dictionary.mjs',
   'name-filter-vendor.mjs', 'name-filter-node.mjs', 'NAME-DICTIONARY-LICENSE.txt', 'NAME-FILTER-LICENSE.txt',
   'NAME-CATEGORIES-LICENSE.txt', 'NAME-POLITICAL-LICENSE.txt'].map((f) => `deploy/stardust/auth/${f}`);
+// Every deploy/ path the package ships: the moderation chain plus the one deploy runtime the server itself imports
+// (server/http/asset-jump.js → the edge sidecar's shared decision functions).
+const STARDUST_DEPLOY_SHIP = [...STARDUST_MODERATION, 'deploy/stardust/ms-edge/edge-sidecar.mjs'];
 const EXCLUDED_DEPLOY = ['deploy/unknown.mjs', 'deploy/stardust/auth/server.mjs', 'deploy/stardust/auth/config.json',
   'deploy/stardust/auth/secrets.json', 'deploy/stardust/auth/.env', 'deploy/stardust/auth/.env.production',
   'deploy/stardust/auth/keys/signing.pem', 'deploy/stardust/secrets/verifier.key', 'deploy/stardust/auth/Dockerfile',
@@ -93,14 +96,16 @@ test('refusal list: 0.1.x\'s entries and what 0.2.0 leaves out, at the path or u
   for (const p of ['server/index.js', 'docs/research/03-operators.json', 'testing.md', 'public/js/review.js']) assert.ok(!isRefused(p), p);
 });
 
-test('Stardust selection: only the exact offline moderation runtime and licenses, never other deploy paths or secrets', () => {
+test('Stardust selection: only the exact offline moderation runtime and licenses plus the imported edge sidecar, never other deploy paths or secrets', () => {
   assert.deepEqual(STARDUST_NAME_RUNTIME, STARDUST_MODERATION);
-  const refused = [...EXCLUDED_DEPLOY, 'deploy', 'deploy/stardust', 'deploy/stardust/auth',
-    ...STARDUST_MODERATION.flatMap((f) => [`${f}.bak`, `${f}/extra`, f.replace('/auth/', '/other/')])];
-  const { keep, drop } = selectTracked([...STARDUST_MODERATION, ...refused]);
-  assert.deepEqual(keep, [...STARDUST_MODERATION].sort());
+  assert.deepEqual(STARDUST_RUNTIME, STARDUST_DEPLOY_SHIP);
+  const refused = [...EXCLUDED_DEPLOY, 'deploy', 'deploy/stardust', 'deploy/stardust/auth', 'deploy/stardust/ms-edge',
+    ...STARDUST_MODERATION.flatMap((f) => [`${f}.bak`, `${f}/extra`, f.replace('/auth/', '/other/')]),
+    'deploy/stardust/ms-edge/nginx.conf', 'deploy/stardust/ms-edge/edge-sidecar.mjs.bak', 'deploy/stardust/ms-edge/test/x.mjs'];
+  const { keep, drop } = selectTracked([...STARDUST_DEPLOY_SHIP, ...refused]);
+  assert.deepEqual(keep, [...STARDUST_DEPLOY_SHIP].sort());
   assert.deepEqual(drop, refused.sort());
-  for (const f of STARDUST_MODERATION) {
+  for (const f of STARDUST_DEPLOY_SHIP) {
     assert.equal(isRefused(f), false, f);
     assert.equal(isRefused(f.replaceAll('/', '\\')), false, f);
   }
@@ -108,14 +113,14 @@ test('Stardust selection: only the exact offline moderation runtime and licenses
     assert.equal(isRefused(f), true, f);
     assert.equal(isRefused(f.replaceAll('/', '\\')), true, f);
   }
-  assert.deepEqual(selectTracked(STARDUST_MODERATION.map((f) => f.replaceAll('/', '\\'))).keep, keep);
+  assert.deepEqual(selectTracked(STARDUST_DEPLOY_SHIP.map((f) => f.replaceAll('/', '\\'))).keep, keep);
 });
 
 test('the real tracked tree: runtime in, the rest out; every shipped import, npm entry point, research table and spawned tool ships', () => {
   const p = plan(ROOT, { lite: true, allowDirty: true, scan: false, measure: false });
   assert.deepEqual(p.problems, []);
   const got = new Set(p.files);
-  assert.deepEqual([...got].filter((f) => f.startsWith('deploy/')).sort(), [...STARDUST_MODERATION].sort());
+  assert.deepEqual([...got].filter((f) => f.startsWith('deploy/')).sort(), [...STARDUST_DEPLOY_SHIP].sort());
   for (const f of EXCLUDED_DEPLOY) assert.ok(!got.has(f), f);
   for (const f of ['server/index.js', 'tools/setup.mjs', 'tools/fetch-assets.mjs', 'scripts/start.sh', 'docs/PLAYING.md', 'docs/DEPLOY.md',
     'package-lock.json', 'NOTICE.md', ...RUNTIME_RESEARCH]) assert.ok(got.has(f), f);

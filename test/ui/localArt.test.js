@@ -13,6 +13,9 @@ import { EMOTES, EMOTE_CATALOG, emoteArtPath, emoteArtGroup, emoteInfo } from '.
 import { GUIDE_PAGES } from '../../tools/assets/plan.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+// data/assets.json bakes a cache-busting query (`?v=v0.2.4-…`) into every URL (a deliberate fork change); a URL read
+// back from the committed manifest is compared by path, tolerating that query.
+const bare = (u) => String(u).replace(/\?v=.*$/, '');
 
 const manifest = {
   version: 1,
@@ -136,10 +139,10 @@ describe('emotes and 玩法说明 pages: local art first, then the mirror copy (
     await reload(data);
     const { emoteArtUrl } = await import('../../public/js/ui/emotes.js');
     const { guidePages } = await import('../../public/js/ui/guide.js');
-    for (const e of EMOTE_CATALOG) assert.equal(emoteArtUrl(e.id), `/assets/ui/emoticon/${e.dir}/${e.picId}.png`, e.id);
+    for (const e of EMOTE_CATALOG) assert.equal(bare(emoteArtUrl(e.id)), `/assets/ui/emoticon/${e.dir}/${e.picId}.png`, e.id);
     const pages = guidePages();
     assert.deepEqual(pages.map((p) => p.key), GUIDE_PAGES);
-    assert.deepEqual(pages.map((p) => p.url), GUIDE_PAGES.map((k) => `/assets/ui/guide/${k}.png`));
+    assert.deepEqual(pages.map((p) => bare(p.url)), GUIDE_PAGES.map((k) => `/assets/ui/guide/${k}.png`));
     assert.ok(pages.every((p) => p.urls.length === 1));
   });
 

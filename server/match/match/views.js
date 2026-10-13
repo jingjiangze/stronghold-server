@@ -288,7 +288,7 @@ export class MatchViews {
   /** UnitInfo of a player's board pieces on their (board) tiles — a prep scout's board, the boss partner's (bossMateView).
    *  `area: 'board'` (a bench unit says 'hand' / 'temp': prepFieldMeta). */
   _prepBoardUnits(ps) {
-    const units = [];
+    const units = this.prepMapChars(ps);
     // the player's own view of the data (0.2.0 自选编队: its slotted DIY slots are its operators — player/diy.js)
     const gd = ps.gd || this.gd;
     for (const { r, c, piece } of boardOrder(ps.board)) {

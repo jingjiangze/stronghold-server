@@ -20,7 +20,8 @@ const REAL = { skip: !hasGeneratedData() };
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const manifest = JSON.parse(readFileSync(path.join(ROOT, 'data', 'assets.json'), 'utf8'));
 const SFX = manifest.audio.sfx;
-const TOKEN_DEAD = SFX.battle.charDie.replace(/b_char_dead\.mp3$/, 'b_char_tokendead.mp3');
+// the manifest URL carries a cache-busting `?v=…`: swap the extension and keep the query
+const TOKEN_DEAD = SFX.battle.charDie.replace(/b_char_dead\.mp3(\?[^?]*)?$/, 'b_char_tokendead.mp3$1');
 const ds = getDefaultSource();
 const dummy = (o = {}) => enemyRec({ key: o.key ?? 'enemy_dummy', hp: 1e7, speed: 0, def: 0, res: 0, ...o });
 const walker = (o = {}) => enemyRec({ key: o.key ?? 'enemy_walker', hp: 1e6, speed: 1, def: 0, atk: 0, ...o });

@@ -77,7 +77,7 @@ test('data/assets.json: voiceJp gives every voiced operator the JP twin of each 
   const walk = (x) => { if (typeof x === 'string') lines.push(x); else if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') Object.values(x).forEach(walk); };
   walk(jp);
   assert.equal(lines.length, 2688);
-  for (const u of lines) assert.match(u, /^\/assets\/audio\/voice\/jp\/char_[^/]+\/cn_\d+\.mp3$/);
+  for (const u of lines) assert.match(u, /^\/assets\/audio\/voice\/jp\/char_[^/]+\/cn_\d+\.mp3(\?[^\s]*)?$/);
   // no voice: the 17 stand-ins of data/backups.json (预备干员 / 原型干员), the mode's 盟约·辅助干员, every summon
   const backups = readJson('data/backups.json');
   const standIns = Object.entries(backups.units).filter(([, u]) => Array.isArray(u.standsIn) ? u.standsIn.length : u.standsIn).map(([id]) => id);
@@ -86,9 +86,9 @@ test('data/assets.json: voiceJp gives every voiced operator the JP twin of each 
     assert.equal(jp[id], undefined, `${id}: no JP line`);
     assert.equal(cn[id], undefined, `${id}: no line`);
   }
-  // the files themselves, where this checkout has downloaded the art
+  // the files themselves, where this checkout has downloaded the art (manifest URLs carry a cache-busting `?v=`)
   const dir = path.join(ROOT, 'public', 'assets', 'audio', 'voice', 'jp');
-  if (fs.existsSync(dir)) for (const u of lines) assert.ok(fs.statSync(path.join(ROOT, 'public', u)).size > 0, u);
+  if (fs.existsSync(dir)) for (const u of lines) assert.ok(fs.statSync(path.join(ROOT, 'public', u.replace(/\?[^]*$/, ''))).size > 0, u);
 });
 
 test('settings 语音语言: canonical Chinese/Japanese/English with Chinese default; the upstream row stays translated', () => {

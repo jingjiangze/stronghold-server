@@ -195,7 +195,8 @@ export function unitSoundClass(info) {
 function tokenDieUrl(manifest) {
   const b = manifest?.audio?.sfx?.battle;
   if (typeof b?.tokenDie === 'string') return b.tokenDie;
-  return typeof b?.charDie === 'string' && /b_char_dead\.mp3$/.test(b.charDie) ? b.charDie.replace(/b_char_dead\.mp3$/, 'b_char_tokendead.mp3') : null;
+  // the manifest URL may carry a cache-busting `?v=…`: match the extension with an optional query and keep it
+  return typeof b?.charDie === 'string' && /b_char_dead\.mp3(\?[^?]*)?$/.test(b.charDie) ? b.charDie.replace(/b_char_dead\.mp3(\?[^?]*)?$/, 'b_char_tokendead.mp3$1') : null;
 }
 
 /**
@@ -497,12 +498,17 @@ export class VoiceGate {
  *
  * A response that declares no type at all is not treated as wrong: absence of a header is not evidence of an HTML
  * page, and fetch stubs / minimal hosts legitimately omit it.
+ *
+ * A generic binary type is decodable too: `application/octet-stream` / `binary/octet-stream` is what a bucket /
+ * object store without a MIME map (and the R2 / CDN edge for an unknown extension) answers with, and Web Audio
+ * sniffs the container itself — so it is accepted (and must NOT trigger the raw-URL fallback). A type that merely
+ * *starts* like one (`application/octet-streamx`) is not: only the exact type, with an optional parameter list.
  * @param {{ ok?: boolean, headers?: { get?: (n: string) => string | null } }} res
  */
 function isAudioResponse(res) {
   if (!res || !res.ok) return false;
   const type = res.headers?.get?.('content-type');
-  return !type || /^\s*audio\//i.test(type);
+  return !type || /^\s*audio\//i.test(type) || /^\s*(?:application|binary)\/octet-stream\s*(?:;|$)/i.test(type);
 }
 export class AudioManager {
   /**
@@ -678,8 +684,16 @@ export class AudioManager {
    * @param {string} lang
    */
   setVoiceLang(lang, overrides = this.voiceOverrides) {
-    this.voiceLang = lang === 'jp' ? 'jp' : 'cn';
-    this.voiceOverrides = sanitizeVoiceOverrides(overrides);
+    const nextLang = lang === 'jp' ? 'jp' : 'cn';
+    const nextOverrides = sanitizeVoiceOverrides(overrides);
+    const changed = nextLang !== this.voiceLang
+      || Object.keys(nextOverrides).length !== Object.keys(this.voiceOverrides).length
+      || Object.keys(nextOverrides).some((id) => nextOverrides[id] !== this.voiceOverrides[id]);
+    this.voiceLang = nextLang;
+    this.voiceOverrides = nextOverrides;
+    // A changed dub abandons the line on air — and one still decoding: it was drawn from the tree just left, and its
+    // Chinese fallback must not take the channel the next line asks for. The same preference does not interrupt.
+    if (changed) this._stopVoice();
   }
 
   _applyVolumes() {
@@ -706,22 +720,38 @@ export class AudioManager {
     }
     const p = (async () => {
       try {
+        // Decode one fetched response; null when the fetch failed or Web Audio rejects the bytes (the caller then
+        // falls back to the next source / the Chinese line).
+        const decode = async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const ab = await res.arrayBuffer();
+          return await new Promise((resolve) => {
+            try {
+              const r = this.ctx.decodeAudioData(ab, resolve, () => resolve(null));
+              if (r && typeof r.then === 'function') r.then(resolve, () => resolve(null));
+            } catch { resolve(null); }
+          });
+        };
+        // Drop a response we will not use (404, or a 200 that is really the SPA's index.html) so its connection is
+        // not left hanging while the next source is tried.
+        const discard = async (res) => { try { await res.body?.cancel?.(); } catch { /* the fallback matters more */ } };
         // Extension-less URL first so download managers leave the BGM alone; a host without /media/ still works.
         const media = mediaUrl(url);
+        if (media === url) return await decode(await fetch(url));   // not an audio asset we serve: a single attempt
+        // /media/… → same-version OpenI (`?sp_source=openi`) → the raw manifest URL (a host with no /media/ route).
         let res = await fetch(media);
-        if (media !== url && !isAudioResponse(res)) {
-          // Drop the unusable response (404, or a 200 that is really index.html) before trying the original URL.
-          try { await res.body?.cancel?.(); } catch { /* the fallback request matters more than draining this one */ }
-          res = await fetch(url);
+        if (res.ok && isAudioResponse(res)) {
+          // /media/ answered audio: decode it. A decode failure retries the SAME audio through OpenI — the raw URL is
+          // NOT the fallback here (it is the download-manager URL the /media/ route exists to avoid).
+          const buf = await decode(res);
+          if (buf) return buf;
+          const openi = await fetch(`${media}?sp_source=openi`);
+          return openi.ok && isAudioResponse(openi) ? decode(openi) : null;
         }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const ab = await res.arrayBuffer();
-        return await new Promise((resolve) => {
-          try {
-            const r = this.ctx.decodeAudioData(ab, resolve, () => resolve(null));
-            if (r && typeof r.then === 'function') r.then(resolve, () => resolve(null));
-          } catch { resolve(null); }
-        });
+        await discard(res);
+        res = await fetch(`${media}?sp_source=openi`);
+        if (!(res.ok && isAudioResponse(res))) { await discard(res); res = await fetch(url); }
+        return await decode(res);
       } catch (err) {
         this._warn(url, err);
         return null;

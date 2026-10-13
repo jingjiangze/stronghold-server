@@ -96,7 +96,7 @@ export async function startServer(opts = {}) {
       // It closes over `network`, which exists by the time a hook can possibly be called.
       send: (conn, msg) => network?.reply(conn, msg),
     });
-    ({ registry, lobby, network } = createSessionStack({ ...opts, MatchClass: workshop.matchClassFor(opts.MatchClass ?? Match) }, {
+    ({ registry, lobby, network } = createSessionStack({ ...opts, snapshotHz, MatchClass: workshop.matchClassFor(opts.MatchClass ?? Match) }, {
       data, log, combatPool, trialPool,
       getLoadState: () => serverLoadState(healthMetrics?.snapshot?.()),
       getLoadDetails: () => publicLoadDetails(healthMetrics?.snapshot?.()),

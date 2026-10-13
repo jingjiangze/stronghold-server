@@ -340,7 +340,7 @@ describe('8: 特质 right under the detail card\'s header', () => {
     const blocks = ChessDetail({ chess: c, piece: null, editable: false, bonds: [], loadout: null });
     const gb = blocks.find((b) => b.key === 'garrison');
     const img = [...walk(gb.type(gb.props))].find((n) => hasClass(n, 'dgarrison__icon'));
-    assert.match(String(img.props.src), /garrisonTypeIcon\/s_icon_gold\.png$/);
+    assert.match(String(img.props.src), /garrisonTypeIcon\/s_icon_gold\.png(?:\?v=[\w.-]+)?$/, 'the path, tolerating the manifest\'s cache-busting query');
   });
 
   test('css: a compact gold-accented block; stats in a 4 × 2 grid so the skill stays close', () => {

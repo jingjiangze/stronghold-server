@@ -49,7 +49,9 @@ test('a duplicate draft card becomes unavailable when the preceding player exhau
 });
 test('measured operator capacities and exceptions: co-op doubles shared stock, never private DIY stock', () => {
   const solo = new GameData(DATA, 'mode_single_normal'), coop = new GameData(DATA, 'mode_multi_normal');
-  for (const [name, n] of [['普罗旺斯', 10], ['跃跃', 10], ['风丸', 8], ['蒂比', 12], ['哈洛德', 14], ['缪尔赛思', 5]]) {
+  // 缪尔赛思's pool is the fork's documented exception (4; docs/DATA.md:112, docs/META.md:578, test/data.test.js) —
+  // upstream's measured table has no entry for her, so without the override she falls back to the tier-6 default 5.
+  for (const [name, n] of [['普罗旺斯', 10], ['跃跃', 10], ['风丸', 8], ['蒂比', 12], ['哈洛德', 14], ['缪尔赛思', 4]]) {
     assert.equal(solo.poolCopies(byName(name)), n, name); assert.equal(coop.poolCopies(byName(name)), 2 * n, name);
   }
   assert.equal(coop.poolCopies('chess_char_6_diy1_a'), solo.poolCopies('chess_char_6_diy1_a'));

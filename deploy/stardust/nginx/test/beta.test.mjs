@@ -25,6 +25,9 @@ const DOCKER = '/usr/bin/docker';
 const PURPOSE = 'ark-beta-nginx-localtest';
 const enabled = process.env.BETA_NGINX_SMOKE === '1';
 const presenceBlock = /    location = \/_server\/presence \{\n        content_by_lua_block \{[\s\S]*?\n        \}\n    \}/;
+// The candidate vhost is LF in the repository (.gitattributes: `*.conf text eol=lf`); a stale Windows
+// checkout may still hold CRLF, so normalise before the line-based expectations below.
+const readConfig = async name => (await fs.readFile(path.join(configDir, name), 'utf8')).replace(/\r\n/g, '\n');
 const DummyBody = 'export const DummyBody = "edge-beta-local-test-only";\n';
 const FallbackBody = 'export const DummyBody = "node-beta-foo-test-only";\n';
 const fixtureRevision = 'b'.repeat(40); // Pure generator input; never claimed as a verified Git export.
@@ -46,7 +49,7 @@ async function stopChild(child) {
 
 // Mandatory even when the machine has no Nginx; executable smoke is separately opt-in.
 test('Beta candidate templates and exact private localcode generator remain isolated', async () => {
-  const text = await fs.readFile(path.join(configDir, 'ark-proto-beta.conf'), 'utf8');
+  const text = await readConfig('ark-proto-beta.conf');
   assert.deepEqual([...text.matchAll(/server ([\d.]+):(\d+);/g)].map(m => m[1] + ':' + m[2]),
     ['10.253.77.2:3220', '127.0.0.1:3241', '127.0.0.1:3230']);
   assert.match(text, presenceBlock);
@@ -124,7 +127,7 @@ test('REAL Beta isolated stock Nginx TLS, gate, localcode fallback and WS bounda
     const tlsPort = await freePort(), httpPort = await freePort();
     execFileSync('/usr/bin/openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
       '-subj', '/CN=beta-local.test', '-keyout', path.join(dir, 'key.pem'), '-out', path.join(dir, 'cert.pem')], { stdio: 'ignore', timeout: 10000 });
-    let text = await fs.readFile(path.join(configDir, 'ark-proto-beta.conf'), 'utf8');
+    let text = await readConfig('ark-proto-beta.conf');
     text = text.replace('10.253.77.2:3220', '127.0.0.1:' + ready.game)
       .replace('127.0.0.1:3241', '127.0.0.1:' + ready.auth).replace('127.0.0.1:3230', '127.0.0.1:' + ready.assets)
       .replace('listen 80;', `listen 127.0.0.1:${httpPort};`).replace('listen [::]:80;', '')

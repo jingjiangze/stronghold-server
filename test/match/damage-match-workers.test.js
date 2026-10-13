@@ -34,6 +34,10 @@ function deploy(m, ps, count = 1) {
   return Array.from({ length: count }, (_, i) => give(m, ps, 'chess_char_4_22_b', 'board', [9 + i, 8]));
 }
 const owner = (packet, pid = 'p0') => packet.owners.find((o) => o.playerId === pid);
+// A group's packet owners and its field's players need not share an order: pairPlayers (finalAssault.js) seeds the
+// pairing with a shuffle, and the packet lists owners in the match's global order. Only the membership is constrained.
+const groupIds = (packet) => packet.owners.map((o) => o.playerId).sort();
+const fieldIds = (f) => [...f.players].sort();
 const hit = (b, u, e, n) => b.dealDamage(u, e, { type: 'true', amount: n });
 const tokenDef = { tokenId: 'score_fixture_token', stats: { maxHp: 100, atk: 0, blockCnt: 0, cost: 0 }, rangeGrid: [] };
 
@@ -134,15 +138,15 @@ for (const hidden of [false, true]) test(`actual ${hidden ? 'hidden' : 'boss'} M
   const own = m.fields.find((f) => f.players.includes('p0'));
   const other = m.fields.find((f) => f !== own);
   assert.equal(own.players.length, 2); assert.equal(other.players.length, 2);
-  assert.deepEqual(h.last('p0').owners.map((o) => o.playerId), own.players);
+  assert.deepEqual(groupIds(h.last('p0')), fieldIds(own));
   assert.equal(m.handle('p0', { t: 'g.watch', fieldId: other.fieldId }).error, 'BAD_TARGET');
-  m.onReconnect('p0'); assert.deepEqual(h.last('p0').owners.map((o) => o.playerId), own.players);
+  m.onReconnect('p0'); assert.deepEqual(groupIds(h.last('p0')), fieldIds(own));
   m.addSpectator('observer'); assert.equal(h.last('observer').owners.length, 4);
   m.order[3].alive = false; m._sendDamageTo('p3'); assert.equal(h.last('p3').owners.length, 4);
   m.runner.forceAll();
   await until(() => m.damageBoard.status === 'frozen');
   assert.equal(h.last('p0').status, 'frozen');
-  assert.deepEqual(h.last('p0').owners.map((o) => o.playerId), own.players, 'completion delay does not expose the other group');
+  assert.deepEqual(groupIds(h.last('p0')), fieldIds(own), 'completion delay does not expose the other group');
   m.startRound(m.round + 1);
   m._sendDamageTo('p0'); assert.equal(h.last('p0').owners.length, 4, 'no-field preparation uses existing teammate scouting scope');
   assert.deepEqual(h.errors, []);

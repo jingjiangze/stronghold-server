@@ -98,7 +98,7 @@ export function pickBusy(busyIdx, card, mine, allowRepeat = false) {
 export function cardPickable(sp, card, { myId, solo, busyIdx = null }) {
   if (!sp || !card) return false;
   const myTurn = solo || sp.turnPid === myId;
-  return myTurn && sp.pickOf.get(myId) == null && (sp.allowRepeat === true || !card.takenBy) && busyIdx == null;
+  return myTurn && sp.pickOf.get(myId) == null && (sp.allowRepeat === true || !card.takenBy) && !card.soldOut && busyIdx == null;
 }
 
 /**

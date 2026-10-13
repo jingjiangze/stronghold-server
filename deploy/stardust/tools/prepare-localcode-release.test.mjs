@@ -74,8 +74,29 @@ async function manifestEdit(f, edit) {
   await put(path, json(manifest));
 }
 
+// Windows has no unprivileged symlink privilege, reports a single 0o666 mode for every writable file and cannot
+// create the POSIX-only fixture names (e.g. an embedded `"`), so the symlink/hardlink-rejection and 0o644-mode
+// assertions are only meaningful on POSIX. ubuntu-latest CI still runs them all.
+const POSIX_ONLY = process.platform === 'win32' && 'POSIX symlinks/file modes';
+
+// The mandatory real-repository test reads the fixed 9dd baseline blobs. A shallow or blob-filtered checkout
+// (e.g. a CI clone, or a --filter=blob:none clone) does not contain them and the export below deliberately
+// forbids network fetches, so skip when the baseline objects are absent instead of failing on any platform.
+function baselineBlobsPresent() {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  Object.assign(env, { GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0',
+    GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' });
+  const prefix = ['--no-optional-locks', '--no-replace-objects', '-C', REPO, '-c', 'protocol.allow=never', '-c', 'protocol.file.allow=never'];
+  const listing = spawnSync('git', [...prefix, 'ls-tree', '-r', '-z', BASELINE, '--', 'public/js', 'public/css'], { env });
+  const first = listing.status === 0 ? listing.stdout.toString('utf8').split('\0').filter(Boolean)[0] : '';
+  const match = /^(\d{6}) (\w+) ([a-f0-9]{40})\t(.+)$/.exec(first || '');
+  if (!match) return false;
+  return spawnSync('git', [...prefix, 'cat-file', '-e', match[3]], { env }).status === 0;
+}
+const REPO_OBJECTS = baselineBlobsPresent() ? false : 'the fixed real-repository baseline objects are absent from this shallow/partial clone';
+
 // Mandatory real-repository test: fixed 9dd objects are only read, never exported via working tree.
-test('real fixed 9dd commit: single-blob read export, default repo verification and reproducible output', async (t) => {
+test('real fixed 9dd commit: single-blob read export, default repo verification and reproducible output', { skip: REPO_OBJECTS }, async (t) => {
   const base = await temporary(t);
   const source = join(base, 'app'); const output = join(base, 'prepared');
   const paths = await exportCode(REPO, BASELINE, source);
@@ -93,7 +114,7 @@ test('real fixed 9dd commit: single-blob read export, default repo verification 
   t.diagnostic(`Fixed real-repo baseline ${BASELINE}; test runtime ${process.version}; no Nginx/Docker/network/activation`);
 });
 
-test('only tracked JS/CSS snapshots are staged with exact MIME/gate/fallback and private metadata', async (t) => {
+test('only tracked JS/CSS snapshots are staged with exact MIME/gate/fallback and private metadata', { skip: POSIX_ONLY }, async (t) => {
   const f = await fixture(t);
   const manifest = await prepareLocalcodeRelease(f);
   assert.equal(manifest.files.length, 5);
@@ -171,7 +192,7 @@ test('only a real full commit is accepted, not abbreviations, refs, fake objects
   for (const namespace of ['dev', 'beta;return 200', '', '../prod']) await assert.rejects(prepareLocalcodeRelease({ ...f, namespace }), /Namespace must/);
 });
 
-test('paths reject hidden/traversal/nginx syntax, symlink ancestors, hardlinks and nonregular files', async (t) => {
+test('paths reject hidden/traversal/nginx syntax, symlink ancestors, hardlinks and nonregular files', { skip: POSIX_ONLY }, async (t) => {
   const changes = ['dotfile', 'dotdir', 'semicolon', 'space', 'quote', 'variable', 'percent', 'backslash', 'newline', 'double-dot',
     'symlink', 'hardlink', 'directory-link', 'public-link', 'source-link', 'fifo'];
   for (const change of changes) {
@@ -201,7 +222,7 @@ test('paths reject hidden/traversal/nginx syntax, symlink ancestors, hardlinks a
   await assert.rejects(prepareLocalcodeRelease({ ...f, source: f.source + '/../app' }), /traversal/);
 });
 
-test('tracked unsafe paths and git symlink blobs are rejected even when the export mimics normal bytes', async (t) => {
+test('tracked unsafe paths and git symlink blobs are rejected even when the export mimics normal bytes', { skip: POSIX_ONLY }, async (t) => {
   for (const change of ['unsafe-name', 'tracked-link']) {
     const f = await fixture(t);
     if (change === 'unsafe-name') await put(join(f.repo, 'public/js/bad;name.js'), 'export default 1;');
@@ -213,7 +234,7 @@ test('tracked unsafe paths and git symlink blobs are rejected even when the expo
   }
 });
 
-test('new output refuses existing files/directories, links, traversal and symlink parents without touching them', async (t) => {
+test('new output refuses existing files/directories, links, traversal and symlink parents without touching them', { skip: POSIX_ONLY }, async (t) => {
   for (const change of ['empty', 'populated', 'file', 'link', 'dangling-link', 'parent-link', 'traversal', 'inside-source']) {
     const f = await fixture(t);
     if (change === 'empty') await mkdir(f.output);
@@ -231,7 +252,7 @@ test('new output refuses existing files/directories, links, traversal and symlin
   }
 });
 
-test('verify rejects altered bytes, include, sums, metadata, extra files/directories and soft/hard links', async (t) => {
+test('verify rejects altered bytes, include, sums, metadata, extra files/directories and soft/hard links', { skip: POSIX_ONLY }, async (t) => {
   for (const change of ['bytes', 'forged-bytes-and-hash', 'include', 'sums', 'extra-code', 'extra-root', 'extra-nginx', 'extra-revision',
     'empty-directory', 'missing', 'symlink', 'hardlink', 'metadata-hardlink', 'directory-link', 'root-link',
     'namespace', 'source-fullref', 'source-tree', 'source-extra', 'blob', 'sha', 'length', 'tool', 'tool-path', 'include-hash',

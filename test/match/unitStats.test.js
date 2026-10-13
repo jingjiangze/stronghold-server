@@ -212,17 +212,23 @@ test('snapshot unitStats: opted-in seeded combat preserves state, HP, events, ti
   assert.equal(detailed.errorCount, 0);
 });
 
-test('snapshot unitStats: inline server periodic frames and the first reconnect frame retain effective/base DTOs', (t) => {
+test('snapshot unitStats: the inline server carries the effective/base DTOs in the opening m.field, reuses the cache on reconnect and keeps b.snap compact', (t) => {
   const { h, m, carrier } = setup(26, { instant: false });
   t.after(() => m.dispose());
   m.startCombat();
   assert.ok(m.runner instanceof FieldRunner);
+  // The 2026-10-10 fork bandwidth correction (docs/design/network.md §8.2): compact snapshots stay nine-field tuples
+  // and never carry the panel DTOs; the initial undeployed field is a complete empty snapshot with no unitStats key.
   const initial = h.lastTo('p_0', 'b.snap');
-  assert.deepEqual(initial.unitStats, [], 'initial undeployed field is a complete empty snapshot');
+  assert.equal(Object.hasOwn(initial, 'unitStats'), false, 'compact b.snap carries no panel DTOs');
+  assert.deepEqual(initial.units, [], 'initial undeployed field is a complete empty snapshot');
   for (let i = 0; i < 3; i++) m.runner._tick();
-  const periodic = h.lastTo('p_0', 'b.snap');
+  // End of the first simulation tick: the frozen opening detail DTOs arrive once in a reliable, compressible m.field
+  // update (fields.js FieldRunner._emitStart), never repeated per snapshot.
+  const opening = h.allTo('p_0', 'm.field').filter((msg) => Array.isArray(msg.unitStats));
+  assert.equal(opening.length, 1, 'exactly one opening panel update, not one per periodic frame');
   const u = m.fields[0].battle.allyUnits.find((x) => x.uid === carrier.uid);
-  const entry = periodic.unitStats.find((x) => x.uid === carrier.uid);
+  const entry = opening[0].unitStats.find((x) => x.uid === carrier.uid);
   assert.deepEqual(entry, unitStatsEntry(u, u._s));
   assert.ok(entry.atk > entry.base.atk);
   m.onDisconnect('p_0');
@@ -230,12 +236,11 @@ test('snapshot unitStats: inline server periodic frames and the first reconnect 
   m.onReconnect('p_0');
   const frames = h.sent.slice(before).filter(([pid, msg]) => pid === 'p_0' && ['m.field', 'b.snap'].includes(msg.t));
   assert.equal(frames[0][1].t, 'm.field');
+  assert.deepEqual(frames[0][1].unitStats, opening[0].unitStats, 'the very first rejoin metadata reuses the frozen opening cache');
   const resumed = frames.find(([, msg]) => msg.t === 'b.snap')[1];
-  assert.deepEqual(resumed.unitStats, periodic.unitStats, 'the very first rejoin snapshot, not just a later emit');
-  for (const snap of h.allTo('p_0', 'b.snap')) {
-    assert.deepEqual(snap.unitStats.map((x) => x.id), snap.units.map((x) => x[0]));
-    assert.ok(snap.units.every((x) => x.length === 9));
-  }
+  assert.equal(Object.hasOwn(resumed, 'unitStats'), false, 'the first rejoin snapshot is still compact');
+  for (const snap of h.allTo('p_0', 'b.snap')) assert.ok(snap.units.every((x) => x.length === 9));
+  for (const msg of h.allTo('p_0', 'm.field')) if (msg.unitStats) assert.deepEqual(msg.unitStats.map((x) => x.id).sort((a, b) => a - b), msg.units.map((x) => x.id).sort((a, b) => a - b));
   assert.deepEqual(h.logs.error, []);
 });
 

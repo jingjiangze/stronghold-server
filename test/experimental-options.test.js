@@ -220,10 +220,15 @@ for (const independent of [false, true]) test(`exhausted owner stock shared=${!i
     const piece = b.allChess().find(piece => m.gd.baseIdOf(piece.id) === id);
     assert.deepEqual(b.sell(piece.uid), { ok: true }); assert.equal(b.pool.left(id), cap); assert.equal(a.pool.left(id), 0);
   } else {
-    assert.equal(b.buy(0).error, ERR.SOLD_OUT); assert.equal(b.funds, before); assert.equal(b.shop.slots[0].sold, false);
+    // #498 (economy.js buy(); test/match/shared-stock.test.js pins the raw deficit): an already displayed operator
+    // offer stays purchasable after the SHARED stock runs out and OVERDRAWS the pool instead of returning SOLD_OUT.
+    assert.deepEqual(b.buy(0), { ok: true }); assert.equal(b.funds, before - price); assert.equal(b.shop.slots[0].sold, true);
+    assert.equal(b.pool.entries.get(id).left, -1, 'the shared pool records the overdraw');
   }
   const held = a.allChess().find(piece => m.gd.baseIdOf(piece.id) === id);
-  assert.deepEqual(a.sell(held.uid), { ok: true }); assert.equal(a.pool.left(id), held.poolCopies || 3);
+  assert.deepEqual(a.sell(held.uid), { ok: true });
+  // the seller's copies return to the pool it owns; on the shared pool they also repay the buyer's overdraw
+  assert.equal(a.pool.left(id), (held.poolCopies || 3) - (independent ? 0 : 1));
   if (independent) assert.equal(b.pool.left(id), cap);
   h.invariants();
 });

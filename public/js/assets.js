@@ -50,6 +50,11 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' && v ? v : null);
 const get = (o, k) => (isObj(o) && Object.hasOwn(o, k) ? o[k] : undefined);
 
+// Manifest asset URLs may carry a cache-busting `?v=` (the weishucdn manifest bakes `?v=v0.2.4-…` into every spine
+// URL). Extension checks and the `.skel` → `.atlas` swap must tolerate that query and keep it on the swapped path.
+const SKEL_EXT = /\.skel(\?[^\s]*)?$/;
+const skelToAtlas = (p) => p.replace(SKEL_EXT, '.atlas$1');
+
 // ---- pure URL helpers (manifest first) ---------------------------------------------------------------------
 
 /** Strip a trailing `_1` / `_2` art-phase suffix (data/chess.json asset ids). */
@@ -212,7 +217,7 @@ export function localSpineEntry(sl, local, web) {
   const skel = url(sl.skel), atlas = url(sl.atlas);
   const textures = Array.isArray(sl.textures) ? sl.textures.map(url) : [];
   let entry = null;
-  if (skel && atlas && skel.replace(/\.skel$/, '.atlas') === atlas && textures.length && textures.every(Boolean)) {
+  if (skel && atlas && skelToAtlas(skel) === atlas && textures.length && textures.every(Boolean)) {
     entry = { skel, atlas, textures, pma: !!sl.pma, anims: sl.anims, animations: sl.animations, events: sl.events, hits: sl.hits, bounds: sl.bounds, local: true, fallback: web || null };
     if (!validSpine(entry)) entry = null;
   }
@@ -229,7 +234,7 @@ export function hasBackSpine(m, id, opts) {
 }
 
 export function validSpine(sp) {
-  return isObj(sp) && typeof sp.skel === 'string' && /^\/[^\s]*\.skel$/.test(sp.skel) && typeof sp.atlas === 'string' && isObj(sp.anims);
+  return isObj(sp) && typeof sp.skel === 'string' && /^\/[^\s]*\.skel(\?[^\s]*)?$/.test(sp.skel) && typeof sp.atlas === 'string' && isObj(sp.anims);
 }
 
 /** Best 2D picture for a unit asset id (operator avatar, token avatar, enemy icon, item icon). */
@@ -581,7 +586,7 @@ export async function loadSpineData(entry, opts) {
   installPixiMaterialFallback(PIXI);
   if (opts && opts.fresh) forgetPendingSpine(entry, opts.keep);
   const atlas = str(entry.atlas);
-  const source = atlas && atlas !== entry.skel.replace(/\.skel$/, '.atlas')
+  const source = atlas && atlas !== skelToAtlas(entry.skel)
     ? { src: entry.skel, data: { spineAtlasFile: atlas } } : entry.skel;
   const res = await PIXI.Assets.load(source);
   const data = res && (res.spineData || res);
@@ -605,7 +610,7 @@ export function forgetPendingSpine(entry, keep) {
   if (!skel || !cache || typeof cache !== 'object') return 0;
   const done = (u) => { try { return !!PIXI.Assets.cache?.has?.(u); } catch { return true; } };
   if (done(skel)) return 0;
-  const atlas = (typeof entry.atlas === 'string' && entry.atlas) || skel.replace(/\.skel$/, '.atlas');
+  const atlas = (typeof entry.atlas === 'string' && entry.atlas) || skelToAtlas(skel);
   const urls = (done(atlas) ? [skel] : [skel, atlas, ...spinePages(entry)]).filter((u) => !(keep && keep.has(u)));
   let n = 0;
   // the loader keys its cache by the resolved URL: the manifest path itself, or that path made absolute
@@ -658,7 +663,7 @@ export function spinePages(entry) {
   const list = Array.isArray(entry.textures) ? entry.textures.filter((u) => str(u)) : [];
   if (list.length) return list;
   const skel = str(entry.skel);
-  return skel ? [skel.replace(/\.skel$/, '.png')] : [];
+  return skel ? [skel.replace(SKEL_EXT, '.png$1')] : [];
 }
 
 /**
@@ -679,7 +684,7 @@ export function unloadSpineData(entry, _value, keep) {
   const PIXI = globalThis.PIXI;
   const skel = entry && entry.skel;
   if (!skel || !PIXI?.Assets?.unload) return undefined;
-  const atlas = (typeof entry.atlas === 'string' && entry.atlas) || skel.replace(/\.skel$/, '.atlas');
+  const atlas = (typeof entry.atlas === 'string' && entry.atlas) || skelToAtlas(skel);
   const loader = PIXI.Assets.loader;
   const pending = [];
   const unload = (url, direct) => {

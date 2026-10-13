@@ -151,7 +151,9 @@ const ITEM_HANDLERS = {
       const base = ctx.gd.baseIdOf(ev.target.id);
       const owned = [...ctx.board(), ...ctx.hand(), ...ctx.temp()].filter((p) => p && p.kind === 'chess' && !p.golden && ctx.gd.baseIdOf(p.id) === base).length;
       if (owned >= 2) {
-        if (!ctx.grantChess(base)) toastNothing(ctx, ev, ctx.gd.chess(base)?.name || null);
+        // 0.2.4 supersedes the 0.2.0 #207 empty-pool failure: the 3rd copy is granted even when the pool is out (the
+        // grant overdraws — the piece records the deficit), matching the measured 「已拥有至少2名…则再获得1名」.
+        if (!ctx.grantChess(base, { requirePool: false })) toastNothing(ctx, ev);
         return;
       }
       const id = rollSameBond(ctx, ctx.pieceBonds(ev.target.uid), 6);

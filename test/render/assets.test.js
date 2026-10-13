@@ -157,7 +157,7 @@ describe('URL helpers (real data/assets.json)', () => {
       const av = avatarUrl(m, c.assets.avatar);
       assert.ok(av && av.startsWith('/assets/'), `avatar ${c.chessId} ${c.assets.avatar}`);
       const sp = spineEntry(m, c.assets.spine);
-      assert.ok(sp && sp.skel.endsWith('.skel') && sp.anims && sp.anims.idle, `spine ${c.chessId}`);
+      assert.ok(sp && /\.skel(\?|$)/.test(sp.skel) && sp.anims && sp.anims.idle, `spine ${c.chessId}`);
       if (c.skill?.iconId) assert.ok(skillIconUrl(m, c.skill.iconId, { fallback: false }), `skill icon ${c.chessId}`);
     }
     assert.ok(n >= 200, `checked ${n}`);

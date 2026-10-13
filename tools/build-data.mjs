@@ -3694,7 +3694,9 @@ function buildConfig(ctx, waves, stages, bands, chess, items) {
       storeCntMax: act.constData.storeCntMax,
       equipPerChess: 2, maxArtsPerRound: 2,
       poolCopies: { 1: 12, 2: 14, 3: 18, 4: 16, 5: 8, 6: 5 },
-      poolCopiesOverrides: chessStock,
+      // upstream 0.2.5's named stock table + the fork's own 缪尔赛思 override (pool 4): the fork layer must survive
+      // the sync — test/data.test.js pins chess_char_6_11_a, so dropping it here turns the build into a regression
+      poolCopiesOverrides: { ...chessStock, chess_char_6_11_a: 4 },
       coopPoolMultiplier: 2,
       itemPoolCopies: { 1: 4, 2: 6, 3: 7, 4: 8, 5: 7, 6: 3 },
       itemPoolCopiesOverrides: itemStock,

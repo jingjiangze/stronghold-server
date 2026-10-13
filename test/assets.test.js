@@ -663,8 +663,10 @@ describe('emotes and 玩法说明 pages from the public mirror (GitHub issue #42
   test('the committed data/assets.json lists all 55, so setup on an install made before them downloads them', () => {
     // tools/setup.mjs runs fetch-assets when data/assets.json lists a file that is not on disk (checkAssets)
     const m = readJson('data/assets.json');
-    for (const e of EMOTE_CATALOG) assert.equal(m.ui[`emoticon/${e.dir}/${e.picId}`], `/assets/ui/emoticon/${e.dir}/${e.picId}.png`, e.id);
-    for (const k of GUIDE_PAGES) assert.equal(m.ui[`guide/${k}`], `/assets/ui/guide/${k}.png`, k);
+    // the weishucdn manifest bakes a cache-busting `?v=…` into every URL: compare the path, keep the query tolerated
+    const bare = (u) => String(u).replace(/\?[^?]*$/, '');
+    for (const e of EMOTE_CATALOG) assert.equal(bare(m.ui[`emoticon/${e.dir}/${e.picId}`]), `/assets/ui/emoticon/${e.dir}/${e.picId}.png`, e.id);
+    for (const k of GUIDE_PAGES) assert.equal(bare(m.ui[`guide/${k}`]), `/assets/ui/guide/${k}.png`, k);
     assert.equal(m.stats.ui, Object.keys(m.ui).length);
     assert.ok(!JSON.stringify(m).includes('/assets/local/'), 'never a local-client path');
   });

@@ -626,6 +626,11 @@ function LoadoutScreen({ st }) {
   const ioApply = () => {
     const parsed = parseOperatorPreset(ioText);
     if (!parsed.ok) { toast(t('导入失败：{error}', { error: t(parsed.error, parsed.params) }), 'error'); return; }
+    // A payload that carries `ops` (even empty) replaces 潜能 / 练度, and its 自选 operators are named only by
+    // backups.json: refuse it before any write when that data is not ready (GitHub #538) — the fork's unified
+    // preset parser scopes the payload, so the check keys off the `ops` key rather than a separate tab.
+    const opsRefused = loadoutOpsImportRefusal(parsed.patch.ops, ready);
+    if (opsRefused) { toast(opsRefused.text, opsRefused.tone); return; }
     // Never sanitise against absent data. A legacy skin-only file does not need chess or DIY data.
     if (parsed.scope !== 'skins') {
       const kind = Object.keys(parsed.patch.diy || {}).length ? 'diy' : 'loadout';

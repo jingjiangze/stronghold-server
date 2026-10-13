@@ -33,16 +33,18 @@ test('a loadout ops payload is refused with the DIY data check; entries-only is 
   assert.equal(loadoutOpsImportRefusal(null, false, noBackups), null, 'entries-only does not wait on backups');
 });
 
-test('ioApply asks loadoutOpsImportRefusal after parseImport and before cultivationCharIds or applyLoadoutEntries', () => {
+test('ioApply asks loadoutOpsImportRefusal after the parse and before any write', () => {
   const src = readFileSync(path.join(ROOT, 'public/js/screens/loadout.js'), 'utf8');
   const at = src.indexOf('const ioApply = () => {');
   assert.ok(at > 0, 'ioApply');
   const body = src.slice(at, src.indexOf('\n  };\n', at));
-  const parsed = body.indexOf('if (!res.ok)');
-  const guard = body.indexOf('loadoutOpsImportRefusal(res.ops, ready)');
-  const ids = body.indexOf('cultivationCharIds(');
-  const apply = body.indexOf('applyLoadoutEntries(');
+  // the fork parses the unified preset (parseOperatorPreset → parsed.ok / parsed.patch) instead of upstream's
+  // loadout-only parseImport (res.ok / res.ops): the same parse → refuse → write order, same refusal helper.
+  const parsed = body.indexOf('if (!parsed.ok)');
+  const guard = body.indexOf('loadoutOpsImportRefusal(parsed.patch.ops, ready)');
+  const ids = body.indexOf('diyData(');
+  const apply = body.indexOf('applyOperatorPreset(');
   assert.ok(parsed > 0 && guard > parsed, 'refuse only a payload that parsed');
-  assert.ok(ids > guard && apply > guard, 'no write and no DIY id list until the refusal returns null');
-  assert.match(body.slice(guard), /^loadoutOpsImportRefusal\(res\.ops, ready\);\s*if \(opsRefused\) \{ toast\(opsRefused\.text, opsRefused\.tone\); return; \}/);
+  assert.ok(ids > guard && apply > guard, 'no write and no DIY data until the refusal returns null');
+  assert.match(body.slice(guard), /^loadoutOpsImportRefusal\(parsed\.patch\.ops, ready\);\s*if \(opsRefused\) \{ toast\(opsRefused\.text, opsRefused\.tone\); return; \}/);
 });

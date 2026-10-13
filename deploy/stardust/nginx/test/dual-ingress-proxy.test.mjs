@@ -14,7 +14,10 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { prepareDualIngressProxy } from '../../tools/prepare-dual-ingress-proxy.mjs';
 
 const directory = fileURLToPath(new URL('../', import.meta.url));
-const sources = { formal: readFileSync(path.join(directory, 'ark-proto.conf'), 'utf8'), beta: readFileSync(path.join(directory, 'ark-proto-beta.conf'), 'utf8') };
+// The vhosts are LF in the repository (.gitattributes: `*.conf text eol=lf`); a stale Windows checkout may
+// still hold CRLF, so normalise before the exact byte-preservation comparisons below.
+const readConfig = name => readFileSync(path.join(directory, name), 'utf8').replace(/\r\n/g, '\n');
+const sources = { formal: readConfig('ark-proto.conf'), beta: readConfig('ark-proto-beta.conf') };
 for (const [profile, source] of Object.entries(sources)) test(profile + ' preparation changes only reviewed WS upstreams, preserving HTTP/auth/private/material directives byte-for-byte', () => {
   const r = prepareDualIngressProxy(source, { profile });
   assert.equal(r.manifest.activated, false); assert.equal(r.manifest.ingressInstances, 2);
