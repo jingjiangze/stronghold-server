@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, noopLog } from './config.js';
-import { decide, parseSources } from '../../deploy/stardust/ms-edge/edge-sidecar.mjs';
+import { decide, parseSources, stripSourceParam } from '../../deploy/stardust/ms-edge/edge-sidecar.mjs';
 
 /** 排名端点（R2 上的静态 rank.json，speedcdn/weishucdn 同桶）。取不到就用 sources.json 的静态 order。 */
 export const DEFAULT_RANK_URL = 'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json';
@@ -80,12 +80,53 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   };
   refresh();   // 启动即预热
 
+  // ---- 存在性缓存：让 302 尽量不落到「还没有这个文件的镜像」上 -------------------------------------------
+  // 跳转本身是同步的（static.js 直接调用），所以这里不阻塞：只信缓存里已知的「缺件」，未命中就先按既有顺序
+  // 跳出去，同时对刚选中的源做一次 HEAD，把结果写进缓存（TTL 10 分钟）。⇒ 第一个请求可能仍打到缺件源，
+  // 后续请求会自动避开；同步补齐（如刚上传的场景素材）在一个 TTL 之后自动恢复。
+  const EXIST_TTL_MS = 10 * 60_000;
+  const EXIST_MAX = 5000;
+  const exists = new Map();            // key = 源 id + '\n' + 路径 → { v: 'ok' | 'miss' | null, at }
+  const existProbing = new Set();
+  const existKey = (id, pathname) => id + '\n' + pathname;
+  const knownMiss = (id, pathname) => {
+    const e = exists.get(existKey(id, pathname));
+    return !!e && e.v === 'miss' && Date.now() - e.at < EXIST_TTL_MS;
+  };
+  const noteExist = (id, pathname, v) => {
+    if (exists.size >= EXIST_MAX) { const first = exists.keys().next().value; if (first !== undefined) exists.delete(first); }
+    exists.set(existKey(id, pathname), { v, at: Date.now() });
+  };
+  /** 对一个 (源, 路径) 做一次 HEAD：2xx/3xx=有（镜像自己再跳也算能供），403/404=没有，其余=未知（不缓存结论）。 */
+  const probeExist = (id, base, pathname, query) => {
+    const key = existKey(id, pathname);
+    if (existProbing.has(key) || !base) return;
+    existProbing.add(key);
+    const rest = stripSourceParam(query || '');
+    const target = base + pathname + (rest ? `?${rest}` : '');
+    Promise.resolve()
+      .then(() => fetchImpl(target, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(5000) }))
+      .then((r) => noteExist(id, pathname, r.status < 400 ? 'ok' : (r.status === 403 || r.status === 404 ? 'miss' : null)))
+      .catch(() => noteExist(id, pathname, null))
+      .finally(() => existProbing.delete(key));
+  };
+
   // 只把 302 交出去：其余判定（404/405/204）保持 static.js 原有的行为，避免同一个 404 有两种样子。
   /** 取（可能被 rank 覆盖过 order 的）当前配置：static.js 在每次请求前 await 一次，命中缓存时是零成本。 */
   const jump = (pathname, query, method, cfg = null) => {
-    const out = decide(cfg || config, { method, pathname, query });
-    return out.status === 302 ? { status: out.status, headers: out.headers } : null;
+    const conf = cfg || config;
+    const order = Array.isArray(conf.order) ? conf.order : [];
+    const skip = new Set(order.filter((id) => knownMiss(id, pathname)));
+    let out = decide(conf, { method, pathname, query, skip: skip.size ? skip : null });
+    // 全部候选都被判过「没这个文件」→ 退回主源兜底（给客户 302 比给 404 好），并让缓存继续刷新
+    if (out.status !== 302 && skip.size) out = decide(conf, { method, pathname, query });
+    if (out.status !== 302) return null;
+    const chosen = order.find((id) => conf.byId.get(id) && String(out.location).startsWith(conf.byId.get(id)));
+    if (chosen) probeExist(chosen, conf.byId.get(chosen), pathname, query);
+    return { status: out.status, headers: out.headers };
   };
+  /** 诊断用：存在性缓存的规模与其中「已判缺件」的条数（/sp-edge/status 会带上）。 */
+  jump.exists = () => ({ size: exists.size, known: [...exists.values()].filter((e) => e.v === 'miss').length });
   jump.config = effective;
   /**
    * Read-only status for the deployment's own diagnostics: what the jump knows (sources, rank) and, on demand, a
@@ -98,6 +139,8 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       sources: effective().order.map((id) => ({ id, base: config.byId.get(id) })),
       rankUrl, rank: rankState,
       jumpEnabled: true, sourcesPath,
+      // 存在性缓存：size = 记录条数，known = 其中已判「该源没有这个文件」的条数（302 会避开这些源）
+      exists: typeof jump.exists === 'function' ? jump.exists() : null,
     };
     if (!probe) return out;
     const head = async (u) => {

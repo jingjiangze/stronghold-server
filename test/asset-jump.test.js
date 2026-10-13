@@ -100,6 +100,24 @@ test('non-asset paths, other extensions and traversal stay with the caller (null
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a source known to be missing the file is skipped on the next jump (non-empty preference)', async () => {
+  const dir = tmpdir();
+  const doc = { schemaVersion: 1, order: ['a', 'b'], sources: [{ id: 'a', base: 'https://a.example' }, { id: 'b', base: 'https://b.example' }] };
+  const okB = (url) => url.startsWith('https://b.example');
+  const fetchImpl = async (url, init = {}) => (init.method === 'HEAD'
+    ? { ok: okB(url), status: okB(url) ? 200 : 404 }
+    : { ok: true, json: async () => ({ rank: [] }) });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, doc), log: silent, fetchImpl });
+  try {
+    // 第一次：这个 (源,路径) 还没判定过 ⇒ 按既有顺序跳 a（可能与今天线上相同：第一个请求仍可能打到缺件源）
+    assert.equal(jump('/assets/x.png', '', 'GET').headers.Location, 'https://a.example/assets/x.png');
+    for (let i = 0; i < 80 && jump.exists().known === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(jump.exists().known, 1, 'a 被记为「缺这个文件」');
+    // 第二次：已知 a 缺件 ⇒ 自动避开，跳到真的有这个文件的 b
+    assert.equal(jump('/assets/x.png', '', 'GET').headers.Location, 'https://b.example/assets/x.png');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('the rank cannot promote the dataset above weishucdn (2026-10-13: ms-dataset is no longer mapped)', async () => {
   const dir = tmpdir();
   // The live rank lists `ms-dataset` first (unmeasured → ordered by origins.json), so mapping it to `modelscope`

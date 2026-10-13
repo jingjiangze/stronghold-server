@@ -95,11 +95,14 @@ export function parseSources(raw) {
 }
 
 /** First source in config order, or null when the file names none that exist. */
-export function pick(config, id, pathname) {
+export function pick(config, id, pathname, skip = null) {
   if (id) return config.byId.get(id) ?? null;
   const forced = config.exceptions.get(pathname);
-  if (forced) return forced;
+  // `skip` 由调用方给出「已知缺这个文件」的源 id（进程内跳转会按存在性探测填它）；
+  // 例外表也要能被跳过，否则一个缺件的强制源会把 302 变成客户的 404。
+  if (forced && !(skip && [...skip].some((k) => config.byId.get(k) === forced))) return forced;
   for (const want of config.order) {
+    if (skip && skip.has(want)) continue;
     const base = config.byId.get(want);
     if (base) return base;
   }
@@ -119,7 +122,7 @@ export function stripSourceParam(query) {
  * The whole decision, as a pure function: no sockets, no clock, no globals.
  * @returns {{status:number, location?:string, headers:Record<string,string>, source?:string}}
  */
-export function decide(config, { method = 'GET', pathname = '/', query = '' } = {}) {
+export function decide(config, { method = 'GET', pathname = '/', query = '', skip = null } = {}) {
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
@@ -137,7 +140,7 @@ export function decide(config, { method = 'GET', pathname = '/', query = '' } = 
   }
 
   const forced = query ? new URLSearchParams(query).get('sp_source') : null;
-  const base = pick(config, forced, pathname);
+  const base = pick(config, forced, pathname, skip);
   if (!base) {
     // 配置缺失时明确失败：静默 404 会让「边缘层有没有在工作」变成一个只能靠猜的问题。
     return { status: 503, headers: { 'Content-Type': 'text/plain' } };
