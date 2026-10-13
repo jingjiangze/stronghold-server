@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { retainInstalledSkins, skinResourceFiles, skinManifestMetadata, skinCatalogueSource, prepareSkins } from '../tools/prepare-operator-skins.mjs';
@@ -14,7 +14,7 @@ const rec = { charId, avatar: `/assets/skins/${id}/avatar.png`, portrait: `/asse
   spine: Object.fromEntries(['front', 'back'].map(side => [side, { skel: `/assets/skins/${id}/${side}/model.skel`, atlas: `/assets/skins/${id}/${side}/model.atlas`, textures: [`/assets/skins/${id}/${side}/page.png`], anims: { idle: 'Idle' } }])) };
 
 test('ordinary asset rebuild retains complete admitted skin groups and references them for prune accounting', () => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-manifest-'));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-manifest-')));
   try {
     const files = skinResourceFiles({ [id]: rec }); assert.equal(files.size, 9);
     for (const path of files) { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), Buffer.from([1, 2, 3])); }
@@ -74,7 +74,7 @@ test('generated appearance UI names are translatable while exact Wiki title meta
 });
 
 test('source refusal halts a bounded import, does not retry or admit unavailable metadata', async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-blocked-'));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-blocked-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const manifestPath = join(root, 'assets.json');
   writeFileSync(manifestPath, JSON.stringify({ chars: { [charId]: {} }, stats: {} }));

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { link, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,9 @@ const json = (data) => JSON.stringify(data, null, 2) + '\n';
 async function put(path, contents) { await mkdir(dirname(path), { recursive: true }); await writeFile(path, contents); }
 async function absent(path) { await assert.rejects(lstat(path), { code: 'ENOENT' }); }
 async function temporary(t) {
-  const base = await mkdtemp(join(tmpdir(), 'ark-private-localcode-'));
+  // Canonicalise the fixture root: a temp path reached through an 8.3 short name (CI's short TEMP user dir)
+  // is what fs.promises.realpath -- the tools' own path check -- normalises, so hand them a canonical root.
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'ark-private-localcode-')));
   t.after(() => rm(base, { recursive: true, force: true }));
   return base;
 }

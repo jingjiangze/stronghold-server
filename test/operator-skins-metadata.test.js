@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, symlinkSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync, symlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -74,20 +74,20 @@ test('metadata import rejects duplicate jobs before concurrent work begins', asy
   await assert.rejects(prepareSkins({ sourceDir: '/not-used', modelSource: 'metadata', catalogue: [skin, skin] }), /bounded skin import/);
 });
 test('metadata source refusal preserves the old manifest instead of publishing partial readiness', async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-blocked-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-meta-blocked-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, 'assets.json'), prior = JSON.stringify({ chars: { [skin.charId]: {} }, audio: { voiceByLang: { cn: { exact: 'old' } } }, stats: {} }); writeFileSync(path, prior);
   let calls = 0; t.mock.method(globalThis, 'fetch', async () => { calls++; return new Response('Refused', { status: 429 }); });
   await assert.rejects(prepareSkins({ sourceDir: join(root, 'sources'), modelSource: 'metadata', fetchSources: true, catalogue: [skin], manifestPath: path, assetRoot: join(root, 'assets') }), /source-blocked/);
   assert.equal(calls, 1); assert.equal(readFileSync(path, 'utf8'), prior);
 });
 test('an incomplete offline metadata import refuses publication instead of silently admitting a subset', async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-incomplete-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-meta-incomplete-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, 'assets.json'), prior = JSON.stringify({ chars: { [skin.charId]: {} }, audio: { voice: { exact: 'cn' } }, stats: {} }); writeFileSync(path, prior);
   await assert.rejects(prepareSkins({ sourceDir: join(root, 'sources'), modelSource: 'metadata', catalogue: [skin], manifestPath: path, assetRoot: join(root, 'assets') }), /incomplete metadata/);
   assert.equal(readFileSync(path, 'utf8'), prior);
 });
 test('offline source files through a symlink cannot escape the isolated source directory', { skip: process.platform === 'win32' && 'symlink() needs Developer Mode / admin on Windows (EPERM)' }, async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-link-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-meta-link-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   const manifestPath = join(root, 'assets.json'), source = join(root, 'sources'), external = join(root, 'outside');
   const prior = JSON.stringify({ chars: { [skin.charId]: {} }, stats: {} }); writeFileSync(manifestPath, prior); mkdirSync(source); mkdirSync(external);
   writeFileSync(join(external, 'model-meta.json'), JSON.stringify(meta())); symlinkSync(external, join(source, skin.id), 'dir');
@@ -95,14 +95,14 @@ test('offline source files through a symlink cannot escape the isolated source d
   assert.equal(readFileSync(manifestPath, 'utf8'), prior);
 });
 test('manifest compare-and-swap refuses another writer during source loading', async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-cas-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-meta-cas-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   const path = join(root, 'assets.json'), prior = { chars: { [skin.charId]: {} }, stats: {} }, changed = JSON.stringify({ ...prior, changedByOtherWriter: true }); writeFileSync(path, JSON.stringify(prior));
   t.mock.method(globalThis, 'fetch', async () => { writeFileSync(path, changed); return new Response('Not found', { status: 404 }); });
   await assert.rejects(prepareSkins({ sourceDir: join(root, 'sources'), catalogue: [skin], fetchSources: true, manifestPath: path, assetRoot: join(root, 'assets') }), /baseline changed/);
   assert.equal(readFileSync(path, 'utf8'), changed);
 });
 test('metadata import never replaces an already admitted skin record or asks for its source again', async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-preserve-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-meta-preserve-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   const manifestPath = join(root, 'assets.json'), record = { charId: skin.charId, name: skin.name, spine: { front: { exact: 'unchanged' } }, dynamic: { legacy: true } };
   const before = { chars: { [skin.charId]: {} }, skins: { [skin.id]: record }, audio: { voiceByLang: { cn: { exact: 'old' }, jp: { exact: 'old-jp' }, en: { exact: 'old-en' } } }, stats: {} };
   writeFileSync(manifestPath, JSON.stringify(before)); t.mock.method(globalThis, 'fetch', () => { throw new Error('must not fetch an installed skin'); });
@@ -112,7 +112,7 @@ test('metadata import never replaces an already admitted skin record or asks for
 
 const sampleRoot = new URL('../.cache/stardust/exu2-skin-research-20261008-3bmj9cm4/sources/battle-r0/', import.meta.url);
 for (const conflicting of [false, true]) test(conflicting ? 'different installed artwork refuses import without overwrite or partial manifest publication' : 'complete metadata import parses actual Spine bytes, preserves audio and marks a unified source', { skip: !existsSync(new URL('front/char_1041_angel2_iteration_6.skel', sampleRoot)) && 'install the isolated researched skin sample first' }, async t => {
-  const root = mkdtempSync(join(tmpdir(), 'operator-skin-meta-full-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'operator-skin-meta-full-'))); t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, 'sources'), assetRoot = join(root, 'assets'), manifestPath = join(root, 'assets.json');
   const current = { id: 'char_1041_angel2_iteration_6', charId: 'char_1041_angel2', officialId: 'char_1041_angel2@iteration#6', name: '寻翼之歌', brand: '时代', wikiIndex: 1, charName: '新约能天使' };
   const folder = join(source, current.id); mkdirSync(join(folder, 'front'), { recursive: true });

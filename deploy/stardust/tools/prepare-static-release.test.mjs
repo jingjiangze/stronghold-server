@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, rm, symlink, link, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, link, writeFile } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -62,7 +62,9 @@ async function put(path, data) { await mkdir(dirname(path), { recursive: true })
 async function absent(path) { await assert.rejects(lstat(path), { code: 'ENOENT' }); }
 
 async function fixture(t) {
-  const base = await mkdtemp(join(tmpdir(), 'ark-static-release-'));
+  // Canonicalise the fixture root (see prepare-localcode-release.test.mjs): fs.promises.realpath expands an 8.3
+  // short temp name, which is exactly what the tools' path check compares against.
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'ark-static-release-')));
   // Nginx workers need to traverse mkdtemp's normally private directory for the optional smoke test.
   await chmod(base, 0o755);
   t.after(() => rm(base, { recursive: true, force: true }));
@@ -473,7 +475,7 @@ test('full prepared release Nginx smoke: all whitelist entries, audio mappings a
   const nginx = nginxBinary(t); if (!nginx) return;
   const output = resolve(process.env.NGINX_RELEASE_DIR);
   const manifest = await verifyStaticRelease(output);
-  const base = await mkdtemp(join(tmpdir(), 'ark-static-full-nginx-'));
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'ark-static-full-nginx-')));
   await chmod(base, 0o755); t.after(() => rm(base, { recursive: true, force: true }));
   await withNginx(nginx, { output, base }, manifest, async ({ origin, gamePort }) => {
     const prefix = `/releases/${manifest.release}/`;
