@@ -348,6 +348,87 @@ export function PauseButton({ paused, busy = false, onToggle }) {
   <//>`;
 }
 
+/**
+ * 促融共竞 倍速 (P6, PRTS main.raw 711–714): two lamps — the own switch lights blue, the partner's green; the battle runs
+ * 2× only while both are on. Pressing toggles the own switch only (g.speed); the tooltip says whose switch the pair waits for.
+ * @param {{ mine: boolean, theirs: boolean, on: boolean, busy?: boolean, onToggle: () => void }} props
+ */
+export function SpeedToggle({ mine, theirs, on, busy = false, onToggle }) {
+  const tip = on ? t('2 倍速生效中（再点一下关闭自己的开关）')
+    : mine ? t('我已开启 2×，等待对方开启后生效')
+      : theirs ? t('对方已开启 2×，等待你开启') : t('2 倍速：双方都开启后生效');
+  return html`<${Tooltip} text=${tip} placement="bottom">
+    <button type="button" class=${cx('speedbtn', 'tapx', on && 'is-on', busy && 'is-busy')} aria-pressed=${on ? 'true' : 'false'}
+        aria-label=${t('2 倍速开关')} disabled=${busy} data-testid="speed" onClick=${() => onToggle?.()}>
+      <span class=${cx('speedbtn__lamp', mine && 'is-lit')} /><span class=${cx('speedbtn__lamp', 'is-partner', theirs && 'is-lit')} /><b class="speedbtn__x">2×</b>
+    </button>
+  <//>`;
+}
+
+/**
+ * 合作暂停 (P6, PRTS main.raw 717–720): 申请 → the partner's 同意 / 拒绝 (or their own 暂停 press counts as approval) → an
+ * active pause either side lifts (the server's ~1 s release cooldown shows as the busy resume). Renders per state:
+ * idle pause glyph, the own request waiting (press cancels), the partner's request (同意 / 拒绝), or the resume glyph.
+ * @param {{ coop: { paused: boolean, releasing: boolean, request: { id:number, mine:boolean }|null }, busy?: boolean,
+ *   onPropose?: () => void, onCancel?: () => void, onAgree?: (id:number) => void, onDecline?: (id:number) => void, onResume?: () => void }} props
+ */
+export function CoopPauseControls({ coop, busy = false, onPropose, onCancel, onAgree, onDecline, onResume }) {
+  if (!coop) return null;
+  if (coop.paused) {
+    const held = busy || coop.releasing;
+    return html`<${Tooltip} text=${coop.releasing ? t('继续中…') : t('解除暂停（任一方可解除）')} placement="bottom">
+      <button type="button" class=${cx('pausebtn', 'tapx', 'is-on', held && 'is-busy')} aria-label=${coop.releasing ? t('继续中…') : t('解除暂停')}
+          disabled=${held} data-testid="coop-pause-resume" onClick=${() => onResume?.()}>
+        <${Icon} name="play" class="pausebtn__glyph" />
+      </button>
+    <//>`;
+  }
+  const req = coop.request;
+  if (req && req.mine) {
+    return html`<${Tooltip} text=${t('已发出暂停申请，等待对方同意（点击取消）')} placement="bottom">
+      <button type="button" class=${cx('cooppill', 'tapx', 'is-pending', busy && 'is-busy')} disabled=${busy}
+          data-testid="coop-pause-wait" onClick=${() => onCancel?.()}>${t('暂停申请中…')}</button>
+    <//>`;
+  }
+  if (req) {
+    return html`<span class="coopask" data-testid="coop-pause-ask" role="group" aria-label=${t('对方申请暂停')}>
+      <b>${t('对方申请暂停')}</b>
+      <button type="button" class=${cx('cooppill', 'tapx', 'is-primary', busy && 'is-busy')} disabled=${busy}
+          data-testid="coop-pause-agree" onClick=${() => onAgree?.(req.id)}>${t('同意')}</button>
+      <button type="button" class=${cx('cooppill', 'tapx', busy && 'is-busy')} disabled=${busy}
+          data-testid="coop-pause-decline" onClick=${() => onDecline?.(req.id)}>${t('拒绝')}</button>
+    </span>`;
+  }
+  return html`<${Tooltip} text=${t('申请暂停（对方同意后生效）')} placement="bottom">
+    <button type="button" class=${cx('pausebtn', 'tapx', busy && 'is-busy')} aria-label=${t('申请暂停')} disabled=${busy}
+        data-testid="coop-pause" onClick=${() => onPropose?.()}>
+      <${PauseGlyph} />
+    </button>
+  <//>`;
+}
+
+/**
+ * 费用请求 (P6, PRTS main.raw 694–698; prep only): one approval moves up to 15 of the partner's funds. The requester's own
+ * chip waits; the partner's chip is the 同意 / 拒绝 prompt (an AI teammate or a partner who left accepts by itself server-side).
+ * @param {{ fund: { id:number, mine:boolean }|null, busy?: boolean, onAsk?: () => void, onAccept?: (id:number) => void, onDecline?: (id:number) => void }} props
+ */
+export function CoopFundControls({ fund, busy = false, onAsk, onAccept, onDecline }) {
+  if (fund && !fund.mine) {
+    return html`<span class="coopask" data-testid="coop-fund-ask" role="group" aria-label=${t('对方请求费用支援')}>
+      <b>${t('对方请求费用支援')}</b>
+      <button type="button" class=${cx('cooppill', 'tapx', 'is-primary', busy && 'is-busy')} disabled=${busy}
+          data-testid="coop-fund-agree" onClick=${() => onAccept?.(fund.id)}>${t('同意')}</button>
+      <button type="button" class=${cx('cooppill', 'tapx', busy && 'is-busy')} disabled=${busy}
+          data-testid="coop-fund-decline" onClick=${() => onDecline?.(fund.id)}>${t('拒绝')}</button>
+    </span>`;
+  }
+  const waiting = !!fund?.mine;
+  return html`<${Tooltip} text=${waiting ? t('已发出费用请求，等待对方回应') : t('向对方请求最多 15 点费用支援')} placement="bottom">
+    <button type="button" class=${cx('cooppill', 'tapx', waiting && 'is-pending', busy && 'is-busy')} disabled=${busy || waiting}
+        data-testid="coop-fund" onClick=${() => onAsk?.()}>${waiting ? t('费用请求中…') : t('费用请求')}</button>
+  <//>`;
+}
+
 /** A frozen stage budget / round-start balance. The changing real-time countdown stays separate. */
 export function UniteBudgetNote({ pub }) {
   const budget = uniteBudgetInfo(pub);
@@ -373,12 +454,13 @@ export function UniteBudgetNote({ pub }) {
  *     `left` (a leaker in 联防): its enemies still standing — the capsule's ×N tag
  */
 export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyCount, playerCount, pen = false, penAvail = false, onPen = () => {},
-  config = null, frozenAt = null, pause = null, live = null, spectator = false,
+  config = null, frozenAt = null, pause = null, coop = null, live = null, spectator = false,
   spectators = null, myId = null, isHost = false, onRemoveSpectator = null }) {
   const [loadOpen, setLoadOpen] = useState(false);
   const phase = pub?.phase;
   const boss = isBossPhase(phase);
-  const lp = boss && Number.isFinite(pub?.teamLp) ? pub.teamLp : Number.isFinite(priv?.lp) ? priv.lp : null;
+  // 促融共竞: the own bar shows the target-point life (m.private targetLp) instead of the in-battle lp
+  const lp = boss && Number.isFinite(pub?.teamLp) ? pub.teamLp : Number.isFinite(priv?.targetLp) ? priv.targetLp : Number.isFinite(priv?.lp) ? priv.lp : null;
   // normal rounds: the leaks of the own battle so far (boss rounds: the team LP above already moves live)
   const pending = !boss && Number.isFinite(lp) && live && live.pending > 0 ? Math.min(lp, live.pending) : 0;
   const hidden = phase === PHASE.HIDDEN_CORE || (Number.isFinite(pub?.lastRound) && pub.round > pub.lastRound);
@@ -436,6 +518,10 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
           ? html`<${Countdown} seconds=${frozenSecs} total=${total ?? undefined} size="md" label="PAUSED" />`
           : html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="md" />`}
         ${pause && (pause.show || pause.paused) ? html`<${PauseButton} paused=${!!pause.paused} busy=${pause.busy} onToggle=${pause.onToggle} />` : null}
+        ${coop?.pause ? html`<${CoopPauseControls} coop=${coop.pause} busy=${!!coop.busy} onPropose=${coop.onPausePropose} onCancel=${coop.onPauseCancel}
+          onAgree=${coop.onPauseAgree} onDecline=${coop.onPauseDecline} onResume=${coop.onPauseResume} />` : null}
+        ${coop?.speed ? html`<${SpeedToggle} mine=${coop.speed.mine} theirs=${coop.speed.theirs} on=${coop.speed.on} busy=${!!coop.busy} onToggle=${coop.onSpeed} />` : null}
+        ${coop?.fundAvail ? html`<${CoopFundControls} fund=${coop.fund} busy=${!!coop.busy} onAsk=${coop.onFundAsk} onAccept=${coop.onFundAccept} onDecline=${coop.onFundDecline} />` : null}
       </div>
       <${OvertimeWarning} ot=${ot} />
       ${showReady ? html`<${ReadyToggle} priv=${priv} onToggle=${onReady} busy=${readyBusy} readyCount=${readyCount} total=${playerCount} />` : null}

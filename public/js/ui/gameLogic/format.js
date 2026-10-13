@@ -17,6 +17,8 @@ export const STATUS_META = Object.freeze({
   helping: { glyph: 'shield', text: N_('联防中'), tone: 'orange' },
   left: { glyph: 'exit', text: N_('已离开'), tone: 'red' },
   dead: { glyph: 'close', text: N_('已淘汰'), tone: 'red' },
+  // 促融共竞: the downed side (targetLp 0, counting down 30 s toward the revive)
+  reviving: { glyph: 'refresh', text: N_('复活中'), tone: 'gold' },
 });
 
 // ---- snapshots / battle HUD ---------------------------------------------------------------------------------

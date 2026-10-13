@@ -91,9 +91,10 @@ import { actions, onRefreshBusy } from '../ui/gameActions.js';
 import { FacingWheel, holdPiece, setPieceDir, syncPieceDirs, showRange, useTileScreen } from '../ui/facingWheel.js';
 import { Underframe, underframeRect, TempRowNotice } from '../ui/underframe.js';
 import { StandInTags } from './game/standInTags.js';
+import { MarkTool } from './game/markTool.js';
 import { needsFacing, facingIntent, previewGrid, pieceDir, underframeActions, retreatSlot, itemDestroyable } from '../ui/facing.js';
 import { EquipReplaceDialog, replaceRequest, replaceIntent } from '../ui/equipReplace.js';
-import { pauseAvailable, isPaused, frozenNow } from '../ui/matchStatus.js';
+import { pauseAvailable, isPaused, frozenNow, coopSpeed, coopPause, coopPauseAvailable, coopFund, markSides } from '../ui/matchStatus.js';
 import { pieceTile } from '../render/drag.js';
 import {
   phaseMode, phaseBanner, isCombatPhase, showDeadPill, isBossPhase, placementContext, canPlace, boardTargets, dropIntent,
@@ -117,7 +118,7 @@ import { data, getMode } from '../data.js';
 import { audio, resultSpeaker, resultVoiceSlot } from '../audio.js';
 import { useDocClass, FullscreenButton } from '../ui/device.js';
 // MatchEnded, PausedOverlay, the highlight styles and keepEarly live in ./game/*.js.
-import { HUD_HZ_MS, MERGE_HL, SEL_RANGE, cx } from './game/marks.js';
+import { HUD_HZ_MS, MERGE_HL, SEL_RANGE, MARK_KINDS, MARK_OWN_KIND, MARK_PARTNER, cx } from './game/marks.js';
 import { keepEarly, audioEarly, snapshotStats, snapshotUnitStats, notePieceUnits } from './game/early.js';
 import { MatchEnded, PausedOverlay } from './game/overlays.js';
 import { inspectRange } from './game/range.js';
@@ -207,6 +208,12 @@ function MatchScreen() {
   const [camKind, setCamKind] = useState('prep');        // kind of the last camera request (data-camera)
   const [replace, setReplace] = useState(null);          // equip-replace dialog: { request, resolve }
   const [pauseBusy, setPauseBusy] = useState(false);
+  // 促融共竞 合作交互 (P6): the speed switch / fund request are single-flight like pause; the 标记 tool arms a kind the
+  // next field tap places (screens/game/markTool.js)
+  const [speedBusy, setSpeedBusy] = useState(false);
+  const [fundBusy, setFundBusy] = useState(false);
+  const [markOpen, setMarkOpen] = useState(false);
+  const [markKind, setMarkKind] = useState(null);
   const [armedCard, setArmedCard] = useState(null);     // the shop bar's armed card { kind, id } (merge tile cue)
   const cc = isClientCombat(pub);
   const battleState = useStore((s) => s.match.battle, shallowEqual); // local battle runner (client-side combat)
@@ -238,6 +245,12 @@ function MatchScreen() {
   if (!paused) pauseSeenRef.current = null;
   else if (pauseSeenRef.current == null) pauseSeenRef.current = serverNow();
   const frozenAt = paused ? frozenNow(pub, serverNow(), pauseSeenRef.current) : null;
+  // 促融共竞 合作交互 (P6, ui/matchStatus.js): the pair speed switch (players[].speed2), the pause request / vote state
+  // and the pending 费用请求 (prep only) — spectators drive none of it
+  const coop = String(pub?.modeId || '').startsWith('mode_cujong_');
+  const coopSpeedFacts = coop ? coopSpeed(pub, myId) : null;
+  const coopPauseFacts = coop ? coopPause(pub, myId) : null;
+  const coopFundFacts = coop && phase === PHASE.PREP && !spectator ? coopFund(pub, myId) : null;
   // live LP (user playtest #3 item 2): the own normal battle's counted leaks — the local runner's count (authoritative
   // or display replica) and the server's m.public players[].pendingLp, whichever is further (both only grow during a
   // round; a display replica stands still while the player watches a teammate's field, the server's count then moves
@@ -291,7 +304,7 @@ function MatchScreen() {
     getChess: (id) => { const c = gd.chess(id); return ownDiyRecord(c, priv, { chess: data.get('chess'), backups: data.get('backups') }) || c; },
     getToken: gd.token, getItem: gd.item, getEffect: gd.effect, backups: gd.backups,
   }), [priv, pub?.stageId, editable, gd.ready, deployField]);
-  live.current = { pub, priv, field, editable, hasPersonalChoice, placeCtx, watching, watchWho, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, damageOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
+  live.current = { pub, priv, field, editable, hasPersonalChoice, placeCtx, watching, watchWho, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, damageOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused, coopSpeed: coopSpeedFacts, markKind };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
   // the own prep board: the normal board, or — in the prep of a boss round — the player's half of the boss field
@@ -937,6 +950,7 @@ function MatchScreen() {
       moveOff?.(); moveOff = null;
       setDrag(null);
       view.highlightTiles(null, null);
+      applyMarksRef.current?.(); // the wipe above also took the 标记 groups — bring them back (P6)
     };
     /** Open the direction wheel for a legal board drop (the piece stays on the tile meanwhile). */
     const openFacing = (entry, t) => {
@@ -960,6 +974,7 @@ function MatchScreen() {
         const { legal } = boardTargets(L.placeCtx, entry.piece.uid);
         view.highlightTiles(null, null);
         view.highlightTiles(legal, 'legal');
+        applyMarksRef.current?.(); // the wipe above also took the 标记 groups — bring them back (P6)
         ptr.released = false; ptr.tile = null;
         // capture phase: marked before the drag controller (canvas listener) ends the drag
         const onUp = () => { ptr.released = true; };
@@ -1026,6 +1041,16 @@ function MatchScreen() {
       view.on('tileClick', (t) => {
         if (!t || !Number.isInteger(t.row) || !Number.isInteger(t.col)) return;
         const L = live.current;
+        // 促融共竞 标记 (P6): an armed kind turns this ground tap into a mark (both sides see it; the server keeps one
+        // active per side and answers m.mark). Tiles the renderer picks as pieces/enemies land in pieceClick instead —
+        // a mark there means aiming at an occupied tile, which the remake's tap model cannot express (official drag&drop).
+        if (L.markKind) {
+          audio.sfx('click', { volume: 0.4 });
+          actions.mark(t.row, t.col, L.markKind);
+          live.current.markKind = null;
+          setMarkKind(null);
+          return;
+        }
         const [row, col] = L.terrainTile(t.row, t.col);
         const device = L.deviceBattle
           ? deviceTipAt(L.terrainStage, row, col, { units: [...deviceUnitsRef.current.values()], snap: snapUnitsRef.current })
@@ -1084,6 +1109,18 @@ function MatchScreen() {
   }, []);
   const togglePauseRef = useRef(togglePause);
   togglePauseRef.current = togglePause;
+  // 促融共竞 合作交互 (P6): the pair speed switch, the pause request / vote flow and the 费用请求 prompt — single-flight
+  // like the solo pause; the server's m.public fields drive the visual state (no optimistic updates)
+  const coopPauseOff = useCallback(async () => { setPauseBusy(true); await actions.pause(false); setPauseBusy(false); }, []);
+  const coopPausePropose = useCallback(async () => { setPauseBusy(true); await actions.pause(true); setPauseBusy(false); }, []);
+  const coopPauseVote = useCallback(async (voteId, agree) => { setPauseBusy(true); await actions.pauseVote(voteId, agree); setPauseBusy(false); }, []);
+  const toggleSpeed = useCallback(async () => {
+    setSpeedBusy(true);
+    await actions.speed(!live.current.coopSpeed?.mine);
+    setSpeedBusy(false);
+  }, []);
+  const fundAsk = useCallback(async () => { setFundBusy(true); await actions.fundAsk(); setFundBusy(false); }, []);
+  const fundAnswer = useCallback(async (askId, accept) => { setFundBusy(true); await actions.fundAnswer(askId, accept); setFundBusy(false); }, []);
 
   // a press on the field deselects (a tap on a piece selects it again at release — see pieceClick)
   useEffect(() => {
@@ -1329,6 +1366,22 @@ function MatchScreen() {
   // the solo pause button: only while the own battle still runs (the server refuses it afterwards)
   const canPause = pauseAvailable(pub, { solo, alive, done: meP?.status === 'done' || localDone });
   live.current.canPause = canPause;
+  // 促融共竞 合作交互 (P6): the pause control (request / vote / lift) and the speed switch ride the same battle phases;
+  // spectators never drive them. `busy` covers every single-flight of the trio so one press cannot race another.
+  const canCoopPause = coop && !spectator && coopPauseAvailable(pub, { alive, done: meP?.status === 'done' || localDone });
+  const coopFacts = coop && !spectator ? {
+    speed: isCombatPhase(phase) ? coopSpeedFacts : null,
+    pause: canCoopPause || coopPauseFacts?.paused || coopPauseFacts?.request ? coopPauseFacts : null,
+    // the idle 费用请求 chip is a prep feature; `fund` is only the PENDING request (null while idle — CoopFundControls
+    // renders the ask button itself), so availability must not key off it (real-browser preview caught the empty HUD)
+    fundAvail: phase === PHASE.PREP,
+    fund: coopFundFacts,
+    busy: pauseBusy || speedBusy || fundBusy,
+    onSpeed: toggleSpeed,
+    onPausePropose: coopPausePropose, onPauseCancel: coopPauseOff, onPauseResume: coopPauseOff,
+    onPauseAgree: (id) => coopPauseVote(id, true), onPauseDecline: (id) => coopPauseVote(id, false),
+    onFundAsk: fundAsk, onFundAccept: (id) => fundAnswer(id, true), onFundDecline: (id) => fundAnswer(id, false),
+  } : null;
   // client-side combat: observing a teammate's battle (research 09 §3.1) and the 联防 / 最终攻势 camera halves
   // (an eliminated player auto-observes a teammate's normal field — research 09 "keep-watching" — without asking)
   const watchedFid = watchingOther ? watching : (cc && combat && !alive && battleState && battleState.watch && battleState.kind === 'normal' ? battleState.fieldId : null);
@@ -1438,6 +1491,25 @@ function MatchScreen() {
     showRange(view, cardRange?.grid, cardRange?.row, cardRange?.col, cardRange?.dir, SEL_RANGE);
     return () => showRange(view, null, 0, 0, null, SEL_RANGE);
   }, [view, cardRangeKey, showPrep, field]);
+  // 促融共竞 标记 (P6): m.public.marks as highlight groups — own kinds in their colors, the partner's green — on whatever
+  // board / battle field is on screen. Re-applied on every m.public push and after the drag flows' full wipes (above);
+  // the two board spaces coincide (both sides mark the same row/col on their own board).
+  const applyMarks = useCallback(() => {
+    if (!view) return;
+    const L = live.current;
+    if (!String(L.pub?.modeId || '').startsWith('mode_cujong_')) return;
+    const { mine, theirs } = markSides(L.pub, L.myId);
+    try {
+      for (const kind of MARK_KINDS) {
+        view.highlightTiles(mine.filter((m) => m.kind === kind).map((m) => [m.row, m.col]), MARK_OWN_KIND[kind]);
+      }
+      view.highlightTiles(theirs.map((m) => [m.row, m.col]), MARK_PARTNER);
+    } catch { /* cosmetic */ }
+  }, [view]);
+  const applyMarksRef = useRef(applyMarks);
+  applyMarksRef.current = applyMarks;
+  const markKey = coop ? JSON.stringify(markSides(pub, myId)) : '';
+  useEffect(() => { applyMarks(); }, [applyMarks, markKey, pub]);
   // the card's bond chips — and the popup a chip opens: a battle / scouted unit's OWNER's bonds (yours, or that
   // teammate's — m.public + live layers), your own piece's yours, a popup member card the popup's player; shop / reward
   // cards read the strip's (ui/watchBonds.js detailBondOwner)
@@ -1461,6 +1533,7 @@ function MatchScreen() {
         readyBusy=${readyBusy} readyCount=${readyCount} playerCount=${solo ? 1 : aliveCount}
         pen=${pen} penAvail=${penAvail} onPen=${togglePen} config=${gd.config} frozenAt=${frozenAt}
         pause=${canPause || paused ? { show: canPause, paused, busy: pauseBusy, onToggle: () => togglePause(!paused) } : null}
+        coop=${coopFacts}
         live=${liveLpNow} spectator=${spectator}
         spectators=${specFacts.list} myId=${myId} isHost=${specFacts.isHost} onRemoveSpectator=${removeSpectator} />
 
@@ -1516,6 +1589,9 @@ function MatchScreen() {
 
       <div class="gm__corner">
         ${spectator ? null : html`<${EmoteWheel} open=${emoteOpen} onToggle=${(open) => { setEmoteOpen(open); if (open) setDamageOpen(false); }} onSend=${(id) => actions.emote(id)} disabled=${conn.status !== 'online'} />`}
+        ${coop && !spectator ? html`<${MarkTool} open=${markOpen} kind=${markKind} disabled=${conn.status !== 'online'}
+          onOpen=${(open) => { setMarkOpen(open); if (open) { setEmoteOpen(false); setDamageOpen(false); } }}
+          onPick=${(k) => { setMarkKind(k); setMarkOpen(false); }} />` : null}
         <button type="button" class="gm__gear" aria-label=${t('设置')} title=${t('设置')} onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
         <button type="button" class="gm__gear gm__guide" aria-label=${t('玩法说明')} title=${t('玩法说明')} onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
         <${FullscreenButton} class="gm__gear gm__fs" showUnavailable=${true} />
@@ -1563,7 +1639,7 @@ function MatchScreen() {
     ${facing && view ? html`<${FacingWheel} key=${`${facing.uid}:${facing.row},${facing.col}`} view=${view} row=${facing.row} col=${facing.col}
       grid=${facing.grid} name=${facing.name} onPreview=${previewFacing} onCommit=${commitFacing} onCancel=${cancelFacing} />` : null}
 
-    ${paused ? html`<${PausedOverlay} canResume=${solo} busy=${pauseBusy} onResume=${() => togglePause(false)} onExit=${() => setExitOpen(true)} />` : null}
+    ${paused ? html`<${PausedOverlay} canResume=${solo || coop} busy=${pauseBusy || !!(coop && coopPauseFacts?.releasing)} onResume=${() => togglePause(false)} onExit=${() => setExitOpen(true)} />` : null}
 
     ${replace ? html`<${EquipReplaceDialog} request=${replace.request} getItem=${gd.item}
       onConfirm=${(uid) => closeReplace(uid)} onCancel=${() => closeReplace(null)} />` : null}

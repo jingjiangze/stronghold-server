@@ -17,6 +17,7 @@ import { factionTypes, sortedPlayers, phaseTotalSeconds } from '../ui/gameLogic.
 import { enemyIconUrl, factionIconUrl } from '../ui/assetUrls.js';
 import { useStore } from '../store.js';
 import { data } from '../data.js';
+import { MATCH_STYLES, MATCH_STYLE_NAMES } from '../../../shared/constants.js';
 import { t, tParts } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
@@ -27,6 +28,8 @@ export function BriefingScreen() {
   const priv = useStore((s) => s.match.private);
   const myId = useStore((s) => s.me.playerId);
   const solo = useStore((s) => s.room?.mode === 'solo') || String(pub?.modeId || '').includes('single');
+  // 促融共竞 比赛风格: every player picks their own in this phase (g.matchStyle; the chips re-pick freely)
+  const cujong = String(pub?.modeId || '').startsWith('mode_cujong_');
   const gd = useGameData();
   const [exit, setExit] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,6 +90,14 @@ export function BriefingScreen() {
             <span class="brief-faction__text"><b>${factions[t]?.name || t}</b><span>${factions[t]?.desc || ''}</span></span>
           </div>`) : html`<p class="t-dim">${t('本局没有特训敌人')}</p>`}
         </div>
+        ${cujong ? html`<div class="brief-styles">
+          <h3 class="brief-h"><span>${t('比赛风格')}</span><${MicroLabel}>MATCH STYLE</${MicroLabel}></h3>
+          <div class="brief-styles__list">
+            ${MATCH_STYLES.map((id) => html`<button key=${id} type="button" class=${cx('brief-style', me?.styleId === id && 'is-active')} onClick=${() => actions.matchStyle(id)}>
+              <${Icon} name="shield" /><span>${t(MATCH_STYLE_NAMES[id])}</span>
+            </button>`)}
+          </div>
+        </div>` : null}
       </section>
       <section class="brief__right">
         <${MatchInfo} model=${info} />

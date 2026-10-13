@@ -106,3 +106,65 @@ export function remainAt(deadline, now) {
   if (!(Number.isFinite(deadline) && deadline > 0) || !Number.isFinite(now)) return null;
   return Math.max(0, Math.ceil((deadline - now) / 1000));
 }
+
+// ---- 促融共竞 合作交互 (P6; PRTS main.raw 694–720) --------------------------------------------------------------------
+
+/**
+ * 倍速 (PRTS main.raw 711–714): each side owns one switch (m.public players[].speed2) and the pair gates the battle
+ * speed — the server runs 2× only while BOTH are on (Match.effGameSpeed), the standard rate otherwise.
+ * @param {any} pub m.public
+ * @param {any} myId
+ * @returns {{ mine: boolean, theirs: boolean, on: boolean }|null} null without a player list
+ */
+export function coopSpeed(pub, myId) {
+  if (!isObj(pub) || !Array.isArray(pub.players)) return null;
+  const me = pub.players.find((p) => p.playerId === myId) || null;
+  const partner = pub.players.find((p) => p.playerId !== myId && !p.left) || null;
+  const mine = !!me?.speed2;
+  const theirs = !!partner?.speed2;
+  return { mine, theirs, on: mine && theirs };
+}
+
+/**
+ * 合作暂停 (PRTS main.raw 717–720): the proposer sends g.pause { on: true }, the partner answers (g.pauseVote agree /
+ * decline — the proposer's own second { on: true } also counts as approval), and ANY side lifts an active pause with
+ * { on: false } (the server adds a ~1 s release cooldown, m.public.pauseRelease).
+ * @returns {{ paused: boolean, releasing: boolean, request: { id: number, mine: boolean }|null }|null}
+ */
+export function coopPause(pub, myId) {
+  if (!isObj(pub)) return null;
+  const req = isObj(pub.pauseRequest) ? pub.pauseRequest : null;
+  return {
+    paused: !!pub.paused,
+    releasing: !!pub.pauseRelease,
+    request: req ? { id: req.id, mine: req.proposerId === myId } : null,
+  };
+}
+
+/** Whether this side raises the 合作暂停 control: while a battle phase runs (the solo rule), and always while a request is pending or the match is paused (to answer / lift it). */
+export function coopPauseAvailable(pub, { alive = true, done = false } = {}) {
+  if (!isObj(pub) || alive === false) return false;
+  if (pub.paused || isObj(pub.pauseRequest)) return true;
+  if (done) return false;
+  return PAUSE_PHASES.has(pub.phase);
+}
+
+/** The pending 费用请求 of m.public.fundAsk, from this side's point of view (PRTS main.raw 694–698). */
+export function coopFund(pub, myId) {
+  const ask = isObj(pub?.fundAsk) ? pub.fundAsk : null;
+  return ask ? { id: ask.id, mine: ask.fromId === myId } : null;
+}
+
+/**
+ * The 标记 entries of m.public.marks split by side (PRTS main.raw 699–703): own marks carry their kind (标记 / 注意 /
+ * 撤退), the partner's render green whatever the kind (the official reading: 对方的标记显示为绿色).
+ * @returns {{ mine: any[], theirs: any[] }}
+ */
+export function markSides(pub, myId) {
+  const out = { mine: [], theirs: [] };
+  for (const m of Array.isArray(pub?.marks) ? pub.marks : []) {
+    if (!m || !Number.isInteger(m.row) || !Number.isInteger(m.col)) continue;
+    (m.playerId === myId ? out.mine : out.theirs).push(m);
+  }
+  return out;
+}

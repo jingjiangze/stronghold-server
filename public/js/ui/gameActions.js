@@ -65,6 +65,8 @@ export async function act(t, fields = {}, opts = {}) {
 
 export const actions = {
   infoReady: (setupRevision = 0) => act('g.infoReady', { setupRevision }),
+  // 促融共竞 比赛风格 (INFO_CHECK; the chip re-picks, so no success chime)
+  matchStyle: (styleId) => act('g.matchStyle', { styleId }, { sfx: false }),
   rerollSetup: (setupRevision) => act('room.rerollSetup', { setupRevision }, { sfx: 'confirm' }),
   rerollVote: (voteId, agree) => act('g.rerollVote', { voteId, agree }, { sfx: agree ? 'confirm' : 'back' }),
   cancelReroll: (voteId) => act('room.cancelReroll', { voteId }, { sfx: 'back' }),
@@ -97,6 +99,14 @@ export const actions = {
   autoplay: (on) => act('g.autoplay', { on }),
   // solo battles only (ui/matchStatus.js pauseAvailable): m.public.paused follows
   pause: (on) => act('g.pause', { on: !!on }, { sfx: on ? 'click' : 'confirm' }),
+  // 促融共竞 合作交互 (P6, server/match/match/{cujong,pause}.js): the fund request (prep), the pair-gated 2× switch, the
+  // tile marks and the co-op pause votes. `pause` above also rides this flow: { on: true } proposes (or approves when the
+  // partner's request is pending), { on: false } cancels the own request / lifts an active pause.
+  fundAsk: () => act('g.fundAsk', {}, { sfx: 'confirm' }),
+  fundAnswer: (askId, accept) => act('g.fundAnswer', { askId, accept }, { sfx: accept ? 'confirm' : 'back' }),
+  mark: (row, col, kind) => act('g.mark', { row, col, kind }, { sfx: 'click' }),
+  speed: (on) => act('g.speed', { on: !!on }, { sfx: false }),
+  pauseVote: (voteId, agree) => act('g.pauseVote', { voteId, agree }, { sfx: agree ? 'confirm' : 'back' }),
   // room-level intent (NOT g.*): the host frees a spectator seat while the match runs — the server takes room.removeSpectator at
   // any time (server/lobby.js removeSpectator), the game screen had no entry for it (ui/hud.js SpectatorPill; GitHub #120)
   removeSpectator: (playerId) => act('room.removeSpectator', { playerId }, { sfx: 'back' }),

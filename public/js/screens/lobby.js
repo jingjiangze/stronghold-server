@@ -13,7 +13,7 @@
 
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR } from '../../../shared/constants.js';
+import { CUJONG_PROJECTS, CUJONG_PROJECT_NAMES, DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR } from '../../../shared/constants.js';
 import { html, Button, Icon, MicroLabel, Modal, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo, confirmDialog } from '../ui/components.js';
 import { AnnouncementBoard, announcementRevision, announcementDismissed, dismissAnnouncement } from '../ui/announcements.js';
 import { ServerStatusModal } from '../ui/serverStatus.js';
@@ -80,6 +80,9 @@ export function stageNote(stages) {
   return Number.isInteger(stages) && stages > 1 ? t('战场随机（共{stages}张）', { stages }) : '';
 }
 
+/** Shared 促融共竞 copy: the mode card, the fallback mode text and the protocol dialog all show it. */
+const CUJONG_DESC = N_('两名博士在线同屏合作：共享目标生命、互助复活，协作抵御共同敌手。');
+
 const MODE_CARDS = [
   {
     id: 'solo', name: N_('独立模拟'), en: 'SOLO SIMULATION', icon: 'user',
@@ -96,6 +99,11 @@ const MODE_CARDS = [
     desc: N_('寻找相同难度的博士，确认后组成四人同盟；也可从好友房组队匹配。'),
     points: [N_('4 名真人 · 不自动补 AI'), N_('跟随房间选项 · 全员确认自动开局')],
   },
+  {
+    id: 'cujong', name: N_('促融共竞'), en: 'FUSION CO-OP', icon: 'users',
+    desc: CUJONG_DESC,
+    points: [N_('固定 2 名博士 · 在线同屏合作'), N_('共享目标生命 · 30s 互助复活')],
+  },
 ];
 
 /**
@@ -105,6 +113,21 @@ const MODE_CARDS = [
  * @returns {{ code: string, desc: string, effects: string[], rounds: number, hidden: boolean, stageNote: string }}
  */
 export function difficultyInfo(roomMode, difficulty) {
+  if (roomMode === 'cujong') {
+    // A 促融共竞 room's difficulty slot carries the project id (shared/constants.js modeIdFor); the mode record
+    // comes from data/config.json (build-data clones 险境模拟 until the per-project content lands, P3–P6).
+    const m = CUJONG_PROJECTS.includes(difficulty) ? getMode(modeIdFor('cujong', difficulty)) : null;
+    return {
+      code: typeof m?.code === 'string' ? m.code : 'CC',
+      desc: typeof m?.desc === 'string' && m.desc ? m.desc : t(CUJONG_DESC),
+      effects: Array.isArray(m?.effectDescList) && m.effectDescList.length
+        ? m.effectDescList.map((e) => String(e).replace(/^[·•・･\s]+/, '')).filter(Boolean)
+        : [t('固定 2 名博士 · 在线同屏合作'), t('共享目标生命 · 30s 互助复活')],
+      rounds: null,
+      hidden: false,
+      stageNote: '',
+    };
+  }
   const fallback = MODE_TEXT[roomMode === 'solo' ? 'single' : 'multi'][difficulty] || { code: '', desc: '', effects: [] };
   // modeIdFor() lower-cases the difficulty: never call it with a value the server did not validate.
   const m = DIFFICULTIES.includes(difficulty) ? getMode(modeIdFor(roomMode, difficulty)) : null;
@@ -120,6 +143,12 @@ export function difficultyInfo(roomMode, difficulty) {
     hidden: difficulty !== 'FUNNY',
     stageNote: stageNote(Array.isArray(m?.stages) && m.stages.length ? m.stages : STAGE_POOL[difficulty]),
   };
+}
+
+/** Display name of a 促融共竞 project id ('football' → 阵地足球); the raw id when unknown. */
+export function cujongProjectLabel(project) {
+  const name = CUJONG_PROJECT_NAMES[project];
+  return name ? t(name) : String(project ?? '');
 }
 
 const CODE_RE = new RegExp(`^[A-Z0-9]{${ROOM_CODE_LEN}}$`);
@@ -277,6 +306,23 @@ function DifficultyCard({ roomMode, difficulty, selected, onSelect, disabled = f
   </button>`;
 }
 
+/** 促融共竞 project card (阵地足球 / 堡垒守御 / 障碍漂航): the mode's difficulty slot holds a project id. */
+function ProjectCard({ project, selected, onSelect, disabled = false }) {
+  const info = difficultyInfo('cujong', project);
+  return html`<button type="button" class=${`diff-card${selected ? ' is-selected' : ''}`}
+      style=${'--d-color: var(--mint-400)'} disabled=${disabled} onClick=${() => onSelect(project)} aria-pressed=${selected ? 'true' : 'false'}>
+    <span class="diff-card__bar" aria-hidden="true"></span>
+    <span class="diff-card__head">
+      <${Icon} name="users" class="diff-card__glyph" />
+      <span class="diff-card__name">${cujongProjectLabel(project)}</span>
+      <span class="diff-card__code num">${info.code}</span>
+    </span>
+    <span class="diff-card__desc">${info.desc}</span>
+    <span class="diff-card__effects">${info.effects.map((e) => html`<span key=${e}>${e}</span>`)}</span>
+    <span class="diff-card__check" aria-hidden="true"><${Icon} name="check" /><span>${t('已选定')}</span></span>
+  </button>`;
+}
+
 // Mounted on demand. Keep optional announcement I/O here, outside the shared in-match UI data contract.
 function LobbyAnnouncements({ snapshot, onClose }) {
   useData('announcements');
@@ -296,12 +342,16 @@ export function LobbyScreen() {
   const queued = queueActive(queue);
   const [roomMode, setRoomMode] = useState(() => {
     const mode = loadPref('lobby.mode', 'coop');
-    return ['solo', 'coop', 'match'].includes(mode) ? mode : 'coop';
+    return ['solo', 'coop', 'match', 'cujong'].includes(mode) ? mode : 'coop';
   });
   const matching = roomMode === 'match' || queued;
   const [difficulty, setDifficulty] = useState(() => {
     const d = loadPref('lobby.difficulty', 'FUNNY');
     return DIFFICULTIES.includes(d) ? d : 'FUNNY';
+  });
+  const [project, setProject] = useState(() => {
+    const p = loadPref('lobby.cujongProject', 'football');
+    return CUJONG_PROJECTS.includes(p) ? p : 'football';
   });
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(null);
@@ -344,6 +394,7 @@ export function LobbyScreen() {
 
   const pickMode = (m) => { setRoomMode(m); savePref('lobby.mode', m); };
   const pickDifficulty = (d) => { setDifficulty(d); savePref('lobby.difficulty', d); };
+  const pickProject = (p) => { setProject(p); savePref('lobby.cujongProject', p); };
 
   const run = async (kind, fn) => {
     if (inFlight.current) return;
@@ -355,9 +406,16 @@ export function LobbyScreen() {
       if (alive.current) setBusy(null);
     }
   };
-  const create = () => run('create', () => matching
-    ? net.request('queue.join', { difficulty })
-    : net.request('room.create', { mode: roomMode, difficulty }));
+  // 促融共竞's project id travels in the difficulty slot (shared/constants.js modeIdFor). The request itself keeps
+  // its literal `{ mode: roomMode, difficulty }` shape: room.create must not send experimental options — the server
+  // applies its defaults (test/ui/cluster-status.test.js pins exactly that).
+  const createDifficulty = roomMode === 'cujong' ? project : difficulty;
+  const create = () => run('create', () => {
+    const difficulty = createDifficulty;
+    return matching
+      ? net.request('queue.join', { difficulty })
+      : net.request('room.create', { mode: roomMode, difficulty });
+  });
   const join = (c = code) => {
     if (queued) { toast(t('请先取消多人匹配，再加入好友同盟'), 'warn'); return; }
     // Click callbacks may pass an event; only an explicit string overrides the typed key.
@@ -390,7 +448,7 @@ export function LobbyScreen() {
   };
 
   const selectedMode = MODE_CARDS.find(c => c.id === (matching ? 'match' : roomMode));
-  const selectedInfo = difficultyInfo(matching ? 'coop' : roomMode, queued ? queue.difficulty : difficulty);
+  const selectedInfo = difficultyInfo(matching ? 'coop' : roomMode, queued ? queue.difficulty : roomMode === 'cujong' ? project : difficulty);
 
   return html`<div class="screen lobby-screen">
     <header class="topbar">
@@ -462,19 +520,23 @@ export function LobbyScreen() {
       </section>
 
       <section class="lobby-right">
-        <div class="section-label"><span class="section-label__idx num">02</span>${queued ? t('同盟集结') : t('模拟难度')}<${MicroLabel}>${queued ? 'MATCHMAKING' : 'DIFFICULTY'}<//></div>
-        <div class="diff-list" hidden=${queued}>
-          ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${matching ? 'coop' : roomMode} difficulty=${d} selected=${(queued ? queue.difficulty : difficulty) === d} onSelect=${pickDifficulty} disabled=${queued || !!busy} />`)}
-        </div>
+        <div class="section-label"><span class="section-label__idx num">02</span>${queued ? t('同盟集结') : roomMode === 'cujong' ? t('比赛项目') : t('模拟难度')}<${MicroLabel}>${queued ? 'MATCHMAKING' : roomMode === 'cujong' ? 'PROJECT' : 'DIFFICULTY'}<//></div>
+        ${roomMode === 'cujong'
+          ? html`<div class="diff-list">
+              ${CUJONG_PROJECTS.map((p) => html`<${ProjectCard} key=${p} project=${p} selected=${project === p} onSelect=${pickProject} disabled=${!!busy} />`)}
+            </div>`
+          : html`<div class="diff-list" hidden=${queued}>
+              ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${matching ? 'coop' : roomMode} difficulty=${d} selected=${(queued ? queue.difficulty : difficulty) === d} onSelect=${pickDifficulty} disabled=${queued || !!busy} />`)}
+            </div>`}
         ${matching ? html`<${MatchmakingPanel} queue=${queue} difficulty=${difficulty} online=${online} joining=${busy === 'create'} onJoin=${create} compact=${true} />` : html`<div class="create-box">
           <${Tooltip} block=${true} text=${online ? null : t('正在连接服务器…')}>
             <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online} onClick=${create}>
-              ${roomMode === 'solo' ? t('开始独立模拟') : t('创建同盟')}
+              ${roomMode === 'solo' ? t('开始独立模拟') : roomMode === 'cujong' ? t('创建促融共竞') : t('创建同盟')}
             <//>
           <//>
           <div class="create-box__hint">
             ${online
-              ? html`<span>${roomMode === 'solo' ? t('创建后即可开始模拟') : t('创建后可邀请好友或添加 AI 队友')}</span>`
+              ? html`<span>${roomMode === 'solo' ? t('创建后即可开始模拟') : roomMode === 'cujong' ? t('创建后邀请另一名博士，两人到齐即可开始') : t('创建后可邀请好友或添加 AI 队友')}</span>`
               : html`<${Spinner} size="sm" label="CONNECTING" />`}
           </div>
         </div>`}
@@ -488,9 +550,11 @@ export function LobbyScreen() {
       <div class="lobby-protocol-text">
         <h3>${t(selectedMode.name)}</h3><p>${t(selectedMode.desc, selectedMode.params)}</p>
         <ul>${selectedMode.points.map(p => html`<li key=${p}>${t(p, selectedMode.pointParams)}</li>`)}</ul>
-        <h3>${t('{0} · {rounds} 回合', { 0: t(DIFFICULTY_NAMES[queued ? queue.difficulty : difficulty]), rounds: selectedInfo.rounds })}${selectedInfo.hidden ? t(' + 隐秘核心') : ''}</h3>
+        <h3>${roomMode === 'cujong' && !queued
+          ? t(CUJONG_PROJECT_NAMES[project])
+          : t('{0} · {rounds} 回合', { 0: t(DIFFICULTY_NAMES[queued ? queue.difficulty : difficulty]), rounds: selectedInfo.rounds })}${selectedInfo.hidden ? t(' + 隐秘核心') : ''}</h3>
         <p>${selectedInfo.desc}</p><ul>${selectedInfo.effects.map(p => html`<li key=${p}>${p}</li>`)}</ul>
-        <p>${selectedInfo.stageNote}</p>
+        ${selectedInfo.stageNote ? html`<p>${selectedInfo.stageNote}</p>` : null}
       </div>
     <//>` : null}
   </div>`;

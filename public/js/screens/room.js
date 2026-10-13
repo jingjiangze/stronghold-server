@@ -12,7 +12,7 @@
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MAX_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
+import { CUJONG_PROJECTS, CUJONG_PROJECT_NAMES, DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MAX_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
 import { roomCapacity } from '../../../shared/playerCapacity.js';
 import {
   html, Button, Icon, MicroLabel, PingPill, AvatarFrame, DifficultyTag, DifficultyIcon, Tooltip, confirmDialog, doctorNo,
@@ -25,7 +25,7 @@ import { SettingsButton } from '../ui/settings.js';
 import { LoadoutButton } from './loadout.js';
 import { net } from '../net.js';
 import { store, useStore, shallowEqual, emptyMatch, isSpectating } from '../store.js';
-import { difficultyInfo } from './lobby.js';
+import { cujongProjectLabel, difficultyInfo } from './lobby.js';
 import { ExperimentalOptions, experimentalSummary } from '../ui/experimental.js';
 import { ServerStatusModal } from '../ui/serverStatus.js';
 import { MatchmakingPanel, queueActive } from '../ui/matchmaking.js';
@@ -67,7 +67,7 @@ export function roomFacts(room, myId) {
   return {
     seats, occupied, humans, mine, isHost, readyHumans, isReady,
     emptySeats: seats.filter((s) => !s).length,
-    canStart: isHost && othersReady && !!mine,
+    canStart: isHost && othersReady && !!mine && (room?.mode !== 'cujong' || occupied.length === 2),
     othersReady,
     // spectator seats (never players: not in `humans`, never counted for ready / start)
     spectators: Array.isArray(room?.spectators) ? room.spectators.filter((s) => s && typeof s === 'object') : [],
@@ -189,7 +189,8 @@ function SpectatorBar({ facts, myId, busy, onRemove, onSit }) {
 function InviteBox({ code, name, difficulty }) {
   const copy = async (what) => {
     // the copied link carries an invitation line (#103): 「{name}邀请你加入卫戍协议：盟约【{difficulty}】」
-    const invite = t('{name}邀请你加入卫戍协议：盟约【{difficulty}】', { name: name ?? '', difficulty: DIFFICULTY_NAMES[difficulty] ? t(DIFFICULTY_NAMES[difficulty]) : '' });
+    // a 促融共竞 room's difficulty slot holds a project id (shared/constants.js modeIdFor)
+    const invite = t('{name}邀请你加入卫戍协议：盟约【{difficulty}】', { name: name ?? '', difficulty: DIFFICULTY_NAMES[difficulty] ? t(DIFFICULTY_NAMES[difficulty]) : CUJONG_PROJECT_NAMES[difficulty] ? t(CUJONG_PROJECT_NAMES[difficulty]) : '' });
     const ok = await copyText(what === 'code' ? code : `${inviteLink(code)} ${invite}`);
     if (ok) toast(what === 'code' ? t('已复制同盟密钥 {code}', { code }) : t('已复制邀请链接'), 'success');
     else toast(t('复制失败，请手动复制'), 'warn');
@@ -205,6 +206,21 @@ function InviteBox({ code, name, difficulty }) {
 }
 
 function DifficultyPicker({ room, isHost, busy, onPick }) {
+  if (room.mode === 'cujong') {
+    if (!isHost) {
+      return html`<div class="dpick dpick--ro">
+        <span class="dtag" style="--d-color:var(--mint-400)"><${Icon} name="users" class="dtag__icon" /><span class="dtag__name">${cujongProjectLabel(room.difficulty)}</span></span>
+        <span class="t-dim">${t('由创建者选择')}</span>
+      </div>`;
+    }
+    return html`<div class="dpick" role="radiogroup" aria-label=${t('比赛项目')}>
+      ${CUJONG_PROJECTS.map((p) => html`<button key=${p} type="button" role="radio" aria-checked=${room.difficulty === p ? 'true' : 'false'}
+          class=${`dpick__opt${room.difficulty === p ? ' is-active' : ''}`} style=${'--d-color:var(--mint-400)'}
+          disabled=${!!busy} onClick=${() => room.difficulty !== p && onPick(p)}>
+        ${t(CUJONG_PROJECT_NAMES[p])}
+      </button>`)}
+    </div>`;
+  }
   if (!isHost) {
     return html`<div class="dpick dpick--ro">
       <${DifficultyTag} difficulty=${room.difficulty} size="lg" code=${difficultyInfo(room.mode, room.difficulty).code} />
@@ -314,8 +330,8 @@ export function RoomScreen() {
       ? html`<span class="t-mint">${t('*模拟协议已就绪，准许进入模拟')}</span>`
     : facts.isHost
       ? facts.canStart
-        ? html`<span class="t-mint">${t('*同盟人数达标，准许进入模拟')}</span>`
-        : html`<span class="t-lo">${t('等待所有博士准备就绪')}</span>`
+        ? html`<span class="t-mint">${room.mode === 'cujong' ? t('*两名博士到齐，准许进入模拟') : t('*同盟人数达标，准许进入模拟')}</span>`
+        : html`<span class="t-lo">${room.mode === 'cujong' && facts.occupied.length < 2 ? t('等待第二名博士加入') : t('等待所有博士准备就绪')}</span>`
       : myReady
         ? html`<span class="t-mint">${t('已就绪 · 等待创建者开始模拟')}</span>`
         : html`<span class="t-lo">${t('准备就绪后，创建者即可开始模拟')}</span>`;
@@ -335,8 +351,10 @@ export function RoomScreen() {
         <${GuideButton} class="room-guide" variant="secondary" label=${t('玩法说明')} />
       </div>
       <div class="topbar__center">
-        <${MicroLabel} tone="mint">${coop ? 'ALLIANCE LOBBY' : 'SOLO SIMULATION'}<//>
-        <h1 class="topbar__title">${coop ? t('同盟模拟') : t('独立模拟')}<span class="topbar__sep"></span><${DifficultyTag} difficulty=${room.difficulty} size="lg" /></h1>
+        <${MicroLabel} tone="mint">${room.mode === 'cujong' ? 'FUSION CO-OP' : coop ? 'ALLIANCE LOBBY' : 'SOLO SIMULATION'}<//>
+        <h1 class="topbar__title">${room.mode === 'cujong' ? t('促融共竞') : coop ? t('同盟模拟') : t('独立模拟')}<span class="topbar__sep"></span>${room.mode === 'cujong'
+          ? html`<span class="dtag dtag--lg" style="--d-color:var(--mint-400)"><${Icon} name="users" class="dtag__icon" /><span class="dtag__name">${cujongProjectLabel(room.difficulty)}</span></span>`
+          : html`<${DifficultyTag} difficulty=${room.difficulty} size="lg" />`}</h1>
         ${facts.seats.length > MAX_SEATS ? html`<span class="room-capacity">${t('实验性同盟 · {n} 人模式 · 支持同模式匹配', { n: facts.seats.length })}</span>` : null}
       </div>
       <div class="topbar__right">
@@ -375,7 +393,7 @@ export function RoomScreen() {
     <footer hidden=${queued} class="room-bar">
       <div class="room-bar__left">
         <div class="room-bar__difficulty">
-          <span class="room-bar__label">${t('模拟难度')}<${MicroLabel}>DIFFICULTY<//></span>
+          <span class="room-bar__label">${room.mode === 'cujong' ? t('比赛项目') : t('模拟难度')}<${MicroLabel}>${room.mode === 'cujong' ? 'PROJECT' : 'DIFFICULTY'}<//></span>
           <div class="room-bar__opts">
             <${DifficultyPicker} room=${room} isHost=${facts.isHost} busy=${busy} onPick=${setDifficulty} />
             <${AiLastToggle} option=${aiLastOption(room, me.playerId)} busy=${busy} onToggle=${setAiLast} />
@@ -396,7 +414,7 @@ export function RoomScreen() {
       </div>
       <div class="room-bar__right">
         <${LoadoutButton} from="room" size="lg" class="room-loadout" label=${t('干员调配')} />
-        ${coop && facts.isHost ? html`<${Tooltip} text=${queueReason ? t(queueReason) : t('整队寻找相同人数模式和难度的真人，确认后自动开局')}>
+        ${room.mode === 'coop' && facts.isHost ? html`<${Tooltip} text=${queueReason ? t(queueReason) : t('整队寻找相同人数模式和难度的真人，确认后自动开局')}>
           <${Button} variant="secondary" size="lg" icon="search" loading=${busy === 'queue'} disabled=${!!queueReason || !!busy}
             data-testid="party-queue" onClick=${joinQueue}>${t('组队匹配')}<//>
         <//>` : null}

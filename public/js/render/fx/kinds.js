@@ -48,6 +48,8 @@ export const FX_KINDS = Object.freeze({
   ulpiaReturn: { a: 'blink', c: 0x9ff0dc }, manifoldSplit: { a: 'blink', c: 0xd8b0ff },
   // displacement
   pull: { a: 'move', c: 0x9fd4ff }, push: { a: 'move', c: 0xffd9a0 }, displace: { a: 'move', c: 0xd0c0a0 }, lure: { a: 'move', c: 0xffb3ec },
+  // 阵地足球 (P3): the kicked ball's slide marker (its travel rides the displaced unit's own fx) and the goal flash
+  footballKick: { a: 'move', c: 0xd0c0a0 }, footballGoal: { a: 'blast', c: 0xffd45a, r: 1.5 },
   charge: { a: 'move', c: 0xff9c33 }, dash: { a: 'move', c: 0xffd9a0 }, slippery: { a: 'move', c: 0x9fe6ff },
   // pulses
   sonic: { a: 'wave', c: 0xc9a2ff, r: 1.5 }, pulse: { a: 'wave', c: 0x9ff0dc }, sermon: { a: 'wave', c: 0xffe28a, r: 1.5 }, ripple: { a: 'wave', c: 0x5fe0ff },

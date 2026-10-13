@@ -20,11 +20,12 @@
 
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { PHASE } from '../../../shared/constants.js';
-import { html, Icon, Tooltip } from './components.js';
+import { html, Icon, Tooltip, useTicker } from './components.js';
 import { PlayerAvatar, LpTower, GIcon, LocalSprite } from './gameComponents.js';
 import { EmoteBubble } from './emotes.js';
 import { STATUS_META, sortedPlayers, teamFrameIds } from './gameLogic.js';
 import { MissTag, uniteRemaining } from './hud.js';
+import { serverNow } from '../store.js';
 import { localAsset } from '../data.js';
 import { t } from '../../../shared/i18n.js';
 import { uniteRelayKey } from '../battle/observe.js';
@@ -47,7 +48,8 @@ const STATUS_SPRITE = { ready: 'icon_ready', deciding: 'icon_waiting', done: 'ic
  * @returns {{ lp: number|null, pending: number, unite: boolean, left: number|null }}
  */
 export function rowLp(p, pub, self = null, { uniteLocal = null, cap = 10 } = {}) {
-  const pubLp = Number.isFinite(p?.lp) ? p.lp : null;
+  // 促融共竞: players[] carries the target-point life (targetLp) — the tower reads it instead of the in-battle lp
+  const pubLp = Number.isFinite(p?.targetLp) ? p.targetLp : Number.isFinite(p?.lp) ? p.lp : null;
   if ((pub?.phase !== PHASE.COMBAT && pub?.phase !== PHASE.UNITE) || p?.alive === false) return { lp: pubLp, pending: 0, unite: false, left: null };
   const lp = self && Number.isFinite(self.lp) ? self.lp : pubLp;
   const leaker = pub.phase === PHASE.UNITE && Array.isArray(pub.unite?.leakers) && pub.unite.leakers.includes(p.playerId);
@@ -186,6 +188,8 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
     onWatch(p);
   };
   const style = expanded ? `--team-columns:${layout.columns};--team-rows:${layout.rows};--team-row:${layout.rowHeight}px;--team-avatar:${layout.avatar}px;--team-gap:${layout.gap}px;--ebubble-unit:${layout.avatar / 1.08}px` : undefined;
+  // 促融共竞: tick while any row shows the revive countdown (the row reads p.reviveAt against the server clock)
+  useTicker(players.some((p) => p.status === 'reviving') ? 500 : 0);
   return html`<aside ref=${panelRef} class=${cx('team', compact && 'team--compact', expanded && 'team--expanded', !rosterOpen && 'is-folded')} style=${style} aria-label=${t('同盟成员')}>
     <div ref=${headerRef} class="team__header">
       <button type="button" class="team__toggle" aria-expanded=${String(rosterOpen)} aria-controls="team-roster" onClick=${() => setRosterOpen(on => !on)}>
@@ -225,6 +229,7 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
                   : html`<${GIcon} name=${meta.glyph} />`}
               </span>
             <//>
+            ${p.status === 'reviving' && Number.isFinite(p.reviveAt) ? html`<span class="team__revive num" title=${t('复活中')}>${t('{n} 秒后复活', { n: Math.max(0, Math.ceil((p.reviveAt - serverNow()) / 1000)) })}</span>` : null}
             ${watched && !self ? html`<span class="team__eye" title=${t('正在查看')}><${GIcon} name="eye" /></span>` : null}
           </div>
           ${open ? html`<button type="button" class="btn btn--primary btn--sm team__ob"

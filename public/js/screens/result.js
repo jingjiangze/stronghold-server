@@ -150,6 +150,7 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
           <b class="result__rnum num">${r.roundsPassed}</b>
           ${r.roundsPassed <= r.lastRound ? html`<span class="result__rof num">/${r.lastRound}</span>` : null}
         </div>
+        ${r.cujong && Number.isFinite(r.cujong.stamps) ? html`<p class="result__stamps t-lo">${t('嘉奖印章')} <b class="num">${r.cujong.stamps}</b>${r.cujong.goals && (r.cujong.goals.for || r.cujong.goals.against) ? html` · ${t('净胜球')} <b class="num">${r.cujong.goals.diff}</b>` : null}</p>` : null}
         <div class="result__medals">
           ${boss ? html`<div class=${cx('medal', r.victory && 'is-done')} title=${boss.name}>
             <${Img} src=${enemyIconUrl(gd.m, boss.enemyKey)} /><span class="medal__check">${r.victory ? html`<${Icon} name="check" />` : html`<${Icon} name="close" />`}</span>

@@ -21,7 +21,8 @@ export function normalizeResult(res, pub) {
     const pp = pubPlayers.get(p.playerId) || {};
     const title = typeof p.title === 'string' ? { id: p.title } : isObj(p.title) ? p.title : null;
     const alive = p.alive ?? pp.alive ?? true;
-    const ownLp = Number.isFinite(p.lp) ? p.lp : (Number.isFinite(pp.lp) ? pp.lp : null);
+    // 促融共竞: the settlement shows the target-point life when the row carries it
+    const ownLp = Number.isFinite(p.targetLp) ? p.targetLp : Number.isFinite(p.lp) ? p.lp : (Number.isFinite(pp.lp) ? pp.lp : null);
     return {
       playerId: p.playerId,
       seat: int(p.seat, int(pp.seat, 0)),
@@ -38,6 +39,7 @@ export function normalizeResult(res, pub) {
       stats: isObj(p.stats) ? p.stats : {},
       trophies: Number.isFinite(p.trophies) ? p.trophies : 0,
       reward: Number.isFinite(p.reward) ? p.reward : 0,
+      deaths: Number.isFinite(p.deaths) ? p.deaths : 0,
       left: !!p.left,
     };
   }).sort((a, b) => a.seat - b.seat);
@@ -54,6 +56,8 @@ export function normalizeResult(res, pub) {
     bossId: r.bossId ?? pub?.bossId ?? null,
     hiddenBossId: r.hiddenBossId ?? pub?.hiddenBossId ?? null,
     durationMs: Number.isFinite(r.durationMs) ? r.durationMs : null,
+    // 促融共竞: the settlement's 嘉奖印章 block ({ stage, stamps, stages }), null elsewhere
+    cujong: isObj(r.cujong) ? r.cujong : null,
     players,
   };
 }

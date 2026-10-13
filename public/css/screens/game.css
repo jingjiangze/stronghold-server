@@ -101,6 +101,56 @@
 .pausebtn.is-on { background: var(--mint-500); border-color: var(--mint-400); color: var(--text-on-mint); box-shadow: 0 0 .22rem rgba(23, 249, 183, .45); }
 .pausebtn.is-busy { opacity: .6; }
 
+/* 促融共竞 合作交互 (P6, ui/hud.js): the pair speed switch (two lamps: own blue / partner green), the pause request chip
+   and the 费用请求 prompt chip */
+.speedbtn {
+  display: flex; align-items: center; gap: .07rem; height: .6rem; padding: 0 .12rem; flex: none;
+  background: rgba(10, 14, 12, .88); border: 2px solid rgba(242, 242, 242, .75); color: #fff;
+  box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+}
+.speedbtn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); border-color: #fff; }
+.speedbtn__lamp { width: .13rem; height: .13rem; border-radius: 50%; background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .45); }
+.speedbtn__lamp.is-lit { background: #66b8ff; border-color: #cfe8ff; box-shadow: 0 0 .12rem rgba(102, 184, 255, .9); }
+.speedbtn__lamp.is-partner.is-lit { background: #4fd07a; border-color: #c8f4d8; box-shadow: 0 0 .12rem rgba(79, 208, 122, .9); }
+.speedbtn__x { font-family: var(--font-num); font-size: .16rem; line-height: 1; }
+.speedbtn.is-on { background: var(--mint-500); border-color: var(--mint-400); color: var(--text-on-mint); box-shadow: 0 0 .22rem rgba(23, 249, 183, .45); }
+.speedbtn.is-busy { opacity: .6; }
+.cooppill {
+  display: inline-flex; align-items: center; height: .38rem; padding: 0 .14rem; flex: none;
+  background: rgba(10, 14, 12, .88); border: 1px solid rgba(242, 242, 242, .6); color: #fff;
+  font-size: .15rem; white-space: nowrap; box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
+}
+.cooppill:hover:not(:disabled) { background: rgba(255, 255, 255, .14); border-color: #fff; }
+.cooppill.is-primary { background: var(--mint-500); border-color: var(--mint-400); color: var(--text-on-mint); }
+.cooppill.is-pending { opacity: .75; }
+.cooppill.is-busy { opacity: .6; }
+.coopask {
+  display: inline-flex; align-items: center; gap: .08rem; padding: .05rem .1rem; flex: none;
+  background: rgba(10, 14, 12, .92); border: 1px solid rgba(242, 242, 242, .5); color: #fff;
+  font-size: .15rem; white-space: nowrap; box-shadow: 0 .04rem .16rem rgba(0, 0, 0, .55);
+}
+.coopask b { font-weight: 600; }
+
+/* 促融共竞 标记 tool (P6, screens/game/markTool.js): the corner button + its kind menu (kinds: 标记 gold / 注意 blue / 撤退 red) */
+.marktool { position: relative; display: grid; }
+.marktool__menu {
+  position: absolute; right: 0; bottom: calc(100% + .08rem); display: grid; gap: .06rem;
+  padding: .08rem; background: rgba(10, 14, 12, .95); border: 1px solid rgba(242, 242, 242, .4);
+  box-shadow: 0 .06rem .2rem rgba(0, 0, 0, .6); z-index: 5;
+}
+.marktool__kind {
+  display: flex; align-items: center; gap: .08rem; min-width: 1rem; height: .38rem; padding: 0 .14rem;
+  background: transparent; border: 1px solid transparent; color: #fff; font-size: .15rem; white-space: nowrap;
+}
+.marktool__kind::before { content: ''; width: .14rem; height: .14rem; }
+.marktool__kind.is-mark::before { background: #ffd45a; }
+.marktool__kind.is-note::before { background: #66b8ff; }
+.marktool__kind.is-retreat::before { background: #ff6b5a; }
+.marktool__kind:hover { background: rgba(255, 255, 255, .12); }
+.marktool__kind.is-active { border-color: #ffd45a; }
+.marktool__btn.is-armed { border-color: #ffd45a; color: #ffd45a; box-shadow: 0 0 .16rem rgba(255, 212, 90, .5); }
+
 /* boss-round overtime warning (ui/hud.js OvertimeWarning; red DOT look: official icon_warn / blood_icon + bg_lose_hp) */
 .otwarn {
   position: relative; display: flex; align-items: center; gap: .08rem; height: .38rem; padding: 0 .14rem 0 .1rem;
