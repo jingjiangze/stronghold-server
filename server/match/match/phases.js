@@ -14,6 +14,7 @@ import { OK, fail, DELAYS, BAND_TURN_SECONDS } from './common.js';
 export class MatchPhases {
   enterInfoCheck() {
     this.phase = PHASE.INFO_CHECK;
+    this.cujongInitTargets(); // 促融共竞: the target-point life exists from the info check on
     for (const ps of this.order) if (ps.botControlled) ps.infoReady = true;
     // solo: no time limit (the player confirms); co-op: the official 25 s guard
     this.setDeadline(this.soloUntimed ? 0 : this.gd.timer('infoCheck'), () => this.enterBandDraft());
@@ -202,6 +203,7 @@ export class MatchPhases {
     d.picks[ps.playerId] = id;
     ps.bandId = id;
     ps.lp = this.gd.startLp(id);
+    this.cujongInitPlayer(ps);
     this.markPrivate(ps);
     this.markPublic();
     this.startDraftTurn();
@@ -242,6 +244,7 @@ export class MatchPhases {
         this.draft.picks[ps.playerId] = id;
         ps.bandId = id;
         ps.lp = this.gd.startLp(id);
+        this.cujongInitPlayer(ps);
       }
       this.markPrivate(ps);
     }

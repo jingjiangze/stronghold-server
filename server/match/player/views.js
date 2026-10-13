@@ -65,6 +65,8 @@ export class PlayerViews {
       seat: this.seat,
       alive: this.alive,
       lp: this.lp,
+      // 促融共竞: the own target-point life / the revive deadline (the HUD's life bar reads it instead of lp)
+      ...(this.m.isCujong ? { targetLp: this.targetLp, styleId: this.styleId || null, ...(this.reviving ? { reviveAt: this.reviveAt } : {}) } : {}),
       funds: this.funds,
       bandId: this.bandId,
       ready: this.ready,

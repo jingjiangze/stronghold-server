@@ -57,7 +57,7 @@ export class MatchSpDraft {
     this._turnTimer = null;
     while (s.idx < s.order.length) {
       const ps = this.players.get(s.order[s.idx]);
-      if (ps && ps.alive && s.picks[ps.playerId] == null) break;
+      if (ps && ps.alive && !ps.reviving && s.picks[ps.playerId] == null) break;
       s.idx++;
     }
     const available = s.cards.filter((c) => this.spCardAvailable(c)).map((c) => c.idx);

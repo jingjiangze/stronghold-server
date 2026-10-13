@@ -61,7 +61,12 @@ export function collectViolations(m, { limit = 25 } = {}) {
     if (!Number.isInteger(ps.funds) || ps.funds < 0) fail(`${id}: funds ${ps.funds}`);
     if (!Number.isInteger(ps.pendingFunds) || ps.pendingFunds < 0) fail(`${id}: pendingFunds ${ps.pendingFunds}`);
     if (!Number.isFinite(ps.lp)) fail(`${id}: lp ${ps.lp}`);
-    if (ps.alive && m.phase !== PHASE.SETTLE && ps.lp <= 0 && m.teamLp == null && m.round > 0 && ps.bandId) fail(`${id}: alive with lp ${ps.lp}`);
+    if (m.isCujong) {
+      // 促融共竞: targetLp within [0, max]; a downed side always carries a live countdown
+      if (!(Number.isFinite(ps.targetLp) && ps.targetLp >= 0 && ps.targetLp <= (ps.targetLpMax || 0))) fail(`${id}: targetLp ${ps.targetLp}/${ps.targetLpMax}`);
+      if ((!!ps.reviving) !== (ps.reviveAt > 0)) fail(`${id}: reviving ${ps.reviving} reviveAt ${ps.reviveAt}`);
+    }
+    if (ps.alive && m.phase !== PHASE.SETTLE && ps.lp <= 0 && m.teamLp == null && m.round > 0 && ps.bandId && !(m.isCujong && ps.reviving)) fail(`${id}: alive with lp ${ps.lp}`);
     if (ps.hand.length !== gd.benchSize) fail(`${id}: hand has ${ps.hand.length} slots`);
     if (ps.temp.length !== gd.tempSize) fail(`${id}: temp has ${ps.temp.length} slots`);
     // 临时整备区 = overflow only (PRTS 卫戍协议/帮助 §手牌区 "常规手牌区出现空位时自动移入", GitHub #82)

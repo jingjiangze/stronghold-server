@@ -3655,6 +3655,25 @@ function buildConfig(ctx, waves, stages, bands, chess, items) {
     };
   }
 
+  // 促融共竞 (MULTIPLAY_V3 two-player co-op) — an independent mode that reuses the engine, not a difficulty.
+  // Each project clones 险境模拟 (mode_multi_normal); rooms carry mode:'cujong' with the project in the difficulty
+  // slot, so the modeId is mode_cujong_<project> (shared/constants.js modeIdFor). Rounds/stages are placeholders
+  // until the per-project content lands (方案-独立模式-v2 §3 P2–P5).
+  // inScope stays false (the placeholder clone is not yet a faithful recreation): the suite's in-scope set — the
+  // eight single/multi modes with the full invariant checks (test/data.test.js) — is unchanged.
+  const CUJONG_PROJECTS = { football: '阵地足球', fortress: '堡垒守御', raft: '障碍漂航' };
+  for (const [project, label] of Object.entries(CUJONG_PROJECTS)) {
+    const base = modes.mode_multi_normal;
+    if (!base) { warn('config: 促融共竞 skipped — mode_multi_normal is missing'); continue; }
+    modes[`mode_cujong_${project}`] = { ...structuredClone(base), modeId: `mode_cujong_${project}`,
+      name: `促融共竞·${label}`, code: 'CC', type: 'MULTI', difficulty: 'NORMAL', sortId: 90, inScope: false,
+      // the main-loop seams (server/match/match/cujong.js): each side's target-point life, and the round after which
+      // 中场休整 runs (stage 1 = rounds 1..7, stage 2 = 8..lastRound on the placeholder clone)
+      targetLp: 10, halftimeRound: 7,
+      desc: `促融共竞·${label}：两名博士在线同屏合作的限时玩法。`,
+      effectDescList: ['·2 名博士 · 在线同屏合作', '·共享目标生命 · 30s 互助复活'] };
+  }
+
   const priceTable = act.shopCharChessInfoData || {};
   const chessPrice = {}, chessSell = {}, chessStatus = {};
   for (const [tier, rows] of Object.entries(priceTable)) {

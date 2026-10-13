@@ -123,7 +123,7 @@ export class MatchBoss {
     this.overtimeApplied = 0;
     // HUD: the boss level's countdown (maxPlayTime, 120 real s — the battle goes on past it) and the moment the
     // overtime drain starts (150 real s), both on the field clock
-    const onClock = (realS) => this.sched.now() + Math.round(((realS * this.gd.combatTimeScale) / this.gameSpeed) * 1000);
+    const onClock = (realS) => this.sched.now() + Math.round(((realS * this.gd.combatTimeScale) / this.effGameSpeed) * 1000);
     const levelTime = this.gd.bossLevelTime(this.round);
     this.deadline = this.sched.instant || !levelTime ? 0 : onClock(levelTime);
     this.overtimeAt = this.sched.instant ? 0 : onClock(this.gd.bossOvertimeAfterReal);
@@ -323,7 +323,7 @@ export class MatchBoss {
     if (this.phase !== PHASE.FINAL_ASSAULT && this.phase !== PHASE.HIDDEN_CORE) return;
     if (this.paused) return; // re-armed by _resume
     const now = this.sched.now();
-    this._applyOvertime(((now - this._bossStartAt) / 1000) * this.gameSpeed);
+    this._applyOvertime(((now - this._bossStartAt) / 1000) * this.effGameSpeed);
     for (const f of this.fields) {
       // reports held back by the plausibility budget are credited as the field clock advances
       if (f.cc && !f.done && f.mode === 'client') {

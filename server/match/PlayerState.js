@@ -153,6 +153,26 @@ export class PlayerState {
     this.autoplay = false;
     this.alive = true;
     this.lp = 0;
+    /**
+     * 促融共竞 (mode_cujong_*): the side's 目标点生命 (server/match/match/cujong.js). Leaks debit it — a 共同敌手
+     * (a leaked entry flagged `common`) debits both sides — and 0 falls into the reviving state, never elimination.
+     * 0 for every other mode (the field is only shown / charged there).
+     */
+    this.targetLp = 0;
+    this.targetLpMax = 0;
+    /** true while downed: acts nothing, the board keeps fighting; the 30 s countdown lives in `reviveAt` */
+    this.reviving = false;
+    /** @type {number} sched-clock epoch ms when the revive completes; 0 = not reviving */
+    this.reviveAt = 0;
+    /** times this side reached targetLp 0 (the stamp rule: ≥ 2 costs one) */
+    this.deaths = 0;
+    /** 促融共竞 比赛风格 (MATCH_STYLES), picked in INFO_CHECK; null outside the mode */
+    this.styleId = null;
+    /** P6 合作交互: this side's own 倍速 switch (2× runs only while both sides' are on — cujong.js effGameSpeed) */
+    this.speed2 = false;
+    /** P6: the 费用请求 cooldown anchor / the 标记 cooldown anchor (both sched ms) */
+    this.lastFundAskAt = -Infinity;
+    this.lastMarkAt = -Infinity;
     this.bandId = null;
     this.funds = 0;
     this.pendingFunds = 0;

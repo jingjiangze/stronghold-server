@@ -10,8 +10,13 @@ import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
 
+/** 促融共竞: the intents a downed (reviving) side may not act on — its board keeps fighting, emotes / watching stay open. */
+const REVIVING_BLOCKED = new Set(['g.buy', 'g.refresh', 'g.freeze', 'g.levelUp', 'g.sell', 'g.move', 'g.equip', 'g.art', 'g.destroy', 'g.reward', 'g.choice', 'g.ready']);
+
 export class MatchIntents {
   _handle(ps, msg) {
+    // 促融共竞: a downed side acts nothing (its board keeps fighting; emotes / watching stay open)
+    if (ps.reviving && REVIVING_BLOCKED.has(msg.t)) return fail(ERR.REVIVING);
     switch (msg.t) {
       case 'g.infoReady':
         if (this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE);
@@ -20,6 +25,7 @@ export class MatchIntents {
         if (!ps.infoReady) { ps.infoReady = true; this.markPublic(); this.maybeEndInfo(); }
         return OK;
       case 'g.rerollVote': return this.voteSetupReroll(ps, msg.voteId, msg.agree);
+      case 'g.matchStyle': return this.pickMatchStyle(ps, msg.styleId);
       case 'g.band': return this.pickBand(ps, msg.bandId);
       case 'g.bandSkip': return this.skipBand(ps);
       // the strategy highlighted in the draft screen (what a timed-out turn takes, timeoutBand)
@@ -44,6 +50,12 @@ export class MatchIntents {
       case 'g.watch': return this.watch(ps, msg.fieldId, msg.playerId ?? null);
       case 'g.autoplay': return this.setAutoplay(ps, !!msg.on);
       case 'g.pause': return this.setPause(ps, !!msg.on);
+      // P6 合作交互 (cujong.js): the pause consent vote, the fee request pair, the tile mark and the own speed switch
+      case 'g.pauseVote': return this.votePause(ps, msg.voteId, !!msg.agree);
+      case 'g.fundAsk': return this.fundAsk(ps);
+      case 'g.fundAnswer': return this.fundAnswer(ps, msg.askId, !!msg.accept);
+      case 'g.mark': return this.mark(ps, msg);
+      case 'g.speed': return this.setSpeed(ps, !!msg.on);
       // the stats the board's units start their next battle with (the detail card in prep, user playtest #4 item 7)
       case 'g.unitStats': return this.unitStats(ps, msg.seq ?? null);
       case 'g.leave': this.onLeave(ps.playerId); return OK;

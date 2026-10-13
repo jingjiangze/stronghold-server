@@ -37,6 +37,8 @@ export class MatchViews {
   statusOf(ps) {
     if (ps.left) return 'left';
     if (!ps.alive) return 'dead';
+    // 促融共竞: the downed side (targetLp 0, waiting out the 30 s) — alive, but acts nothing
+    if (ps.reviving) return 'reviving';
     switch (this.phase) {
       case PHASE.INFO_CHECK: return ps.infoReady ? 'ready' : 'deciding';
       case PHASE.BAND_DRAFT:
@@ -70,6 +72,8 @@ export class MatchViews {
       phase: this.phase,
       round: this.round,
       lastRound: this.gd.lastRound,
+      // 促融共竞: the project, the live 净胜球 counters (阵地足球) and the rival-team pick — display + result review
+      ...(this.isCujong ? { cujong: { project: this.cujongProject, goals: { ...this.cujongGoals }, rivalTeam: this.cujongRival } } : {}),
       deadline: this.deadline,
       serverNow: this.sched.now(),
       modeId: this.modeId,
@@ -97,6 +101,12 @@ export class MatchViews {
       combatMode: this.clientCombat ? 'client' : 'server',
       // solo pause (g.pause, DESIGN §14): the battle, its field clock and every deadline are frozen while true
       paused: !!this.paused,
+      // P6 合作交互: exact freeze instant, the pending 暂停申请 / 费用请求, the release cooldown and the live 标记
+      pausedAt: this.paused ? this._pausedAt : 0,
+      pauseRequest: this.pauseRequest ? { ...this.pauseRequest } : null,
+      pauseRelease: this.pauseReleaseAt > 0,
+      fundAsk: this.fundAskReq ? { ...this.fundAskReq } : null,
+      marks: [...this.marks.values()],
       players: this.order.map((ps) => ({
         playerId: ps.playerId,
         seat: ps.seat,
@@ -106,6 +116,8 @@ export class MatchViews {
         alive: ps.alive,
         left: ps.left,
         lp: Math.max(0, ps.lp),
+        // 促融共竞: each side's target-point life (the bar both players read), the revive deadline while downed
+        ...(this.isCujong ? { targetLp: Math.max(0, ps.targetLp), styleId: ps.styleId || null, speed2: !!ps.speed2, ...(ps.reviving ? { reviveAt: ps.reviveAt } : {}) } : {}),
         bandId: ps.bandId,
         shopLevel: ps.shop.level,
         boardCount: ps.deployCount,

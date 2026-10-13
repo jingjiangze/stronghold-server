@@ -121,6 +121,8 @@ export function buildResult(m, outcome) {
       roundsPassed,
       eliminatedRound: ps.eliminatedRound,
       lp: Math.max(0, ps.lp),
+      // 促融共竞: the target-point life the bar showed, the times the side went down, the downed state at the end
+      ...(m.isCujong ? { targetLp: Math.max(0, ps.targetLp), deaths: ps.deaths || 0, reviving: !!ps.reviving } : {}),
       bandId: ps.bandId,
       lineup,
       bonds: bondList(gd, ps.bonds).filter((b) => b.active || b.layers > 0),
@@ -144,6 +146,9 @@ export function buildResult(m, outcome) {
     reason: outcome.reason,
     // the merged Final Assault pool (null before round 14); players[].lp are the alive players' shares of it
     teamLp: m.teamLp != null ? Math.max(0, Math.round(m.teamLp)) : null,
+    // 促融共竞: the settlement's 嘉奖印章 (cujong.js: football reads its 净胜球 thresholds; the rest stay placeholders)
+    ...(m.isCujong ? { cujong: { stage: m.cujongStage, stamps: m.cujongStampsTotal(), stages: { ...m.cujongStamps },
+      goals: { for: m.cujongGoals.for, against: m.cujongGoals.against, diff: m.cujongGoals.for - m.cujongGoals.against } } } : {}),
     modeId: m.modeId,
     difficulty: m.difficulty,
     stageId: m.stageId,

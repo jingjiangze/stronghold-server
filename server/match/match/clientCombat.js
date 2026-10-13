@@ -68,7 +68,7 @@ export class MatchClientCombat {
   /** Game seconds a field has run (its clock; a finished field: its final time). */
   _fieldElapsed(f) {
     if (f.done && f.result && Number.isFinite(f.result.time)) return f.result.time;
-    const gt = Math.max(0, ((this._clockNow() - f.startAt) / 1000) * this.gameSpeed);
+    const gt = Math.max(0, ((this._clockNow() - f.startAt) / 1000) * this.effGameSpeed);
     if (f.endGt != null) return Math.min(gt, f.endGt);
     const lim = f.spec && f.spec.timeLimit > 0 ? f.spec.timeLimit : HARD_CAP_SECONDS;
     return Math.min(gt, lim);
@@ -93,7 +93,7 @@ export class MatchClientCombat {
       spec: this.spectators.has(pid) ? this._spectatorSpec(f) : f.spec,
       authoritative: !!(!f.done && !f.verifyJob && f.mode === 'client' && f.authority === pid && !watch),
       startAt: f.startAt, serverNow: this.sched.now(), elapsed: Math.round(this._fieldElapsed(f) * 1000) / 1000,
-      speed: this.gameSpeed, watch: !!watch, done: !!f.done,
+      speed: this.effGameSpeed, watch: !!watch, done: !!f.done,
     };
   }
 
@@ -130,7 +130,7 @@ export class MatchClientCombat {
     if (f.deadlineTimer) { this.cancel(f.deadlineTimer); f.deadlineTimer = null; }
     if (f.verifyJob) return;
     const lim = f.spec.timeLimit > 0 ? f.spec.timeLimit : 60;
-    const at = f.startAt + Math.round((lim / this.gameSpeed) * 1000) + RESULT_GRACE_MS;
+    const at = f.startAt + Math.round((lim / this.effGameSpeed) * 1000) + RESULT_GRACE_MS;
     f.deadlineTimer = this.later(Math.max(0, at - this.sched.now()), () => {
       f.deadlineTimer = null;
       if (f.done || f.mode !== 'client') return;
@@ -143,7 +143,7 @@ export class MatchClientCombat {
     if (f.doneTimer) { this.cancel(f.doneTimer); f.doneTimer = null; }
     if (f.done || f.result == null) return;
     if (this.paused) { f.rearmRelease = true; return; }
-    const doneAt = f.startAt + Math.round(((f.endGt || 0) / this.gameSpeed) * 1000);
+    const doneAt = f.startAt + Math.round(((f.endGt || 0) / this.effGameSpeed) * 1000);
     const wait = this.sched.instant ? 0 : Math.max(0, doneAt - this.sched.now());
     f.doneTimer = this.later(wait, () => { f.doneTimer = null; this._fieldDone(f); });
   }

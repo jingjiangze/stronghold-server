@@ -97,8 +97,10 @@ export class MatchPlatform {
       ps.connected = false;
       // A disconnected human's silence is never consent to a new setup.
       this.cancelSetupVote();
-      // a paused solo battle resumes (the server takes the field over; nobody is left to resume it)
-      this._resume();
+      // a paused solo battle resumes (the server takes the field over; nobody is left to resume it); a 促融共竞 pause
+      // HOLDS across a disconnect — both sides gone pauses the system instead (PRTS main.raw 738, cujong.js)
+      if (this.isSolo) this._resume();
+      if (this.isCujong) this._autoPauseBothGone();
       if (this.clientCombat) this._authorityLost(ps, 'disconnect');
       this.markPublic();
     });

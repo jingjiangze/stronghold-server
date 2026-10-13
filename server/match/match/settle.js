@@ -46,13 +46,23 @@ export class MatchSettle {
       ...(relay ? { rounds: relay.rounds.map((r) => ({ ...r.view, helpers: r.view.helpers.slice() })) } : {}),
     } : null;
     const alive = this.alivePlayers();
+    // 促融共竞: the charge goes to each side's target-point life (cujong.js) — computed before the loop so the 联防
+    // result box reads the same number the bar shows
+    const cujongLosses = this.isCujong ? this.cujongTargetLosses(alive, (ps) => this.lastResults.get(ps.playerId), { uniteRan, plan, survivors }) : null;
     for (const ps of alive) {
       const r = this.lastResults.get(ps.playerId) || { leaked: [], perfect: true, coins: 0, layerGains: {}, killed: 0, damageDealt: 0 };
       const counted = (r.leaked || []).filter((l) => l && l.counted !== false).length;
       const loss = uniteRan && plan.leakers.includes(ps) ? Math.min(cap, survivors.get(ps.playerId) || 0) : Math.min(cap, counted);
-      if (this.uniteResultView) this.uniteResultView.losses[ps.playerId] = loss;
-      ps.lp -= loss;
-      ps.stats.lpLost += loss;
+      if (this.uniteResultView) this.uniteResultView.losses[ps.playerId] = this.isCujong ? (cujongLosses.get(ps.playerId) || 0) : loss;
+      if (this.isCujong) {
+        // 阵地足球 (P3): the balls' goals ride the battle result into the match's 净胜球 counters
+        this.cujongGoals.for += Math.max(0, Math.trunc(Number(r.goalsFor) || 0));
+        this.cujongGoals.against += Math.max(0, Math.trunc(Number(r.goalsAgainst) || 0));
+      }
+      if (!this.isCujong) {
+        ps.lp -= loss;
+        ps.stats.lpLost += loss;
+      }
       ps.stats.leaks += counted;
       ps.stats.kills += Number(r.killed) || 0;
       ps.stats.dmgDealt += Number(r.damageDealt) || 0;
@@ -62,6 +72,10 @@ export class MatchSettle {
       let coins = Math.max(0, Math.trunc(Number(r.coins) || 0));
       const up = combinedUnite && combinedUnite.perPlayer && combinedUnite.perPlayer[ps.playerId];
       if (up) {
+        if (this.isCujong) {
+          this.cujongGoals.for += Math.max(0, Math.trunc(Number(up.goalsFor) || 0));
+          this.cujongGoals.against += Math.max(0, Math.trunc(Number(up.goalsAgainst) || 0));
+        }
         coins += Math.max(0, Math.trunc(Number(up.coins) || 0));
         ps.stats.dmgDealt += Number(up.damageDealt) || 0;
         ps.stats.kills += Number(up.killed) || 0;
@@ -79,7 +93,9 @@ export class MatchSettle {
       this.dispatch(ps, 'onBattleResult', { result: r, lpLoss: loss, perfect: counted === 0 && r.perfect !== false, unite: combinedUnite || null });
       ps.recompute();
     }
-    for (const ps of alive) {
+    // 促融共竞: charge target-point lives and run the revive machine — a downed side is never eliminated
+    if (this.isCujong) this.cujongChargeTargets(alive, cujongLosses, (ps) => this.lastResults.get(ps.playerId));
+    if (!this.isCujong) for (const ps of alive) {
       if (ps.lp <= 0) {
         ps.lp = 0;
         ps.eliminate(this.round);
@@ -119,6 +135,16 @@ export class MatchSettle {
 
   afterSettle() {
     if (!this.alivePlayers().length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
+    if (this.isCujong) {
+      // both sides downed at once: nothing holds the field — the match is lost
+      if (this.cujongAllDown()) { this.finish({ victory: false, reason: 'wipe' }); return; }
+      // stage 1 clears into 中场休整; stage 2 runs on to the boss finale like every mode
+      if (this.cujongStage === 1 && this.round === this.gd.halftimeRound) {
+        resetRoundCounters(this);
+        this.enterHalftime();
+        return;
+      }
+    }
     resetRoundCounters(this); // AI bot merge-counter resets each round (server/match/botEmotes.js)
     this.startRound(this.round + 1);
   }
@@ -137,6 +163,7 @@ export class MatchSettle {
     this.phase = PHASE.RESULT;
     this.deadline = 0;
     for (const f of this.fields) f.live = false;
+    if (this.isCujong) this.cujongFinalizeStamps(!!victory);
     this.outcome = { victory: !!victory, hiddenReached: this.hiddenReached, hiddenCleared: !!hiddenCleared, reason };
     let result;
     try {

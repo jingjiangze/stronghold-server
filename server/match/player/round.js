@@ -141,6 +141,10 @@ export class PlayerRound {
       units,
       bonds: bondSnapshot(reached ? this.bondsView() : this.bonds),
       bandId: this.bandId,
+      // 促融共竞: the player's 比赛风格 rides on the battle input (sim/content/styles.js buffs the owner's units off it)
+      ...(this.m && this.m.isCujong && this.styleId ? { styleId: this.styleId } : {}),
+      // 促融共竞·阵地足球 (P3): the football flag + the seed-picked rival team (sim/content/football.js installs off it)
+      ...(this.m && this.m.cujongProject === 'football' ? { football: true, rivalTeam: this.m.cujongRival ?? null } : {}),
       playerEffects: this.effects.filter((e) => e.battle !== false).map((e) => ({
         id: e.id, key: e.key ?? null, source: e.iconKind ?? null, params: e.params ?? null, counter: e.counter ?? null, data: e.data ?? null,
       })),

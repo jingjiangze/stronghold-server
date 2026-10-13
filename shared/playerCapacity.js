@@ -9,6 +9,7 @@ export const isPlayerCapacity = value => Number.isInteger(value) && PLAYER_CAPAC
 
 export function roomCapacity(mode, experimental) {
   if (mode === 'solo') return 1;
+  if (mode === 'cujong') return 2; // 促融共竞 is a fixed two-player co-op mode
   const capacity = experimental && typeof experimental === 'object'
     ? Object.getOwnPropertyDescriptor(experimental, 'playerCapacity')?.value : undefined;
   return isPlayerCapacity(capacity) ? capacity : MAX_SEATS;

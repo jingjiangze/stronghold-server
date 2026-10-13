@@ -34,6 +34,10 @@ export class BattlePlayers {
       half: mirror || (Number(p.colOffset) || 0) >= 8 ? 'R' : 'L',
       bonds: clone(p.bonds ?? {}),
       bandId: p.bandId ?? null,
+      styleId: p.styleId ?? null,
+      // 促融共竞·阵地足球 (P3): the football field flag + the rival-team pick (sim/content/football.js)
+      football: p.football === true,
+      rivalTeam: p.rivalTeam ?? null,
       playerEffects: clone(p.playerEffects ?? []),
       lpForBoss: p.lpForBoss ?? null,
       dp: this.flags.dpInit,

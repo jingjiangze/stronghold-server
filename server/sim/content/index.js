@@ -42,7 +42,9 @@ async function safeImport(path) {
 }
 
 const KIT_REGISTRY = await safeImport('./kits/index.js');
-const DOMAIN_NAMES = ['tokens', 'devices', 'enemies', 'bosses', 'bonds', 'garrisons', 'items', 'bands', 'choices'];
+// 'styles' = the 促融共竞 比赛风格; 'football' = 阵地足球's balls/goals/field bonuses — both install only for their own
+// matches (players[].styleId / players[].football), so every other battle sees a no-op
+const DOMAIN_NAMES = ['tokens', 'devices', 'enemies', 'bosses', 'bonds', 'garrisons', 'items', 'bands', 'styles', 'football', 'choices'];
 const DOMAINS = await Promise.all(DOMAIN_NAMES.map((n) => safeImport(`./${n}.js`)));
 const tokens = DOMAINS[0];
 
@@ -52,7 +54,7 @@ const tokens = DOMAINS[0];
  */
 export const KITS = KIT_REGISTRY.KITS ?? Object.freeze({});
 
-/** Domain modules in install order: tokens, devices, enemies, bosses, bonds, garrisons, items, bands, choices. */
+/** Domain modules in install order: tokens, devices, enemies, bosses, bonds, garrisons, items, bands, styles, choices. */
 export const MODULES = Object.freeze(DOMAIN_NAMES.map((n, i) => [n, DOMAINS[i]]));
 
 /**

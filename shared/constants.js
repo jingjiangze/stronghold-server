@@ -27,9 +27,22 @@ export const DIFFICULTIES = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
 export const DIFFICULTY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境模拟'), HARD: N_('绝境模拟'), ABYSS: N_('终极模拟') };
 export const DIFFICULTY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', ABYSS: '#ff0024' };
 
+/** 促融共竞 (MULTIPLAY_V3 co-op) projects — an independent mode that reuses the engine, not a difficulty. */
+export const CUJONG_PROJECTS = ['football', 'fortress', 'raft'];
+/** Display names of the projects (N_ msgids: call t() where they are shown). */
+export const CUJONG_PROJECT_NAMES = { football: N_('阵地足球'), fortress: N_('堡垒守御'), raft: N_('障碍漂航') };
+/**
+ * 促融共竞 pre-match 比赛风格 (PRTS 玩法 §4): each player picks one in INFO_CHECK; the main buffs are applied to that
+ * player's own units in the sim (server/sim/content/styles.js). The 携带物 (deployable items) land in a later phase.
+ */
+export const MATCH_STYLES = ['basic', 'anchoring', 'roaming', 'offensive', 'supportive', 'disabling'];
+export const MATCH_STYLE_NAMES = { basic: N_('基础'), anchoring: N_('驻场'), roaming: N_('游走'), offensive: N_('攻坚'), supportive: N_('支援'), disabling: N_('控制') };
+
 // modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi
+// 促融共竞 rooms carry `mode:'cujong'` and reuse the difficulty slot for the project id (football/fortress/raft).
 export const modeIdFor = (roomMode, difficulty) =>
-  `mode_${roomMode === 'solo' ? 'single' : 'multi'}_${difficulty.toLowerCase()}`;
+  roomMode === 'cujong' ? `mode_cujong_${difficulty.toLowerCase()}`
+    : `mode_${roomMode === 'solo' ? 'single' : 'multi'}_${difficulty.toLowerCase()}`;
 
 export const PHASE = Object.freeze({
   LOBBY: 'LOBBY',
@@ -42,6 +55,7 @@ export const PHASE = Object.freeze({
   COMBAT: 'COMBAT',
   UNITE: 'UNITE',
   SETTLE: 'SETTLE',
+  HALFTIME: 'HALFTIME',
   FINAL_ASSAULT: 'FINAL_ASSAULT',
   HIDDEN_CORE: 'HIDDEN_CORE',
   RESULT: 'RESULT',
@@ -50,7 +64,7 @@ export const PHASE = Object.freeze({
 export const PHASE_NAMES = {
   LOBBY: N_('等待中'), INFO_CHECK: N_('确认本局信息'), BAND_DRAFT: N_('选择策略'), BATTLE_CHECK: N_('协议启动'),
   ROUND_START: N_('回合开始'), SP_DRAFT: N_('机变阶段'), PREP: N_('休整期'), COMBAT: N_('作战中'), UNITE: N_('联防阶段'),
-  SETTLE: N_('结算'), FINAL_ASSAULT: N_('最终攻势'), HIDDEN_CORE: N_('隐秘核心'), RESULT: N_('模拟结束'),
+  SETTLE: N_('结算'), HALFTIME: N_('中场休整'), FINAL_ASSAULT: N_('最终攻势'), HIDDEN_CORE: N_('隐秘核心'), RESULT: N_('模拟结束'),
 };
 
 // Board geometry on the 19x21 stage grid (row 0 = bottom). See DESIGN §3.
@@ -150,6 +164,7 @@ export const ERR = Object.freeze({
   ALREADY: 'ALREADY',
   TEMP_NOT_EMPTY: 'TEMP_NOT_EMPTY',
   ELIMINATED: 'ELIMINATED',
+  REVIVING: 'REVIVING',           // a 促融共竞 side in the death/revive state acts nothing but watch
   QUEUED: 'QUEUED',               // leave matchmaking before creating/joining a private room
   SPECTATOR: 'SPECTATOR',         // a spectator seat only watches (MAX_SPECTATORS)
   INTERNAL: 'INTERNAL',
@@ -162,6 +177,7 @@ export const ERR_TEXT = {
   WRONG_PHASE: N_('当前阶段无法进行该操作'), NO_FUNDS: N_('资金不足'), HAND_FULL: N_('整备区已满'), BOARD_FULL: N_('已达到部署上限'),
   BAD_TILE: N_('无法部署在该位置'), BAD_TARGET: N_('无效的目标'), SOLD_OUT: N_('已售出'), MAX_LEVEL: N_('调度中心已达最高等级'),
   NOT_YOUR_TURN: N_('尚未轮到你'), ALREADY: N_('已完成该操作'), TEMP_NOT_EMPTY: N_('临时整备区不为空'), ELIMINATED: N_('你已被淘汰'),
+  REVIVING: N_('复活中：无法进行该操作'),
   SPECTATOR: N_('观战中无法进行该操作'), INTERNAL: N_('服务器内部错误'),
   NAME_REJECTED: N_('代号含有不适宜内容或格式无效，请换一个昵称。'),
   QUEUED: N_('正在匹配中，请先取消匹配'),

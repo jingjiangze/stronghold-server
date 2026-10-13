@@ -1,7 +1,7 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, EMOTES, GEO } from './constants.js';
+import { CUJONG_PROJECTS, DIFFICULTIES, MATCH_STYLES, NAME_MAX_LEN, ROOM_CODE_LEN, EMOTES, GEO } from './constants.js';
 import { MAX_PLAYER_CAPACITY, MAX_DRAFT_CARDS } from './playerCapacity.js';
 import { isExperimental } from './experimental.js';
 import { isSkinChoices } from './skins.js';
@@ -405,7 +405,10 @@ export const C2S = {
     matchmakingVersion: isId, playerCapacityVersion: isId, noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER),
     $optional: ['token', 'version', 'matchmakingVersion', 'playerCapacityVersion', 'noReplace', 'claimAt'] },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop', difficulty: (v) => DIFFICULTIES.includes(v), experimental: isExperimental, $optional: ['experimental'] },
+  // 促融共竞 rooms carry mode:'cujong' and a project id in the difficulty slot (shared/constants.js modeIdFor). The
+  // wire layer accepts the union of both value pools; which pool belongs to which mode is enforced by lobby.create /
+  // setDifficulty (a shape-valid but wrong pairing never reaches a room).
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'cujong', difficulty: (v) => DIFFICULTIES.includes(v) || CUJONG_PROJECTS.includes(v), experimental: isExperimental, $optional: ['experimental'] },
   'room.setExperimental': { experimental: isExperimental },
   'room.join': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
@@ -413,7 +416,7 @@ export const C2S = {
   'queue.join': { difficulty: (v) => DIFFICULTIES.includes(v), party: isBool, experimental: () => false, $optional: ['party', 'experimental'] },
   'queue.cancel': { ticketId: isId },
   'queue.accept': { ticketId: isId, offerId: isId, experimental: () => false, $optional: ['experimental'] },
-  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) },
+  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) || CUJONG_PROJECTS.includes(v) },
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
@@ -445,6 +448,7 @@ export const C2S = {
   // match
   'g.infoReady': { setupRevision: (v) => isInt(v, 0, 2 ** 31), $optional: ['setupRevision'] },
   'g.rerollVote': { voteId: (v) => isInt(v, 1, 2 ** 31), agree: isBool },
+  'g.matchStyle': { styleId: (v) => MATCH_STYLES.includes(v) },
   'g.band': { bandId: isId },
   'g.bandSkip': {},
   // the strategy highlighted in the draft screen (user playtest #4 item 4): a turn that runs out takes it while it is
@@ -473,6 +477,16 @@ export const C2S = {
   // solo pause (official PauseUp / ResumeUp, DESIGN §14): freezes the running battle (field clock, deadlines, the
   // browser's local runner) — solo matches only (co-op ⇒ WRONG_PHASE), only while a battle runs; m.public.paused
   'g.pause': { on: isBool },
+  // 合作暂停 (PRTS main.raw 717–720; P6): solo keeps the direct g.pause above; 促融共竞 moves it through a request —
+  // the proposer sends g.pause { on: true }, the partner answers with g.pauseVote, and ANY side lifts it with { on: false }
+  'g.pauseVote': { voteId: (v) => isInt(v, 1, 2 ** 31), agree: isBool },
+  // 费用请求 (PRTS main.raw 694–698; P6): ask the partner to wire up to 15 of their funds (their approval; 15 s CD)
+  'g.fundAsk': {},
+  'g.fundAnswer': { askId: (v) => isInt(v, 1, 2 ** 31), accept: isBool },
+  // 标记 (PRTS main.raw 699–703; P6): highlight a tile for both sides; kind: mark / note(注意) / retreat(撤退)
+  'g.mark': { row: (v) => isInt(v, 0, GEO.ROWS - 1), col: (v) => isInt(v, 0, GEO.COLS - 1), kind: (v) => ['mark', 'note', 'retreat'].includes(v), $optional: ['kind'] },
+  // 倍速 (PRTS main.raw 711–714; P6): each 促融共竞 player toggles their own switch — 2× runs only while BOTH are on
+  'g.speed': { on: isBool },
   // the stats the own board's units start their next battle with (user playtest #4 item 7; prep phases): answered by
   // the push m.unitStats { seq, round, units: [unitStatsEntry] }; `seq` is echoed so the client keeps the newest answer
   'g.unitStats': { seq: (v) => isInt(v, 0, 2 ** 31), $optional: ['seq'] },

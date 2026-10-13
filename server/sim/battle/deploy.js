@@ -263,7 +263,10 @@ export class BattleDeploy {
     const owner = timeout ? e.ownerId : this._ownerForTile([Math.round(e.y), Math.round(e.x)]) ?? e.ownerId;
     const pp = this._pp(owner) ?? this._pp(e.ownerId);
     if (pp) {
-      pp.leaked.push({ enemyKey: e.defId, mods: e.mods ?? null, lpr: e.lpr ?? 1, sourcePlayerId: e.sourcePlayerId ?? e.ownerId, tag: e.tag ?? null, counted: !!e.counted || e.isBoss, boss: e.isBoss || undefined, spawned: true });
+      pp.leaked.push({ enemyKey: e.defId, mods: e.mods ?? null, lpr: e.lpr ?? 1, sourcePlayerId: e.sourcePlayerId ?? e.ownerId, tag: e.tag ?? null, counted: !!e.counted || e.isBoss, boss: e.isBoss || undefined, spawned: true,
+        // 促融共竞 共同敌手 (jumping-arrow marker): its leak debits BOTH sides' targetLp (match/cujong.js); content sets
+        // `common = true` on the enemy unit (enemies.js). Only carried when true — every other entry stays byte-identical
+        ...(e.common === true ? { common: true } : null) });
       if (e.counted || e.isBoss) pp.perfect = false;
     }
     if (e.counted) this.leakedCount++;

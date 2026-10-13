@@ -3,7 +3,7 @@
 // balancing summary: LP over time, shop level, deployed units, kills/leaks, 联防, Final Assault outcome.
 //
 // Usage:
-//   node tools/matchrun.mjs [--mode solo|coop] [--difficulty FUNNY|NORMAL|HARD|ABYSS|ALL] [--players 1..4] [--seed 1]
+//   node tools/matchrun.mjs [--mode solo|coop|cujong] [--difficulty FUNNY|NORMAL|HARD|ABYSS|ALL | football|fortress|raft] [--players 1..4] [--seed 1]
 //                           [--seeds N] [--lp N] [--humans N] [--content full|generic|none] [--check] [--errors]
 //                           [--odds] [--json] [--quiet] [--rehearsal N]
 //   --players   co-op seats (default 2; solo is always 1)
@@ -53,10 +53,14 @@ if (opt.help) {
 }
 
 const DIFFS = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
-const mode = opt.mode === 'solo' ? 'solo' : 'coop';
-const diffArg = String(opt.difficulty || 'NORMAL').toUpperCase();
-const difficulties = diffArg === 'ALL' ? DIFFS : [DIFFS.includes(diffArg) ? diffArg : 'NORMAL'];
-const players = mode === 'solo' ? 1 : Math.max(1, Math.min(4, Number(opt.players) || 2));
+// 促融共竞 (P2): --mode cujong — the difficulty slot carries the project id (shared/constants.js modeIdFor)
+const CUJONG_PROJECTS = ['football', 'fortress', 'raft'];
+const mode = opt.mode === 'solo' ? 'solo' : opt.mode === 'cujong' ? 'cujong' : 'coop';
+const diffArg = String(opt.difficulty || (mode === 'cujong' ? 'football' : 'NORMAL'));
+const difficulties = mode === 'cujong'
+  ? [CUJONG_PROJECTS.includes(diffArg.toLowerCase()) ? diffArg.toLowerCase() : 'football']
+  : diffArg.toUpperCase() === 'ALL' ? DIFFS : [DIFFS.includes(diffArg.toUpperCase()) ? diffArg.toUpperCase() : 'NORMAL'];
+const players = mode === 'solo' ? 1 : mode === 'cujong' ? 2 : Math.max(1, Math.min(4, Number(opt.players) || 2));
 const humans = mode === 'solo' ? (opt.humans != null ? 1 : 0) : Math.max(0, Math.min(players, Number(opt.humans) || 0));
 const seed0 = Number(opt.seed) || 1;
 const seeds = Math.max(1, Number(opt.seeds) || 1);
@@ -130,7 +134,7 @@ function runOne(seed, difficulty) {
     const key = `${m.phase}:${m.round}`;
     if (key !== last) {
       last = key;
-      if (lpOverride && m.phase === 'PREP' && m.round === 1) for (const ps of m.players.values()) ps.lp = lpOverride;
+      if (lpOverride && m.phase === 'PREP' && m.round === 1) for (const ps of m.players.values()) { ps.lp = lpOverride; if (m.isCujong) { ps.targetLp = lpOverride; ps.targetLpMax = Math.max(ps.targetLpMax, lpOverride); } }
       if (layerBoost && m.phase === 'PREP' && m.round === m.gd.bossRound) {
         for (const ps of m.alivePlayers()) { for (const id of m.gd.bondIds) { const before = ps.layers[id] || 0; ps.layers[id] = before + layerGainRoom(before, layerBoost); } ps.recompute(); }
       }
@@ -141,6 +145,7 @@ function runOne(seed, difficulty) {
           row.players[ps.playerId] = {
             lp: ps.lp, alive: ps.alive, level: ps.shop.level, units: ps.deployCount,
             killed: r ? r.killed : null, total: r ? r.total : null, leaks: r ? (r.leaked || []).filter((l) => l.counted !== false).length : null,
+            ...(m.isCujong && r ? { goals: `${r.goalsFor || 0}:${r.goalsAgainst || 0}` } : {}),
             bonds: Object.entries(ps.bonds).filter(([, b]) => b.active).map(([id, b]) => `${data.bonds[id]?.name ?? id}${b.tier > 1 ? b.tier : ''}`).join(' '),
           };
         }
@@ -177,7 +182,7 @@ for (const difficulty of difficulties) {
       const s = r.summary || {};
       console.log(`== ${mode} ${difficulty} · ${players} seat(s)${humans ? ` (${humans} human on AI 托管)` : ''} · seed ${r.seed} · stage ${r.stageId} · boss ${r.bossId}`);
       for (const row of r.rounds) {
-        const cells = Object.entries(row.players).map(([id, p]) => `${id.replace(/^(ai|p)_/, 'P')}:${p.alive ? `LP${String(p.lp).padStart(3)}` : ' dead '} L${p.level} u${p.units} ${p.killed != null ? `${p.killed}/${p.total}` : '-'}${p.leaks ? ` −${p.leaks}` : ''}`).join(' | ');
+        const cells = Object.entries(row.players).map(([id, p]) => `${id.replace(/^(ai|p)_/, 'P')}:${p.alive ? `LP${String(p.lp).padStart(3)}` : ' dead '} L${p.level} u${p.units} ${p.killed != null ? `${p.killed}/${p.total}` : '-'}${p.leaks ? ` −${p.leaks}` : ''}${p.goals ? ` ⚽${p.goals}` : ''}`).join(' | ');
         const extra = [row.unite ? '联防' : '', row.teamLp != null ? `teamLP ${row.teamLp}` : '', row.boss ? `boss ${row.boss.hp}/${row.boss.max}` : ''].filter(Boolean).join(' ');
         console.log(`R${String(row.round).padStart(2)}  ${cells}${extra ? '  · ' + extra : ''}`);
       }

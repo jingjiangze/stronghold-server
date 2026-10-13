@@ -29,7 +29,9 @@
 //                 ≥ 1 perfect player; helpers = unite.js helperOrder (PRTS: units > active bond > layers > standing
 //                 units > seat, research 08 §5); leakers = players with counted leaks
 //   settle        no unite ⇒ loss = min(cap, counted leaks); after 联防 a leaker loses ≤ cap (its leaked enemies'
-//                 offspring count too), everybody else ≤ min(cap, own counted leaks); LP ≤ 0 ⇔ eliminated
+//                 offspring count too), everybody else ≤ min(cap, own counted leaks); LP ≤ 0 ⇔ eliminated.
+//                 促融共竞 (mode_cujong_*): the charge lands on targetLp (cujong.js) — the in-battle lp must NOT move,
+//                 targetLp ≤ 0 ⇒ reviving (a downed side is allowed to sit at 0; nobody is eliminated this way)
 //   final assault fields follow the saved per-match pairs, team LP = Σ alive LP, boss pool = bossPoolHp(); hidden core only
 //                 after a win when hiddenEligible() holds
 //   result        each title ≤ once, ≤ 1 title per player, onlyOnWin titles only on a win, roundsPassed per player,
@@ -419,17 +421,31 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       if (expectUnite && expectUnite.round === m.round && expectUnite.expect !== !!plan) fail(`联防 ${plan ? 'ran' : 'skipped'} but ${expectUnite.expect ? '≥ 1 leaker and ≥ 1 perfect player' : 'not both a leaker and a perfect player'}`);
       expectUnite = null;
     });
-    const before = new Map(m.alivePlayers().map((ps) => [ps, ps.lp]));
+    // 促融共竞 charges targetLp instead of lp (cujong.js): snapshot both
+    const before = new Map(m.alivePlayers().map((ps) => [ps, m.isCujong ? { target: ps.targetLp, lp: ps.lp } : ps.lp]));
     const res = orig(plan, uniteResult);
     check('settle', () => {
       const cap = gd.lpCapPerRound;
       const uniteRan = !!(plan && uniteResult && !uniteResult.synthetic);
-      for (const [ps, lp0] of before) {
+      for (const [ps, before0] of before) {
         const r = m.lastResults.get(ps.playerId) || { leaked: [] };
         const counted = (r.leaked || []).filter((l) => l && l.counted !== false).length;
         // after 联防 a leaker pays for every surviving enemy of its source — enemies spawned by its leaked enemies
         // (splitters, summoners) included — so only the cap bounds it; everybody else never exceeds own leaks
         const max = uniteRan && plan.leakers.includes(ps) ? cap : Math.min(cap, counted);
+        if (m.isCujong) {
+          // the charge is the side's own leaks plus the 共同敌手 of the other side's field (capped either way, and
+          // floored at what the side had — a downed side at 0 shows no loss; its leak resets the countdown instead)
+          const loss = before0.target - ps.targetLp;
+          const floor = Math.min(cap, counted, before0.target);
+          if (loss < 0) fail(`${ps.playerId}: targetLp rose in settle ${before0.target} → ${ps.targetLp}`);
+          if (loss > cap) fail(`${ps.playerId}: lost ${loss} targetLp (cap ${cap})`);
+          if (!uniteRan && loss < floor) fail(`${ps.playerId}: lost ${loss} targetLp with ${counted} own leaks (min ${floor})`);
+          if (ps.lp !== before0.lp) fail(`${ps.playerId}: the in-battle lp moved in a cujong settle (${before0.lp} → ${ps.lp})`);
+          if (ps.alive && !ps.reviving && ps.targetLp <= 0) fail(`${ps.playerId}: alive with targetLp 0 and not reviving`);
+          continue;
+        }
+        const lp0 = before0;
         if (ps.alive) {
           const loss = lp0 - ps.lp;
           if (loss < 0) fail(`${ps.playerId}: LP rose in settle ${lp0} → ${ps.lp}`);

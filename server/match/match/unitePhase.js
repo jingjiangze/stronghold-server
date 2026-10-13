@@ -28,7 +28,7 @@ export class MatchUnite {
     this.fields = [this.combatPool ? this._remoteField(opts, players)
       : { fieldId: opts.fieldId, kind: 'unite', players, battle: this.newBattle(opts), live: true }];
     this._beginDamage('unite');
-    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.gameSpeed) * 1000);
+    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.effGameSpeed) * 1000);
     this._defaultWatch();
     this.markPublic();
     this.tickerText(msg('联防阶段：{names} 迎战突破防线的敌人', { names: plan.helpers.map((p) => p.name) }), FLOW_TICKER_PRIORITY);
@@ -62,7 +62,7 @@ export class MatchUnite {
     const budget = this._uniteBudget;
     plan.totalBudget = budget.total;
     plan.remainingBudget = budget.remaining;
-    plan.gameSpeed = this.gameSpeed;
+    plan.gameSpeed = this.effGameSpeed;
     // Early completion consumes only natural elapsed time; it never increases the next allocation.
     plan.timeLimit = Math.min(budget.remaining, budget.allocations[plan.uniteRound === 2 ? 1 : 0] ?? 0);
     plan.budgetSpent = 0;
@@ -116,7 +116,7 @@ export class MatchUnite {
     if (this.capacityExperiment && !(limit > 0)) { this.settle(plan, null); return; }
     const opts = this._uniteOpts(plan, limit);
     const f = this._ccField({ fieldId: opts.fieldId, kind: 'unite', players: plan.helpers.map((p) => p.playerId), opts });
-    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.gameSpeed) * 1000);
+    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.effGameSpeed) * 1000);
     this.watchers.clear();
     this._launch([f]);
     this._beginDamage('unite');

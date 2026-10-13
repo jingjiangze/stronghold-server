@@ -81,7 +81,7 @@ export class MatchCombat {
       : { fieldId: `n:${ps.playerId}`, kind: 'normal', players: [ps.playerId], battle: this._normalBattle(ps), live: true });
     this._beginDamage('normal');
     const limit = this.wave ? this.wave.timeLimit : 60;
-    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.gameSpeed) * 1000);
+    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.effGameSpeed) * 1000);
     const Runner = this.combatPool ? WorkerFieldRunner : FieldRunner;
     this.runner = new Runner(this, this.fields, {
       onTick: (runner) => { if (!runner.remote) this._sampleDamage(); },
@@ -102,7 +102,7 @@ export class MatchCombat {
     this.watchers.clear();
     const fields = alive.map((ps) => this._ccField({ fieldId: `n:${ps.playerId}`, kind: 'normal', players: [ps.playerId], opts: this._normalOpts(ps) }));
     const limit = this.wave ? this.wave.timeLimit : 60;
-    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.gameSpeed) * 1000);
+    this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.effGameSpeed) * 1000);
     this._launch(fields);
     this._beginDamage('normal');
     this._flushDamage(true);

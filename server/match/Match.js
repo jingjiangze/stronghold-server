@@ -205,6 +205,7 @@ import { MatchClientCombat } from './match/clientCombat.js';
 import { MatchReports } from './match/reports.js';
 import { MatchUnite } from './match/unitePhase.js';
 import { MatchBoss } from './match/bossRounds.js';
+import { MatchCujong } from './match/cujong.js';
 import { MatchSettle } from './match/settle.js';
 
 export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS } from './match/common.js';
@@ -241,7 +242,11 @@ export class Match {
     this.roomCode = opts.roomCode ?? '----';
     this.mode = opts.mode === 'solo' ? 'solo' : 'coop';
     this.difficulty = opts.difficulty;
-    this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
+    // modeIdFor reads the ROOM mode (促融共竞 carries it in the difficulty slot: mode_cujong_<project>); `this.mode`
+    // above is the engine's normalized solo/coop, so derive from the raw opts.mode
+    this.modeId = opts.modeId || modeIdFor(opts.mode === 'solo' ? 'solo' : opts.mode === 'cujong' ? 'cujong' : 'coop', opts.difficulty);
+    /** 促融共竞 (mode_cujong_*): the shared targetLp / revive / halftime loop — server/match/match/cujong.js */
+    this.isCujong = opts.mode === 'cujong' || /^mode_cujong_/.test(String(this.modeId || ''));
     this.seed = (Number(opts.seed) >>> 0) || 1;
     this.log = opts.log || noopLog;
     this.sendFn = opts.send;
@@ -439,13 +444,31 @@ export class Match {
     this.hiddenLayerSum = 0;
     this.finalAliveCount = 0;
     this.hiddenReached = false;
+    /** 促融共竞: the stage counter (1 → 2 at 中场休整), the 嘉奖印章 tally and the revive countdown handles */
+    this.cujongStage = 1;
+    this.cujongStamps = { stage1: false, stage2: false, advanced: false };
+    this._cujongReviveTimers = new Map();
+    /** the project id (football/fortress/raft), the 阵地足球 rival-team pick and the 净胜球 counters (cujong/match) */
+    this.cujongProject = this.isCujong ? String(this.modeId || '').replace(/^mode_cujong_/, '') : null;
+    this.cujongRival = null;
+    this.cujongGoals = { for: 0, against: 0 };
+    /** P6 合作交互 state: the pending 费用请求 / 暂停申请, the release cooldown, the 标记 map and its seqs.
+     * (the pending request is `fundAskReq` — `fundAsk` is the g.fundAsk method on the prototype) */
+    this.fundAskReq = null;
+    this._fundAskSeq = 0;
+    this.pauseRequest = null;
+    this._pauseRequestSeq = 0;
+    this.pauseReleaseAt = 0;
+    this._pauseReleaseTimer = null;
+    this.marks = new Map();
+    this._markSeq = 0;
     this.outcome = null;
     this._turnToken = 0;
   }
 }
 
 // the method modules, in this order (a name defined twice is an error, never a silent override)
-for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, MatchWatch, MatchIntents, MatchPause, MatchPhases, MatchSetupVote, MatchSpDraft, MatchPrep, MatchCombat, MatchClientCombat, MatchReports, MatchUnite, MatchBoss, MatchSettle, MatchExtensions]) {
+for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, MatchWatch, MatchIntents, MatchPause, MatchPhases, MatchSetupVote, MatchSpDraft, MatchPrep, MatchCombat, MatchClientCombat, MatchReports, MatchUnite, MatchBoss, MatchCujong, MatchSettle, MatchExtensions]) {
   for (const key of Reflect.ownKeys(part.prototype)) {
     if (key === 'constructor') continue;
     if (Object.prototype.hasOwnProperty.call(Match.prototype, key)) throw new Error(`Match.${String(key)} is defined twice`);

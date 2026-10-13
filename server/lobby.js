@@ -99,7 +99,7 @@
 //     a player seat (the seat is kept and given back on resume).
 
 import { randomBytes, randomInt } from 'node:crypto';
-import { ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, MATCHMAKING_VERSION, modeIdFor } from '../shared/constants.js';
+import { CUJONG_PROJECTS, DIFFICULTIES, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, MATCHMAKING_VERSION, modeIdFor } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks } from '../shared/protocol.js';
 import { isSkinChoices } from '../shared/skins.js';
 import { EXPERIMENTAL_DEFAULTS, experimentalOptions, isExperimental, sameExperimental } from '../shared/experimental.js';
@@ -523,6 +523,7 @@ export class Lobby {
 
   create(session, { mode, difficulty, experimental = EXPERIMENTAL_DEFAULTS }) {
     if (!isExperimental(experimental)) return fail(ERR.BAD_MSG);
+    if (mode === 'cujong' ? !CUJONG_PROJECTS.includes(difficulty) : !DIFFICULTIES.includes(difficulty)) return fail(ERR.BAD_MSG, 'invalid mode/difficulty');
     if (roomCapacity(mode, experimental) > MAX_SEATS && !this.supportsCapacity(session)) return fail(ERR.BAD_MSG);
     if (this.queue.has(session)) return fail(ERR.QUEUED);
     const cur = this.roomOf(session);
@@ -687,6 +688,8 @@ export class Lobby {
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
     if (this.roomQueued(room)) return fail(ERR.QUEUED);
+    const pool = room.mode === 'cujong' ? CUJONG_PROJECTS : DIFFICULTIES;
+    if (!pool.includes(difficulty)) return fail(ERR.BAD_MSG, 'invalid difficulty for the room mode');
     this.dropReplay(room, session.playerId);
     if (room.difficulty !== difficulty) {
       room.difficulty = difficulty;
@@ -786,6 +789,11 @@ export class Lobby {
     const bots = room.seats.filter((s) => s && s.isBot);
     if (humans.length < 1 || (room.mode === 'solo' && (humans.length !== 1 || bots.length > 0))) {
       return fail(ERR.BAD_MSG, 'invalid seat configuration');
+    }
+    // 促融共竞 is a fixed two-player mode: both seats must be filled before starting (a filled seat may be an AI
+    // teammate, mirroring the cluster admission's players.length === 2 in copyAssignmentSpec).
+    if (room.mode === 'cujong' && room.seats.filter(Boolean).length !== 2) {
+      return fail(ERR.NOT_READY, 'cujong needs exactly two seated players');
     }
     const key = session.limitKey || null;
     const keys = room.ownerKeys ? new Set(room.ownerKeys) : new Set();

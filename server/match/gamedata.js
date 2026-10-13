@@ -345,6 +345,10 @@ export class GameData {
   }
   get bossRound() { return Number.isInteger(this.mode.bossRound) && this.mode.bossRound > 0 ? this.mode.bossRound : this.lastRound; }
   get hiddenRound() { return Number.isInteger(this.mode.hiddenRound) && this.mode.hiddenRound > 0 ? this.mode.hiddenRound : null; }
+  /** 促融共竞: the round after which 中场休整 runs (build-data sets 7 on the placeholder clones); null elsewhere. */
+  get halftimeRound() { return Number.isInteger(this.mode.halftimeRound) && this.mode.halftimeRound > 0 ? this.mode.halftimeRound : null; }
+  /** 促融共竞: each side's target-point life (the placeholder clones carry 10 until P3–P5 tune it per project). */
+  get cujongTargetLp() { return Number.isInteger(this.mode.targetLp) && this.mode.targetLp > 0 ? this.mode.targetLp : 10; }
   get maxShopLevel() { return posIntOr(this.mode.maxShopLevel, DEFAULTS.maxShopLevel); }
 
   roundCfg(r) {

@@ -191,7 +191,7 @@ export class MatchPrep {
 
   maybeEndPrep() {
     if (this.phase !== PHASE.PREP || this._prepEndQueued) return;
-    const allReady = () => { const alive = this.alivePlayers(); return alive.length > 0 && alive.every((p) => p.ready); };
+    const allReady = () => { const alive = this.alivePlayers(); return alive.length > 0 && alive.every((p) => p.ready || p.reviving); };
     if (!allReady()) return;
     const round = this.round;
     this._prepEndQueued = true;

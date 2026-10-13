@@ -4,7 +4,7 @@ import { Match } from '../match/Match.js';
 import { C2S, LOADOUT_LIMITS, OWNERSHIP_LIMITS, DIY_LIMITS, isNotOwnedList, isDiyPicks } from '../../shared/protocol.js';
 import { experimentalOptions, isExperimental } from '../../shared/experimental.js';
 import { SKIN_LIMITS, isSkinChoices } from '../../shared/skins.js';
-import { DIFFICULTIES, ERR, NAME_MAX_LEN, modeIdFor } from '../../shared/constants.js';
+import { CUJONG_PROJECTS, DIFFICULTIES, ERR, NAME_MAX_LEN, modeIdFor } from '../../shared/constants.js';
 import { roomCapacity } from '../../shared/playerCapacity.js';
 
 const OK = Object.freeze({ ok: true });
@@ -103,7 +103,8 @@ export function copyAssignmentSpec(input, fallbackAssignmentId) {
   if (!identifier(spec.assignmentId) || !identifier(spec.build)
     || typeof spec.roomCode !== 'string' || !/^[A-Z]{4}(?![\s\S])/.test(spec.roomCode)
     || !integer(spec.protocol, 1) || !integer(spec.seed, 0, 0xffffffff) || !integer(spec.matchNo, 1)
-    || !['solo', 'coop'].includes(spec.mode) || !DIFFICULTIES.includes(spec.difficulty)
+    || !['solo', 'coop', 'cujong'].includes(spec.mode)
+    || (spec.mode === 'cujong' ? !CUJONG_PROJECTS.includes(spec.difficulty) : !DIFFICULTIES.includes(spec.difficulty))
     || spec.modeId !== modeIdFor(spec.mode, spec.difficulty)
     || (spec.disableSharedPool !== undefined && typeof spec.disableSharedPool !== 'boolean')
     || (spec.aiPicksLast !== undefined && typeof spec.aiPicksLast !== 'boolean')
@@ -153,7 +154,8 @@ export function copyAssignmentSpec(input, fallbackAssignmentId) {
     if (!identifier(id, 64) || id.startsWith('ai_') || ids.has(id)) invalid();
     ids.add(id);
   }
-  if (!humans || (spec.mode === 'solo' && (players.length !== 1 || humans !== 1 || spectators.length))) invalid();
+  if (!humans || (spec.mode === 'solo' && (players.length !== 1 || humans !== 1 || spectators.length))
+    || (spec.mode === 'cujong' && players.length !== 2)) invalid();
   return freeze({ assignmentId: spec.assignmentId, roomCode: spec.roomCode, build: spec.build, protocol: spec.protocol,
     seed: spec.seed, matchNo: spec.matchNo, mode: spec.mode, difficulty: spec.difficulty, modeId: spec.modeId,
     seats: players, spectators: [...spectators],

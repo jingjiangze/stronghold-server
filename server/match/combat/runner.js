@@ -105,7 +105,7 @@ export class WorkerFieldRunner {
     try {
       this.inflight = true;
       this.session = this.m.combatPool.create({ specs: this.fields.map((f) => f.spec), boss: this.boss,
-        wireFrames: true, coalesceFrames: true, damageBoard: true, snapshotHz: this.m.snapshotHz, gameSpeed: this.m.gameSpeed }, {
+        wireFrames: true, coalesceFrames: true, damageBoard: true, snapshotHz: this.m.snapshotHz, gameSpeed: this.m.effGameSpeed }, {
         onFailure: (e) => this._fail(e),
       });
       this.session.ready.then((out) => this._receive(out, true), (e) => this._fail(e));
@@ -149,7 +149,7 @@ export class WorkerFieldRunner {
     const now = this.m.sched.now();
     const dt = Math.max(0, now - this.last);
     this.last = now;
-    const speed = Number.isFinite(this.m.gameSpeed) && this.m.gameSpeed > 0 ? this.m.gameSpeed : GAME_SPEED;
+    const speed = Number.isFinite(this.m.effGameSpeed) && this.m.effGameSpeed > 0 ? this.m.effGameSpeed : GAME_SPEED;
     // Active time remains owed even while the parent/worker queue is delayed. The phase hard cap bounds this
     // scalar debt; the command budget below bounds work/frames and preserves fair FIFO turns, not elapsed time.
     if (this.ready && !this.m.paused && !this.held) this.acc = Math.min(this.acc + dt / 1000 * speed, Math.max(0, HARD_CAP_SECONDS - this.time));
