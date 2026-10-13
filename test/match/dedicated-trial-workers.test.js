@@ -174,7 +174,11 @@ test('cancel before run ACK, queued cancel and repeated close release exactly on
 });
 
 test('single-credit progress is low frequency/aggregated and an async consumer cannot block done', async (t) => {
-  const pool = await realPool(t);
+  // A worker reports progress at most once per `trialProgressMs` window. On a slow/loaded box one slice (≤
+  // MAX_TRIAL_TICKS ticks) can take the whole default 50 ms window, so the first report would legitimately cover a
+  // single slice and `ticks > MAX_TRIAL_TICKS` could never hold. Widen the window so the first aggregate event spans
+  // several slices on any machine — the property under test (aggregation, not per-tick reporting) stays pinned.
+  const pool = await realPool(t, { trialProgressMs: 500 });
   const observed = [];
   const incoming = [];
   const slot = pool.slots[0];

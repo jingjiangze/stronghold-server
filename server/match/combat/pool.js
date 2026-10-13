@@ -25,9 +25,11 @@ function deferred() {
 export class CombatWorkerPool {
   constructor({ size, data = getData(), log = console, maxSessions = 0, maxPending = 8192,
     startupTimeoutMs = 15_000, requestTimeoutMs = 30_000, maxTrials = 64, maxTrialPending = 64,
-    role = 'combat', trialAckTimeoutMs = 5_000, trialStallTimeoutMs = 5_000 } = {}) {
+    role = 'combat', trialAckTimeoutMs = 5_000, trialStallTimeoutMs = 5_000, trialProgressMs = 50 } = {}) {
     if (!['combat', 'trial'].includes(role)) throw new RangeError('role must be combat or trial');
     this.role = role;
+    // How long a worker accumulates a trial slice before it may report progress (the worker's own default is 50 ms).
+    this.trialProgressMs = positive(trialProgressMs, 'trialProgressMs');
     this.size = positive(size, 'size', role === 'trial' ? 2 : 64);
     this.trialAckTimeoutMs = positive(trialAckTimeoutMs, 'trialAckTimeoutMs');
     this.trialStallTimeoutMs = positive(trialStallTimeoutMs, 'trialStallTimeoutMs');
@@ -84,7 +86,7 @@ export class CombatWorkerPool {
     try {
       // Full data crosses the boundary only here, once per worker lifetime, never once per phase/command.
       const worker = new Worker(WORKER_URL, {
-        workerData: { epoch, data: this.data, maxSessions: this.maxSessions, role: this.role },
+        workerData: { epoch, data: this.data, maxSessions: this.maxSessions, role: this.role, trialProgressMs: this.trialProgressMs },
         // Test runners/CLI eval can expose process-only flags (Node24 even includes V8 defaults).
         // These plain ESM workers need no loader/preload/inspection flags from the host entrypoint.
         execArgv: [],
