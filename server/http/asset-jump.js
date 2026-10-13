@@ -115,6 +115,8 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       'https://github.com/sganggs/Stronghold-Protocol/releases',
       'https://raw.githubusercontent.com/sganggs/Stronghold-Protocol/master/package.json',
       'https://ghfast.top/https://raw.githubusercontent.com/sganggs/Stronghold-Protocol/master/package.json',
+      'https://api.github.com/repos/sganggs/Stronghold-Protocol',
+      'https://api.github.com/repos/sganggs/Stronghold-Protocol/releases/latest',
     ];
     out.probes = await Promise.all([...new Set(targets)].map(head));
     return out;
