@@ -14,17 +14,40 @@ import path from 'node:path';
 import { ROOT, noopLog } from './config.js';
 import { decide, parseSources, stripSourceParam } from '../../deploy/stardust/ms-edge/edge-sidecar.mjs';
 
-/** 排名端点（R2 上的静态 rank.json，speedcdn/weishucdn 同桶）。取不到就用 sources.json 的静态 order。 */
-export const DEFAULT_RANK_URL = 'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json';
+/**
+ * 排名端点（R2 上的静态 rank.json）。**多个 URL 是同一个对象的不同门牌**（同桶的 speedcdn / weishucdn），
+ * 2026-10-14 实测容器到 CF 系是「能通但慢/抖动」（weishucdn HEAD 900ms vs modelscope 111ms）⇒ 一个门牌
+ * 失败/超时不代表对象不可达，按序回退。取不到就用 sources.json 的静态 order（排名是优化，不是依赖）。
+ */
+export const DEFAULT_RANK_URLS = [
+  'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json',
+  'https://weishucdn.jiangjiangze.icu/cdn/v1/rank.json',
+];
+/** 旧名保留：SP_RANK_URL 仍可作为「首选 URL」。 */
+export const DEFAULT_RANK_URL = DEFAULT_RANK_URLS[0];
 export const RANK_TTL_MS = 300_000;
 /**
  * 排名里的 id → 边缘源表的 id。两边的命名不同名（CDN 侧叫 ms-dataset/ms-edge/r2-alt，边缘侧叫
  * modelscope/r2），而且 **ms-edge 就是本容器自己**——映射成 null 表示"跳过"：否则边缘会 302 到自己，
  * 客户端跟着无限跳。未列出的 id 按同名处理（两边同名时零配置即可用）。
  */
-// 2026-10-13：不再映射 `ms-dataset` —— 它在 rank 里按 origins 顺序排在最前（未实测），映射成 modelscope 就会
-// 把数据集抬到 weishucdn 之前。不映射 = 落回「未进榜的已配置源」段（静态 order 里排第二），weishucdn 优先。
-export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-edge': null };
+export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-dataset': 'modelscope', 'ms-edge': null };
+
+/**
+ * **合格集**：只有「真的测过」的条目才有资格进生效顺序的**头部**。
+ *
+ * 为什么必须卡这一条（2026-10-14 实读线上 rank.json）：rank 的前两名是 `ms-dataset` / `ms-edge`，两条都是
+ * `measured:false, usable:null` —— 它们是按 `origins.json` 的**登记顺序**排的，不是测出来的。若照单全收，
+ * 「最快」就只是「谁先登记」的另一种写法，跳转层会把这个顺序放大成对外的速度结论。
+ *
+ * 未实测/未进榜的**已配置源不丢**，只是按静态 order 接到尾部（见 applyRank）。
+ */
+export function rankQualified(r) {
+  if (!r || typeof r !== 'object') return false;
+  if (r.excluded === true || r.down === true || r.usable === false) return false;
+  if (r.coverage === 'partial') return false;
+  return r.measured === true;
+}
 
 export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-edge', 'sources.json');
 
@@ -34,7 +57,7 @@ export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-ed
  * @param {{ sourcesPath?: string, disabled?: boolean, log?: { info?: Function, warn?: Function } }} [opts]
  * @returns {(pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null}
  */
-export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || DEFAULT_RANK_URL, fetchImpl = globalThis.fetch } = {}) {
+export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || '', rankUrls = null, fetchImpl = globalThis.fetch } = {}) {
   if (disabled) {
     log.info?.('[http] asset jump: disabled (SP_ASSET_JUMP=0)');
     return () => null;
@@ -47,35 +70,69 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     return () => null;
   }
   log.info?.(`[http] asset jump: on — order=${config.order.join(' > ')}, exceptions=${config.exceptions.size} (${sourcesPath})`);
-  // 动态次序：rank.json 把实测最快的源排在前面。只在**已配置的源**里取（不引入未知 id），
-  // 取不到/解析失败就沿用静态 order——排名是优化，不是依赖。
-  let ranked = null, rankedAt = 0, inflight = null, rankState = { at: null, ok: null };
+  // 候选门的顺序：显式参数 > SP_RANK_URLS > SP_RANK_URL（旧名，作首选）> 内置两条（同桶的两个门牌）。
+  const urls = (rankUrls
+    || (process.env.SP_RANK_URLS ? process.env.SP_RANK_URLS.split(',').map((s) => s.trim()).filter(Boolean) : null)
+    || (rankUrl ? [rankUrl, ...DEFAULT_RANK_URLS.filter((u) => u !== rankUrl)] : DEFAULT_RANK_URLS)).slice();
+  // 动态次序：rank.json 把**实测最快**的源排在前面。只在**已配置的源**里取（不引入未知 id），
+  // 取不到/没有合格条目就沿用静态 order——排名是优化，不是依赖。
+  // rankCheckedAt = 上一次**尝试**的时间（成功、无合格条目、失败都算），TTL 一视同仁：否则「没有合格条目」
+  // 会让 ranked 保持 null，而 effective() 的 `!ranked` 判断就会变成「每个请求都去 fetch 一次」。
+  let ranked = null, rankCheckedAt = 0, inflight = null, rankState = { at: null, ok: null };
+  /** 按序试每个门牌，返回第一个**解析成功**的（HTTP 非 2xx 与网络错都算这一路失败）。 */
+  async function fetchRank() {
+    let last = null;
+    for (const u of urls) {
+      if (!u) continue;
+      try {
+        const res = await fetchImpl(u, { signal: AbortSignal.timeout(4000) });
+        if (!res.ok) { last = `HTTP ${res.status} @ ${u}`; continue; }
+        const doc = await res.json();
+        return { url: u, doc };
+      } catch (e) { last = `${e?.message || e} @ ${u}`; }
+    }
+    throw new Error(last || 'no rank url configured');
+  }
+  /**
+   * rank 文档 → 生效顺序。**头部只放合格集**（见 rankQualified），已配置但未实测的源按静态 order 接在尾部。
+   * 没有任何合格条目 ⇒ 返回 null（不动 order）：宁可承认「没有测速结论」，也不把登记顺序当结论。
+   */
+  function applyRank(doc) {
+    const rows = Array.isArray(doc?.rank) ? doc.rank : [];
+    const head = [];
+    for (const r of rows) {
+      if (!rankQualified(r)) continue;
+      const id = Object.prototype.hasOwnProperty.call(RANK_ID_MAP, r.id) ? RANK_ID_MAP[r.id] : r.id;
+      if (typeof id === 'string' && id && config.byId.has(id) && !head.includes(id)) head.push(id);
+    }
+    if (!head.length) return null;
+    const tail = config.order.filter((id) => !head.includes(id));
+    return { head, order: [...head, ...tail] };
+  }
   function refresh() {
-    if (inflight || !rankUrl || !fetchImpl) return;
+    if (inflight || !urls.length || !fetchImpl) return;
     inflight = (async () => {
       try {
-        const res = await fetchImpl(rankUrl, { signal: AbortSignal.timeout(4000) });
-        const doc = await res.json();
-        const mapped = (doc?.rank || [])
-          .filter((r) => r && r.excluded !== true && r.usable !== false)
-          .map((r) => (Object.prototype.hasOwnProperty.call(RANK_ID_MAP, r.id) ? RANK_ID_MAP[r.id] : r.id))
-          .filter((id) => typeof id === 'string' && id && config.byId.has(id));   // null（自身）与未知 id 一并丢掉
-        const ids = [...new Set(mapped)];
-        if (ids.length) {
-          const rest = config.order.filter((id) => !ids.includes(id));   // 未进榜的已配置源接在后面
-          ranked = [...ids, ...rest]; rankedAt = Date.now();
-          rankState = { at: new Date().toISOString(), ok: true, order: [...ranked] };
-          log.info?.(`[http] asset jump: rank → ${ranked.join(' > ')}`);
+        const { url, doc } = await fetchRank();
+        const applied = applyRank(doc);
+        if (applied) {
+          ranked = applied.order;
+          rankState = { at: new Date().toISOString(), ok: true, url, qualified: applied.head, order: [...ranked] };
+          log.info?.(`[http] asset jump: rank(${url}) qualified=[${applied.head.join(',')}] → ${ranked.join(' > ')}`);
+        } else {
+          ranked = null;
+          rankState = { at: new Date().toISOString(), ok: true, url, qualified: [], order: [...config.order], note: 'rank 里没有合格（实测）条目 ⇒ 保持静态 order' };
+          log.warn?.('[http] asset jump: rank has no measured/usable entry — keeping the static order');
         }
       } catch (e) {
         rankState = { at: new Date().toISOString(), ok: false, error: String(e?.message || e) };
         log.warn?.(`[http] asset jump: rank unavailable (${e?.message || e}) — using the static order`);
-      } finally { inflight = null; }
+      } finally { rankCheckedAt = Date.now(); inflight = null; }
     })();
   }
   /** 同步返回当前有效配置（后台按 TTL 刷新）：请求路径上永不等待网络。 */
   const effective = () => {
-    if (!ranked || Date.now() - rankedAt >= RANK_TTL_MS) refresh();
+    if (Date.now() - rankCheckedAt >= RANK_TTL_MS) refresh();
     return ranked ? { ...config, order: ranked } : config;
   };
   refresh();   // 启动即预热
@@ -137,7 +194,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     const out = {
       order: effective().order,
       sources: effective().order.map((id) => ({ id, base: config.byId.get(id) })),
-      rankUrl, rank: rankState,
+      rankUrls: [...urls], rank: rankState,
       jumpEnabled: true, sourcesPath,
       // 存在性缓存：size = 记录条数，known = 其中已判「该源没有这个文件」的条数（302 会避开这些源）
       exists: typeof jump.exists === 'function' ? jump.exists() : null,

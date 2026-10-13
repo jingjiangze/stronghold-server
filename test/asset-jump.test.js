@@ -9,7 +9,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createStaticHandler } from '../server/index.js';
-import { createAssetJump } from '../server/http/asset-jump.js';
+import { createAssetJump, rankQualified } from '../server/http/asset-jump.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const silent = { info() {}, warn() {}, error() {}, debug() {} };
@@ -118,21 +118,83 @@ test('a source known to be missing the file is skipped on the next jump (non-emp
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('the rank cannot promote the dataset above weishucdn (2026-10-13: ms-dataset is no longer mapped)', async () => {
+// 合格集：只有 measured:true 的条目才能进生效顺序的头部（未实测的「第一」只是登记顺序）。
+test('rankQualified: measured/usable/excluded/down/coverage 硬闸门', () => {
+  const ok = { id: 'r2', measured: true, usable: true, coverage: 'full' };
+  assert.equal(rankQualified(ok), true);
+  assert.equal(rankQualified({ ...ok, measured: false }), false, '未实测 ⇒ 不进头部');
+  assert.equal(rankQualified({ ...ok, usable: false }), false);
+  assert.equal(rankQualified({ ...ok, usable: null }), true, 'usable:null 是「没结论」，不是「不可用」');
+  assert.equal(rankQualified({ ...ok, excluded: true }), false);
+  assert.equal(rankQualified({ ...ok, down: true }), false);
+  assert.equal(rankQualified({ ...ok, coverage: 'partial' }), false);
+  assert.equal(rankQualified(null), false);
+});
+
+// 现场形状：线上的 rank[0] 是 ms-dataset（measured:false，按 origins.json 登记顺序排）⇒ 不许它压过 weishucdn。
+test('an unmeasured rank[0] cannot lead — the static order survives (live rank shape)', async () => {
   const dir = tmpdir();
-  // The live rank lists `ms-dataset` first (unmeasured → ordered by origins.json), so mapping it to `modelscope`
-  // used to outrank weishucdn. Unmapped it falls into the "configured but unranked" tail, which follows the static
-  // order — weishucdn first.
   const doc = { schemaVersion: 1, order: ['r2', 'modelscope'], sources: [{ id: 'r2', base: R2 }, { id: 'modelscope', base: MIRROR }] };
-  const rank = { rank: [{ id: 'ms-dataset' }, { id: 'r2' }] };
+  // 2026-10-14 线上 rank.json 的前三条原样照抄（前两条都是 measured:false）
+  const rank = { rank: [{ id: 'ms-dataset', measured: false, usable: null, coverage: 'full' }, { id: 'ms-edge', measured: false, usable: null, coverage: 'full' }, { id: 'r2', measured: true, usable: true, coverage: 'full' }] };
   const logs = [];
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, doc), log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
-    fetchImpl: async () => ({ json: async () => rank }) });
+  const jump = createAssetJump({
+    sourcesPath: writeSources(dir, doc),
+    log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => rank }),
+  });
   try {
-    for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank →')); i++) await new Promise((r) => setTimeout(r, 10));
-    const line = logs.find((m) => m.includes('rank →'));
-    assert.ok(line && line.includes('r2 > modelscope'), `rank keeps weishucdn first: ${line}`);
-    assert.equal(jump('/assets/a/b.png', '', 'GET').headers.Location, `${R2}/assets/a/b.png`);
+    for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
+    const line = logs.find((m) => m.includes('rank(')) || '';
+    assert.match(line, /qualified=\[r2\]/, line);
+    assert.match(line, /r2 > modelscope/, line);
+    // 生效顺序 = effective()（static.js 每请求把它作为 cfg 传进 jump）
+    assert.deepEqual(jump.config().order, ['r2', 'modelscope']);
+    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${R2}/assets/a/b.png`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// 反过来：同一份 rank，只要 ms-dataset 被实测过并更快 ⇒ 必须真的翻身（否则「最快」只是装饰）。
+test('a measured, faster dataset takes the lead — and the unranked sources keep their tail', async () => {
+  const dir = tmpdir();
+  const doc = { schemaVersion: 1, order: ['r2', 'modelscope'], sources: [{ id: 'r2', base: R2 }, { id: 'modelscope', base: MIRROR }] };
+  const rank = { rank: [{ id: 'ms-dataset', measured: true, usable: true, coverage: 'full' }, { id: 'r2', measured: true, usable: true, coverage: 'full' }] };
+  const logs = [];
+  const jump = createAssetJump({
+    sourcesPath: writeSources(dir, doc),
+    log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => rank }),
+  });
+  try {
+    for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.match(logs.find((m) => m.includes('rank(')) || '', /modelscope > r2/);
+    assert.deepEqual(jump.config().order, ['modelscope', 'r2']);
+    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${MIRROR}/assets/a/b.png`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// 多门牌回退：同桶的两个域名，第一个 5xx/超时不能让排名整段失效。
+test('rank fetch falls through to the next url when the first one fails', async () => {
+  const dir = tmpdir();
+  const doc = { schemaVersion: 1, order: ['r2', 'modelscope'], sources: [{ id: 'r2', base: R2 }, { id: 'modelscope', base: MIRROR }] };
+  const rank = { rank: [{ id: 'ms-dataset', measured: true, usable: true, coverage: 'full' }] };
+  const seen = [];
+  const logs = [];
+  const jump = createAssetJump({
+    sourcesPath: writeSources(dir, doc), rankUrls: ['https://dead.example/rank.json', 'https://alive.example/rank.json'],
+    log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+    fetchImpl: async (u) => {
+      seen.push(u);
+      if (u.startsWith('https://dead.example')) return { ok: false, status: 503, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => rank };
+    },
+  });
+  try {
+    for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(seen.slice(0, 2), ['https://dead.example/rank.json', 'https://alive.example/rank.json']);
+    assert.match(logs.find((m) => m.includes('rank(')) || '', /alive\.example/);
+    assert.deepEqual(jump.config().order, ['modelscope', 'r2']);
+    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${MIRROR}/assets/a/b.png`);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
