@@ -2,8 +2,12 @@
   "_comment": "边缘层的分流表。容器的 /assets/** 与 /fonts/** 按这里的顺序 302 出去，字节从不落在容器上。镜像对应：r2 = 第一镜像（weishucdn）；openi = 第二镜像（OpenI，浏览器 CORS 不可用，仅 ?sp_source=openi 点名可达）；modelscope = 第三镜像（ModelScope 创空间）的 HTTP 运行时形态——创空间 cdn 分支本身无文件直链、只作 git 镜像，其同族数据集即本条目，也是默认 302 目标。",
   "_order_note": "这是静态顺序，不是实时测速：容器在 ModelScope 机房，玩家在全国各地，容器量出来的链路速度不代表玩家的。真正按玩家网络选最快是客户端 pick.js 的事，两者分工。客户端可用 ?sp_source=<id> 覆盖这里的顺序。",
   "_order_basis": "顺序按直连实测（本机 --noproxy，非代理）：小文件 TTFB modelscope 0.21s / r2 0.66s；855 KB 大文件 modelscope 0.26s(3.3 MB/s) / r2 1.9s(0.4 MB/s)。",
+  "_order_reason": "2026-10-13 用户指令：魔搭部署也优先 weishucdn。weishucdn(r2) 是同一个 R2 桶的规范入口，内容最全（例如官方战场场景在数据集镜像补齐之前它就已经有）；modelscope 数据集是第二顺位。注意 rank 只能在这些已配置源之间重排，不会把列表外的源拉进来。",
   "schemaVersion": 1,
-  "order": ["modelscope", "r2"],
+  "order": [
+    "r2",
+    "modelscope"
+  ],
   "sources": [
     {
       "id": "modelscope",

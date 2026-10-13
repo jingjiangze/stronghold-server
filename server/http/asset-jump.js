@@ -22,7 +22,9 @@ export const RANK_TTL_MS = 300_000;
  * modelscope/r2），而且 **ms-edge 就是本容器自己**——映射成 null 表示"跳过"：否则边缘会 302 到自己，
  * 客户端跟着无限跳。未列出的 id 按同名处理（两边同名时零配置即可用）。
  */
-export const RANK_ID_MAP = { 'ms-dataset': 'modelscope', 'r2': 'r2', 'r2-alt': 'r2', 'ms-edge': null };
+// 2026-10-13：不再映射 `ms-dataset` —— 它在 rank 里按 origins 顺序排在最前（未实测），映射成 modelscope 就会
+// 把数据集抬到 weishucdn 之前。不映射 = 落回「未进榜的已配置源」段（静态 order 里排第二），weishucdn 优先。
+export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-edge': null };
 
 export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-edge', 'sources.json');
 

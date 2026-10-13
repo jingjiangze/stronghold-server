@@ -100,6 +100,24 @@ test('non-asset paths, other extensions and traversal stay with the caller (null
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('the rank cannot promote the dataset above weishucdn (2026-10-13: ms-dataset is no longer mapped)', async () => {
+  const dir = tmpdir();
+  // The live rank lists `ms-dataset` first (unmeasured → ordered by origins.json), so mapping it to `modelscope`
+  // used to outrank weishucdn. Unmapped it falls into the "configured but unranked" tail, which follows the static
+  // order — weishucdn first.
+  const doc = { schemaVersion: 1, order: ['r2', 'modelscope'], sources: [{ id: 'r2', base: R2 }, { id: 'modelscope', base: MIRROR }] };
+  const rank = { rank: [{ id: 'ms-dataset' }, { id: 'r2' }] };
+  const logs = [];
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, doc), log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+    fetchImpl: async () => ({ json: async () => rank }) });
+  try {
+    for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank →')); i++) await new Promise((r) => setTimeout(r, 10));
+    const line = logs.find((m) => m.includes('rank →'));
+    assert.ok(line && line.includes('r2 > modelscope'), `rank keeps weishucdn first: ${line}`);
+    assert.equal(jump('/assets/a/b.png', '', 'GET').headers.Location, `${R2}/assets/a/b.png`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('an unreadable sources file turns the jump off instead of failing requests', () => {
   const dir = tmpdir();
   try {
