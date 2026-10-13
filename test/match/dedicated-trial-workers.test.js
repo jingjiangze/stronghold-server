@@ -178,7 +178,10 @@ test('single-credit progress is low frequency/aggregated and an async consumer c
   // MAX_TRIAL_TICKS ticks) can take the whole default 50 ms window, so the first report would legitimately cover a
   // single slice and `ticks > MAX_TRIAL_TICKS` could never hold. Widen the window so the first aggregate event spans
   // several slices on any machine — the property under test (aggregation, not per-tick reporting) stays pinned.
-  const pool = await realPool(t, { trialProgressMs: 500 });
+  // Holding the consumer means no further progress arrives by design, so the 5 s stall watchdog would fail the
+  // trial on a slow box before it ends — a machine-speed race, not the credit rule under test. Give this pool a
+  // stall window long enough that the trial always finishes first.
+  const pool = await realPool(t, { trialProgressMs: 500, trialStallTimeoutMs: 120_000 });
   const observed = [];
   const incoming = [];
   const slot = pool.slots[0];
@@ -203,7 +206,8 @@ test('single-credit progress is low frequency/aggregated and an async consumer c
 });
 
 test('terminal event bypasses exhausted worker progress credit and duplicate events do not mint credit', async (t) => {
-  const pool = await realPool(t);
+  // Same race as above: the credit is held forever, so only the stall window bounds this trial's runtime.
+  const pool = await realPool(t, { trialStallTimeoutMs: 120_000 });
   const control = pool._trialControl.bind(pool);
   // Hold one real worker credit forever, without advancing its control sequence.
   pool._trialControl = (session, op, payload) => op === 'progressAck' ? session.controlSeq : control(session, op, payload);
