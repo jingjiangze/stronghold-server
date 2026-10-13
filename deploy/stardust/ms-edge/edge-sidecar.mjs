@@ -40,7 +40,11 @@ const SEGMENT = /^[A-Za-z0-9_[-][A-Za-z0-9_.[\]-]*$/;
 export function allowedExt(pathname) {
   const ext = extensionOf(pathname);
   if (ALLOWED_EXT.has(ext)) return true;
-  return ext === 'css' && pathname.startsWith('/fonts/');
+  // `/fonts/fonts.css`（官方客户端唯一的字体清单）与提取出来的**本地美术**（`/assets/local/**` 的
+  // scene.json / scene.bin 与其它 json 清单）在容器里没有本地副本，不存在「与本地构建产物版本不一致」
+  // 的问题 —— 它们是本地美术的一部分，跟着同一张源表走。`/assets` 下其它位置的 css/js/json 仍留给游戏本体。
+  if (ext === 'css' && pathname.startsWith('/fonts/')) return true;
+  return (ext === 'json' || ext === 'bin') && pathname.startsWith('/assets/local/');
 }
 
 export function splittable(pathname) {

@@ -92,6 +92,11 @@ test('non-asset paths, other extensions and traversal stay with the caller (null
     // holds no copy of it — so it is served from the same source table as the fonts it names. (The exclusion the other
     // paths carry is about manifest/code *version skew*; there is no local counterpart to skew against here.)
     assert.equal(jump('/fonts/fonts.css', '', 'GET')?.status, 302, '/fonts/fonts.css');
+    // The extracted LOCAL art is the same kind of exception: a scene's `scene.json` / `scene.bin` (and the other
+    // module manifests under /assets/local/) have no in-container counterpart either, so they ride the same table.
+    assert.equal(jump('/assets/local/scene/act1autochess_m01/scene.json', '', 'GET')?.status, 302, '/assets/local/** *.json');
+    assert.equal(jump('/assets/local/scene/act1autochess_m01/scene.bin', '', 'GET')?.status, 302, '/assets/local/** *.bin');
+    assert.equal(jump('/assets/local/x/y.bin', '', 'GET')?.status, 302, '/assets/local/** *.bin (any depth)');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
