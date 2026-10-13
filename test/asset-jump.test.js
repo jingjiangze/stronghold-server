@@ -85,9 +85,13 @@ test('non-asset paths, other extensions and traversal stay with the caller (null
   const dir = tmpdir();
   const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent });
   try {
-    for (const p of ['/js/app.js', '/data/assets.json', '/assets/x/y.js', '/assets/min.js', '/fonts/fonts.css', '/assets/../etc/passwd', '/assets/a b/c.png']) {
+    for (const p of ['/js/app.js', '/data/assets.json', '/assets/x/y.js', '/assets/min.js', '/assets/min.css', '/assets/../etc/passwd', '/assets/a b/c.png']) {
       assert.equal(jump(p, '', 'GET'), null, p);
     }
+    // One exception: `/fonts/fonts.css` is the official client's font manifest, and an install built without the art
+    // holds no copy of it — so it is served from the same source table as the fonts it names. (The exclusion the other
+    // paths carry is about manifest/code *version skew*; there is no local counterpart to skew against here.)
+    assert.equal(jump('/fonts/fonts.css', '', 'GET')?.status, 302, '/fonts/fonts.css');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
