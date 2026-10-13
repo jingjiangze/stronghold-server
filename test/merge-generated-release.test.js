@@ -29,6 +29,20 @@ async function snapshots(dir) {
   }
   return opts;
 }
+// The pinned blobs live in older commits. A shallow checkout (CI's actions/checkout) does not have them, so the two
+// tests that materialize the snapshots skip instead of failing on `git show`; a full clone runs them.
+const PINNED_BLOBS = (() => {
+  const env = { ...process.env, GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0' };
+  try {
+    for (const source of Object.values(RELEASE_SNAPSHOTS)) {
+      for (const name of Object.keys(source.blobs)) {
+        if (spawnSync('git', ['-C', ROOT, 'cat-file', '-e', `${source.commit}:data/${name}`], { env, stdio: 'ignore' }).status !== 0) return false;
+      }
+    }
+    return true;
+  } catch { return false; }
+})();
+const NO_PINNED_BLOBS = PINNED_BLOBS ? false : 'the pinned release blobs are absent from this shallow/partial clone';
 
 test('strict three-way merge preserves disjoint changes, deletions and object order without mutating inputs', () => {
   const base = { z: 1, nested: { unchanged: 2, deleted: 3 }, array: [1, 2] };
@@ -67,7 +81,7 @@ test('merged asset flags retain both strict completeness reporting and multiling
   assert.equal(opts.voiceLang, 'jp');
 });
 
-test('exact pinned blobs generate only assets/config/provenance, synchronize CN/JP and reproduce deterministically', async t => {
+test('exact pinned blobs generate only assets/config/provenance, synchronize CN/JP and reproduce deterministically', { skip: NO_PINNED_BLOBS }, async t => {
   const dir = await directory(t), opts = await snapshots(dir);
   const first = join(dir, 'first'), second = join(dir, 'second');
   const report = await mergeReleaseSnapshots({ ...opts, outDir: first });
@@ -111,7 +125,7 @@ test('exact pinned blobs generate only assets/config/provenance, synchronize CN/
   await assert.rejects(mergeReleaseSnapshots({ ...opts, outDir: first }), /EEXIST/);
 });
 
-test('snapshot mode dispatches before ordinary table/cache generation and refuses modified source blobs', async t => {
+test('snapshot mode dispatches before ordinary table/cache generation and refuses modified source blobs', { skip: NO_PINNED_BLOBS }, async t => {
   const dir = await directory(t), opts = await snapshots(dir);
   const output = join(dir, 'cli');
   const run = spawnSync(process.execPath, [join(ROOT, 'tools', 'build-data.mjs'), '--merge-release-snapshots',
