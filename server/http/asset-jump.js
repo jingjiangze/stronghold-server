@@ -49,7 +49,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   log.info?.(`[http] asset jump: on — order=${config.order.join(' > ')}, exceptions=${config.exceptions.size} (${sourcesPath})`);
   // 动态次序：rank.json 把实测最快的源排在前面。只在**已配置的源**里取（不引入未知 id），
   // 取不到/解析失败就沿用静态 order——排名是优化，不是依赖。
-  let ranked = null, rankedAt = 0, inflight = null;
+  let ranked = null, rankedAt = 0, inflight = null, rankState = { at: null, ok: null };
   function refresh() {
     if (inflight || !rankUrl || !fetchImpl) return;
     inflight = (async () => {
@@ -64,9 +64,11 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
         if (ids.length) {
           const rest = config.order.filter((id) => !ids.includes(id));   // 未进榜的已配置源接在后面
           ranked = [...ids, ...rest]; rankedAt = Date.now();
+          rankState = { at: new Date().toISOString(), ok: true, order: [...ranked] };
           log.info?.(`[http] asset jump: rank → ${ranked.join(' > ')}`);
         }
       } catch (e) {
+        rankState = { at: new Date().toISOString(), ok: false, error: String(e?.message || e) };
         log.warn?.(`[http] asset jump: rank unavailable (${e?.message || e}) — using the static order`);
       } finally { inflight = null; }
     })();
@@ -85,5 +87,32 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     return out.status === 302 ? { status: out.status, headers: out.headers } : null;
   };
   jump.config = effective;
+  /**
+   * Read-only status for the deployment's own diagnostics: what the jump knows (sources, rank) and, on demand, a
+   * HEAD probe of the first source and of the upstream (so an operator can tell what this container can reach).
+   * Never throws; probe failures are reported as data.
+   */
+  jump.status = async ({ probe = false, probeUrl = 'https://github.com/sgangs/Stronghold-Protocol/releases.atom' } = {}) => {
+    const out = {
+      order: effective().order,
+      sources: effective().order.map((id) => ({ id, base: config.byId.get(id) })),
+      rankUrl, rank: rankState,
+      jumpEnabled: true, sourcesPath,
+    };
+    if (!probe) return out;
+    const head = async (u) => {
+      const t0 = Date.now();
+      try {
+        const r = await fetchImpl(u, { method: 'HEAD', signal: AbortSignal.timeout(6000) });
+        return { url: u, status: r.status, ms: Date.now() - t0 };
+      } catch (e) { return { url: u, error: String(e?.message || e), ms: Date.now() - t0 }; }
+    };
+    const first = effective().order[0];
+    out.probes = await Promise.all([
+      first ? head(config.byId.get(first) + '/assets/char/avatar/char_003_kalts.png') : null,
+      head(probeUrl),
+    ].filter(Boolean));
+    return out;
+  };
   return jump;
 }
