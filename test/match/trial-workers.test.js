@@ -393,7 +393,12 @@ test('unlimited combat admission does not relax the independent per-worker trial
   assert.equal(reply.generation, generation);
   assert.equal(reply.error?.message, 'worker session limit reached');
   assert.equal((await combat.request('state')).ticks, 0);
-  assert.equal((await trial.advance(1)).ticks, 1);
+  // The surviving trial must still advance. A slice may legitimately report 0 ticks: trial.js bounds the FIRST
+  // candidate's construction by TRIAL_SLICE_MS (never build all candidates in one wire turn), so a slow/cold turn
+  // can spend the whole budget before stepping — advance until it reports a tick rather than pinning the first slice.
+  let advanced = await trial.advance(1);
+  for (let i = 0; i < 100 && advanced.ticks < 1; i++) advanced = await trial.advance(1);
+  assert.ok(advanced.ticks >= 1, 'the surviving trial session still advances');
   await trial.close(); combat.close();
 });
 
