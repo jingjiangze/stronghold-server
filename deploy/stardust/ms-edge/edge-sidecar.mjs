@@ -33,6 +33,16 @@ export const ALLOWED_EXT = new Set([
 // 每段必须是 [A-Za-z0-9_[-] 开头、之后允许 . —— 于是 ".."、"尾点段"、控制字符全部被拒。
 const SEGMENT = /^[A-Za-z0-9_[-][A-Za-z0-9_.[\]-]*$/;
 
+/**
+ * 扩展名闸门：白名单之外只放一个例外 —— `/fonts/fonts.css`，官方客户端唯一的字体清单（它属于字体集，
+ * 镜像里就在 fonts/ 下）。`/assets/` 下的 css/js/json 仍然留给游戏本体：那些可能与本地构建产物版本不同。
+ */
+export function allowedExt(pathname) {
+  const ext = extensionOf(pathname);
+  if (ALLOWED_EXT.has(ext)) return true;
+  return ext === 'css' && pathname.startsWith('/fonts/');
+}
+
 export function splittable(pathname) {
   return pathname.startsWith('/assets/') || pathname.startsWith('/fonts/');
 }
@@ -118,7 +128,7 @@ export function decide(config, { method = 'GET', pathname = '/', query = '' } = 
     return { status: 405, headers: { Allow: 'GET, HEAD, OPTIONS' } };
   }
   // nginx 已经按扩展名粗筛过；这里再判一次是防守，不是主逻辑。
-  if (!splittable(pathname) || !validPath(pathname) || !ALLOWED_EXT.has(extensionOf(pathname))) {
+  if (!splittable(pathname) || !validPath(pathname) || !allowedExt(pathname)) {
     return { status: 404, headers: {} };
   }
 
