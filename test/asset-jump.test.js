@@ -53,7 +53,7 @@ test('missing /assets file → 302 to the first source (cacheable), local file s
   const dir = tmpdir();
   const pub = path.join(dir, 'public');
   fs.mkdirSync(pub);
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0 });
   const srv = await serve(pub, jump);
   try {
     const miss = await get(srv, '/assets/skins/char_103_angel_wild_1/front/char_103_angel_wild_1.skel');
@@ -71,7 +71,7 @@ test('missing /assets file → 302 to the first source (cacheable), local file s
 
 test('exception path is forced to r2; ?sp_source overrides the order and only that key is dropped', async () => {
   const dir = tmpdir();
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0 });
   try {
     const exc = jump('/assets/skins/char_340_shwaz_snow_1/illustration.png', '', 'GET');
     assert.equal(exc.status, 302);
@@ -83,7 +83,7 @@ test('exception path is forced to r2; ?sp_source overrides the order and only th
 
 test('non-asset paths, other extensions and traversal stay with the caller (null → its own 404)', () => {
   const dir = tmpdir();
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0 });
   try {
     for (const p of ['/js/app.js', '/data/assets.json', '/assets/x/y.js', '/assets/min.js', '/assets/min.css', '/assets/../etc/passwd', '/assets/a b/c.png']) {
       assert.equal(jump(p, '', 'GET'), null, p);
@@ -315,7 +315,7 @@ test('an unreadable sources file turns the jump off instead of failing requests'
 });
 
 test('every path in the committed manifest is jumpable — or a fonts URL (absolute by design)', () => {
-  const jump = createAssetJump({ sourcesPath: path.join(ROOT, 'deploy/stardust/ms-edge/sources.json'), log: silent });
+  const jump = createAssetJump({ sourcesPath: path.join(ROOT, 'deploy/stardust/ms-edge/sources.json'), log: silent, healthIntervalMs: 0 });
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/assets.json'), 'utf8'));
   assert.equal(Object.keys(manifest.skins || {}).length, 271, '271 skins in data/assets.json');
 

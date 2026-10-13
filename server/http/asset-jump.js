@@ -121,7 +121,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
           log.info?.(`[http] asset jump: rank(${url}) qualified=[${applied.head.join(',')}] → ${ranked.join(' > ')}`);
         } else {
           ranked = null;
-          rankState = { at: new Date().toISOString(), ok: true, url, qualified: [], order: [...config.order], note: 'rank 里没有合格（实测）条目 ⇒ 保持静态 order' };
+          rankState = { at: new Date().toISOString(), ok: true, url, qualified: [], order: [...config.order], note: 'no measured/usable entry in rank - keeping the static order' };
           log.warn?.('[http] asset jump: rank has no measured/usable entry — keeping the static order');
         }
       } catch (e) {
