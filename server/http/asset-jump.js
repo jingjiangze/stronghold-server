@@ -16,11 +16,18 @@ import { decide, parseSources, stripSourceParam } from '../../deploy/stardust/ms
 import { createMirrorProbe } from '../mirrorProbe.js';
 
 /**
- * 排名端点（R2 上的静态 rank.json）。**多个 URL 是同一个对象的不同门牌**（同桶的 speedcdn / weishucdn），
- * 2026-10-14 实测容器到 CF 系是「能通但慢/抖动」（weishucdn HEAD 900ms vs modelscope 111ms）⇒ 一个门牌
- * 失败/超时不代表对象不可达，按序回退。取不到就用 sources.json 的静态 order（排名是优化，不是依赖）。
+ * 排名端点。**多个 URL 是同一个对象的不同门牌**，按序回退：
+ *   1. 魔搭数据集门牌 —— 同一份 rank.json 镜像进 `jingjiangze/Stronghold-Protocol-Assets` 数据集，
+ *      容器侧实测 0.16 s（本机 curl）/ 67 ms（容器视角）可达，是「容器自己就能稳定读到」的那一个；
+ *   2. speedcdn —— 同桶自定义域，2026-10-14 实测容器侧慢/抖动；
+ *   3. weishucdn —— 同桶主域，作为最后兜底。
+ *
+ * 2026-10-14 实测容器里 weishucdn/speedcdn 两个门牌拿 rank.json 都要 4.7~20 s，旧代码的 4 s 超时
+ * 让这三条**全部**读失败 —— 排名于是永远取不到，`ranked ?? config.order` 一路退化成静态 order。
+ * 所以镜像进数据集（快门牌）+ 抬高超时（容忍慢门牌）两件事都要做。
  */
 export const DEFAULT_RANK_URLS = [
+  'https://modelscope.cn/api/v1/datasets/jingjiangze/Stronghold-Protocol-Assets/repo?Revision=master&FilePath=cdn%2Fv1%2Frank.json',
   'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json',
   'https://weishucdn.jiangjiangze.icu/cdn/v1/rank.json',
 ];
@@ -28,11 +35,20 @@ export const DEFAULT_RANK_URLS = [
 export const DEFAULT_RANK_URL = DEFAULT_RANK_URLS[0];
 export const RANK_TTL_MS = 300_000;
 /**
+ * rank.json 的抓取超时。门牌里最慢的一条实测要 4.7 s（容器到 CF 系），4 s 会让它必然超时，
+ * 于是三条门牌全都失败、排名永远取不到。取 15 s：仍远小于 5 分钟的 TTL，失败也只浪费一次空等，
+ * 换来慢门牌真的有机会成功。
+ */
+export const RANK_TIMEOUT_MS = 15_000;
+/**
  * 排名里的 id → 边缘源表的 id。两边的命名不同名（CDN 侧叫 ms-dataset/ms-edge/r2-alt，边缘侧叫
  * modelscope/r2），而且 **ms-edge 就是本容器自己**——映射成 null 表示"跳过"：否则边缘会 302 到自己，
  * 客户端跟着无限跳。未列出的 id 按同名处理（两边同名时零配置即可用）。
  */
-export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-dataset': 'modelscope', 'ms-edge': null };
+// 2026-10-14 用户指令「目前的 CDN 换成 speedcdn」：r2（= speedcdn 门牌）作为默认首跳，
+// 数据集不再参与头部竞争（否则 rank 的 ms-dataset 排第一会把首跳带到 modelscope）——它留在尾部做兜底，
+// 由「非空优先」在 r2 缺件时自动顶上。等价于 10-13 的「魔搭部署也优先 weishucdn」（同桶）。
+export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-dataset': null, 'ms-edge': null };
 
 /**
  * **合格集**：只有「真的测过」的条目才有资格进生效顺序的**头部**。
@@ -108,7 +124,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     for (const u of urls) {
       if (!u) continue;
       try {
-        const res = await fetchImpl(u, { signal: AbortSignal.timeout(4000) });
+        const res = await fetchImpl(u, { signal: AbortSignal.timeout(RANK_TIMEOUT_MS) });
         if (!res.ok) { last = `HTTP ${res.status} @ ${u}`; continue; }
         const doc = await res.json();
         return { url: u, doc };

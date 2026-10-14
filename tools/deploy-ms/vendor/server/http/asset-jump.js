@@ -45,7 +45,10 @@ export const RANK_TIMEOUT_MS = 15_000;
  * modelscope/r2），而且 **ms-edge 就是本容器自己**——映射成 null 表示"跳过"：否则边缘会 302 到自己，
  * 客户端跟着无限跳。未列出的 id 按同名处理（两边同名时零配置即可用）。
  */
-export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-dataset': 'modelscope', 'ms-edge': null };
+// 2026-10-14 用户指令「目前的 CDN 换成 speedcdn」：r2（= speedcdn 门牌）作为默认首跳，
+// 数据集不再参与头部竞争（否则 rank 的 ms-dataset 排第一会把首跳带到 modelscope）——它留在尾部做兜底，
+// 由「非空优先」在 r2 缺件时自动顶上。等价于 10-13 的「魔搭部署也优先 weishucdn」（同桶）。
+export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-dataset': null, 'ms-edge': null };
 
 /**
  * **合格集**：只有「真的测过」的条目才有资格进生效顺序的**头部**。
