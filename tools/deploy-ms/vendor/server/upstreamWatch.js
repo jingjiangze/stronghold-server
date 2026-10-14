@@ -25,15 +25,26 @@ const WATCH_POINTS = [
   { key: 'sha', url: `${API}/repos/${UPSTREAM}/commits?per_page=1`, pick: (j) => (Array.isArray(j) && j[0] && j[0].sha) || null },
 ];
 
-/** 默认执行器：既有 workflow_dispatch 工作流（不改它们，只被调用）。 */
+/**
+ * 默认执行器：既有 workflow_dispatch 工作流（不改它们，只被调用）。
+ * 2026-10-14 用户口径：上游一变 → 扇出**全部可触发写入端**（不再只发 2 条）。`inputs` 必须按各
+ * workflow 的声明补：sync.yml 的**手动**派发默认只读，要显式 write/pages/packs/sources；rank 无
+ * 输入；git-art/openi 各自带 write。site.yml 不在此表 —— sync.yml 写成功后自己会派发它，避免双发。
+ */
 const DEFAULT_TARGETS = [
-  { repo: 'jingjiangze/Stronghold-Protocol-CDN', file: 'sync.yml', ref: 'main' },
+  { repo: 'jingjiangze/Stronghold-Protocol-CDN', file: 'sync.yml', ref: 'main', inputs: { write: true, pages: true, packs: true, sources: true } },
+  { repo: 'jingjiangze/Stronghold-Protocol-CDN', file: 'rank.yml', ref: 'main' },
+  { repo: 'jingjiangze/Stronghold-Protocol-CDN', file: 'git-art-sync.yml', ref: 'main', inputs: { write: true } },
+  { repo: 'jingjiangze/Stronghold-Protocol-CDN', file: 'openi-mirror.yml', ref: 'main', inputs: { write: true } },
   { repo: 'jingjiangze/stronghold-server', file: 'sync-upstream.yml', ref: 'master' },
 ];
 
+// 轮询间隔：未认证的 GitHub API 限 60 次/小时/IP —— 2 个观测点 × 每 45 秒 = 160 次/小时，必然 403
+// （2026-10-14 线上实测 state.error = "tag: HTTP 403"）。300 秒 = 24 次/小时，安全，且与 CF tick
+// worker 同频（*/5）。容器端保持 observe-only（不配 token），派发由 worker 主责 —— 单端为主。
 export function createUpstreamWatch({
   log = console, token = (typeof process !== 'undefined' ? process.env?.SP_UPSTREAM_TOKEN : null) || null,
-  intervalMs = 45_000, targets = DEFAULT_TARGETS, upstream = UPSTREAM,
+  intervalMs = 300_000, targets = DEFAULT_TARGETS, upstream = UPSTREAM,
   fetchImpl = globalThis.fetch, now = () => Date.now(),
 } = {}) {
   const etags = new Map();   // url → etag
@@ -76,7 +87,7 @@ export function createUpstreamWatch({
             accept: 'application/vnd.github+json', 'content-type': 'application/json',
             'user-agent': 'stronghold-upstream-watch/1.0', authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ ref: t.ref || 'main' }),   // 不带 inputs：各工作流的输入声明不同，带错会 422
+          body: JSON.stringify({ ref: t.ref || 'main', ...(t.inputs ? { inputs: t.inputs } : {}) }),   // inputs 逐目标声明；未声明的目标不带 inputs（带错会 422）
           signal: AbortSignal.timeout(10_000),
         });
         http = r.status;                            // 204 = 已触发
