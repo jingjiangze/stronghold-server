@@ -63,7 +63,9 @@ jobs:
             for (const e of o.entries) if (/\.m?js$/.test(e.path) && e.kind!=="generated") {
               const src=fs.readFileSync(e.from.startsWith("/")?e.from:e.from,"utf8");
               if (!/^\s*\/\*|^\s*\/\//.test(src)) throw new Error("odd file head: "+e.path);
-              if (/export (default|async function startServer)|require\(/.test(src)) {
+              if (/^export /m.test(src)) {
+                cp.execFileSync(process.execPath,["--input-type=module","--check","-"],{input:src});   // ESM 文件必须声明 input-type
+              } else {
                 cp.execFileSync(process.execPath,["--check","-"],{input:src});
               }
             }
