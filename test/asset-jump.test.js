@@ -53,7 +53,7 @@ test('missing /assets file → 302 to the first source (cacheable), local file s
   const dir = tmpdir();
   const pub = path.join(dir, 'public');
   fs.mkdirSync(pub);
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0, probeIntervalMs: 0 });
   const srv = await serve(pub, jump);
   try {
     const miss = await get(srv, '/assets/skins/char_103_angel_wild_1/front/char_103_angel_wild_1.skel');
@@ -71,7 +71,7 @@ test('missing /assets file → 302 to the first source (cacheable), local file s
 
 test('exception path is forced to r2; ?sp_source overrides the order and only that key is dropped', async () => {
   const dir = tmpdir();
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     const exc = jump('/assets/skins/char_340_shwaz_snow_1/illustration.png', '', 'GET');
     assert.equal(exc.status, 302);
@@ -83,7 +83,7 @@ test('exception path is forced to r2; ?sp_source overrides the order and only th
 
 test('non-asset paths, other extensions and traversal stay with the caller (null → its own 404)', () => {
   const dir = tmpdir();
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, DOC), log: silent, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     for (const p of ['/js/app.js', '/data/assets.json', '/assets/x/y.js', '/assets/min.js', '/assets/min.css', '/assets/../etc/passwd', '/assets/a b/c.png']) {
       assert.equal(jump(p, '', 'GET'), null, p);
@@ -107,7 +107,7 @@ test('a source known to be missing the file is skipped on the next jump (non-emp
   const fetchImpl = async (url, init = {}) => (init.method === 'HEAD'
     ? { ok: okB(url), status: okB(url) ? 200 : 404 }
     : { ok: true, json: async () => ({ rank: [] }) });
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, doc), log: silent, fetchImpl });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, doc), log: silent, fetchImpl, probeIntervalMs: 0 });
   try {
     // 第一次：这个 (源,路径) 还没判定过 ⇒ 按既有顺序跳 a（可能与今天线上相同：第一个请求仍可能打到缺件源）
     assert.equal(jump('/assets/x.png', '', 'GET').headers.Location, 'https://a.example/assets/x.png');
@@ -141,7 +141,7 @@ test('an unmeasured rank[0] cannot lead — the static order survives (live rank
   const jump = createAssetJump({
     sourcesPath: writeSources(dir, doc),
     log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
-    fetchImpl: async () => ({ ok: true, status: 200, json: async () => rank }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => rank }), probeIntervalMs: 0,
   });
   try {
     for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
@@ -163,7 +163,7 @@ test('a measured, faster dataset takes the lead — and the unranked sources kee
   const jump = createAssetJump({
     sourcesPath: writeSources(dir, doc),
     log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
-    fetchImpl: async () => ({ ok: true, status: 200, json: async () => rank }),
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => rank }), probeIntervalMs: 0,
   });
   try {
     for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
@@ -187,7 +187,7 @@ test('rank fetch falls through to the next url when the first one fails', async 
       seen.push(u);
       if (u.startsWith('https://dead.example')) return { ok: false, status: 503, json: async () => ({}) };
       return { ok: true, status: 200, json: async () => rank };
-    },
+    }, probeIntervalMs: 0,
   });
   try {
     for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
@@ -228,7 +228,7 @@ function fakeSources(healthStatus = {}, missing = []) {
 test('a source that answers 5xx is skipped — the jump falls through to the next domain', async () => {
   const dir = tmpdir();
   const { impl } = fakeSources({ a: 503 });
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     await jump.checkHealth();
     assert.equal(jump.health().sources.a.v, 'down');
@@ -249,7 +249,7 @@ test('an unreachable source (network error / timeout) is also skipped', async ()
     if (init.method === 'HEAD') return { ok: true, status: 200 };
     return { ok: true, status: 200, json: async () => ({ rank: [] }) };
   };
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: boom, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: boom, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     await jump.checkHealth();
     assert.equal(jump.health().sources.a.v, 'down');
@@ -260,7 +260,7 @@ test('an unreachable source (network error / timeout) is also skipped', async ()
 test('reachability is not file presence: a 404 on the health path must NOT demote the source', async () => {
   const dir = tmpdir();
   const { impl } = fakeSources({ a: 404 });
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     await jump.checkHealth();
     assert.equal(jump.health().sources.a.v, 'ok', '403/404 说明域名活着，只是没有这个文件');
@@ -271,7 +271,7 @@ test('reachability is not file presence: a 404 on the health path must NOT demot
 test('every source unreachable → still 302 to the primary (never 404/503)', async () => {
   const dir = tmpdir();
   const { impl } = fakeSources({ a: 503, b: 503, c: 503 });
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     await jump.checkHealth();
     const res = jump('/assets/x.png', '', 'GET', jump.config());
@@ -283,7 +283,7 @@ test('every source unreachable → still 302 to the primary (never 404/503)', as
 test('naming an unreachable source falls through by order instead of handing out a dead link', async () => {
   const dir = tmpdir();
   const { impl } = fakeSources({ a: 503 });
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     await jump.checkHealth();
     const res = jump('/assets/x.png', 'sp_source=a&v=2', 'GET', jump.config());
@@ -294,7 +294,7 @@ test('naming an unreachable source falls through by order instead of handing out
 test('the fallback list follows the effective order, excludes the chosen source, and never self-links', async () => {
   const dir = tmpdir();
   const { impl } = fakeSources();
-  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: writeSources(dir, THREE), log: silent, fetchImpl: impl, healthIntervalMs: 0, probeIntervalMs: 0 });
   try {
     await jump.checkHealth();
     const res = jump('/assets/x.png', 'v=7', 'GET', jump.config());
@@ -303,6 +303,37 @@ test('the fallback list follows the effective order, excludes the chosen source,
     assert.match(res.headers.Link, /^<https:\/\/b\.example\/assets\/x\.png\?v=7>; rel="alternate", <https:\/\/c\.example\/assets\/x\.png\?v=7>; rel="alternate"$/);
     assert.ok(!res.headers['X-SP-Fallbacks'].includes('https://a.example'), '自己不在后备里');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// 容器测速：默认只报告，不掌舵（10-13 指令：weishucdn 优先）；开关打开后实测序掌舵。
+test('container-measured speed is reported by default and leads only when asked to', async () => {
+  const dir = tmpdir();
+  const doc = { schemaVersion: 1, order: ['a', 'b'],
+    sources: [{ id: 'a', base: 'https://a.example' }, { id: 'b', base: 'https://b.example' }] };
+  const mkFetch = (delays) => async (url, init = {}) => {
+    const u = new URL(url);
+    const id = u.host.split('.')[0];
+    if (init.method === 'HEAD') return { ok: true, status: 200 };
+    if (init.headers && init.headers.range) {                       // 测速 GET（带 Range）
+      await new Promise((r) => setTimeout(r, delays[id] ?? 0));
+      return { ok: true, status: 206, arrayBuffer: async () => new ArrayBuffer(2048) };
+    }
+    return { ok: true, status: 200, json: async () => ({ rank: [] }) };   // rank
+  };
+  const off = createAssetJump({ sourcesPath: writeSources(dir, doc), log: silent, fetchImpl: mkFetch({ a: 30, b: 0 }), healthIntervalMs: 0, probeIntervalMs: 0 });
+  try {
+    await off.checkProbe();
+    assert.deepEqual(off.config().order, ['a', 'b'], '默认不让实测序掌舵（保持既有指令的顺序）');
+    assert.deepEqual(off.probe().measuredOrder, ['b', 'a'], '但实测证据要如实给出');
+    assert.equal(off.probe().leads, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const dir2 = tmpdir();
+  const on = createAssetJump({ sourcesPath: writeSources(dir2, doc), log: silent, fetchImpl: mkFetch({ a: 30, b: 0 }), healthIntervalMs: 0, probeIntervalMs: 0, probeLeads: true });
+  try {
+    await on.checkProbe();
+    assert.deepEqual(on.config().order, ['b', 'a'], 'probeLeads 打开后实测序掌舵');
+    assert.equal(on('/assets/x.png', '', 'GET', on.config()).headers.Location, 'https://b.example/assets/x.png');
+  } finally { fs.rmSync(dir2, { recursive: true, force: true }); }
 });
 
 test('an unreadable sources file turns the jump off instead of failing requests', () => {
@@ -315,7 +346,7 @@ test('an unreadable sources file turns the jump off instead of failing requests'
 });
 
 test('every path in the committed manifest is jumpable — or a fonts URL (absolute by design)', () => {
-  const jump = createAssetJump({ sourcesPath: path.join(ROOT, 'deploy/stardust/ms-edge/sources.json'), log: silent, healthIntervalMs: 0 });
+  const jump = createAssetJump({ sourcesPath: path.join(ROOT, 'deploy/stardust/ms-edge/sources.json'), log: silent, healthIntervalMs: 0, probeIntervalMs: 0 });
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/assets.json'), 'utf8'));
   assert.equal(Object.keys(manifest.skins || {}).length, 271, '271 skins in data/assets.json');
 

@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, noopLog } from './config.js';
 import { decide, parseSources, stripSourceParam } from '../../deploy/stardust/ms-edge/edge-sidecar.mjs';
+import { createMirrorProbe } from '../mirrorProbe.js';
 
 /**
  * 排名端点（R2 上的静态 rank.json）。**多个 URL 是同一个对象的不同门牌**（同桶的 speedcdn / weishucdn），
@@ -57,7 +58,7 @@ export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-ed
  * @param {{ sourcesPath?: string, disabled?: boolean, log?: { info?: Function, warn?: Function } }} [opts]
  * @returns {(pathname: string, query: string, method: string) => { status: number, headers: Record<string, string> } | null}
  */
-export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || '', rankUrls = null, fetchImpl = globalThis.fetch, healthIntervalMs = process.env.SP_ASSET_HEALTH === '0' ? 0 : Number(process.env.SP_ASSET_HEALTH_INTERVAL_MS || 60_000) } = {}) {
+export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || DEFAULT_SOURCES_PATH, disabled = process.env.SP_ASSET_JUMP === '0', log = noopLog, rankUrl = process.env.SP_RANK_URL || '', rankUrls = null, fetchImpl = globalThis.fetch, healthIntervalMs = process.env.SP_ASSET_HEALTH === '0' ? 0 : Number(process.env.SP_ASSET_HEALTH_INTERVAL_MS || 60_000), probeIntervalMs = process.env.SP_PROBE === '0' ? 0 : Number(process.env.SP_PROBE_INTERVAL_MS || 300_000), probeLeads = process.env.SP_PROBE_LEADS === '1' } = {}) {
   if (disabled) {
     log.info?.('[http] asset jump: disabled (SP_ASSET_JUMP=0)');
     return () => null;
@@ -133,7 +134,13 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   /** 同步返回当前有效配置（后台按 TTL 刷新）：请求路径上永不等待网络。 */
   const effective = () => {
     if (Date.now() - rankCheckedAt >= RANK_TTL_MS) refresh();
-    return ranked ? { ...config, order: ranked } : config;
+    let order = ranked ?? config.order;
+    if (probeLeads) {
+      // 容器实测序（至少两个源测成功才有意义）插到最前，其余保持原相对顺序。
+      const measured = probe.measuredOrder().filter((id) => config.byId.has(id));
+      if (measured.length > 1) order = [...measured, ...order.filter((id) => !measured.includes(id))];
+    }
+    return { ...config, order };
   };
   refresh();   // 启动即预热
 
@@ -214,6 +221,14 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   healthTimer?.unref?.();
   if (healthTimer) for (const id of config.order) probeHealth(id, config.byId.get(id));   // 启动即预热
 
+  // ---- 容器视角的测速（实测证据；默认只报告，不掌舵）----------------------------------------------------
+  // 目标集合**只来自 sources.json 的已配置源**（不接受任何外部 URL）。分工见 server/mirrorProbe.js。
+  const probe = createMirrorProbe({
+    sources: config.order.map((id) => ({ id, base: config.byId.get(id) })),
+    fetchImpl, log, intervalMs: probeIntervalMs,
+    probePath: process.env.SP_PROBE_PATH || undefined,
+  });
+
   /**
    * 顺延链的最后一跳：给定源 id，返回**指向同一路径**的后备绝对地址（复用 decide 的同一套实现，
    * 靠 `?sp_source=<id>` 点名 —— 不在这里另写一份拼 URL 的规则）。取不到就返回 null。
@@ -275,6 +290,9 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     byHealth: healthSkips,
     cfg: { intervalMs: HEALTH_INTERVAL_MS, ttlMs: HEALTH_TTL_MS, path: HEALTH_PATH },
   });
+  /** 立刻把测速跑一轮并等到结果（线上排查/测试用；正常请求路径不需要它）。 */
+  jump.checkProbe = async () => probe.refresh();
+  jump.probe = () => ({ ...probe.state(), leads: probeLeads });
   /** 立刻把所有源探一遍并等到结果（线上排查/测试用；正常请求路径不需要它）。 */
   jump.checkHealth = async () => {
     await Promise.all(config.order.map((id) => probeHealth(id, config.byId.get(id))));
@@ -296,6 +314,8 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       exists: typeof jump.exists === 'function' ? jump.exists() : null,
       // 源健康：每个源当前通不通，以及因为健康被顺延掉的次数（byHealth）
       health: typeof jump.health === 'function' ? jump.health() : null,
+      // 容器视角测速：逐源 TTFB/吞吐（EWMA 平滑）+ 实测序；leads 表示是否让实测序掌舵
+      probe: { ...probe.state(), leads: probeLeads },
     };
     if (!probe) return out;
     const head = async (u) => {
