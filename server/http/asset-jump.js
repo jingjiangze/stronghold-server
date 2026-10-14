@@ -137,7 +137,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     let order = ranked ?? config.order;
     if (probeLeads) {
       // 容器实测序（至少两个源测成功才有意义）插到最前，其余保持原相对顺序。
-      const measured = probe.measuredOrder().filter((id) => config.byId.has(id));
+      const measured = speedProbe.measuredOrder().filter((id) => config.byId.has(id));
       if (measured.length > 1) order = [...measured, ...order.filter((id) => !measured.includes(id))];
     }
     return { ...config, order };
@@ -223,7 +223,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
 
   // ---- 容器视角的测速（实测证据；默认只报告，不掌舵）----------------------------------------------------
   // 目标集合**只来自 sources.json 的已配置源**（不接受任何外部 URL）。分工见 server/mirrorProbe.js。
-  const probe = createMirrorProbe({
+  const speedProbe = createMirrorProbe({
     sources: config.order.map((id) => ({ id, base: config.byId.get(id) })),
     fetchImpl, log, intervalMs: probeIntervalMs,
     probePath: process.env.SP_PROBE_PATH || undefined,
@@ -291,8 +291,8 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     cfg: { intervalMs: HEALTH_INTERVAL_MS, ttlMs: HEALTH_TTL_MS, path: HEALTH_PATH },
   });
   /** 立刻把测速跑一轮并等到结果（线上排查/测试用；正常请求路径不需要它）。 */
-  jump.checkProbe = async () => probe.refresh();
-  jump.probe = () => ({ ...probe.state(), leads: probeLeads });
+  jump.checkProbe = async () => speedProbe.refresh();
+  jump.probe = () => ({ ...speedProbe.state(), leads: probeLeads });
   /** 立刻把所有源探一遍并等到结果（线上排查/测试用；正常请求路径不需要它）。 */
   jump.checkHealth = async () => {
     await Promise.all(config.order.map((id) => probeHealth(id, config.byId.get(id))));
@@ -315,7 +315,7 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       // 源健康：每个源当前通不通，以及因为健康被顺延掉的次数（byHealth）
       health: typeof jump.health === 'function' ? jump.health() : null,
       // 容器视角测速：逐源 TTFB/吞吐（EWMA 平滑）+ 实测序；leads 表示是否让实测序掌舵
-      probe: { ...probe.state(), leads: probeLeads },
+      probe: { ...speedProbe.state(), leads: probeLeads },
     };
     if (!probe) return out;
     const head = async (u) => {
