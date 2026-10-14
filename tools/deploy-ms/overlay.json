@@ -10,55 +10,55 @@
     {
       "path": "deploy/stardust/ms-edge/nginx.conf",
       "kind": "add",
-      "from": "deploy/stardust/ms-edge/nginx.conf",
+      "from": "tools/deploy-ms/vendor/deploy/stardust/ms-edge/nginx.conf",
       "note": "容器边缘层 nginx（创空间平台上实际不执行 CMD，仅保留形态）"
     },
     {
       "path": "deploy/stardust/ms-edge/edge-sidecar.mjs",
       "kind": "add",
-      "from": "deploy/stardust/ms-edge/edge-sidecar.mjs",
+      "from": "tools/deploy-ms/vendor/deploy/stardust/ms-edge/edge-sidecar.mjs",
       "note": "分流纯函数（白名单/路径校验/例外表/sp_source），与进程内跳转共用"
     },
     {
       "path": "deploy/stardust/ms-edge/render-nginx.mjs",
       "kind": "add",
-      "from": "deploy/stardust/ms-edge/render-nginx.mjs",
+      "from": "tools/deploy-ms/vendor/deploy/stardust/ms-edge/render-nginx.mjs",
       "note": "nginx 配置渲染器"
     },
     {
       "path": "deploy/stardust/ms-edge/sources.json",
       "kind": "add",
-      "from": "deploy/stardust/ms-edge/sources.json",
+      "from": "tools/deploy-ms/vendor/deploy/stardust/ms-edge/sources.json",
       "note": "源表与顺序（r2=weishucdn 打头，modelscope 第二；openi 仅显式）"
     },
     {
       "path": "deploy/stardust/ms-edge/entrypoint.sh",
       "kind": "add",
-      "from": "deploy/stardust/ms-edge/entrypoint.sh",
+      "from": "tools/deploy-ms/vendor/deploy/stardust/ms-edge/entrypoint.sh",
       "note": "容器入口"
     },
     {
       "path": "server/http/asset-jump.js",
       "kind": "add",
-      "from": "server/http/asset-jump.js",
+      "from": "tools/deploy-ms/vendor/server/http/asset-jump.js",
       "note": "进程内素材 302：rank 合格集+多门牌回退+非空优先+源健康顺延+后备清单"
     },
     {
       "path": "server/mirrorProbe.js",
       "kind": "add",
-      "from": "server/mirrorProbe.js",
+      "from": "tools/deploy-ms/vendor/server/mirrorProbe.js",
       "note": "容器视角抽样测速（每次不同素材/大小分类/缺失表）——跳转层证据源"
     },
     {
       "path": "server/upstreamWatch.js",
       "kind": "add",
-      "from": "server/upstreamWatch.js",
+      "from": "tools/deploy-ms/vendor/server/upstreamWatch.js",
       "note": "容器内上游监听（无 SP_UPSTREAM_TOKEN 时 observe-only）"
     },
     {
       "path": "server/healthMetrics.js",
       "kind": "add",
-      "from": "server/healthMetrics.js",
+      "from": "tools/deploy-ms/vendor/server/healthMetrics.js",
       "note": "/healthz 性能指标"
     },
     {
