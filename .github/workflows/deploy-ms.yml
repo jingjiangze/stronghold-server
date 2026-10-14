@@ -79,7 +79,10 @@ jobs:
         env:
           MS_TOKEN: ${{ secrets.MS_TOKEN }}
         run: |
+          git config user.name "sp-deploy-bot"
+          git config user.email "deploy@users.noreply.github.com"
           TREE="$(cat /tmp/deploy-tree.txt)"
+          if [ -z "$MS_TOKEN" ]; then echo "✗ MS_TOKEN secret is not configured — cannot push to ms or restart the studio"; exit 5; fi
           git remote add ms "https://oauth2:$MS_TOKEN@www.modelscope.cn/studios/jingjiangze/Stronghold-Protocol.git"
           git fetch --depth=1 ms master
           PARENT="$(git ls-remote ms refs/heads/master | cut -f1)"
