@@ -314,9 +314,10 @@ test('container-measured speed is reported by default and leads only when asked 
     const u = new URL(url);
     const id = u.host.split('.')[0];
     if (init.method === 'HEAD') return { ok: true, status: 200 };
-    if (init.headers && init.headers.range) {                       // 测速 GET（带 Range）
+    // rank 只有一个门牌地址（dead/alive.example）；抽样测速打的是素材源（a/b.example）
+    if (u.host.includes('example') && !u.pathname.startsWith('/rank')) {
       await new Promise((r) => setTimeout(r, delays[id] ?? 0));
-      return { ok: true, status: 206, arrayBuffer: async () => new ArrayBuffer(2048) };
+      return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(64 * 1024) };
     }
     return { ok: true, status: 200, json: async () => ({ rank: [] }) };   // rank
   };

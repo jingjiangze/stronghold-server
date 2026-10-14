@@ -53,6 +53,28 @@ export function rankQualified(r) {
 export const DEFAULT_SOURCES_PATH = path.join(ROOT, 'deploy', 'stardust', 'ms-edge', 'sources.json');
 
 /**
+ * 抽样池 = 随服务发布的素材清单里的相对路径（`data/assets.json`）。读不到就退回一个内置路径，
+ * 保证探测器至少还能量出「小文件延迟」这一项；**绝不**从网络或调用方取路径。
+ */
+export function loadProbePaths(fsImpl = fs, pathImpl = path, root = ROOT, log = noopLog) {
+  const fallback = ['/assets/char/avatar/char_003_kalts.png'];
+  try {
+    const manifest = JSON.parse(fsImpl.readFileSync(pathImpl.join(root, 'data', 'assets.json'), 'utf8'));
+    const urls = [];
+    (function walk(o) {
+      if (typeof o === 'string') urls.push(o);
+      else if (Array.isArray(o)) o.forEach(walk);
+      else if (o && typeof o === 'object') Object.values(o).forEach(walk);
+    })(manifest);
+    const rel = [...new Set(urls.filter((u) => u.startsWith('/assets/') && !u.includes('?')))];
+    return rel.length ? rel : fallback;
+  } catch (e) {
+    log.warn?.(`[http] asset jump: cannot read data/assets.json (${e?.message || e}) — probe uses the built-in sample`);
+    return fallback;
+  }
+}
+
+/**
  * Build the jump decision function. Off when the sources file is unreadable or SP_ASSET_JUMP=0 —
  * a jump layer must never take the game down with it.
  * @param {{ sourcesPath?: string, disabled?: boolean, log?: { info?: Function, warn?: Function } }} [opts]
@@ -222,12 +244,14 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   if (healthTimer) for (const id of config.order) probeHealth(id, config.byId.get(id));   // 启动即预热
 
   // ---- 容器视角的测速（实测证据；默认只报告，不掌舵）----------------------------------------------------
-  // 目标集合**只来自 sources.json 的已配置源**（不接受任何外部 URL）。分工见 server/mirrorProbe.js。
+  // 源集合**只来自 sources.json 的已配置源**；抽样池**只来自随服务发布的素材清单**
+  // （data/assets.json 里的相对路径）—— 两边都不接受任何外部传入的 URL（否则这个端点就是一台扫描器）。
+  const probePaths = loadProbePaths(fs, path, ROOT, log);
   const speedProbe = createMirrorProbe({
     sources: config.order.map((id) => ({ id, base: config.byId.get(id) })),
-    fetchImpl, log, intervalMs: probeIntervalMs,
-    probePath: process.env.SP_PROBE_PATH || undefined,
+    paths: probePaths, fetchImpl, log, intervalMs: probeIntervalMs,
   });
+  log.info?.(`[http] asset jump: speed probe — ${speedProbe.poolSize()} sample paths from data/assets.json`);
 
   /**
    * 顺延链的最后一跳：给定源 id，返回**指向同一路径**的后备绝对地址（复用 decide 的同一套实现，
