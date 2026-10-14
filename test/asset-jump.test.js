@@ -154,8 +154,9 @@ test('an unmeasured rank[0] cannot lead — the static order survives (live rank
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-// 反过来：同一份 rank，只要 ms-dataset 被实测过并更快 ⇒ 必须真的翻身（否则「最快」只是装饰）。
-test('a measured, faster dataset takes the lead — and the unranked sources keep their tail', async () => {
+// 2026-10-14 用户口径「CDN 换成 speedcdn」：数据集（ms-dataset）在 RANK_ID_MAP 里映射成 null ⇒
+// 即使它被实测且更快，头部仍是 r2；数据集按静态 order 留在尾部兜底（不再翻身抢首跳）。
+test('the mapped head stays r2 even when the dataset is measured faster — the dataset keeps the tail', async () => {
   const dir = tmpdir();
   const doc = { schemaVersion: 1, order: ['r2', 'modelscope'], sources: [{ id: 'r2', base: R2 }, { id: 'modelscope', base: MIRROR }] };
   const rank = { rank: [{ id: 'ms-dataset', measured: true, usable: true, coverage: 'full' }, { id: 'r2', measured: true, usable: true, coverage: 'full' }] };
@@ -167,9 +168,9 @@ test('a measured, faster dataset takes the lead — and the unranked sources kee
   });
   try {
     for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
-    assert.match(logs.find((m) => m.includes('rank(')) || '', /modelscope > r2/);
-    assert.deepEqual(jump.config().order, ['modelscope', 'r2']);
-    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${MIRROR}/assets/a/b.png`);
+    assert.match(logs.find((m) => m.includes('rank(')) || '', /r2 > modelscope/);
+    assert.deepEqual(jump.config().order, ['r2', 'modelscope']);
+    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${R2}/assets/a/b.png`);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -192,9 +193,9 @@ test('rank fetch falls through to the next url when the first one fails', async 
   try {
     for (let i = 0; i < 100 && !logs.some((m) => m.includes('rank(')); i++) await new Promise((r) => setTimeout(r, 10));
     assert.deepEqual(seen.slice(0, 2), ['https://dead.example/rank.json', 'https://alive.example/rank.json']);
-    assert.match(logs.find((m) => m.includes('rank(')) || '', /alive\.example/);
-    assert.deepEqual(jump.config().order, ['modelscope', 'r2']);
-    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${MIRROR}/assets/a/b.png`);
+    // 2026-10-14：rank 里只有 ms-dataset（映射成 null）⇒ 没有合格头部，顺序退回静态 order（r2 优先）。
+    assert.deepEqual(jump.config().order, ['r2', 'modelscope']);
+    assert.equal(jump('/assets/a/b.png', '', 'GET', jump.config()).headers.Location, `${R2}/assets/a/b.png`);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
