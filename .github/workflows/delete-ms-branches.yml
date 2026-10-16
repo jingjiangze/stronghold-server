@@ -1,0 +1,81 @@
+name: delete-ms-branches
+
+# 一次性：删掉创空间 jingjiangze/Stronghold-Protocol 上两个不再使用的分支。
+#
+# 为什么要走 Actions：创空间公网 git 端点要求 Basic 认证，MS_TOKEN 只在这个仓库的 Secrets 里。
+#
+# 为什么先打 tag：魔搭删分支不可逆、无回收站。这里先把两个 HEAD 记成
+# `archive/cdn`、`archive/stardust-server` 两个 tag，万一删错了还能按 commit sha 拉回来。
+# 归档 tag 与要删的分支同名前缀，一眼能看出来源。
+#
+# 默认 dry_run=true：只打印会做什么，不动远端。确认无误后再用 dry_run=false 跑。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'true = 只打印不做（默认）；false = 真的归档并删除'
+        type: boolean
+        default: true
+      branches:
+        description: '要删的分支，逗号分隔'
+        default: 'cdn,stardust-server'
+
+permissions:
+  contents: read
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: archive then delete
+        env:
+          MS_TOKEN: ${{ secrets.MS_TOKEN }}
+          INPUT_BRANCHES: ${{ inputs.branches }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          URL="https://oauth2:${MS_TOKEN}@www.modelscope.cn/studios/jingjiangze/Stronghold-Protocol.git"
+          DRY="${INPUT_DRY_RUN}"
+
+          echo "=== 删除前：全部分支 ==="
+          git ls-remote --heads "$URL" | sed 's/^/  /'
+
+          echo ""
+          echo "=== 受保护的分支（永不删除）==="
+          echo "  master"
+
+          IFS=',' read -ra BRANCHES <<< "$INPUT_BRANCHES"
+          for b in "${BRANCHES[@]}"; do
+            b="$(echo "$b" | xargs)"          # 去掉空格
+            [ -z "$b" ] && continue
+            if [ "$b" = "master" ]; then
+              echo ""
+              echo "⛔ 拒绝删除 master（部署链路强依赖它，deploy-ms.yml 只推这个分支）"
+              continue
+            fi
+            sha=$(git ls-remote "$URL" "refs/heads/$b" | cut -f1)
+            if [ -z "$sha" ]; then
+              echo ""
+              echo "分支 $b 不存在，跳过"
+              continue
+            fi
+            echo ""
+            echo "############ 分支 $b @ $sha ############"
+            if [ "$DRY" = "true" ]; then
+              echo "  [dry-run] 将归档为 tag archive/$b 并删除该分支"
+              continue
+            fi
+            echo "  → 归档 tag archive/$b"
+            git push "$URL" "$sha:refs/tags/archive/$b" 2>&1 | sed 's/^/     /' || true
+            echo "  → 删除分支 refs/heads/$b"
+            git push "$URL" --delete "refs/heads/$b" 2>&1 | sed 's/^/     /' || true
+          done
+
+          echo ""
+          echo "=== 删除后：剩余分支 ==="
+          git ls-remote --heads "$URL" | sed 's/^/  /'
+          echo ""
+          echo "=== 归档 tag ==="
+          git ls-remote --tags "$URL" | sed 's/^/  /'
