@@ -17,18 +17,18 @@ import { createMirrorProbe } from '../mirrorProbe.js';
 
 /**
  * 排名端点。**多个 URL 是同一个对象的不同门牌**，按序回退：
- *   1. 魔搭数据集门牌 —— 同一份 rank.json 镜像进 `jingjiangze/Stronghold-Protocol-Assets` 数据集，
- *      容器侧实测 0.16 s（本机 curl）/ 67 ms（容器视角）可达，是「容器自己就能稳定读到」的那一个；
- *   2. speedcdn —— 同桶自定义域，2026-10-14 实测容器侧慢/抖动；
- *   3. weishucdn —— 同桶主域，作为最后兜底。
+ *   1. 魔搭数据集门牌 —— 同一份 rank.json 镜像进 `jingjiangze/Stronghold-Protocol-Assets` 数据集。
+ *      **2026-10-18 起该数据集为私有**：匿名直取 404 / repo/tree 403，所以它**不再是客户端可用的
+ *      镜像**；但容器跑在魔搭平台内、带着平台内置的私有鉴权，服务端这一跳仍按可达处理。若失败，
+ *      下一条 weishucdn 会接住，代价只是一次快速 404（不是 15 s 空等）。
+ *   2. weishucdn —— 公开门牌兜底（同桶另有 weishucdn2 / speedcdn，三个域名字节一致）。
  *
  * 2026-10-14 实测容器里 weishucdn/speedcdn 两个门牌拿 rank.json 都要 4.7~20 s，旧代码的 4 s 超时
- * 让这三条**全部**读失败 —— 排名于是永远取不到，`ranked ?? config.order` 一路退化成静态 order。
+ * 让这几条**全部**读失败 —— 排名于是永远取不到，`ranked ?? config.order` 一路退化成静态 order。
  * 所以镜像进数据集（快门牌）+ 抬高超时（容忍慢门牌）两件事都要做。
  */
 export const DEFAULT_RANK_URLS = [
   'https://modelscope.cn/api/v1/datasets/jingjiangze/Stronghold-Protocol-Assets/repo?Revision=master&FilePath=cdn%2Fv1%2Frank.json',
-  'https://speedcdn.jiangjiangze.icu/cdn/v1/rank.json',
   'https://weishucdn.jiangjiangze.icu/cdn/v1/rank.json',
 ];
 /** 旧名保留：SP_RANK_URL 仍可作为「首选 URL」。 */
@@ -45,17 +45,30 @@ export const RANK_TIMEOUT_MS = 15_000;
  * modelscope/r2），而且 **ms-edge 就是本容器自己**——映射成 null 表示"跳过"：否则边缘会 302 到自己，
  * 客户端跟着无限跳。未列出的 id 按同名处理（两边同名时零配置即可用）。
  */
-// 2026-10-14 用户指令「目前的 CDN 换成 speedcdn」：r2（= speedcdn 门牌）作为默认首跳，
-// 数据集不再参与头部竞争（否则 rank 的 ms-dataset 排第一会把首跳带到 modelscope）——它留在尾部做兜底，
-// 由「非空优先」在 r2 缺件时自动顶上。等价于 10-13 的「魔搭部署也优先 weishucdn」（同桶）。
-export const RANK_ID_MAP = { 'r2': 'r2', 'r2-alt': 'r2', 'ms-dataset': null, 'ms-edge': null };
+// 2026-10-19：数据集转私有后，它已不在边缘的默认 order 里（匿名客户端取不到），但**条目仍在
+// sources 表里**，服务端带魔搭内置鉴权时照常调用。所以 rank 里的 ms-dataset 仍映射成 modelscope；
+// 把它映射成 r2 会把「服务端可用的私有源」和「公开桶」混成一个身份，排名就失真了。
+// ms-edge 仍是**本容器自己**，必须继续映射成 null（否则边缘 302 到自己，客户端无限跳）。
+// speedcdn / r2-alt 与 r2 同桶同字节（R2 私有桶的三个门牌）⇒ 统一映射成 r2。
+export const RANK_ID_MAP = {
+  'r2': 'r2',
+  'r2-alt': 'r2',
+  'speedcdn': 'r2',
+  'ms-dataset': 'modelscope',
+  'ms-edge': null,
+};
 
 /**
  * **合格集**：只有「真的测过」的条目才有资格进生效顺序的**头部**。
  *
- * 为什么必须卡这一条（2026-10-14 实读线上 rank.json）：rank 的前两名是 `ms-dataset` / `ms-edge`，两条都是
- * `measured:false, usable:null` —— 它们是按 `origins.json` 的**登记顺序**排的，不是测出来的。若照单全收，
- * 「最快」就只是「谁先登记」的另一种写法，跳转层会把这个顺序放大成对外的速度结论。
+ * **为什么仍要卡这一条**：rank 是**外部可写**的数据（CDN 仓生成后上传）。这一层不假设它可信——
+ * `partial` 覆盖、`down`、`excluded` 的条目一律不得进头部，否则「最快」会变成一个缺件源，
+ * 玩家拿到 404，而跳转层还把它当速度结论放大出去。同一套判据也是防止「谁先登记谁排第一」
+ * 的兜底：一旦上游生成器退化成按登记顺序出榜，未实测条目会被这里挡下，退化成静态 order。
+ *
+ * 2026-10-14 复核线上 rank.json：8 条里前 6 条 measured:true/coverage:full 均合格，
+ * `ghfast-raw`(usable:false,coverage:partial) 与 `ghfast-assets`(usable:false) 被判不合格 ——
+ * 与本机实测一致（jsDelivr 系 34% 成功/TTFB 13.3 s）。**旧注释写的「前两名 measured:false」已不成立**。
  *
  * 未实测/未进榜的**已配置源不丢**，只是按静态 order 接到尾部（见 applyRank）。
  */
@@ -118,13 +131,58 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   // rankCheckedAt = 上一次**尝试**的时间（成功、无合格条目、失败都算），TTL 一视同仁：否则「没有合格条目」
   // 会让 ranked 保持 null，而 effective() 的 `!ranked` 判断就会变成「每个请求都去 fetch 一次」。
   let ranked = null, rankCheckedAt = 0, inflight = null, rankState = { at: null, ok: null };
+  /**
+   * 私有数据集的鉴权。魔搭的 Web API **不认** `Authorization: Bearer <ms-token>`（实测 404/403），
+   * 要先拿 token 换会话 cookie（`POST /api/v1/login`）。容器里的 token 由平台环境变量
+   * `MODELSCOPE_API_TOKEN` 提供；换到就缓存，失败就退回匿名（匿名仍能读公开门牌，不会更糟）。
+   *
+   * 只对 modelscope.cn 的 URL 生效，且只影响**服务端自己发起的**请求（rank.json）。
+   * 边缘给客户端发的 302 不带凭据，所以私有数据集永远不进默认 302 目标——那是 sources.json 的事。
+   */
+  const MS_TOKEN = process.env.MODELSCOPE_API_TOKEN || '';
+  const MS_LOGIN_URL = 'https://modelscope.cn/api/v1/login';
+  const MS_COOKIE_TTL_MS = 20 * 60 * 1000;
+  let msCookie = null, msCookieAt = 0, msCookieInflight = null;
+
+  function isModelscopeUrl(u) {
+    try { return new URL(u).hostname.endsWith('modelscope.cn'); } catch { return false; }
+  }
+
+  async function modelscopeCookie() {
+    if (!MS_TOKEN) return null;
+    if (msCookie && Date.now() - msCookieAt < MS_COOKIE_TTL_MS) return msCookie;
+    if (msCookieInflight) return msCookieInflight;
+    msCookieInflight = (async () => {
+      try {
+        const res = await fetchImpl(MS_LOGIN_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ AccessToken: MS_TOKEN }),
+          signal: AbortSignal.timeout(RANK_TIMEOUT_MS),
+        });
+        if (!res.ok) return null;
+        const setCookie = res.headers?.getSetCookie?.() || [];
+        if (!setCookie.length) return null;
+        msCookie = setCookie.map((c) => String(c).split(';')[0]).join('; ');
+        msCookieAt = Date.now();
+        return msCookie;
+      } catch { return null; }
+      finally { msCookieInflight = null; }
+    })();
+    return msCookieInflight;
+  }
+
   /** 按序试每个门牌，返回第一个**解析成功**的（HTTP 非 2xx 与网络错都算这一路失败）。 */
   async function fetchRank() {
     let last = null;
     for (const u of urls) {
       if (!u) continue;
       try {
-        const res = await fetchImpl(u, { signal: AbortSignal.timeout(RANK_TIMEOUT_MS) });
+        const cookie = isModelscopeUrl(u) ? await modelscopeCookie() : null;
+        const res = await fetchImpl(u, {
+          signal: AbortSignal.timeout(RANK_TIMEOUT_MS),
+          ...(cookie ? { headers: { cookie } } : {}),
+        });
         if (!res.ok) { last = `HTTP ${res.status} @ ${u}`; continue; }
         const doc = await res.json();
         return { url: u, doc };
@@ -139,14 +197,29 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   function applyRank(doc) {
     const rows = Array.isArray(doc?.rank) ? doc.rank : [];
     const head = [];
+    // `config.byId.has(id)` 是**安全属性**，不能放宽：rank 是外部可写数据，照单全收会把玩家 302 到
+    // 这份 sources.json 里根本没配过（因而没做过路径白名单校验）的源。真正的问题不是门槛本身，
+    // 而是旧实现把「门槛拦下」与「本来就没有合格条目」混成同一种 null 结果，日志里都写成
+    // 「no measured/usable entry」——排查时会误判成 rank 生成器坏了。这里把两种原因分开记录。
+    const unmapped = [];   // 合格、但映射后的 id 不在本机源表里（配置漂移，需要改 RANK_ID_MAP 或 sources.json）
+    const skipped = [];    // 合格、但被 RANK_ID_MAP 显式映射成 null（有意为之，如 ms-edge 是本容器自己）
     for (const r of rows) {
       if (!rankQualified(r)) continue;
       const id = Object.prototype.hasOwnProperty.call(RANK_ID_MAP, r.id) ? RANK_ID_MAP[r.id] : r.id;
-      if (typeof id === 'string' && id && config.byId.has(id) && !head.includes(id)) head.push(id);
+      if (id === null || id === undefined) { skipped.push(r.id); continue; }
+      if (typeof id === 'string' && id && !head.includes(id)) {
+        if (config.byId.has(id)) head.push(id);
+        else unmapped.push(`${r.id}→${id}`);
+      }
     }
-    if (!head.length) return null;
+    if (!head.length) return { empty: true, unmapped, skipped };
+    // 用户 2026-10-19 口径：静态 order（modelscope 第一 / r2 垫底）说了算。rank 只作信息与合格集证据，
+    // 默认不再重排；需要按测速重排时显式 SP_RANK_ORDER=on。
+    if (String(process.env.SP_RANK_ORDER || 'off') !== 'on') {
+      return { head, order: config.order.slice(), unmapped, skipped, informational: true };
+    }
     const tail = config.order.filter((id) => !head.includes(id));
-    return { head, order: [...head, ...tail] };
+    return { head, order: [...head, ...tail], unmapped, skipped };
   }
   function refresh() {
     if (inflight || !urls.length || !fetchImpl) return;
@@ -154,14 +227,17 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
       try {
         const { url, doc } = await fetchRank();
         const applied = applyRank(doc);
-        if (applied) {
+        if (!applied.empty) {
           ranked = applied.order;
-          rankState = { at: new Date().toISOString(), ok: true, url, qualified: applied.head, order: [...ranked] };
-          log.info?.(`[http] asset jump: rank(${url}) qualified=[${applied.head.join(',')}] → ${ranked.join(' > ')}`);
+          rankState = { at: new Date().toISOString(), ok: true, url, qualified: applied.head, order: [...ranked], unmapped: applied.unmapped, skipped: applied.skipped };
+          log.info?.(`[http] asset jump: rank(${url}) qualified=[${applied.head.join(',')}]${applied.informational ? ' — informational (static order kept)' : ' → ' + ranked.join(' > ')}`);
         } else {
           ranked = null;
-          rankState = { at: new Date().toISOString(), ok: true, url, qualified: [], order: [...config.order], note: 'no measured/usable entry in rank - keeping the static order' };
-          log.warn?.('[http] asset jump: rank has no measured/usable entry — keeping the static order');
+          const why = applied.unmapped.length
+            ? `rank entries not in sources.json: ${applied.unmapped.join(', ')}`
+            : (applied.skipped.length ? `all qualified entries mapped away: ${applied.skipped.join(', ')}` : 'no qualified (measured/usable/full) entry in rank');
+          rankState = { at: new Date().toISOString(), ok: true, url, qualified: [], order: [...config.order], note: why };
+          log.warn?.(`[http] asset jump: rank unusable — ${why} — keeping the static order`);
         }
       } catch (e) {
         rankState = { at: new Date().toISOString(), ok: false, error: String(e?.message || e) };
@@ -224,11 +300,21 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
   const HEALTH_PATH = process.env.SP_ASSET_HEALTH_PATH || '/assets/char/avatar/char_003_kalts.png';
   const HEALTH_TIMEOUT_MS = 4000;
   const health = new Map();          // 源 id → { v: 'ok' | 'down', at, ms, status|error }
+  // 连续失败计数：一次探测抖动（本机到 CDN 的瞬断）不该把整源降级 —— 降级会把玩家推到覆盖不全的镜像上，
+  // 那正是「部分素材不全」的来源。默认连续 2 次失败才判 down。
+  // 用户 2026-10-19 口径：默认**一次就降级**（探测到的不可达立刻顺延）。
+  const HEALTH_STRIKES = Math.max(1, Number(process.env.SP_ASSET_HEALTH_STRIKES || 1));
+  const healthStrikes = new Map();   // 源 id → 连续失败次数
   const healthProbing = new Set();
   let healthSkips = 0;
   const knownDown = (id) => {
     const h = health.get(id);
     return !!h && h.v === 'down' && Date.now() - h.at < HEALTH_TTL_MS;
+  };
+  /** 结构性不可用（健康路径返回 4xx：私有数据集 / 源根本供不了这个玩家群）—— 兜底时也不退回它。 */
+  const knownDead = (id) => {
+    const h = health.get(id);
+    return !!h && h.structural === true && Date.now() - h.at < HEALTH_TTL_MS;
   };
   /** 对**固定健康路径**做一次 HEAD（可达性判定，口径见上）。可 await（诊断/测试用），也可 fire-and-forget。 */
   const probeHealth = (id, base) => {
@@ -238,15 +324,26 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     return Promise.resolve()
       .then(() => fetchImpl(base + HEALTH_PATH, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) }))
       .then((r) => {
-        const v = { v: r.status >= 500 ? 'down' : 'ok', at: Date.now(), ms: Date.now() - t0, status: r.status };
+        // 健康路径是一条**必然存在**的素材：4xx 说明这个源对匿名玩家根本供不了（私有数据集就是 404），
+        // 不能算 ok —— 否则「modelscope 第一」会把所有素材 302 到 404。
+        const ok = r.status < 400;
+        if (ok) healthStrikes.set(id, 0);
+        const strikes = ok ? 0 : (healthStrikes.get(id) || 0) + 1;
+        if (!ok) healthStrikes.set(id, strikes);
+        // structural = 这个源对匿名玩家**根本供不了**（4xx），与「临时连不上」分开：兜底时绝不退回它。
+        const structural = r.status >= 400 && r.status < 500;
+        const v = { v: ok ? 'ok' : (strikes >= HEALTH_STRIKES ? 'down' : 'unknown'), at: Date.now(), ms: Date.now() - t0, status: r.status, strikes, structural };
         health.set(id, v);
         if (v.v === 'down') log.warn?.(`[http] asset jump: source ${id} answered ${r.status} on ${HEALTH_PATH} — the next source will be used`);
         return v;
       })
       .catch((e) => {
-        const v = { v: 'down', at: Date.now(), ms: Date.now() - t0, error: String(e?.message || e).slice(0, 80) };
+        const strikes = (healthStrikes.get(id) || 0) + 1;
+        healthStrikes.set(id, strikes);
+        const down = strikes >= HEALTH_STRIKES;
+        const v = { v: down ? 'down' : 'unknown', at: Date.now(), ms: Date.now() - t0, error: String(e?.message || e).slice(0, 80), strikes, structural: false };
         health.set(id, v);
-        log.warn?.(`[http] asset jump: source ${id} unreachable (${v.error}) — the next source will be used`);
+        log.warn?.(`[http] asset jump: source ${id} unreachable (${v.error}) — ${down ? 'the next source will be used' : `strike ${strikes}/${HEALTH_STRIKES}, still tried once more`}`);
         return v;
       })
       .finally(() => healthProbing.delete(id));
@@ -299,7 +396,11 @@ export function createAssetJump({ sourcesPath = process.env.SP_EDGE_SOURCES || D
     }
     let out = decide(conf, { method, pathname, query: q, skip: skip.size ? skip : null });
     // 全部候选都被剔除（缺件 / 不可达）→ 退回不带 skip 的主源兜底（给客户 302 比给 404 好），并让缓存继续刷新
-    if (out.status !== 302 && skip.size) out = decide(conf, { method, pathname, query: q });
+    if (out.status !== 302 && skip.size) {
+      // 兜底（给 302 比给 404 好）——但只退回到**不是结构性不可用**的源：私有数据集那种 4xx 源退回去等于必 404。
+      const dead = new Set(order.filter((id) => knownDead(id)));
+      out = decide(conf, { method, pathname, query: q, skip: dead.size ? dead : null });
+    }
     if (out.status !== 302) return null;
     const chosen = order.find((id) => conf.byId.get(id) && String(out.location).startsWith(conf.byId.get(id)));
     if (chosen) probeExist(chosen, conf.byId.get(chosen), pathname, query);
