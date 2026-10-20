@@ -29,8 +29,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { C2S } from '../shared/protocol.js';
-import { SERVER_MODULE_USES, HEALTHZ_LIMITS } from '../shared/forgeContract.js';
+import { C2S } from '../../shared/protocol.js';
+import { SERVER_MODULE_USES, HEALTHZ_LIMITS } from '../../shared/forgeContract.js';
 import { preDispatchIssues, validateHookPolicy } from './modGate.js';
 import { createModDispatch } from './modDispatch.js';
 import { loadServerModules, mountServerModules, stateRootFor } from './modModules.js';

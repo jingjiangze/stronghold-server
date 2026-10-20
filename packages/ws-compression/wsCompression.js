@@ -21,9 +21,9 @@ import {
   DEFAULT_EXTRA_COMPRESSIBLE_TYPES,
   STRONGHOLD_COMPRESSIBLE_TYPES,
   WS_COMPRESSION_MODES,
-} from './ws-compression/wsCompression.mjs';
-import { TransportStats, sendFrame } from './ws-compression/plumbing.mjs';
-import { createReadonlyRouter, READONLY_ROUTES, cacheControlFor } from './ws-compression/readonlyRoutes.mjs';
+} from './wsCompression.mjs';
+import { TransportStats, sendFrame } from './plumbing.mjs';
+import { createReadonlyRouter, READONLY_ROUTES, cacheControlFor } from './readonlyRoutes.mjs';
 
 export {
   parseExtraCompressibleTypes, DEFAULT_EXTRA_COMPRESSIBLE_TYPES, WS_COMPRESSION_MODES,

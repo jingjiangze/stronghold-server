@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocketServer, WebSocket } from 'ws';
-import { resolveWsCompression } from '../../server/ws-compression/wsCompression.mjs';
+import { resolveWsCompression } from '../../packages/ws-compression/wsCompression.mjs';
 
 /** A real server with the given mode, returning a connect() helper. */
 async function withServer(mode, fn) {

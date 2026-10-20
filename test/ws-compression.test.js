@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { startServer } from '../server/index.js';
 import { NET_DEFAULTS, encode, send, sendRaw } from '../server/net.js';
-import { resolveWsCompression, isCompressibleType, parseExtraCompressibleTypes, compressibleTypes, BASE_COMPRESSIBLE_TYPES, DEFAULT_EXTRA_COMPRESSIBLE_TYPES } from '../server/wsCompression.js';
+import { resolveWsCompression, isCompressibleType, parseExtraCompressibleTypes, compressibleTypes, BASE_COMPRESSIBLE_TYPES, DEFAULT_EXTRA_COMPRESSIBLE_TYPES } from '../packages/ws-compression/wsCompression.js';
 import { PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 
 // The upstream module's base whitelist (jingjiangze/stronghold-ws-compression) — the audited battle-traffic set.

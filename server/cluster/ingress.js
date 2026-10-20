@@ -5,7 +5,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { NET_DEFAULTS, TokenBucket, clientAddress, encode, sendRaw, errorMsg, CLOSE, HEAVY_TYPES } from '../net.js';
 import { C2S, validateC2S } from '../../shared/protocol.js';
 import { ERR } from '../../shared/constants.js';
-import { isCompressibleType, resolveWsCompression } from '../wsCompression.js';
+import { isCompressibleType, resolveWsCompression } from '../../packages/ws-compression/wsCompression.js';
 
 const safeId = v => typeof v === 'string' && v.length > 0 && v.length <= 128 && /^[A-Za-z0-9_-][A-Za-z0-9_.:-]*(?![\s\S])/.test(v);
 const typeOf = raw => /^\s*\{\s*"t"\s*:\s*"([A-Za-z0-9_.-]{1,64})"/.exec(raw.slice(0, 256))?.[1] ?? null;

@@ -105,7 +105,7 @@ import { isSkinChoices } from '../shared/skins.js';
 import { EXPERIMENTAL_DEFAULTS, experimentalOptions, isExperimental, sameExperimental } from '../shared/experimental.js';
 import { MAX_PLAYER_CAPACITY, PLAYER_CAPACITY_VERSION, roomCapacity } from '../shared/playerCapacity.js';
 import { encode, isDroppable, isErrCode, sendRaw, sendSession } from './net.js';
-import { isCompressibleType } from './wsCompression.js';
+import { isCompressibleType } from '../packages/ws-compression/wsCompression.js';
 import { getData as defaultGetData, lookup } from './data.js';
 import { Match as DefaultMatch } from './match/Match.js';
 import { Matchmaking } from './matchmaking.js';

@@ -27,7 +27,7 @@
 // 这是有意的：一道因为自己的 bug 而 fail-closed 的闸门会让一个坏包把所有人的连接挡在门外，而「拒绝这个钩子」是
 // 加载期（server/workshop.js loadWorkshopHooks）该做的事 —— 那里一个坏声明是**点名拒绝**的。
 
-import { C2S } from '../shared/protocol.js';
+import { C2S } from '../../shared/protocol.js';
 
 const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
 

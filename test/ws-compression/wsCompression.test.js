@@ -6,7 +6,7 @@ import {
   resolveWsCompression, describeWsCompression, createCompressFilter,
   WS_COMPRESSION_MODES, STRONGHOLD_COMPRESSIBLE_TYPES,
   compressibleTypes, compressibleTypesFrom, parseExtraCompressibleTypes, DEFAULT_EXTRA_COMPRESSIBLE_TYPES,
-} from '../../server/ws-compression/wsCompression.mjs';
+} from '../../packages/ws-compression/wsCompression.mjs';
 
 test('the mode table: off by default, on is the shipped set, safe is the fallback, anything else refused', () => {
   assert.equal(resolveWsCompression(), false);

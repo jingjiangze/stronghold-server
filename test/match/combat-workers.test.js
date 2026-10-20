@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { startServer, parseCombatWorkers, parseTrialWorkers } from '../../server/index.js';
 import { Lobby } from '../../server/lobby.js';
 import { NET_DEFAULTS } from '../../server/net.js';
-import { isCompressibleType } from '../../server/wsCompression.js';
+import { isCompressibleType } from '../../packages/ws-compression/wsCompression.js';
 import { Match } from '../../server/match/Match.js';
 import { FieldRunner, emptyPerPlayer } from '../../server/match/fields.js';
 import { VirtualScheduler } from '../../server/match/scheduler.js';

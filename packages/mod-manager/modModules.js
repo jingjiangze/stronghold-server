@@ -24,7 +24,7 @@ import { pathToFileURL } from 'node:url';
 // The one permitted local edit is the import below: upstream takes SERVER_MODULE_USES from shared/workshop.js, which
 // is Forge's game-data model (it pulls in support.js / kitImports.js) and does not exist here. The constant itself is
 // the same closed enumeration, vendored verbatim in shared/forgeContract.js and watched by the drift test.
-import { SERVER_MODULE_USES } from '../shared/forgeContract.js';
+import { SERVER_MODULE_USES } from '../../shared/forgeContract.js';
 
 /** 静默的日志替身（装载期不需要日志时用）。 */
 const noopLog = { info() {}, warn() {}, error() {}, debug() {} };

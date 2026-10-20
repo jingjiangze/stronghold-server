@@ -18,7 +18,7 @@
 // decide what the identity means for a game session — that is a product decision, not a transport one.
 
 import crypto from 'node:crypto';
-import { noopLog } from './config.js';
+import { noopLog } from '../../server/http/config.js';
 import { t } from '../../shared/i18n.js';
 
 /** The provider's discovery document (ADR: fetched, cached; the literal fallback is the measured document). */

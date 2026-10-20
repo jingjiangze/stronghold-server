@@ -1,0 +1,10 @@
+{
+  "name": "@stronghold/announcements",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "公告板外部源：仅当 SP_ANNOUNCEMENTS_URL 设置时拉取；磁盘 data/announcements.json 仍是唯一真源。",
+  "exports": {
+    ".": "./announcements.js"
+  }
+}

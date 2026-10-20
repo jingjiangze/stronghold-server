@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeManifest } from '../shared/packs.js';
 import { C2S } from '../shared/protocol.js';
-import { loadWorkshopServer } from '../server/modBridge.js';
+import { loadWorkshopServer } from '../packages/mod-manager/modBridge.js';
 import { startServer } from '../server/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

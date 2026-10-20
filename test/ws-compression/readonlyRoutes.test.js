@@ -2,9 +2,9 @@
 // These assertions exist because two different sets of rules for the same idea is two things to get wrong.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createReadonlyRouter, cacheControlFor, READONLY_ROUTES } from '../../server/ws-compression/readonlyRoutes.mjs';
-import { TransportStats } from '../../server/ws-compression/plumbing.mjs';
-import { describeWsCompression, STRONGHOLD_COMPRESSIBLE_TYPES } from '../../server/ws-compression/wsCompression.mjs';
+import { createReadonlyRouter, cacheControlFor, READONLY_ROUTES } from '../../packages/ws-compression/readonlyRoutes.mjs';
+import { TransportStats } from '../../packages/ws-compression/plumbing.mjs';
+import { describeWsCompression, STRONGHOLD_COMPRESSIBLE_TYPES } from '../../packages/ws-compression/wsCompression.mjs';
 
 function makeRouter(overrides = {}) {
   return createReadonlyRouter({

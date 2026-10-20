@@ -38,6 +38,7 @@ COPY deploy/stardust/auth/name-policy.mjs \
      deploy/stardust/auth/NAME-FILTER-LICENSE.txt \
      deploy/stardust/auth/NAME-CATEGORIES-LICENSE.txt \
      deploy/stardust/auth/NAME-POLITICAL-LICENSE.txt ./deploy/stardust/auth/
+COPY packages ./packages
 COPY server ./server
 COPY tools ./tools
 COPY data ./data
@@ -79,6 +80,7 @@ COPY --from=deps /app/package.json ./package.json
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/deploy/stardust/auth ./deploy/stardust/auth
+COPY --from=build /app/packages ./packages
 COPY --from=build /app/server ./server
 COPY --from=build /app/data ./data
 COPY --from=build /app/public ./public

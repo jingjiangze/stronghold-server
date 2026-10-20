@@ -18,11 +18,11 @@ import { answerClientError } from './http/common.js';
 import { lanUrls, displayHost, isProcessEntry, runMain } from './http/boot.js';
 import { Match } from './match/Match.js';
 import { CombatWorkerPool } from './match/combat/pool.js';
-import { loadWorkshopServer } from './modBridge.js';
+import { loadWorkshopServer } from '../packages/mod-manager/modBridge.js';
 import { createHealthMetrics, serverLoadState, publicLoadDetails } from './healthMetrics.js';
-import { resolveWsCompression, wsCompressionMode, createTransportRoutes } from './wsCompression.js';
-import { announcementsUrlFrom, createAnnouncementSource } from './http/announcements.js';
-import { oauthConfigFrom, createOauthRoutes } from './http/oauth.js';
+import { resolveWsCompression, wsCompressionMode, createTransportRoutes } from '../packages/ws-compression/wsCompression.js';
+import { announcementsUrlFrom, createAnnouncementSource } from '../packages/announcements/announcements.js';
+import { oauthConfigFrom, createOauthRoutes } from '../packages/oauth/oauth.js';
 import { parseSnapshotHz } from './match/fields.js';
 
 export {

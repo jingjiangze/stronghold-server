@@ -18,7 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { C2S } from '../shared/protocol.js';
+import { C2S } from '../../shared/protocol.js';
 
 export function preDispatchIssues(pack, packDir, { c2s = C2S } = {}) {
   const decl = pack && pack.server && pack.server.preDispatch;

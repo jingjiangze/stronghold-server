@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ANNOUNCEMENTS_PATH, ANNOUNCEMENTS_URL_ENV,
   announcementsUrlFrom, createAnnouncementSource,
-} from '../server/http/announcements.js';
+} from '../packages/announcements/announcements.js';
 import { createStaticHandler } from '../server/http/static.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

@@ -96,7 +96,7 @@ export const PLAYER_TOOLS = ['tools/crop-board-atlas.mjs', 'tools/doctor.mjs', '
 /** Whole tool directories: fetch-assets' modules, the local-client extraction setup runs. */
 export const PLAYER_TOOL_DIRS = ['tools/assets/', 'tools/local-extract/'];
 /** Whole runtime directories (their tracked files). */
-export const RUNTIME_DIRS = ['server/', 'shared/', 'data/', 'public/', 'packs/'];
+export const RUNTIME_DIRS = ['server/', 'packages/', 'shared/', 'data/', 'public/', 'packs/'];
 /** Pure offline moderation used by shared/names.js, including transitive vendor/data and their licenses — NOT the auth service. */
 export const STARDUST_NAME_RUNTIME = ['name-policy.mjs', 'name-dictionary.mjs', 'name-sensitive-dictionary.mjs',
   'name-filter-vendor.mjs', 'name-filter-node.mjs', 'NAME-DICTIONARY-LICENSE.txt', 'NAME-FILTER-LICENSE.txt',

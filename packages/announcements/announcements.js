@@ -20,7 +20,7 @@
 // fallback for exactly as long as the source is unusable, and a source that recovers is picked up on the next
 // poll without a restart.
 
-import { noopLog } from './config.js';
+import { noopLog } from '../../server/http/config.js';
 
 /** The path this module answers (the client's data name is `announcements`, → /data/announcements.json). */
 export const ANNOUNCEMENTS_PATH = '/data/announcements.json';

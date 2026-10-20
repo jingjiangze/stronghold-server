@@ -43,7 +43,7 @@ import { C2S, validateC2S, normalizeServerLoad, normalizeLoadDetails } from '../
 import { normalizeClusterLoad } from '../shared/cluster-load.js';
 import { ERR, ERR_TEXT, PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
 import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
-import { isCompressibleType, transportStats } from './wsCompression.js';
+import { isCompressibleType, transportStats } from '../packages/ws-compression/wsCompression.js';
 import { sanitizeName } from '../shared/names.js';
 export { sanitizeName };
 

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import {
   oauthConfigFrom, createOauthRoutes, authorizeUrl,
   OAUTH_LOGIN_PATH, OAUTH_CALLBACK_PATH,
-} from '../server/http/oauth.js';
+} from '../packages/oauth/oauth.js';
 
 const ENV = { OAUTH_CLIENT_ID: 'cid-abc', OAUTH_CLIENT_SECRET: 'sec-shh', STUDIO_HOST: 'studio.example' };
 
