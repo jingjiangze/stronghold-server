@@ -42,6 +42,7 @@ export const SKIPPED_CI_STEPS = [
   { uses: 'actions/checkout', why: 'GitHub runner: the checkout is this folder' },
   { uses: 'actions/setup-node', why: 'GitHub runner: the Node.js of this machine is used' },
   { name: 'Install (npm ci → postinstall copies public/vendor)', why: 'run `npm ci` yourself; it is not a check' },
+  { name: 'Install zip (Windows)', why: 'GitHub runner: windows-latest ships no `zip` binary; the local machine has its own (or bsdtar tar)' },
 ];
 
 /**
