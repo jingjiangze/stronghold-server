@@ -299,12 +299,15 @@ export class CombatEngine {
    * the same dto shape as advance/state (fields snapshots included) so the runner's `_apply` keeps working, plus a
    * `deploy` key the runner forwards to the requesting player (`{ ok, error?, uid?, dp? }` — Battle.deployLive).
    */
-  deploy({ fieldId, playerId, uid } = {}) {
+  deploy({ fieldId, playerId, uid, row, col, action = 'deploy' } = {}) {
     this._begin([fieldId]);
     const f = this.fields.find((field) => field.fieldId === fieldId);
-    const out = f && f.battle && typeof f.battle.deployLive === 'function'
-      ? f.battle.deployLive(playerId, uid)
-      : { ok: false, error: 'field' };
+    const b = f && f.battle;
+    let out = { ok: false, error: 'field' };
+    if (b && action === 'retreat' && typeof b.retreatLive === 'function') out = b.retreatLive(playerId, uid);
+    else if (b && action !== 'retreat' && typeof b.deployLive === 'function') {
+      out = b.deployLive(playerId, uid, Number.isInteger(row) && Number.isInteger(col) ? [row, col] : null);
+    }
     return { ...this._output({ state: true }), deploy: out };
   }
 

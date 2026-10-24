@@ -55,6 +55,7 @@ export class MatchIntents {
       case 'g.fundAsk': return this.fundAsk(ps);
       // 促融共竞·实时协防: deploy a held board piece live during COMBAT (cujong.js cujongDeploy)
       case 'g.deploy': return this.cujongDeploy(ps, msg);
+      case 'g.retreat': return this.cujongRetreat(ps, msg);
       case 'g.fundAnswer': return this.fundAnswer(ps, msg.askId, !!msg.accept);
       case 'g.mark': return this.mark(ps, msg);
       case 'g.speed': return this.setSpeed(ps, !!msg.on);

@@ -304,7 +304,7 @@ export class BattleDeploy {
    * 'finished' | 'player' | 'unknown' | 'deployed' | 'removed' | 'respawn' | 'tile' | 'dp' | 'mode'.
    * @param {string} playerId @param {number} uid @returns {object}
    */
-  deployLive(playerId, uid) {
+  deployLive(playerId, uid, tile = null) {
     if (this.finished) return { ok: false, error: 'finished' };
     if (this.flags.liveDeploy !== true) return { ok: false, error: 'mode' };
     const ps = this.getPlayer(playerId);
@@ -316,16 +316,37 @@ export class BattleDeploy {
     // a never-deployed piece has respawnAt = Infinity (no window armed): only a FINITE window gates
     const armed = Number.isFinite(u.respawnAt) ? u.respawnAt : -Infinity;
     if (this.time + 1e-9 < armed) return { ok: false, error: 'respawn' };
-    // the piece's board tile is its home: the same tile the spec deployment would have used
-    const tile = [u.homeR, u.homeC];
-    if (!this.grid.inRect(tile[0], tile[1])) return { ok: false, error: 'tile' };
-    if (!this.grid.canStand(tile[0], tile[1], { ranged: deployPosClass(u) !== 'melee' })) return { ok: false, error: 'tile' };
-    const occ = this._occ[tile[0] * COLS + tile[1]];
+    // `tile` = the field tile the player tapped (stage coordinates); absent = the piece's own board tile (its home,
+    // the tile the spec deployment would have used). A landing tile does not move the home: a later redeploy still
+    // returns to the board tile.
+    const at = Array.isArray(tile) && Number.isInteger(tile[0]) && Number.isInteger(tile[1]) ? [tile[0], tile[1]] : [u.homeR, u.homeC];
+    if (!this.grid.inRect(at[0], at[1])) return { ok: false, error: 'tile' };
+    if (!this.grid.canStand(at[0], at[1], { ranged: deployPosClass(u) !== 'melee' })) return { ok: false, error: 'tile' };
+    const occ = this._occ[at[0] * COLS + at[1]];
     if (occ && occ.alive && occ !== u) return { ok: false, error: 'occupied' };
-    if (this.downOn(tile[0], tile[1], u)) return { ok: false, error: 'down' };
+    if (this.downOn(at[0], at[1], u)) return { ok: false, error: 'down' };
     // redeploy carries the whole DP path (check, pay before the deploy hook, refund when the deploy refuses)
-    if (!this.redeploy(u, { free: false, tile })) return { ok: false, error: 'dp' };
+    if (!this.redeploy(u, { free: false, tile: at })) return { ok: false, error: 'dp' };
     return { ok: true, uid: u.uid, dp: ps.dp };
+  }
+
+  /**
+   * 实时协防 (mode_cujong_realtime): withdraw a standing operator. `retreat` removes it and arms the redeploy timer
+   * (stats.respawnTime) — no DP is refunded (a retreat costs the deployment; the operator comes back after the
+   * cooldown), and `_checkRedeploys` stays out of the way (flags.liveDeploy): the player chooses when and where.
+   * @param {string} playerId @param {number} uid
+   * @returns {{ ok: boolean, uid?: number, error?: string }}
+   */
+  retreatLive(playerId, uid) {
+    if (this.finished) return { ok: false, error: 'finished' };
+    if (this.flags.liveDeploy !== true) return { ok: false, error: 'mode' };
+    const ps = this.getPlayer(playerId);
+    if (!ps) return { ok: false, error: 'player' };
+    const u = ps.units.find((x) => x.uid === uid && x.kind === 'op');
+    if (!u) return { ok: false, error: 'unknown' };
+    if (!u.alive || !u.deployed) return { ok: false, error: 'notdeployed' };
+    this.retreat(u);
+    return { ok: true, uid: u.uid };
   }
 
 }

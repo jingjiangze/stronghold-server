@@ -144,3 +144,69 @@ test('realtime: the co-op frame is untouched — non-realtime cujong keeps PREP 
 });
 
 function toPrep1Like(h) { h.autoHumans(); h.drive(() => h.m.phase === PHASE.PREP && h.m.round === 1); return h; }
+
+test('realtime: g.deploy row/col lands the piece on the tapped tile, and the home stays the board tile', () => {
+  const h = realtime({ seed: 13 }).start();
+  const m = h.m;
+  const { placed } = toCombat1(h);
+  const [melee] = placed.get('p_0');
+  const b = battleOf(h, 'p_0');
+  const ps = b.getPlayer('p_0');
+  const cost = m.gd.chess(melee.id).stats.cost;
+  for (let i = 0; i < 600 && ps.dp < cost; i++) b.step();
+  // a legal melee tile that is NOT the piece's board tile (9,3)
+  const tile = [9, 5];
+  assert.ok(b.grid.inRect(tile[0], tile[1]));
+  assert.ok(b.grid.canStand(tile[0], tile[1], { ranged: false }));
+  assert.deepEqual(m.handle('p_0', { t: 'g.deploy', uid: melee.uid, row: tile[0], col: tile[1] }), { ok: true });
+  const unit = b.players[0].units.find((u) => u.uid === melee.uid);
+  assert.equal(unit.alive && unit.deployed, true);
+  assert.deepEqual([unit.tileR, unit.tileC], tile, 'standing on the tapped tile');
+  assert.deepEqual([unit.homeR, unit.homeC], [9, 3], 'the board tile is still the home');
+  // a tap outside the field rect is refused
+  m.handle('p_0', { t: 'g.retreat', uid: melee.uid });
+  unit.respawnAt = b.time;
+  for (let i = 0; i < 20 && ps.dp < cost; i++) b.step();
+  m.handle('p_0', { t: 'g.deploy', uid: melee.uid, row: 2, col: 2 });
+  assert.equal(h.lastTo('p_0', 'm.deploy').error, 'tile');
+  h.invariants();
+});
+
+test('realtime: g.retreat withdraws a standing piece, arms its timer, and the next deploy brings it back', () => {
+  const h = realtime({ seed: 17 }).start();
+  const m = h.m;
+  const { placed } = toCombat1(h);
+  const [melee] = placed.get('p_0');
+  const b = battleOf(h, 'p_0');
+  const ps = b.getPlayer('p_0');
+  const cost = m.gd.chess(melee.id).stats.cost;
+  for (let i = 0; i < 600 && ps.dp < cost; i++) b.step();
+  m.handle('p_0', { t: 'g.deploy', uid: melee.uid });
+  const unit = b.players[0].units.find((u) => u.uid === melee.uid);
+  assert.equal(unit.alive, true);
+
+  // a piece that is not standing cannot be withdrawn
+  const [, ranged] = placed.get('p_0');
+  m.handle('p_0', { t: 'g.retreat', uid: ranged.uid });
+  assert.equal(h.lastTo('p_0', 'm.deploy').error, 'notdeployed');
+
+  // retreat: off the field, timer armed, no DP refunded
+  const dpBefore = ps.dp;
+  assert.deepEqual(m.handle('p_0', { t: 'g.retreat', uid: melee.uid }), { ok: true });
+  assert.equal(unit.alive, false, 'withdrawn');
+  assert.equal(h.lastTo('p_0', 'm.deploy').ok, true);
+  assert.ok(Number.isFinite(unit.respawnAt) && unit.respawnAt > b.time, 'the redeploy timer armed');
+  assert.equal(ps.dp, dpBefore, 'a retreat refunds nothing');
+
+  // before the window: refused; after it (and with DP): back at the board tile
+  m.handle('p_0', { t: 'g.deploy', uid: melee.uid });
+  assert.equal(h.lastTo('p_0', 'm.deploy').error, 'respawn');
+  unit.respawnAt = b.time;
+  // the first deployment already spent its DP and a retreat refunds nothing: wait for the natural regen again
+  for (let i = 0; i < 600 && ps.dp < cost; i++) b.step();
+  assert.ok(ps.dp >= cost, 'the regen affords the return');
+  m.handle('p_0', { t: 'g.deploy', uid: melee.uid });
+  assert.equal(h.lastTo('p_0', 'm.deploy').ok, true);
+  assert.deepEqual([unit.tileR, unit.tileC], [unit.homeR, unit.homeC], 'no tile named = the board tile');
+  h.invariants();
+});
