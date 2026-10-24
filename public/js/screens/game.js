@@ -214,6 +214,8 @@ function MatchScreen() {
   const [fundBusy, setFundBusy] = useState(false);
   const [markOpen, setMarkOpen] = useState(false);
   const [markKind, setMarkKind] = useState(null);
+  // 促融共竞·实时协防: the piece armed for a tap-to-place deploy (null = not arming)
+  const [rtArm, setRtArm] = useState(null);
   const [armedCard, setArmedCard] = useState(null);     // the shop bar's armed card { kind, id } (merge tile cue)
   const cc = isClientCombat(pub);
   const battleState = useStore((s) => s.match.battle, shallowEqual); // local battle runner (client-side combat)
@@ -304,7 +306,7 @@ function MatchScreen() {
     getChess: (id) => { const c = gd.chess(id); return ownDiyRecord(c, priv, { chess: data.get('chess'), backups: data.get('backups') }) || c; },
     getToken: gd.token, getItem: gd.item, getEffect: gd.effect, backups: gd.backups,
   }), [priv, pub?.stageId, editable, gd.ready, deployField]);
-  live.current = { pub, priv, field, editable, hasPersonalChoice, placeCtx, watching, watchWho, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, damageOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused, coopSpeed: coopSpeedFacts, markKind };
+  live.current = { pub, priv, field, editable, hasPersonalChoice, placeCtx, watching, watchWho, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, damageOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused, coopSpeed: coopSpeedFacts, markKind, rtArm };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
   // the own prep board: the normal board, or — in the prep of a boss round — the player's half of the boss field
@@ -1044,6 +1046,15 @@ function MatchScreen() {
         // 促融共竞 标记 (P6): an armed kind turns this ground tap into a mark (both sides see it; the server keeps one
         // active per side and answers m.mark). Tiles the renderer picks as pieces/enemies land in pieceClick instead —
         // a mark there means aiming at an occupied tile, which the remake's tap model cannot express (official drag&drop).
+        // 促融共竞·实时协防: an armed piece turns this ground tap into a live deployment at (row, col) — the server
+        // validates the tile (rect / 位次 / occupancy) and answers m.deploy.
+        if (L.rtArm != null) {
+          audio.sfx('click', { volume: 0.4 });
+          actions.deploy(L.rtArm, t.row, t.col);
+          live.current.rtArm = null;
+          setRtArm(null);
+          return;
+        }
         if (L.markKind) {
           audio.sfx('click', { volume: 0.4 });
           actions.mark(t.row, t.col, L.markKind);
@@ -1406,7 +1417,12 @@ function MatchScreen() {
       return { uid: p.uid, id: p.id, name: rec?.name || p.id, cost: rec?.stats?.cost ?? null,
         standing: rtDeploy.standing.has(p.uid) };
     });
-    return pieces.length ? { pieces, dp, onDeploy: (uid) => actions.deploy(uid) } : null;
+    return pieces.length ? {
+      pieces, dp, armed: rtArm,
+      // chip tap arms the piece (a second tap on the same chip disarms); the ground tap then names the tile
+      onDeploy: (uid) => setRtArm((cur) => (cur === uid ? null : uid)),
+      onRetreat: (uid) => actions.retreat(uid),
+    } : null;
   })();
   // client-side combat: observing a teammate's battle (research 09 §3.1) and the 联防 / 最终攻势 camera halves
   // (an eliminated player auto-observes a teammate's normal field — research 09 "keep-watching" — without asking)

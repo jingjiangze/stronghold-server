@@ -151,9 +151,12 @@ export class FieldRunner {
    */
   deploy(fieldId, payload, onReply = null) {
     const f = this.fields.find((x) => x.fieldId === fieldId);
-    const out = f && f.battle && typeof f.battle.deployLive === 'function'
-      ? f.battle.deployLive(payload.playerId, payload.uid)
-      : { ok: false, error: 'field' };
+    const b = f && f.battle;
+    let out = { ok: false, error: 'field' };
+    if (b && payload.action === 'retreat' && typeof b.retreatLive === 'function') out = b.retreatLive(payload.playerId, payload.uid);
+    else if (b && typeof b.deployLive === 'function') {
+      out = b.deployLive(payload.playerId, payload.uid, Number.isInteger(payload.row) && Number.isInteger(payload.col) ? [payload.row, payload.col] : null);
+    }
     if (onReply) onReply(out);
     return out;
   }

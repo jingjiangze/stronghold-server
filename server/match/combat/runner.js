@@ -192,7 +192,7 @@ export class WorkerFieldRunner {
    */
   deploy(fieldId, payload, onReply = null) {
     this._deployReply = onReply;
-    this.controls.set(`${fieldId}:deploy`, { op: 'deploy', payload: { fieldId, playerId: payload.playerId, uid: payload.uid } });
+    this.controls.set(`${fieldId}:deploy`, { op: 'deploy', payload: { fieldId, playerId: payload.playerId, uid: payload.uid, row: payload.row, col: payload.col, action: payload.action } });
     this._pump();
   }
 

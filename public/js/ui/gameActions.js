@@ -105,7 +105,10 @@ export const actions = {
   fundAsk: () => act('g.fundAsk', {}, { sfx: 'confirm' }),
   // 促融共竞·实时协防: deploy one of the player's own held board pieces live in COMBAT (mode_cujong_realtime).
   // The intent returns ok when the ORDER was queued; the authoritative result rides m.deploy (ok / error, with dp).
-  deploy: (uid) => act('g.deploy', { uid }, { sfx: 'confirm' }),
+  // row/col: the field tile tapped while the piece is armed (stage coordinates; omitted = the piece's board tile)
+  deploy: (uid, row, col) => act('g.deploy', Number.isInteger(row) && Number.isInteger(col) ? { uid, row, col } : { uid }, { sfx: 'confirm' }),
+  // withdraw a standing operator (arms its redeploy timer; no DP refund)
+  retreat: (uid) => act('g.retreat', { uid }, { sfx: 'back' }),
   fundAnswer: (askId, accept) => act('g.fundAnswer', { askId, accept }, { sfx: accept ? 'confirm' : 'back' }),
   mark: (row, col, kind) => act('g.mark', { row, col, kind }, { sfx: 'click' }),
   speed: (on) => act('g.speed', { on: !!on }, { sfx: false }),

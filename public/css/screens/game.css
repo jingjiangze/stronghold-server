@@ -84,6 +84,11 @@
   background: rgba(255, 255, 255, .04); border: 1px solid var(--line-2); color: var(--text-md, #cfe6df); cursor: pointer; }
 .rtdeploy__chip:hover:not(:disabled) { border-color: var(--mint-400, #17f9b7); color: #fff; }
 .rtdeploy__chip.is-standing, .rtdeploy__chip:disabled { opacity: .45; cursor: default; }
+.rtdeploy__chip.is-armed { border-color: var(--mint-400, #17f9b7); box-shadow: 0 0 .1rem rgba(23, 249, 183, .5); color: #fff; }
+.rtdeploy__slot { position: relative; display: inline-flex; }
+.rtdeploy__out { position: absolute; top: -.04rem; right: -.04rem; width: .16rem; height: .16rem; padding: 0; line-height: 1;
+  border: 1px solid var(--line-2); background: rgba(8, 11, 10, .92); color: var(--text-lo); cursor: pointer; }
+.rtdeploy__out:hover { color: #fff; border-color: var(--mint-400, #17f9b7); }
 .rtdeploy__name { font-size: max(calc(.11 * var(--t)), 10px); font-weight: 700; max-width: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rtdeploy__cost { font-size: max(calc(.10 * var(--t)), 9px); color: var(--gold-2, #f2c33c); }
 

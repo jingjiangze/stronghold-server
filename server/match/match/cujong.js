@@ -263,14 +263,32 @@ export class MatchCujong {
    * Phase-gated to COMBAT (the whole point of the mode), the runner must be alive, and the seat must be a living
    * player (spectators / downed-reviving seats have no field of their own).
    */
-  cujongDeploy(ps, { uid } = {}) {
+  /**
+   * 实时协防: withdraw one standing operator (g.retreat). Its redeploy timer arms on the server (stats.respawnTime);
+   * the next g.deploy brings it back — at any legal tile (or its board tile when none is named).
+   */
+  cujongRetreat(ps, { uid } = {}) {
     if (!this.isCujong || !this.cujongRealtime) return fail(ERR.WRONG_PHASE, 'live deploy is the realtime project');
     if (this.phase !== PHASE.COMBAT || !this.runner) return fail(ERR.WRONG_PHASE, 'live deploy runs in combat');
     if (!ps || ps.spectator || !ps.alive) return fail(ERR.ELIMINATED);
     if (ps.reviving) return fail(ERR.REVIVING);
     if (!Number.isSafeInteger(uid) || uid <= 0) return fail(ERR.BAD_TARGET, 'which unit');
     const fieldId = `n:${ps.playerId}`;
-    this.runner.deploy(fieldId, { playerId: ps.playerId, uid }, (out) => {
+    this.runner.deploy(fieldId, { playerId: ps.playerId, uid, action: 'retreat' }, (out) => {
+      this.sendTo(ps.playerId, { t: 'm.deploy', ok: !!out.ok, ...(out.ok ? { uid: out.uid } : { error: out.error || 'unknown' }) });
+      if (out.ok) this.markPublic();
+    });
+    return OK;
+  }
+
+  cujongDeploy(ps, { uid, row, col } = {}) {
+    if (!this.isCujong || !this.cujongRealtime) return fail(ERR.WRONG_PHASE, 'live deploy is the realtime project');
+    if (this.phase !== PHASE.COMBAT || !this.runner) return fail(ERR.WRONG_PHASE, 'live deploy runs in combat');
+    if (!ps || ps.spectator || !ps.alive) return fail(ERR.ELIMINATED);
+    if (ps.reviving) return fail(ERR.REVIVING);
+    if (!Number.isSafeInteger(uid) || uid <= 0) return fail(ERR.BAD_TARGET, 'which unit');
+    const fieldId = `n:${ps.playerId}`;
+    this.runner.deploy(fieldId, { playerId: ps.playerId, uid, row, col }, (out) => {
       if (out.ok) this.cujongDp[ps.playerId] = out.dp;
       this.sendTo(ps.playerId, { t: 'm.deploy', ok: !!out.ok, ...(out.ok ? { uid: out.uid, dp: out.dp } : { error: out.error || 'unknown' }) });
       if (out.ok) this.markPublic();

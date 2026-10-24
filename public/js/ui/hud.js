@@ -456,15 +456,20 @@ export function UniteBudgetNote({ pub }) {
 /** 促融共竞·实时协防 (mode_cujong_realtime): one chip per held board piece — tap = deploy it on its own board
  * tile (its home), DP-gated server-side. A standing piece (m.deploy ok) renders grey; a refusal (m.deploy error)
  * toasts via gameActions. The DP figure is the last authoritative answer (regen between deploys is server truth). */
-export function RealtimeDeployStrip({ pieces, dp = null, onDeploy }) {
+export function RealtimeDeployStrip({ pieces, dp = null, armed = null, onDeploy, onRetreat }) {
   if (!Array.isArray(pieces) || !pieces.length) return null;
   return html`<div class="rtdeploy" role="group" aria-label=${t('实时部署')}>
     <span class="rtdeploy__dp num" data-testid="rt-dp">${dp == null ? '—' : Math.floor(dp)}</span>
-    ${pieces.map((p) => html`<button key=${p.uid} type="button" class=${cx('rtdeploy__chip', p.standing && 'is-standing')}
-      disabled=${p.standing} data-testid="rt-chip" title=${t('部署 {name}（{cost} 费用）', { name: p.name, cost: p.cost ?? '?' })}
-      onClick=${() => onDeploy?.(p.uid)}>
-      <b class="rtdeploy__name">${p.name}</b><span class="rtdeploy__cost num">${p.cost ?? '?'}</span>
-    </button>`)}
+    ${pieces.map((p) => html`<span key=${p.uid} class="rtdeploy__slot">
+      <button type="button" class=${cx('rtdeploy__chip', p.standing && 'is-standing', armed === p.uid && 'is-armed')}
+        disabled=${p.standing} data-testid="rt-chip"
+        title=${p.standing ? t('{name} 在场上', { name: p.name }) : t('部署 {name}（{cost} 费用）：点亮后再点地图格子', { name: p.name, cost: p.cost ?? '?' })}
+        onClick=${() => onDeploy?.(p.uid)}>
+        <b class="rtdeploy__name">${p.name}</b><span class="rtdeploy__cost num">${p.cost ?? '?'}</span>
+      </button>
+      ${p.standing ? html`<button type="button" class="rtdeploy__out" data-testid="rt-retreat"
+        title=${t('撤退 {name}（进入再部署冷却）', { name: p.name })} onClick=${() => onRetreat?.(p.uid)}>×</button>` : null}
+    </span>`)}
   </div>`;
 }
 
@@ -536,7 +541,8 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
         ${coop?.pause ? html`<${CoopPauseControls} coop=${coop.pause} busy=${!!coop.busy} onPropose=${coop.onPausePropose} onCancel=${coop.onPauseCancel}
           onAgree=${coop.onPauseAgree} onDecline=${coop.onPauseDecline} onResume=${coop.onPauseResume} />` : null}
         ${coop?.speed ? html`<${SpeedToggle} mine=${coop.speed.mine} theirs=${coop.speed.theirs} on=${coop.speed.on} busy=${!!coop.busy} onToggle=${coop.onSpeed} />` : null}
-        ${realtime ? html`<${RealtimeDeployStrip} pieces=${realtime.pieces} dp=${realtime.dp} onDeploy=${realtime.onDeploy} />` : null}
+        ${realtime ? html`<${RealtimeDeployStrip} pieces=${realtime.pieces} dp=${realtime.dp} armed=${realtime.armed}
+          onDeploy=${realtime.onDeploy} onRetreat=${realtime.onRetreat} />` : null}
         ${coop?.fundAvail ? html`<${CoopFundControls} fund=${coop.fund} busy=${!!coop.busy} onAsk=${coop.onFundAsk} onAccept=${coop.onFundAccept} onDecline=${coop.onFundDecline} />` : null}
       </div>
       <${OvertimeWarning} ot=${ot} />
