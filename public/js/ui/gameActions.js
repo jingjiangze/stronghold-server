@@ -103,6 +103,9 @@ export const actions = {
   // tile marks and the co-op pause votes. `pause` above also rides this flow: { on: true } proposes (or approves when the
   // partner's request is pending), { on: false } cancels the own request / lifts an active pause.
   fundAsk: () => act('g.fundAsk', {}, { sfx: 'confirm' }),
+  // 促融共竞·实时协防: deploy one of the player's own held board pieces live in COMBAT (mode_cujong_realtime).
+  // The intent returns ok when the ORDER was queued; the authoritative result rides m.deploy (ok / error, with dp).
+  deploy: (uid) => act('g.deploy', { uid }, { sfx: 'confirm' }),
   fundAnswer: (askId, accept) => act('g.fundAnswer', { askId, accept }, { sfx: accept ? 'confirm' : 'back' }),
   mark: (row, col, kind) => act('g.mark', { row, col, kind }, { sfx: 'click' }),
   speed: (on) => act('g.speed', { on: !!on }, { sfx: false }),

@@ -144,6 +144,20 @@ export class FieldRunner {
   /** Game seconds elapsed on the master clock (all fields step in lockstep). */
   get time() { return this.ticks * TICK; }
 
+  /**
+   * 促融共竞·实时协防: apply one player deployment to this field's live Battle (Battle.deployLive) and answer
+   * through `onReply` ({ ok, error?, uid?, dp? }). The inline runner owns the Battle on this thread, so the answer
+   * is synchronous; the worker variant (combat/runner.js) queues a bounded control command instead.
+   */
+  deploy(fieldId, payload, onReply = null) {
+    const f = this.fields.find((x) => x.fieldId === fieldId);
+    const out = f && f.battle && typeof f.battle.deployLive === 'function'
+      ? f.battle.deployLive(payload.playerId, payload.uid)
+      : { ok: false, error: 'field' };
+    if (onReply) onReply(out);
+    return out;
+  }
+
   start() {
     if (this.fields.every((f) => !f.live)) { this._finish(); return; }
     if (this.m.sched.instant) {

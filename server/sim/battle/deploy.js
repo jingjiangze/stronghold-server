@@ -7,6 +7,18 @@ import { COLS } from '../constants.js';
 import { unitInfo } from '../snapshot.js';
 import { fin } from './util.js';
 
+/** Placement class of a deployed ally ('melee' | 'high' | 'ranged' | 'all'), from its chess record's `position`.
+ * Mirrors server/match/board.js positionClass without the 可以放置于远程位 trait exception (a melee chess with that
+ * trait is melee-only here for now — the battle grid has no trait-text parser). */
+function deployPosClass(u) {
+  const rec = (u && u.def && (u.def.raw ?? u.def)) || null;
+  const pos = rec && typeof rec.position === 'string' ? rec.position.toUpperCase() : 'ALL';
+  if (rec && rec.rangedTilesOnly === true) return 'high';
+  if (pos === 'MELEE') return 'melee';
+  if (pos === 'HIGH') return 'high';
+  return 'ranged';
+}
+
 export class BattleDeploy {
   /**
    * Deploy `u` on its home tile, or on `tile` ([r, c]: a one-off landing tile — the home stays the board tile; an
@@ -234,6 +246,9 @@ export class BattleDeploy {
    * is free and its player has the DP.
    */
   _checkRedeploys() {
+    // 促融共竞·实时协防 (mode_cujong_realtime): redeployment is the PLAYER's order (g.deploy — tile and timing are
+    // theirs), so the automatic home-tile redeploy never runs; a downed operator waits for its player.
+    if (this.flags.liveDeploy === true) return;
     for (const u of this.allyUnits) {
       if (u.alive || u.removed || u.kind !== 'op') continue;
       if (this.time + 1e-9 < u.respawnAt) continue;
@@ -278,4 +293,39 @@ export class BattleDeploy {
       if (pp) pp.leakedInTotal++;
     }
   }
+
+  /**
+   * 实时协防 (mode_cujong_realtime): deploy one of the player's OWN board pieces — created at battle start but held
+   * off the field (`flags.liveDeploy` skips the initial deployment) — on its home tile, paying DP. The tile is the
+   * piece's board tile (homeR/homeC, mapped at creation), so the request only names the unit; free tile choice is a
+   * later slice.
+   *
+   * Returns `{ ok: true, uid, dp }` or `{ ok: false, error }` — `error` is a stable reason the client shows:
+   * 'finished' | 'player' | 'unknown' | 'deployed' | 'removed' | 'respawn' | 'tile' | 'dp' | 'mode'.
+   * @param {string} playerId @param {number} uid @returns {object}
+   */
+  deployLive(playerId, uid) {
+    if (this.finished) return { ok: false, error: 'finished' };
+    if (this.flags.liveDeploy !== true) return { ok: false, error: 'mode' };
+    const ps = this.getPlayer(playerId);
+    if (!ps) return { ok: false, error: 'player' };
+    const u = ps.units.find((x) => x.uid === uid && x.kind === 'op');
+    if (!u) return { ok: false, error: 'unknown' };
+    if (u.alive && u.deployed) return { ok: false, error: 'deployed' };
+    if (u.removed) return { ok: false, error: 'removed' };
+    // a never-deployed piece has respawnAt = Infinity (no window armed): only a FINITE window gates
+    const armed = Number.isFinite(u.respawnAt) ? u.respawnAt : -Infinity;
+    if (this.time + 1e-9 < armed) return { ok: false, error: 'respawn' };
+    // the piece's board tile is its home: the same tile the spec deployment would have used
+    const tile = [u.homeR, u.homeC];
+    if (!this.grid.inRect(tile[0], tile[1])) return { ok: false, error: 'tile' };
+    if (!this.grid.canStand(tile[0], tile[1], { ranged: deployPosClass(u) !== 'melee' })) return { ok: false, error: 'tile' };
+    const occ = this._occ[tile[0] * COLS + tile[1]];
+    if (occ && occ.alive && occ !== u) return { ok: false, error: 'occupied' };
+    if (this.downOn(tile[0], tile[1], u)) return { ok: false, error: 'down' };
+    // redeploy carries the whole DP path (check, pay before the deploy hook, refund when the deploy refuses)
+    if (!this.redeploy(u, { free: false, tile })) return { ok: false, error: 'dp' };
+    return { ok: true, uid: u.uid, dp: ps.dp };
+  }
+
 }

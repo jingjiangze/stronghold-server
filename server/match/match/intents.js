@@ -53,6 +53,8 @@ export class MatchIntents {
       // P6 合作交互 (cujong.js): the pause consent vote, the fee request pair, the tile mark and the own speed switch
       case 'g.pauseVote': return this.votePause(ps, msg.voteId, !!msg.agree);
       case 'g.fundAsk': return this.fundAsk(ps);
+      // 促融共竞·实时协防: deploy a held board piece live during COMBAT (cujong.js cujongDeploy)
+      case 'g.deploy': return this.cujongDeploy(ps, msg);
       case 'g.fundAnswer': return this.fundAnswer(ps, msg.askId, !!msg.accept);
       case 'g.mark': return this.mark(ps, msg);
       case 'g.speed': return this.setSpeed(ps, !!msg.on);

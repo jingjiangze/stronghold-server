@@ -77,6 +77,16 @@
 .gtop__iconbtn:hover, .gtop__iconbtn.is-on { background: var(--mint-a20); color: var(--mint-400); border-color: var(--mint-500); }
 .gtop__iconbtn.is-on:not(.has-sprite) { opacity: .6; }
 .gtop__iconbtn .enemybtn__chev { color: #fff; }
+/* 促融共竞·实时协防 (mode_cujong_realtime): the live-deploy strip in the top bar — one chip per held piece. */
+.rtdeploy { display: flex; align-items: center; gap: .04rem; margin: 0 .06rem; }
+.rtdeploy__dp { min-width: .3rem; padding: 0 .06rem; text-align: center; font-weight: 800; color: var(--gold-2, #f2c33c); border: 1px solid currentColor; border-radius: .04rem; }
+.rtdeploy__chip { display: flex; flex-direction: column; align-items: center; gap: 0; padding: .02rem .08rem;
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line-2); color: var(--text-md, #cfe6df); cursor: pointer; }
+.rtdeploy__chip:hover:not(:disabled) { border-color: var(--mint-400, #17f9b7); color: #fff; }
+.rtdeploy__chip.is-standing, .rtdeploy__chip:disabled { opacity: .45; cursor: default; }
+.rtdeploy__name { font-size: max(calc(.11 * var(--t)), 10px); font-weight: 700; max-width: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtdeploy__cost { font-size: max(calc(.10 * var(--t)), 9px); color: var(--gold-2, #f2c33c); }
+
 .gtop__right { display: flex; flex-direction: column; align-items: flex-end; gap: .1rem; justify-self: end; }
 .gtop__right .countdown { --cd-h: .7rem; filter: drop-shadow(0 0 .12rem rgba(0, 0, 0, .8)); }
 .gtop__clock { display: flex; align-items: flex-start; gap: .14rem; }

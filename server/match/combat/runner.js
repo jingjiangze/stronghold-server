@@ -102,6 +102,9 @@ export class WorkerFieldRunner {
     this.resync = new Map();
     this.damageResync = new Map();
     this.controls = new Map();
+    // 促融共竞·实时协防: the pending g.deploy answer (one bounded control command in flight — the runner's FIFO
+    // guarantees at most one request on the wire, so a single slot is exact).
+    this._deployReply = null;
     for (const f of fields) f.battle.runner = this;
   }
 
@@ -183,6 +186,16 @@ export class WorkerFieldRunner {
     if (n > 0) this._request('advance', { ticks: n, snapshotFields: this.fields.filter((f) => this._watchers(f.fieldId).length).map((f) => f.fieldId) });
   }
 
+  /**
+   * 促融共竞·实时协防: queue one player deployment as a bounded control command; the engine applies it to the live
+   * worker-side Battle (CombatEngine.deploy → Battle.deployLive) and the reply reaches `_apply` with a `deploy` key.
+   */
+  deploy(fieldId, payload, onReply = null) {
+    this._deployReply = onReply;
+    this.controls.set(`${fieldId}:deploy`, { op: 'deploy', payload: { fieldId, playerId: payload.playerId, uid: payload.uid } });
+    this._pump();
+  }
+
   _request(op, payload) {
     if (!this.active || this.inflight) return;
     this.inflight = true;
@@ -207,6 +220,8 @@ export class WorkerFieldRunner {
   }
 
   _apply(out, forceSnapshots = false) {
+    // a g.deploy reply rides the state dto (fresh field snapshots included); hand it to the awaiting player first
+    if (out && out.deploy) { const cb = this._deployReply; this._deployReply = null; if (cb) cb(out.deploy); }
     for (const [pid, sent] of this.terminalSnapshots) {
       const ps = this.m.players.get(pid) || this.m.spectators.get(pid);
       if (!ps?.connected || ps.left || this.m.watchers.get(pid) !== sent.fieldId) this.terminalSnapshots.delete(pid);

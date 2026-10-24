@@ -254,6 +254,30 @@ export class MatchCujong {
    * of THEIR holdings, with a 15 s cooldown on the requester. A partner who has left (or an AI teammate) counts as an
    * unconditional accept. Prep only: the remake's funds are the prep currency.
    */
+  /**
+   * 实时协防 (mode_cujong_realtime): the player deploys one of their OWN board pieces live during COMBAT. The piece
+   * was created at battle start but held off the field (`Battle.flags.liveDeploy`); this hands the order to the phase's
+   * runner — inline fields answer synchronously, the combat worker queues a bounded control command and answers on its
+   * reply turn (`m.deploy` carries `{ ok, error?, uid?, dp? }` to the deployer only).
+   *
+   * Phase-gated to COMBAT (the whole point of the mode), the runner must be alive, and the seat must be a living
+   * player (spectators / downed-reviving seats have no field of their own).
+   */
+  cujongDeploy(ps, { uid } = {}) {
+    if (!this.isCujong || !this.cujongRealtime) return fail(ERR.WRONG_PHASE, 'live deploy is the realtime project');
+    if (this.phase !== PHASE.COMBAT || !this.runner) return fail(ERR.WRONG_PHASE, 'live deploy runs in combat');
+    if (!ps || ps.spectator || !ps.alive) return fail(ERR.ELIMINATED);
+    if (ps.reviving) return fail(ERR.REVIVING);
+    if (!Number.isSafeInteger(uid) || uid <= 0) return fail(ERR.BAD_TARGET, 'which unit');
+    const fieldId = `n:${ps.playerId}`;
+    this.runner.deploy(fieldId, { playerId: ps.playerId, uid }, (out) => {
+      if (out.ok) this.cujongDp[ps.playerId] = out.dp;
+      this.sendTo(ps.playerId, { t: 'm.deploy', ok: !!out.ok, ...(out.ok ? { uid: out.uid, dp: out.dp } : { error: out.error || 'unknown' }) });
+      if (out.ok) this.markPublic();
+    });
+    return OK;
+  }
+
   fundAsk(ps) {
     if (!this.isCujong) return fail(ERR.WRONG_PHASE, 'the fee request is a cujong feature');
     if (ps.spectator) return fail(ERR.BAD_TARGET, 'spectators do not drive the co-op features');

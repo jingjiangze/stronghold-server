@@ -3661,7 +3661,7 @@ function buildConfig(ctx, waves, stages, bands, chess, items) {
   // until the per-project content lands (方案-独立模式-v2 §3 P2–P5).
   // inScope stays false (the placeholder clone is not yet a faithful recreation): the suite's in-scope set — the
   // eight single/multi modes with the full invariant checks (test/data.test.js) — is unchanged.
-  const CUJONG_PROJECTS = { football: '阵地足球', fortress: '堡垒守御', raft: '障碍漂航' };
+  const CUJONG_PROJECTS = { football: '阵地足球', fortress: '堡垒守御', raft: '障碍漂航', realtime: '实时协防' };
   for (const [project, label] of Object.entries(CUJONG_PROJECTS)) {
     const base = modes.mode_multi_normal;
     if (!base) { warn('config: 促融共竞 skipped — mode_multi_normal is missing'); continue; }

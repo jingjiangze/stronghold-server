@@ -36,7 +36,7 @@ function fixture(t) {
 }
 
 test('shared contract: modeIdFor routes cujong projects, solo/coop keep their modeIds, capacity is two', () => {
-  assert.deepEqual(CUJONG_PROJECTS, ['football', 'fortress', 'raft']);
+  assert.deepEqual(CUJONG_PROJECTS, ['football', 'fortress', 'raft', 'realtime']);
   for (const p of CUJONG_PROJECTS) assert.equal(modeIdFor('cujong', p), `mode_cujong_${p}`);
   assert.equal(modeIdFor('solo', 'FUNNY'), 'mode_single_funny');
   assert.equal(modeIdFor('coop', 'ABYSS'), 'mode_multi_abyss');
@@ -76,7 +76,7 @@ test('a cujong room may start with one Doctor and one AI teammate (two seated pl
   assert.ok(room.match.opts.seats.some((s) => s.isBot));
 });
 
-test('cujong rooms only carry the three projects (room.create + room.setDifficulty); non-cujong rooms are untouched', t => {
+test('cujong rooms only carry the four projects (room.create + room.setDifficulty); non-cujong rooms are untouched', t => {
   const f = fixture(t);
   const host = f.player(), guest = f.player();
   assert.equal(f.lobby.create(host, { mode: 'cujong', difficulty: 'NORMAL' }).error, ERR.BAD_MSG);

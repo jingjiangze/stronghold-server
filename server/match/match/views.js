@@ -73,7 +73,9 @@ export class MatchViews {
       round: this.round,
       lastRound: this.gd.lastRound,
       // 促融共竞: the project, the live 净胜球 counters (阵地足球) and the rival-team pick — display + result review
-      ...(this.isCujong ? { cujong: { project: this.cujongProject, goals: { ...this.cujongGoals }, rivalTeam: this.cujongRival } } : {}),
+      ...(this.isCujong ? { cujong: { project: this.cujongProject, goals: { ...this.cujongGoals }, rivalTeam: this.cujongRival,
+        // 实时协防 (mode_cujong_realtime): the HUD deploy strip reads the flag + the last known battle DP
+        ...(this.cujongRealtime ? { realtime: true, dp: { ...this.cujongDp } } : null) } } : {}),
       deadline: this.deadline,
       serverNow: this.sched.now(),
       modeId: this.modeId,

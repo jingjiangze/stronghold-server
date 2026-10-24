@@ -39,6 +39,8 @@ function randomIntent(rng, m, ps) {
     // P6 合作交互 (whitelist-ish shapes ⇒ only valid values keep the fuzz contract)
     case 'g.pauseVote': return { t, voteId: 1 + rng.int(10), agree: rng() < 0.5 };
     case 'g.fundAsk': return { t };
+    // 促融共竞·实时协防: random uid / churned matches — every one is a refusal, which is what the fuzz checks
+    case 'g.deploy': return { t, uid: 1 + rng.int(99999) };
     case 'g.fundAnswer': return { t, askId: 1 + rng.int(10), accept: rng() < 0.5 };
     case 'g.mark': return { t, row: rng.int(19), col: rng.int(21), kind: rng.pick(['mark', 'note', 'retreat']) };
     case 'g.speed': return { t, on: rng() < 0.5 };
