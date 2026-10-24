@@ -481,6 +481,9 @@ export const C2S = {
   // the proposer sends g.pause { on: true }, the partner answers with g.pauseVote, and ANY side lifts it with { on: false }
   'g.pauseVote': { voteId: (v) => isInt(v, 1, 2 ** 31), agree: isBool },
   // 费用请求 (PRTS main.raw 694–698; P6): ask the partner to wire up to 15 of their funds (their approval; 15 s CD)
+  // 促融共竞·实时协防: deploy one of the player's own board pieces (created held at battle start) live in COMBAT;
+  // the tile is the piece's board tile (homeR/homeC). The authoritative answer rides m.deploy.
+  'g.deploy': { uid: (v) => Number.isSafeInteger(v) && v > 0 },
   'g.fundAsk': {},
   'g.fundAnswer': { askId: (v) => isInt(v, 1, 2 ** 31), accept: isBool },
   // 标记 (PRTS main.raw 699–703; P6): highlight a tile for both sides; kind: mark / note(注意) / retreat(撤退)
@@ -529,6 +532,8 @@ export const S2C = [
   'm.layer',
   // m.unitStats { seq, round, units: [unitStatsEntry] } — the answer to g.unitStats (the requester only)
   'm.unitStats',
+  // 促融共竞·实时协防: the authoritative answer to g.deploy — { ok, uid?, dp? } or { ok:false, error }, deployer only
+  'm.deploy',
   // client-side combat (DESIGN §14): b.start { battleId, fieldId, kind, spec, authoritative, startAt, serverNow, elapsed,
   // speed, watch? } · b.pool { hp, max, teamLp, acked: { [fieldId]: cumulative boss damage counted } } ·
   // b.end { battleId, fieldId, reason }

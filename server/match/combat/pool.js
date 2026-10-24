@@ -6,7 +6,7 @@ import { deepFreeze, getData } from '../../data.js';
 import { snapshotTrialInput, MAX_TRIAL_TICKS } from './trial.js';
 
 const WORKER_URL = new URL('./worker.js', import.meta.url);
-const OPS = new Set(['advance', 'state', 'forceField', 'forceAll']);
+const OPS = new Set(['advance', 'state', 'forceField', 'forceAll', 'deploy']);
 const MAX_REPLACEMENTS = 3; // lifetime budget per slot, NOT reset after a successful boot
 const error = (message, code) => Object.assign(new Error(message), { code });
 function positive(n, name, max = Number.MAX_SAFE_INTEGER) {

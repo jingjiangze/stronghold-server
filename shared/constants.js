@@ -28,7 +28,7 @@ export const DIFFICULTY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境�
 export const DIFFICULTY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', ABYSS: '#ff0024' };
 
 /** 促融共竞 (MULTIPLAY_V3 co-op) projects — an independent mode that reuses the engine, not a difficulty. */
-export const CUJONG_PROJECTS = ['football', 'fortress', 'raft'];
+export const CUJONG_PROJECTS = ['football', 'fortress', 'raft', 'realtime'];
 /** Display names of the projects (N_ msgids: call t() where they are shown). */
 export const CUJONG_PROJECT_NAMES = { football: N_('阵地足球'), fortress: N_('堡垒守御'), raft: N_('障碍漂航') };
 /**

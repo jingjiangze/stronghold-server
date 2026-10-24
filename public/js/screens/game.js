@@ -1254,6 +1254,19 @@ function MatchScreen() {
   // fall back to record values. The getter only reads the cache. Prep: an own board unit's stats at the next battle start,
   // asked from the server (g.unitStats → m.unitStats; only the newest request's answer counts) whenever m.private or the
   // phase changes while such a card is open — the last answer stays on show until the next one lands
+  // 促融共竞·实时协防 (mode_cujong_realtime): local mirror of the authoritative g.deploy answers — the last known
+  // battle DP (m.deploy dp) and the uids that are standing (ok) or were refused (error, with the reason for the toast)
+  const [rtDeploy, setRtDeploy] = useState({ dp: null, standing: new Set() });
+  useEffect(() => net.on('m.deploy', (msg) => {
+    if (!msg || typeof msg !== 'object') return;
+    setRtDeploy((cur) => {
+      if (msg.ok) {
+        const standing = new Set(cur.standing); standing.add(msg.uid);
+        return { dp: Number.isFinite(msg.dp) ? msg.dp : cur.dp, standing };
+      }
+      return cur;
+    });
+  }), []);
   const [unitStats, setUnitStats] = useState(null);      // m.unitStats: { seq, round, units: Map<uid, entry> }
   const statsSeqRef = useRef(0);
   useEffect(() => net.on('m.unitStats', (msg) => {
@@ -1382,6 +1395,19 @@ function MatchScreen() {
     onPauseAgree: (id) => coopPauseVote(id, true), onPauseDecline: (id) => coopPauseVote(id, false),
     onFundAsk: fundAsk, onFundAccept: (id) => fundAnswer(id, true), onFundDecline: (id) => fundAnswer(id, false),
   } : null;
+  // 促融共竞·实时协防: the HUD deploy strip — the player's own board pieces (each waits held at battle start; the
+  // home tile is where it stands), the authoritative DP hint, and the standing set from the m.deploy answers
+  const realtimeFacts = (() => {
+    if (!coop || !pub?.cujong?.realtime || phase !== PHASE.COMBAT || spectator || !alive || !priv) return null;
+    const dp = Number.isFinite(rtDeploy.dp) ? rtDeploy.dp
+      : (Number.isFinite(pub.cujong.dp?.[myId]) ? pub.cujong.dp[myId] : null);
+    const pieces = (priv.board || []).filter((p) => p && p.kind === 'chess').map((p) => {
+      const rec = gd.chess(p.id);
+      return { uid: p.uid, id: p.id, name: rec?.name || p.id, cost: rec?.stats?.cost ?? null,
+        standing: rtDeploy.standing.has(p.uid) };
+    });
+    return pieces.length ? { pieces, dp, onDeploy: (uid) => actions.deploy(uid) } : null;
+  })();
   // client-side combat: observing a teammate's battle (research 09 §3.1) and the 联防 / 最终攻势 camera halves
   // (an eliminated player auto-observes a teammate's normal field — research 09 "keep-watching" — without asking)
   const watchedFid = watchingOther ? watching : (cc && combat && !alive && battleState && battleState.watch && battleState.kind === 'normal' ? battleState.fieldId : null);
@@ -1533,7 +1559,7 @@ function MatchScreen() {
         readyBusy=${readyBusy} readyCount=${readyCount} playerCount=${solo ? 1 : aliveCount}
         pen=${pen} penAvail=${penAvail} onPen=${togglePen} config=${gd.config} frozenAt=${frozenAt}
         pause=${canPause || paused ? { show: canPause, paused, busy: pauseBusy, onToggle: () => togglePause(!paused) } : null}
-        coop=${coopFacts}
+        coop=${coopFacts} realtime=${realtimeFacts}
         live=${liveLpNow} spectator=${spectator}
         spectators=${specFacts.list} myId=${myId} isHost=${specFacts.isHost} onRemoveSpectator=${removeSpectator} />
 

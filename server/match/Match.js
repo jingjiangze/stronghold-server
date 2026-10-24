@@ -450,8 +450,18 @@ export class Match {
     this._cujongReviveTimers = new Map();
     /** the project id (football/fortress/raft), the 阵地足球 rival-team pick and the 净胜球 counters (cujong/match) */
     this.cujongProject = this.isCujong ? String(this.modeId || '').replace(/^mode_cujong_/, '') : null;
+    /** 实时协防 (mode_cujong_realtime): the board pieces deploy live during COMBAT (Battle.flags.liveDeploy). */
+    this.cujongRealtime = this.cujongProject === 'realtime';
+    // A live deployment must reach the RUNNING Battle on the server (g.deploy → runner → Battle.deployLive).
+    // A client-authoritative field has no server-side Battle and no mid-battle input channel, so the realtime
+    // project always runs server-streamed combat (fields.js FieldRunner / the combat worker); every other mode
+    // keeps its default (client-side) authority. spec-side input replay (SP_VERIFY) is future work — see the
+    // realtime audit, gap #4.
+    if (this.cujongRealtime) this.clientCombat = false;
     this.cujongRival = null;
     this.cujongGoals = { for: 0, against: 0 };
+    /** 实时协防: the last known battle DP per player (worker-side truth; refreshed on every m.deploy reply). */
+    this.cujongDp = {};
     /** P6 合作交互 state: the pending 费用请求 / 暂停申请, the release cooldown, the 标记 map and its seqs.
      * (the pending request is `fundAskReq` — `fundAsk` is the g.fundAsk method on the prototype) */
     this.fundAskReq = null;

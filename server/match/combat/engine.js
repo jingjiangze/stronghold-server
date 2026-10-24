@@ -294,6 +294,20 @@ export class CombatEngine {
     return this._output();
   }
 
+  /**
+   * 促融共竞·实时协防: apply one player deployment to a live field's Battle and answer immediately. The reply rides
+   * the same dto shape as advance/state (fields snapshots included) so the runner's `_apply` keeps working, plus a
+   * `deploy` key the runner forwards to the requesting player (`{ ok, error?, uid?, dp? }` — Battle.deployLive).
+   */
+  deploy({ fieldId, playerId, uid } = {}) {
+    this._begin([fieldId]);
+    const f = this.fields.find((field) => field.fieldId === fieldId);
+    const out = f && f.battle && typeof f.battle.deployLive === 'function'
+      ? f.battle.deployLive(playerId, uid)
+      : { ok: false, error: 'field' };
+    return { ...this._output({ state: true }), deploy: out };
+  }
+
   dispose() {
     if (this.disposed) return;
     this.disposed = true;

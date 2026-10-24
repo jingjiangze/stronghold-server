@@ -30,7 +30,10 @@ export class BattleLifecycle {
     // its owner's deploy — takes its 联防 carry on that first deployment too)
     this._startDeploying = true;
     for (const kind of ['op', 'token']) {
-      const per = lists.map((l) => l.filter((u) => u.kind === kind && !u.deferDeploy));
+      // 促融共竞·实时协防 (flags.liveDeploy): operators are deployed by PLAYER order (g.deploy → deployLive),
+      // never by the opening deployment; summon pieces keep their normal docking rules.
+      const live = this.flags.liveDeploy === true;
+      const per = lists.map((l) => l.filter((u) => u.kind === kind && !u.deferDeploy && !(live && kind === 'op')));
       const n = Math.max(0, ...per.map((l) => l.length));
       for (let i = 0; i < n; i++) for (const l of per) if (l[i]) this._safe(() => this._deploy(l[i], { initial: true }), 'initialDeploy', l[i]);
     }

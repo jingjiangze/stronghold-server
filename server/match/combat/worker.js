@@ -117,6 +117,7 @@ try {
         case 'state': dto = session.engine.state({ snapshotFields: p.snapshotFields }); break;
         case 'forceField': dto = session.engine.forceField(p.fieldId, p.reason); break;
         case 'forceAll': dto = session.engine.forceAll(p.reason); break;
+        case 'deploy': dto = session.engine.deploy(p); break;
         default: throw new Error(`unknown combat operation ${op}`);
       }
       reply(request, { dto });

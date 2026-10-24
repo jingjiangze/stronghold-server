@@ -453,8 +453,23 @@ export function UniteBudgetNote({ pub }) {
  *   live: the own battle's pending LP loss (liveLp): the tower keeps the settled lp and adds a red −N tick, 联防中 during 联防;
  *     `left` (a leaker in 联防): its enemies still standing — the capsule's ×N tag
  */
+/** 促融共竞·实时协防 (mode_cujong_realtime): one chip per held board piece — tap = deploy it on its own board
+ * tile (its home), DP-gated server-side. A standing piece (m.deploy ok) renders grey; a refusal (m.deploy error)
+ * toasts via gameActions. The DP figure is the last authoritative answer (regen between deploys is server truth). */
+export function RealtimeDeployStrip({ pieces, dp = null, onDeploy }) {
+  if (!Array.isArray(pieces) || !pieces.length) return null;
+  return html`<div class="rtdeploy" role="group" aria-label=${t('实时部署')}>
+    <span class="rtdeploy__dp num" data-testid="rt-dp">${dp == null ? '—' : Math.floor(dp)}</span>
+    ${pieces.map((p) => html`<button key=${p.uid} type="button" class=${cx('rtdeploy__chip', p.standing && 'is-standing')}
+      disabled=${p.standing} data-testid="rt-chip" title=${t('部署 {name}（{cost} 费用）', { name: p.name, cost: p.cost ?? '?' })}
+      onClick=${() => onDeploy?.(p.uid)}>
+      <b class="rtdeploy__name">${p.name}</b><span class="rtdeploy__cost num">${p.cost ?? '?'}</span>
+    </button>`)}
+  </div>`;
+}
+
 export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyCount, playerCount, pen = false, penAvail = false, onPen = () => {},
-  config = null, frozenAt = null, pause = null, coop = null, live = null, spectator = false,
+  config = null, frozenAt = null, pause = null, coop = null, realtime = null, live = null, spectator = false,
   spectators = null, myId = null, isHost = false, onRemoveSpectator = null }) {
   const [loadOpen, setLoadOpen] = useState(false);
   const phase = pub?.phase;
@@ -521,6 +536,7 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
         ${coop?.pause ? html`<${CoopPauseControls} coop=${coop.pause} busy=${!!coop.busy} onPropose=${coop.onPausePropose} onCancel=${coop.onPauseCancel}
           onAgree=${coop.onPauseAgree} onDecline=${coop.onPauseDecline} onResume=${coop.onPauseResume} />` : null}
         ${coop?.speed ? html`<${SpeedToggle} mine=${coop.speed.mine} theirs=${coop.speed.theirs} on=${coop.speed.on} busy=${!!coop.busy} onToggle=${coop.onSpeed} />` : null}
+        ${realtime ? html`<${RealtimeDeployStrip} pieces=${realtime.pieces} dp=${realtime.dp} onDeploy=${realtime.onDeploy} />` : null}
         ${coop?.fundAvail ? html`<${CoopFundControls} fund=${coop.fund} busy=${!!coop.busy} onAsk=${coop.onFundAsk} onAccept=${coop.onFundAccept} onDecline=${coop.onFundDecline} />` : null}
       </div>
       <${OvertimeWarning} ot=${ot} />

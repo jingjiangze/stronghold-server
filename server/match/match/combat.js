@@ -62,7 +62,8 @@ export class MatchCombat {
       spawns: this._sanitizeSpawns(Array.isArray(ev.spawns) ? ev.spawns : spawns, ps.playerId),
       routes: wave.routes,
       sharedBoss: null,
-      flags: { layerGainsEnabled: true, ...this.gd.dp },
+      // 促融共竞·实时协防: the opening deployment is skipped and every board piece waits for its player's g.deploy
+      flags: { layerGainsEnabled: true, ...this.gd.dp, ...(this.cujongRealtime ? { liveDeploy: true } : null) },
       fieldId: `n:${ps.playerId}`,
       enemyOverrides: wave.overrides,
       waveId: wave.templateId,
