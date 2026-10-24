@@ -44,6 +44,12 @@ jobs:
       - name: Setup check (no downloads)
         run: node tools/setup.mjs --check --no-local
 
+      # Windows runners ship no `zip` binary; the zip fixtures (and tools/package.mjs) need it.
+      # Same fix as the Forge repo's PR #19 (proven there on the 0.3.2 line).
+      - name: Install zip (Windows)
+        if: runner.os == 'Windows'
+        run: choco install zip -y --no-progress
+
       - name: Unit & integration tests
         run: node --test
 
