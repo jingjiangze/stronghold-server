@@ -76,6 +76,12 @@ function sameRowCount(ctx, me) {
 }
 function rowCondition(ctx, me) {
   const { bb, bbStr } = ctx.source;
+  // Maintainer 2026-10-10, #473's official-game recording: Ptilopsis's copied Gladiia / Yu prep-start gifts skip
+  // the three-in-a-row gate. This is not a general change to copying or to either original operator's condition.
+  const from = ctx.source.copiedFrom;
+  if (from && ctx.source.garrison?.eventType === 'SERVER_PREP_START'
+    && ctx.chessRecord(me?.id)?.charId === 'char_128_plosis'
+    && ['char_474_glady', 'char_2026_yu'].includes(ctx.chessRecord(from.id)?.charId)) return true;
   if (bbStr.conditionkey === 'character_same_row') return sameRowCount(ctx, me) >= num(bb.check_count, 0);
   return true;
 }
@@ -85,8 +91,36 @@ function rowCondition(ctx, me) {
 
 const H = {};
 
+H.SERVER_GAIN_CHAR = {
+  run(ctx) {
+    for (let i = 0; i < Math.min(10, num(ctx.source.bb.count, 1)); i++) ctx.grantChess(ctx.source.bbStr.chess);
+  },
+};
+
+H.SERVER_ADD_BOND_ACTIVATED_RANDOM = {
+  run(ctx) {
+    const active = bondOrder(ctx).filter((id) => ctx.bondActive(id));
+    if (!active.length) return;
+    for (let i = 0; i < Math.min(10, num(ctx.source.bb.rand_count, 1)); i++) ctx.addLayers(ctx.rng.pick(active), num(ctx.source.bb.count), { requireActive: true });
+  },
+};
+
+H.SERVER_ADD_BOND_FRONT_ALL_LAYER = {
+  run(ctx) {
+    const me = selfView(ctx);
+    if (!onBoard(me)) return;
+    const dir = me.dir || 'RIGHT';
+    for (const p of chessOnBoard(ctx)) {
+      const ahead = dir === 'UP' ? p.col === me.col && p.row > me.row : dir === 'DOWN' ? p.col === me.col && p.row < me.row
+        : dir === 'LEFT' ? p.row === me.row && p.col < me.col : p.row === me.row && p.col > me.col;
+      if (ahead) addAll(ctx, metaBonds(ctx, p), num(ctx.source.bb.count), true);
+    }
+  },
+};
+
 H.SERVER_ADD_BOND = {
   run(ctx) {
+    if (!rowCondition(ctx, selfView(ctx))) return;
     const { bb, bbStr, garrison, piece } = ctx.source;
     const bonds = ids(bbStr.bond);
     // 录武官 (hidden 4_15) carries garrison_157 (【奇迹】+3) next to garrison_156 (【炎】+6、【奇迹】+3) with the same text:
@@ -121,6 +155,8 @@ H.SERVER_ADD_BOND_METHOD = {
       case 'hand_count': addAll(ctx, bonds, ctx.hand().filter((p) => p && p.kind === 'chess').length * multi, ra); break;
       case 'same_row': addAll(ctx, bonds, sameRowCount(ctx, me) * multi, ra); break;
       case 'same_bond_diff_lv':
+        // V1's garrison_53 text names both bonds although its blackboard names only Victoria.
+        if (ctx.data.config?.season === 'act1autochess' && /^garrison_53_[ab]$/.test(ctx.source.garrisonId)) bonds.push('miraShip');
         for (const b of bonds) addAll(ctx, [b], distinctTiers(ctx, (p) => metaBonds(ctx, p).includes(b)).size * multi, ra);
         break;
       default: break;
@@ -329,7 +365,7 @@ H.SERVER_SELL_CHESS_GAIN_SPECIAL_GOODS = {
     const tier = pool && Number.isInteger(pool.tier) ? pool.tier : null;
     const count = Math.max(1, num(ctx.gd.rewardOffer ? ctx.gd.rewardOffer().count : 3, 3));
     const list = [];
-    for (let i = 0; i < count * 4 && list.length < count; i++) {
+    for (let i = 0; i < count * 4 && list.length < count; i++) { // loop-cap: 4 × rewardOffer().count (≤ MAX_OFFER_SLOTS)
       const r = ctx.rollPool(poolId);
       if (r && r.kind === 'chess' && !list.includes(r.id)) list.push(r.id);
     }

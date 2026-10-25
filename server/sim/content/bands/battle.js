@@ -41,7 +41,7 @@
 
 import {
   num, buffsOf, bandRecord, isOp, onField, isElite, tierOf, unitBonds, activeBondIds, playerOps, passiveBuff, fxOn,
-  matchBands, gainLayers, alliesAround, N4, baseChessId, isGroundOp, directMods,
+  matchBands, gainLayers, alliesAround, N4, baseChessId, isGroundOp, directMods, isVersionData, isFirstPeriod,
 } from '../support/index.js';
 import { weaknessRetype, addShieldLayer, PRIO_RESPAWN, reviveNow } from '../items/battle.js';
 import { spawnMapChar } from '../tokens.js';
@@ -105,6 +105,11 @@ const BY_KEY = {
     const mul = Math.max(0, 1 + num(p.respawn_time, 0));
     if (mul === 1) return;
     const key = keyOf(bandId);
+    if (isFirstPeriod()) {
+      // The historical text has one reduction, without "每次部署后".
+      for (const u of playerOps(battle, ps.playerId)) passiveBuff(battle, u, key, { redeployMul: mul });
+      return;
+    }
     battle.on('deploy', (c) => {
       const u = c.unit;
       if (!isOp(u) || u.ownerId !== ps.playerId) return;
@@ -173,8 +178,15 @@ const BY_KEY = {
     battle.on('hit', (c) => {
       const s = c.source;
       if (!isOp(s) || s.ownerId !== ps.playerId || !c.target || c.target.side !== 'enemy') return;
+      if (isVersionData() && s.def?.position !== 'RANGED') return;
       weaknessRetype(c.dmg, s, c.target);
     }, { priority: 5 });
+  },
+
+  // Season one: the four strategies' extra clause applies only in 标准模拟.
+  act1autochess_band31_buff(battle, ps, p, bandId) {
+    if (battle.data.raw.config?.modes?.[battle.opts.modeId]?.difficulty !== 'FUNNY') return;
+    for (const u of playerOps(battle, ps.playerId)) passiveBuff(battle, u, `${keyOf(bandId)}:standard`, directMods({ atk: num(p.atk), def: num(p.def), hp: num(p.max_hp) }));
   },
 
   // 夕 墨色真颜
@@ -213,9 +225,9 @@ const BY_KEY = {
 // Touch 外勤医疗 (auto_chess_change_map, every player's field)
 
 /** Map-character variants of band_amedic: [{ cond, cnt, chars: [tokenId…] }]. */
-export function amedicVariants() {
+export function amedicVariants(bandId = AMEDIC_BAND) {
   const out = [];
-  for (const b of buffsOf(bandRecord(AMEDIC_BAND))) {
+  for (const b of buffsOf(bandRecord(bandId))) {
     if (b.key !== 'auto_chess_change_map') continue;
     const chars = new Set();
     for (const [k, v] of Object.entries(b.p)) if (k.includes('#') && num(v) > 0) chars.add(k.split('#')[0]);
@@ -242,7 +254,7 @@ function installMapChars(battle) {
     const chars = [];
     for (const ps of holders) {
       const elites = deployedOps(battle, ps.playerId).filter(isElite).length;
-      for (const id of amedicCharsFor(elites, variants)) chars.push({ playerId: ps.playerId, id });
+      for (const id of amedicCharsFor(elites, bandRecord(ps.bandId)?.effectRef === AMEDIC_BAND ? amedicVariants(ps.bandId) : variants)) chars.push({ playerId: ps.playerId, id });
     }
     for (const [i, { playerId, id }] of chars.entries()) {
       // The reserve medic occupies this stage slot in preparation; Touch replaces it at battle start. [ASSUMED]
@@ -259,9 +271,14 @@ function installMapChars(battle) {
 /** Band buff keys with a battle part (tests / tooling). */
 export const BATTLE_BUFF_KEYS = Object.freeze([...Object.keys(BY_KEY), 'auto_chess_change_map']);
 
+/** Map-wide support: Touch's characters or historical 森蚺's device aliases. */
+export function isMapCharBuff(b) {
+  return b.key === 'auto_chess_change_map' && Object.keys(b.p || {}).some((k) => (k.startsWith('char_') || k.startsWith('trap_')) && k.includes('#'));
+}
+
 /** Does this band have a battle part? */
 export function hasBattlePart(bandId) {
-  return buffsOf(bandRecord(bandId)).some((b) => (b.bbKey && BY_KEY[b.bbKey]) || b.key === 'auto_chess_change_map');
+  return buffsOf(bandRecord(bandId)).some((b) => (b.bbKey && BY_KEY[b.bbKey]) || isMapCharBuff(b));
 }
 
 export function install(battle) {

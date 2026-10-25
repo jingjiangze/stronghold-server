@@ -1,0 +1,29 @@
+{
+  "lock": 1,
+  "id": "cdn-local",
+  "version": "0.1.0",
+  "generator": "tools/plugin.mjs pack",
+  "files": {
+    "config/sources.json": {
+      "sha256": "8a7ebb74d327ed68b7952cc3d0f0bad2923301f6dda2a8253786ee403a9df523",
+      "bytes": 6170
+    },
+    "host/noop.js": {
+      "sha256": "7dcdfff1a2f403f005d3858857ea490881355e4b5aa0f87fe91632907d51af4f",
+      "bytes": 201
+    },
+    "plugin.json": {
+      "sha256": "c228a6da0ab58b467b562e6f60fad03408da0ddba313f58b3a470ab4a9c9e7d6",
+      "bytes": 764
+    },
+    "server/assetJump.js": {
+      "sha256": "d4e9094485b411f26a3c058158316244b9b08c7d4163fea8db547dcdcb1f69f6",
+      "bytes": 41163
+    },
+    "server/edge-sidecar.js": {
+      "sha256": "c0cacb8c6228eab0e14526feb0d726ae1b222faa85d3226b910dc79e4ed6524a",
+      "bytes": 13964
+    }
+  },
+  "spine": {}
+}

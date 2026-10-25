@@ -253,7 +253,7 @@ test('co-op spectator removed by the host while the match runs: room.closed {kic
   await ok(a, { t: 'g.ready', ready: true });
   await s2.waitFor('b.start', (x) => x.kind === 'normal', 10000);
   await a.waitFor('m.public', (p) => p.phase === 'PREP' && p.round === 2, 15000);
-  assert.deepEqual(s1.log.slice(mark).filter((x) => !['pong', 'presence.state'].includes(x.t)).map((x) => x.t), [], 'no room, match or battle frame reaches the removed spectator; public presence remains available');
+  assert.deepEqual(s1.log.slice(mark).filter((x) => x.t !== 'pong').map((x) => x.t), [], 'nothing reaches the removed spectator');
   assert.ok(s2.log.some((x) => x.t === 'm.public'), 'the other spectator still gets the match');
 
   // the freed seat can be taken again (no ban list: the key is all it takes)

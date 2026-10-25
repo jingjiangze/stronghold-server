@@ -3,35 +3,25 @@
 // view carries) and RESULT (finish: m.result to every human still here, onEnd).
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
-import { PHASE } from '../../../shared/constants.js';
+import { PHASE, layerGainRoom } from '../../../shared/constants.js';
 import { uniteSurvivors } from '../unite.js';
 import { buildResult } from '../results.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
 import { msg } from '../../../shared/i18n.js';
 import { onSettle, resetRoundCounters } from '../botEmotes.js';
+import { creditedKillsOf } from '../../sim/spec.js';
 
 export class MatchSettle {
   settle(plan, uniteResult) {
-    // Re-entry guard only: a round that already settled (phase SETTLE) must not charge LP twice. Production callers
-    // (combat.js / unitePhase.js) always arrive from COMBAT or UNITE; upstream's settle() carries no phase restriction
-    // and the touch-retained test forces an elimination from PREP, so no phase is excluded here.
-    if (this.disposed || this.ended || this.phase === PHASE.SETTLE) return;
-    this._freezeDamage(); // before LP/death/board cleanup and fields clearing
-    const relay = this._uniteRelay?.rounds.at(-1)?.plan === plan ? this._uniteRelay : null;
-    // Per-field results stay archived (including the earlier leaks). Helpers are unique, so merging their
-    // reward/stat entries cannot overwrite another round. LP below uses only the final field's survivors.
-    const combinedUnite = relay ? { ...uniteResult,
-      perPlayer: Object.assign({}, ...relay.rounds.map((r) => r.result?.perPlayer || {})) } : uniteResult;
     this.phase = PHASE.SETTLE;
     this.runner = null;
     this._stopClientCombat();
-    // Only legacy/final-result gains not yet synchronized may have a pending display overlay.
+    // the pending in-battle gains the views showed become persistent below (alive players) or lapse (DESIGN §20.15)
     for (const ps of this.order) if (ps.pendingLayerGains) { ps.pendingLayerGains = null; ps.dirty(); }
     const cap = this.gd.lpCapPerRound;
     // a 联防 battle that could not run at all (synthetic result) must not wipe the leakers' losses: charge their own leaks
-    const uniteRan = relay ? relay.rounds.some((r) => r.result && !r.result.synthetic)
-      : !!(plan && uniteResult && !uniteResult.synthetic);
-    const survivors = relay ? relay.rounds.at(-1).survivors : uniteRan ? uniteSurvivors(plan, uniteResult) : null;
+    const uniteRan = !!(plan && uniteResult && !uniteResult.synthetic);
+    const survivors = uniteRan ? uniteSurvivors(plan, uniteResult) : null;
     // The 联防's outcome as data for the SETTLE view (m.public.uniteResult, views.js; GitHub #235, PR #112 by @Convey123):
     // each client pops the official result box from it (ui/gameLogic/phases.js uniteResultBox) — `through` = the leakers'
     // enemies that still got through (uncapped; only decides whether 「全员无伤！」 is true), `losses` = every alive
@@ -40,10 +30,9 @@ export class MatchSettle {
     // itself. No ticker line: the official reports the outcome in the one dialog. null when no 联防 resolved.
     this.uniteResultView = uniteRan && plan.leakers.length ? {
       through: plan.leakers.reduce((n, lk) => n + Math.max(0, survivors.get(lk.playerId) || 0), 0),
-      helpers: relay ? relay.rounds.flatMap((r) => r.view.helpers) : plan.helpers.map((p) => p.playerId),
+      helpers: plan.helpers.map((p) => p.playerId),
       leakers: plan.leakers.map((p) => p.playerId),
       losses: {},
-      ...(relay ? { rounds: relay.rounds.map((r) => ({ ...r.view, helpers: r.view.helpers.slice() })) } : {}),
     } : null;
     const alive = this.alivePlayers();
     for (const ps of alive) {
@@ -60,38 +49,38 @@ export class MatchSettle {
       if (r.perfect !== false && counted === 0) ps.stats.perfectRounds++;
       // bounty coins (own battle + unite kills) are credited to the next prep
       let coins = Math.max(0, Math.trunc(Number(r.coins) || 0));
-      const up = combinedUnite && combinedUnite.perPlayer && combinedUnite.perPlayer[ps.playerId];
+      const up = uniteResult && uniteResult.perPlayer && uniteResult.perPlayer[ps.playerId];
       if (up) {
         coins += Math.max(0, Math.trunc(Number(up.coins) || 0));
         ps.stats.dmgDealt += Number(up.damageDealt) || 0;
         ps.stats.kills += Number(up.killed) || 0;
-        if (relay) ps.stats.healing += Number(up.healingDone) || 0;
       }
+      ps.creditedKills += creditedKillsOf(r) + creditedKillsOf(up);
       // perfect-payout bounties (战术特训): own phase perfect
       for (const b of ps.bounties) if (b.card.payout === 'perfect' && counted === 0 && r.perfect !== false) coins += b.card.coin;
       if (coins > 0) { ps.pendingFunds += coins; ps.stats.fundsGained += coins; }
       for (const b of ps.bounties) b.roundsLeft--;
       ps.bounties = ps.bounties.filter((b) => b.roundsLeft > 0);
-      // Ordinary server battles already retain gains live. Reconcile only an unsynchronized final delta;
-      // repeated results or a cap reached during combat must not award layers or milestone rewards again.
-      this._applyBattleLayerGains(ps, r.layerGains);
+      // IN_BATTLE layer gains (normal battles only), at most the room left under BOND_LAYER_CAP (999, as the battle's
+      // live copy: Battle.addLayers); a bond at the cap gains nothing and dispatches nothing
+      for (const [bondId, n] of Object.entries(r.layerGains || {})) {
+        if (!this.gd.bond(bondId) || !(n > 0)) continue;
+        const before = ps.layers[bondId] || 0;
+        const add = layerGainRoom(before, Math.floor(n));
+        if (!(add > 0)) continue;
+        ps.layers[bondId] = before + add;
+        this.dispatch(ps, 'onLayers', { bondId, from: before, to: ps.layers[bondId], reason: 'battle' });
+      }
       this._charDamageTickers(ps, r);
-      this.dispatch(ps, 'onBattleResult', { result: r, lpLoss: loss, perfect: counted === 0 && r.perfect !== false, unite: combinedUnite || null });
+      this.dispatch(ps, 'onBattleResult', { result: r, lpLoss: loss, perfect: counted === 0 && r.perfect !== false, unite: uniteResult || null });
       ps.recompute();
     }
-    for (const ps of alive) {
-      if (ps.lp <= 0) {
-        ps.lp = 0;
-        ps.eliminate(this.round);
-        this.toast(ps, 'error', msg('你的目标生命值耗尽，已被淘汰'));
-        this.tickerText(msg('{name}博士的目标生命值耗尽', { name: ps.name }), FLOW_TICKER_PRIORITY);
-      }
-    }
+    this.eliminateBroken();
     this.fields = [];
     this.watchers.clear();
-    this.setDeadline(DELAYS.SETTLE / 1000, () => this.afterSettle(), { silent: this.soloUntimed });
     this.markPublic();
     onSettle(this); // one emote per alive AI per round (enabled by default; SP_BOT_EMOTES=0 silences it)
+    this.setDeadline(DELAYS.SETTLE / 1000, () => this.afterSettle(), { silent: this.soloUntimed });
   }
 
   /**
@@ -117,6 +106,22 @@ export class MatchSettle {
     }
   }
 
+  /**
+   * Drop every alive player whose LP is already gone. Settlement calls this after the round's LP loss.
+   * An accepted test round jump calls the same helper before the next round starts, so LP 0 cannot be
+   * written back into a new prep. The LP command itself stays a raw write.
+   */
+  eliminateBroken() {
+    for (const ps of this.alivePlayers()) {
+      if (ps.lp <= 0) {
+        ps.lp = 0;
+        ps.eliminate(this.round);
+        this.toast(ps, 'error', '你的目标生命值耗尽，已被淘汰');
+        this.tickerText(msg('{name}博士的目标生命值已耗尽', { name: ps.name }), FLOW_TICKER_PRIORITY);
+      }
+    }
+  }
+
   afterSettle() {
     if (!this.alivePlayers().length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
     resetRoundCounters(this); // AI bot merge-counter resets each round (server/match/botEmotes.js)
@@ -124,10 +129,12 @@ export class MatchSettle {
   }
 
   finish({ victory, hiddenCleared = false, reason = 'defeat' }) {
+    // A command that ends a test match must be audited/counted before publishing its result.
+    if (this.test && this._testApplying) { this._testOutcome = { victory, hiddenCleared, reason }; return; }
     if (this.ended || this.disposed) return;
-    this._freezeDamage();
+    this.offersDispose();
     this.ended = true;
-    for (const ps of this.order) this._cancelBotPrep(ps);
+    this.externalAI?.close();
     if (this.runner) { try { this.runner.stop(); } catch { /* ignore */ } this.runner = null; }
     this._stopClientCombat();
     this.cancel(this._phaseTimer);
@@ -144,6 +151,11 @@ export class MatchSettle {
     } catch (e) {
       this.reportError('buildResult', e);
       result = { t: 'm.result', victory: !!victory, roundsPassed: 0, reason, modeId: this.modeId, difficulty: this.difficulty, players: [] };
+    }
+    if (this.test) {
+      result.test = true;
+      result.testActions = this.testActions;
+      if (this.testReplayable === false) result.testReplayable = false;
     }
     this.lastResultMsg = result;
     this.markPublic();

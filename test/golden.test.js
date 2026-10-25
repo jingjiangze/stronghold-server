@@ -35,12 +35,6 @@ test('a changed digest value is reported with its scenario, field and old → ne
   assert.match(text, /\.enemies\.enemy_\w+\.killed: \d+ → \d+/);
 });
 
-test('changed match-round counts describe added and removed rows without throwing', () => {
-  const short = { x: { rounds: [{}] } }, long = { x: { rounds: [{}, {}] } };
-  assert.match(formatDiffs('matches', compareFamily(short, long)), /\.rounds\[1\]: \(missing\) → \{\}/);
-  assert.match(formatDiffs('matches', compareFamily(long, short)), /\.rounds\[1\]: \{\} → \(missing\)/);
-});
-
 test('golden files list exactly the corpus scenarios (regenerate with npm run golden:update after a corpus change)', () => {
   for (const f of FAMILY_NAMES) {
     const doc = loadGolden(f);

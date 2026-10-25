@@ -20,8 +20,7 @@ const REAL = { skip: !hasGeneratedData() };
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const manifest = JSON.parse(readFileSync(path.join(ROOT, 'data', 'assets.json'), 'utf8'));
 const SFX = manifest.audio.sfx;
-// the manifest URL carries a cache-busting `?v=…`: swap the extension and keep the query
-const TOKEN_DEAD = SFX.battle.charDie.replace(/b_char_dead\.mp3(\?[^?]*)?$/, 'b_char_tokendead.mp3$1');
+const TOKEN_DEAD = SFX.battle.charDie.replace(/b_char_dead\.mp3$/, 'b_char_tokendead.mp3');
 const ds = getDefaultSource();
 const dummy = (o = {}) => enemyRec({ key: o.key ?? 'enemy_dummy', hp: 1e7, speed: 0, def: 0, res: 0, ...o });
 const walker = (o = {}) => enemyRec({ key: o.key ?? 'enemy_walker', hp: 1e6, speed: 1, def: 0, atk: 0, ...o });
@@ -112,6 +111,11 @@ test('#4 audio classes (official ON_UNIT_DEAD/BORN defaults): only operators pla
   assert.equal(deathSfxUrl(manifest, bomb, { consumed: true }), null, 'used up ⇒ silent');
   assert.equal(deathSfxUrl(manifest, mapChar), SFX.battle.charDie, 'band map characters are operators');
   assert.equal(deathSfxUrl(manifest, crate), TOKEN_DEAD, 'act crate trap_1105 ⇒ b_char_tokendead');
+  // a served manifest's charDie carries charDie's content hash (host bandwidth layer 1): the sound derived beside it
+  // names another file, so it goes out without the segment (served plainly, cached a day) instead of a wrong hash
+  const hashed = { ...manifest, audio: { ...manifest.audio, sfx: { ...SFX, battle: { ...SFX.battle, charDie: SFX.battle.charDie.replace(/^\/assets\//, '/assets/~0123456789abcdef/') } } } };
+  assert.equal(deathSfxUrl(hashed, op), hashed.audio.sfx.battle.charDie);
+  assert.equal(deathSfxUrl(hashed, tok), TOKEN_DEAD, 'b_char_tokendead without charDie\'s hash');
   assert.equal(deathSfxUrl(manifest, enemy), SFX.battle.enemyDie);
   assert.equal(deathSfxUrl(manifest, boss), SFX.battle.enemyDieHeavy);
   assert.equal(deathSfxUrl(manifest, op, { reason: 'retreat' }), null, 'a retreat is no knock-down');

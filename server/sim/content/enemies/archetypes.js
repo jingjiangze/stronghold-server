@@ -6,8 +6,8 @@
 import { MOVE_SCALE, COLS, STEALTH_RESTORE } from '../../constants.js';
 import {
   HUSK_REBIRTH, BOOM_RADIUS, POLLUTION_INTERVAL, STEALTH_RESTORE_BY_KEY, DUCK_STEALTH_RESTORE, nthOf, stOf, safe, num, T, elem, hurt,
-  areaAllies, areaAlliesInTiles, zone, spawnChildren, stepToward, setHits, hitCount, setForm, absorbArts, auraBuff,
-  unbalancedNow,
+  areaAllies, areaAlliesInTiles, zone, spawnChildren, stepToward, setHits, hitCount, setForm, auraBuff,
+  unbalancedNow, castSlot,
 } from './helpers.js';
 import { hypot } from '../../detmath.js';
 
@@ -132,9 +132,11 @@ const resist = (immune = []) => ({
 const immuneTo = (...keys) => ({ spawn(b, e, a, ab) { ab.immune = new Set([...(ab.immune || []), ...keys]); } });
 
 /** Every Nth attack: status on the targets ("攻击2次后，下一次攻击会晕眩目标"). */
-const nthAttackStatus = (n, key, dur, sil = true) => ({
+const nthAttackStatus = (n, key, dur, sil = true, s = null) => ({
   sil,
   spawn(b, e, a) { a.n = 0; },
+  // the Nth attack is the skill's (display only: its slot for the client, castSlot)
+  before(c, b, e, a) { if (s && (a.n + 1) % n === 0) castSlot(b, e, s); },
   attack(c, b, e, a) {
     a.n++;
     if (a.n % n) return;
@@ -146,9 +148,9 @@ const nthAttackStatus = (n, key, dur, sil = true) => ({
 });
 
 /** Every Nth attack deals ×scale (+ optional element). */
-const nthAttackPower = (n, scale, el = null, ratio = 0) => ({
+const nthAttackPower = (n, scale, el = null, ratio = 0, s = null) => ({
   spawn(b, e, a) { a.n = 0; a.power = false; },
-  before(c, b, e, a) { a.power = (a.n + 1) % n === 0; },
+  before(c, b, e, a) { a.power = (a.n + 1) % n === 0; if (a.power && s) castSlot(b, e, s); },
   hitOut(c, b, e, a) { if (a.power && c.dmg.isAttack) c.dmg.amount *= scale; },
   dealt(c, b, e, a) { if (a.power && el && ratio > 0) elem(b, e, c.target, el, e.s.atk * ratio); },
   attack(c, b, e, a) { a.n++; },
@@ -202,14 +204,21 @@ const deathBoom = ({ scale, type = 'phys', r = BOOM_RADIUS, status = null, sil =
   },
 });
 
-/** 折射: RES +v (and optional max HP +hpPct) while not silenced. */
+/**
+ * 折射: RES +res while not silenced. 镜膜's optional max HP bonus is permanently lost on the first silence
+ * (PRTS 假想敌：镜膜, 天赋: "受沉默影响后失效，无法恢复"); its fan stays in the stopped B_* form afterwards.
+ */
 const refraction = (res, hpPct = 0) => ({
   silAware: true,                                                    // SILENCE-flagged: silence switches it off in tick()
   tick(b, e, a) {
     const on = !e.s.flags.silence;
+    if (hpPct && !on && !a.hpLost) {
+      a.hpLost = true;
+      setForm(b, e, 'stopped');
+    }
     if (on === a.on) return;
     a.on = on;
-    if (on) b.addBuff(e, { key: 'ab:refraction', mods: hpPct ? { resFlat: res, hpPct } : { resFlat: res }, persist: true, visible: true });
+    if (on) b.addBuff(e, { key: 'ab:refraction', mods: hpPct && !a.hpLost ? { resFlat: res, hpPct } : { resFlat: res }, persist: true, visible: true });
     else b.removeBuff(e, 'ab:refraction');
   },
 });
@@ -428,20 +437,19 @@ function artsBarrier(amount, { key = 'ab:artsBarrier', whileUp = null } = {}) {
     refresh(b, e, a) {
       a.left = amount;
       b.fx('phase', { x: e.x, y: e.y, id: e.id, kind: 'artsBarrier', value: amount });
-      if (whileUp) b.addBuff(e, { key, persist: true, visible: true, mods: whileUp });
+      b.addBuff(e, { key, persist: true, visible: true, mods: whileUp, injury(c) {
+        if (c.type !== 'arts' || !(a.left > 0)) return;
+        const take = Math.min(a.left, c.amount);
+        a.left -= take;
+        c.amount -= take;
+        if (a.left > 1e-6) return;
+        a.left = 0;
+        b.fx('shieldBreak', { x: e.x, y: e.y, id: e.id });
+        // Remove HP-changing bonuses after the breaking instance, even if a later effect dodges its overflow.
+        c.defer(() => b.removeBuff(e, c.buff));
+      } });
     },
     spawn(b, e, a) { if (amount > 0) a.refresh(b, e, a); },
-    hitIn(c, b, e, a) {
-      if (!(a.left > 0)) return;
-      a.left -= absorbArts(c, a.left);
-      if (a.left > 1e-6) return;
-      a.left = 0;
-      b.fx('shieldBreak', { x: e.x, y: e.y, id: e.id });
-      // the bonus it grants ends once the overflow of the breaking hit has landed (never before: an HP bonus removed
-      // first would rescale HP and make the overflow count twice)
-      if (c.dmg.cancel) b.removeBuff(e, key); else a.breaking = true;
-    },
-    taken(c, b, e, a) { if (a.breaking) { a.breaking = false; b.removeBuff(e, key); } },
   };
 }
 
@@ -575,7 +583,8 @@ function bleed(ab) {
  * her low tile: `low`); a unit inside several zones takes one tick per second (`mem.pollutedAt`: the last tick it took).
  */
 function pollution(b, src, x, y, r, life, low, high) {
-  zone(b, { x, y, r, life, iv: POLLUTION_INTERVAL, kind: 'pollution', tick(units) {
+  // the client's projectile knows its source; the zone fx carries that id so the effect binding can tell a 秽蚀轰击 pool from a death pool
+  zone(b, { x, y, r, life, iv: POLLUTION_INTERVAL, kind: 'pollution', id: src && src.id != null ? src.id : null, tick(units) {
     for (const u of units) {
       const v = u.ground ? low : high;
       if (!(v > 0) || b.time - (u.mem.pollutedAt ?? -Infinity) < POLLUTION_INTERVAL - 1e-6) continue;
@@ -602,9 +611,13 @@ function dmgZone(b, src, x, y, r, life, iv, amount, type = 'arts', kind = 'zone'
   } });
 }
 
-/** A cooldown skill ability (`id` labels it for tests / other abilities). */
-const skill = (s, fire, { cond = null, sil = false, cd = null, icd = null, id = null } = {}) => (s || cd != null) && fire ? ({
-  id: id ?? null, sil, cd: cd ?? s.cd, icd: icd ?? s.icd, cond, fire,
+/**
+ * A cooldown skill ability (`id` labels it for tests / other abilities). `turn`: the attack-turn fields of an attack-class
+ * skill (helpers.js attackSkillOf — `atk`, `clip`, `own`; DESIGN §35.52), cast in the attack's turn instead of on its own.
+ */
+const skill = (s, fire, { cond = null, sil = false, cd = null, icd = null, id = null, turn = null } = {}) => (s || cd != null) && fire ? ({
+  id: id ?? null, sil, cd: cd ?? s.cd, icd: icd ?? s.icd, cond, fire, sk: s || null,   // sk: its slot for the 'cast' event
+  ...turn,
 }) : null;
 
 /** Blink past the blocker along the path (弑君者 / 卢西恩). Returns the start position. */
@@ -615,7 +628,7 @@ export function blinkForward(b, e, dist) {
   let left = dist;
   if (R && R.pts && R.ptIdx < R.pts.length) {
     let i = R.ptIdx;
-    while (left > 1e-9 && i < R.pts.length) {
+    while (left > 1e-9 && i < R.pts.length) { // loop-cap: path points
       const p = R.pts[i];
       const d = hypot(p.x - e.x, p.y - e.y);
       if (d <= left) { e.x = p.x; e.y = p.y; left -= d; i++; } else { stepToward(e, p.x, p.y, left); left = 0; }
@@ -647,7 +660,7 @@ const kitPrisoner = (freeAll = false) => (ab) => [prisoner(ab, { freeAll })];
 
 const kitDeathSpawn = (extra = []) => (ab) => [deathSpawn(ab.tS['DeadSpawn.enemy_key'], T(ab, 'DeadSpawn.cnt') ?? 0), ...extra];
 
-const kitStun3 = (ab) => [nthAttackStatus(nthOf(ab.sk.stuncombat), 'stun', (ab.sk.stuncombat && ab.sk.stuncombat.bb.stun) || 0, true)];
+const kitStun3 = (ab) => [nthAttackStatus(nthOf(ab.sk.stuncombat), 'stun', (ab.sk.stuncombat && ab.sk.stuncombat.bb.stun) || 0, true, ab.sk.stuncombat)];
 
 const kitSelfFear = (ab) => [selfFear(ab)];
 

@@ -1,7 +1,8 @@
 // Correctness lint only (npm run lint). No formatter, no stylistic rules, no repo-wide reformat.
 //
 // Node: server, shared, tools, scripts, types.
-// Browser: public/js (also loaded under Node by unit tests, so `process` is a known global).
+// Browser: public/js (also loaded under Node by unit tests, so `process` is a known global) and the plugin studio's page,
+// public/studio.
 // Tests: Node globals plus browser globals (page.evaluate callbacks).
 // Warnings (unused vars, and a few rules that fire on intentional patterns) do not fail the run.
 // `npm run lint` does not pass --max-warnings=0.
@@ -62,8 +63,6 @@ export default [
       'public/fonts/**',
       'public/dev/**',
       '.cache/**',
-      '.claude/**',
-      'deploy/stardust/build/**',
       'coverage/**',
     ],
   },
@@ -77,7 +76,7 @@ export default [
     rules,
   },
   {
-    files: ['public/js/**/*.js'],
+    files: ['public/js/**/*.js', 'public/studio/**/*.js'],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
@@ -97,6 +96,17 @@ export default [
         { selector: "BinaryExpression[operator='**']", message: 'implementation-approximated: use powi from server/sim/detmath.js' },
         { selector: "AssignmentExpression[operator='**=']", message: 'implementation-approximated: use powi from server/sim/detmath.js' },
       ],
+    },
+  },
+  {
+    // Content callers use one public entry (server/sim/attack.js); the facade, its implementation and the Battle methods
+    // (battle/combat.js) own the deep imports. Tests may import the implementation directly.
+    files: ['server/**/*.js', 'public/js/**/*.js'],
+    ignores: ['server/sim/attack.js', 'server/sim/attack/**', 'server/sim/battle/combat.js'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [
+        { regex: '(^|/)attack/', message: 'Use public exports from attack.js; attack/ is private implementation.' },
+      ] }],
     },
   },
   {

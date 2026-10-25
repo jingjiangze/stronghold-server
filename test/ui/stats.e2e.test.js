@@ -5,6 +5,7 @@
 //    1920×1080 and a phone in landscape 844×390: the four tabs, the counting rule on screen (the match left in the first
 //    round is listed as 中途退出 / 不计入统计 and left out of the totals), the row click that re-views a settlement and
 //    its 返回统计, Esc, the title screen's entry; zero console errors. Screenshots: test/e2e/out/stats-*.png
+//    (In the lobby the page opens from the 成就统计 card's window: 查看完整统计 — the maintainer's decision of 2026-10-21.)
 // 2. The data actions: 导出 hands out a file the page itself imports again (nothing new), a corrupt file and a newer
 //    one are refused with a message and change nothing, 清空 asks first (the confirm dialog sits above the overlay and
 //    Esc closes only it), unreadable storage is set aside with a notice, a newer build's data is never overwritten.
@@ -64,7 +65,7 @@ describe('统计数据 page (real server, headless Chrome)', { skip: !ENABLED &&
   after(async () => { for (const c of clients) await c.close(); await srv?.stop(); });
 
   /** A fresh browser on `base` with `sp.pref.stats` (a string) stored before the page loads. */
-  async function open({ w = 1920, h = 1080, stored = null, entered = true, base = srv.base, lang = null } = {}) {
+  async function open({ w = 1920, h = 1080, stored = null, entered = true, base = srv.base, lang = null, nickname = 'Doctor' } = {}) {
     const c = new Client(puppeteer, base, 'stats', { prefix: 'stats', w, h });
     clients.push(c);
     c.browser = await puppeteer.launch({
@@ -76,35 +77,92 @@ describe('统计数据 page (real server, headless Chrome)', { skip: !ENABLED &&
     await c.page.setViewport({ width: w, height: h, hasTouch: w < 1000, isMobile: w < 1000 });
     c.page.on('console', (m) => { if (m.type() === 'error') c.problems.push(`console: ${m.text()}`); });
     c.page.on('pageerror', (e) => c.problems.push(`pageerror: ${e.message}`));
-    await c.page.evaluateOnNewDocument((stored, entered, lang) => {
-      localStorage.setItem('sp.name', 'Doctor');
+    await c.page.evaluateOnNewDocument((stored, entered, lang, nickname) => {
+      if (nickname !== null) localStorage.setItem('sp.name', nickname);
       if (entered) sessionStorage.setItem('sp.entered', '1');
       if (lang) localStorage.setItem('sp.pref.lang', JSON.stringify(lang));
       if (stored != null && !sessionStorage.getItem('sp.e2e.seeded')) { localStorage.setItem('sp.pref.stats', stored); sessionStorage.setItem('sp.e2e.seeded', '1'); }
-    }, stored, entered, lang);
+    }, stored, entered, lang, nickname);
     await c.page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
     await c.page.waitForFunction((needOnline) => (!needOnline || globalThis.__SP__?.store.get().connection.status === 'online') && !!document.querySelector('.screen'), { timeout: 30000 }, entered);
     return c;
   }
   const texts = (c, sel) => c.page.$$eval(sel, (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
   const stored = (c) => c.page.evaluate(() => { const r = localStorage.getItem('sp.pref.stats'); return r ? JSON.parse(r) : null; });
-  const openStats = async (c, from = '.lobby-screen .topbar__right .btn') => {
-    await c.click(from, '统计');
+  /** 统计数据: in the lobby through the 成就统计 card → its window → 查看完整统计; else the given entry (统计). */
+  const openStats = async (c, from = null) => {
+    if (from) await c.click(from, '统计');
+    else {
+      await c.click('.lobby-screen .hub-ach, .lobby-screen .hub-plate--ach'); // the plate on a short phone screen
+      await c.click('.modal__box.achv .achv__more', '查看完整统计');
+    }
     await c.page.waitForSelector('.st .st-tab', { visible: true, timeout: 15000 });
   };
   const toast = (c) => c.page.waitForFunction(() => document.querySelector('.toast')?.textContent || false, { timeout: 8000 }).then((h) => h.jsonValue());
   const noProblems = (c) => assert.deepEqual(c.problems, [], 'no console errors / failed requests');
+
+  test('current nickname follows the active session rather than saved history', async () => {
+    const env = seed(1);
+    for (const rec of env.records) rec.players.find((p) => p.playerId === rec.selfId).name = 'ArchiveID';
+    const c = await open({ stored: JSON.stringify(env), entered: false });
+    await c.page.$eval('.title-login input', (input) => {
+      input.value = 'ActiveID';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await c.click('.title-login .btn--primary', '开始');
+    await c.page.waitForFunction(() => globalThis.__SP__?.store.get().connection.status === 'online');
+    assert.deepEqual(await c.page.evaluate(() => ({
+      current: globalThis.__SP__.store.get().me.name, saved: localStorage.getItem('sp.name'),
+    })), { current: 'ActiveID', saved: 'ActiveID' }, 'entering a new ID updates the session and saved identity');
+    await openStats(c);
+    await c.page.waitForFunction(() => document.querySelector('.st-profile__name')?.textContent.trim() === 'Dr. ActiveID');
+    await c.page.evaluate(() => {
+      localStorage.setItem('sp.name', 'StaleID');
+      globalThis.__SP__.store.patch('me', { name: 'LiveID' });
+    });
+    await c.page.waitForFunction(() => document.querySelector('.st-profile__name')?.textContent.trim() === 'Dr. LiveID');
+    await c.page.evaluate(() => globalThis.__SP__.store.patch('me', { name: '' }));
+    await c.page.waitForFunction(() => document.querySelector('.st-profile__name')?.textContent.trim() === 'Dr. 未知');
+    noProblems(c);
+  });
+
+  test('import restores and saves an unknown ID while preserving an already selected ID', async () => {
+    const env = seed(1);
+    for (const rec of env.records) rec.players.find((p) => p.playerId === rec.selfId).name = 'ArchiveID';
+    const dir = mkdtempSync(path.join(tmpdir(), 'sp-stats-name-'));
+    const file = path.join(dir, 'stats.json');
+    writeFileSync(file, JSON.stringify(env));
+    for (const nickname of [null, 'SessionID']) {
+      const c = await open({ entered: false, nickname });
+      await openStats(c, '.title-corner .btn');
+      await c.page.waitForSelector('.st-empty'); // no records yet: the empty page, no profile until the import
+      const input = await c.page.$('.st input[type="file"]');
+      await input.uploadFile(file);
+      const expected = nickname || 'ArchiveID';
+      await c.page.waitForFunction((name) => document.querySelector('.st-profile__name')?.textContent.trim() === `Dr. ${name}`, {}, expected);
+      await toast(c);
+      assert.deepEqual(await c.page.evaluate(() => ({
+        current: globalThis.__SP__.store.get().me.name, saved: localStorage.getItem('sp.name'),
+      })), { current: expected, saved: expected });
+      await c.page.keyboard.press('Escape');
+      await c.page.waitForFunction((name) => document.querySelector('.title-login input')?.value === name, {}, expected);
+      assert.ok(await c.exists('.title-screen'), 'importing history does not start a session');
+      noProblems(c);
+      await c.close();
+    }
+  });
 
   test('desktop: tabs, the counting rule on screen, a settlement re-viewed, Esc, the title entry', async () => {
     const env = seed();
     const c = await open({ stored: JSON.stringify(env) });
     await c.page.waitForSelector('.lobby-screen');
     await openStats(c);
-    // 总览: 24 settled + the quit after 6 rounds count, the first-round one does not
-    const cards = await texts(c, '.st-card__num');
+    // 总览: 24 settled + the quit after 6 rounds count, the first-round one does not (the tabs show before the page's data
+    // is loaded: wait for the cards)
+    await c.page.waitForSelector('.st-sec > .st-cards .st-card__num', { timeout: 15000 });
+    const cards = await texts(c, '.st-sec > .st-cards .st-card__num');
     assert.equal(cards[0], '25', 'games');
-    assert.match(await c.page.$eval('.st-rule', (e) => e.textContent), /另有 1 局未计入统计/);
-    assert.equal(await c.page.$$eval('.st-title', (els) => els.length), 6, 'the six 评语');
+    assert.match(await c.page.$$eval('.st-rule', (els) => els.map((e) => e.textContent).join(' ')), /另有 1 局未计入统计/);
     await c.page.screenshot({ path: path.join(OUT, 'stats-overview-desktop.png') });
     // 策略 / 战斗累计
     await c.click('.st-tab[data-tab="bands"]');
@@ -176,12 +234,15 @@ describe('统计数据 page (real server, headless Chrome)', { skip: !ENABLED &&
     await c.page.waitForSelector('.lobby-screen');
     await openStats(c);
     // 导出: capture the blob the page hands to the browser
+    // (the Blob itself: the site's CSP, 0.3.0, allows fetch only to 'self', not to a blob: URL)
     await c.page.evaluate(() => {
+      const create = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (blob) => { globalThis.__blob = blob; return create(blob); };
       HTMLAnchorElement.prototype.click = function click() { globalThis.__dl = { name: this.download, href: this.href }; };
     });
     await c.click('[data-testid="stats-export"]');
     await c.page.waitForFunction(() => !!globalThis.__dl, { timeout: 5000 });
-    const exported = await c.page.evaluate(async () => { const r = await fetch(globalThis.__dl.href); return { name: globalThis.__dl.name, text: await r.text() }; });
+    const exported = await c.page.evaluate(async () => ({ name: globalThis.__dl.name, text: await globalThis.__blob.text() }));
     assert.match(exported.name, /^stronghold-stats-\d{8}-\d{4}\.json$/);
     const payload = JSON.parse(exported.text);
     assert.equal(payload.kind, 'local-stats');
@@ -242,7 +303,8 @@ describe('统计数据 page (real server, headless Chrome)', { skip: !ENABLED &&
     const n = await open({ stored: newer });
     await n.page.waitForSelector('.lobby-screen');
     await openStats(n);
-    assert.match(await n.page.$eval('.st-body', (e) => e.textContent), /更新版本的统计数据/);
+    // the page shows 加载中 until its game data is in (the hub's art loads beside it)
+    await n.page.waitForFunction(() => /更新版本的统计数据/.test(document.querySelector('.st-body')?.textContent || ''), { timeout: 15000 });
     assert.ok(await n.page.$eval('[data-testid="stats-clear"]', (b) => b.disabled), 'no 清空 over data this build cannot read');
     assert.equal(await n.page.evaluate(() => localStorage.getItem('sp.pref.stats')), newer);
     noProblems(n);
@@ -305,10 +367,12 @@ describe('统计数据: the real flows (a fast real server, headless Chrome)', {
       assert.equal(env.records[0].players[0].roundsPassed, 1, 'one round cleared — the server\'s own count for a quit in round 2');
       assert.ok(env.records[0].players[0].bandId, 'its strategy');
       // the page: one game counted, one left out, both in the history
-      await c.click('.lobby-screen .topbar__right .btn', '统计');
+      // 统计数据 from the lobby: the 成就统计 card → its window → 查看完整统计
+      await c.click('.lobby-screen .hub-ach');
+      await c.click('.modal__box.achv .achv__more', '查看完整统计');
       await c.page.waitForSelector('.st .st-card', { visible: true });
-      assert.equal((await c.page.$$eval('.st-card__num', (els) => els.map((e) => e.textContent)))[0], '1');
-      assert.match(await c.page.$eval('.st-rule', (e) => e.textContent), /另有 1 局未计入统计/);
+      assert.equal((await c.page.$$eval('.st-sec > .st-cards .st-card__num', (els) => els.map((e) => e.textContent)))[0], '1');
+      assert.match(await c.page.$$eval('.st-rule', (els) => els.map((e) => e.textContent).join(' ')), /另有 1 局未计入统计/);
       await c.click('.st-tab[data-tab="history"]');
       const rows = await c.page.$$eval('.st-table--history tbody tr', (trs) => trs.map((tr) => tr.innerText.replace(/\s+/g, ' ').trim()));
       assert.equal(rows.length, 2);

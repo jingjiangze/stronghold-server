@@ -8,8 +8,8 @@
 //     remainder is dropped so a stalled server never spirals.
 //   * instant (VirtualScheduler default): every field is stepped to completion synchronously.
 //   * a solo pause (Match.paused, g.pause) skips the intervals: the field clock stands still (HeadlessPacer too).
-// Every SNAP_EVERY (3) ticks of a field its events are drained; watchers get `b.ev`, then `b.snap` when due. Lower
-// snapshot rates do not change event boundaries/gt (`emit: false` skips streaming under client-side combat).
+// Every SNAP_EVERY (3) ticks of a field its events are drained; watchers of that field get `b.ev` then `b.snap`, both
+// carrying the field's game time `gt` (`emit: false` skips the streaming: server-run fields under client-side combat).
 // Per-field isolation: an exception from step() force-ends that field as a timeout (and, if even that throws, the
 // field is closed with a synthetic result). A hard cap (HARD_CAP_SECONDS of game time) force-ends anything left.
 // Results that did not come from a finished battle carry `synthetic: true` (the match never charges LP for them).
@@ -28,43 +28,20 @@
 //   specBounds(spec, gd) / validateClientResult(spec, result, { gd })
 //                                          a client's b.result is accepted only when it is plausible for its spec;
 //                                          the returned result is rebuilt from whitelisted fields (never the raw object)
-//   uniteBillBounds(spawns, gd)            联防: per leaker, the most survivors settlement can bill (sent in + the
-//                                          offspring bound) — the live counter's clamp
+//   uniteBillBounds(spawns, gd)            联防: per leaker, the live ×N clamp — what the escaped wave sent in
+//                                          (keySourceCounts only; settlement bills that same set)
 //   syntheticResult(players, progress)     stand-in when a boss field's client never reported
 import { TICK, SNAPSHOT_EVERY } from '../sim/constants.js';
 import { layerGainRoom } from '../../shared/constants.js';
 import { uniteLeft } from '../sim/spec.js';
-import { diyTokenOwner } from '../../shared/diy.js';
+import { diyTokenOwner, diyRecordOf } from '../../shared/diy.js';
+import { requiresTraitLayerAuthority } from './operatorTraits.js';
 
 export const MAX_TICKS_PER_INTERVAL = 8;
 export const INTERVAL_MS = 1000 / 30;
 export const GAME_SPEED = 2;
 export const HARD_CAP_SECONDS = 3700;
 const SNAP_EVERY = Number.isInteger(SNAPSHOT_EVERY) && SNAPSHOT_EVERY > 0 ? SNAPSHOT_EVERY : 3;
-
-/** Periodic snapshots only; events and simulation keep their original cadence. */
-export function parseSnapshotHz(value) {
-  if (value == null || value === '') return 20;
-  if (typeof value === 'string' ? !['5', '10', '20'].includes(value) : ![5, 10, 20].includes(value)) {
-    throw new RangeError('SP_SNAPSHOT_HZ must be 20, 10 or 5');
-  }
-  return Number(value);
-}
-
-/** Committed cumulative gains only; never builds a result or depends on watched/drained events. */
-export function battleLayerGains(battle) {
-  const out = {};
-  if (battle?.kind !== 'normal' || battle.flags?.layerGainsEnabled === false) return out;
-  for (const [pid, stats] of Object.entries(battle._perPlayer || {})) {
-    if (stats.layerGains && Object.keys(stats.layerGains).length) out[pid] = { ...stats.layerGains };
-  }
-  return out;
-}
-
-export function eventFrame(fieldId, battle, events) {
-  const time = Number(battle.time);
-  return { t: 'b.ev', fieldId, gt: Number.isFinite(time) ? Math.round(time * 1000) / 1000 : 0, ev: events };
-}
 
 /** Catch-up cap per pacing interval: 8 ticks at the normal 2× speed, proportionally more when sped up. */
 export function maxTicksPerInterval(speed) {
@@ -77,8 +54,7 @@ export function maxTicksPerInterval(speed) {
  */
 export function snapFrame(fieldId, snap) {
   const { t: gt, ...rest } = snap || {};
-  // Ingress classifies the leading type for compression and snapshot backpressure.
-  return { t: 'b.snap', ...rest, fieldId, gt: typeof gt === 'number' && Number.isFinite(gt) ? gt : 0 };
+  return { ...rest, t: 'b.snap', fieldId, gt: typeof gt === 'number' && Number.isFinite(gt) ? gt : 0 };
 }
 
 /** Synthetic per-player result used when a field could not run at all (never punishes the player). */
@@ -105,9 +81,7 @@ export class DeadBattle {
   step() {}
   forceEnd() {}
   result() { return this._result; }
-  snapshot({ includeUnitStats = false } = {}) {
-    return { fieldId: this.fieldId, t: 0, units: [], ...(includeUnitStats ? { unitStats: [] } : {}), dp: 0, killed: 0, total: 0, resolved: 0 };
-  }
+  snapshot() { return { fieldId: this.fieldId, t: 0, units: [], dp: 0, killed: 0, total: 0, resolved: 0 }; }
   drainEvents() { return []; }
   fieldMeta() { return { fieldId: this.fieldId, kind: this.kind, rect: this.rect, stageId: this.stageId, units: [] }; }
   on() { return null; }
@@ -124,11 +98,6 @@ export class FieldRunner {
     this.m = m;
     this.fields = fields;
     this.emit = emit !== false;
-    const hz = parseSnapshotHz(m.snapshotHz);
-    const speed = Number.isFinite(m.gameSpeed) && m.gameSpeed > 0 ? m.gameSpeed : GAME_SPEED;
-    // Default20 preserves legacy/tool pacing; lower rates sample only at existing event boundaries.
-    this.snapshotEvery = hz === 20 ? SNAP_EVERY : Math.max(SNAP_EVERY, Math.ceil(speed / (TICK * hz * SNAP_EVERY)) * SNAP_EVERY);
-    this.snapshotAt = new Map();
     for (const f of fields) f.live = !f.battle.finished;
     this.onTick = onTick;
     this.onDone = onDone;
@@ -162,7 +131,7 @@ export class FieldRunner {
 
   _runInstant() {
     const cap = Math.ceil(HARD_CAP_SECONDS / TICK);
-    while (!this.stopped && !this.done && this.ticks < cap) {
+    while (!this.stopped && !this.done && this.ticks < cap) { // loop-cap: tick cap
       this._tick();
       if (this.fields.every((f) => !f.live)) break;
     }
@@ -202,7 +171,6 @@ export class FieldRunner {
         this._forceField(f, 'timeout');
       }
       if (b.finished) { f.live = false; this.m.markPublic(); }
-      if (this.ticks === 1) this._emitStart(f);
       if (this.ticks % SNAP_EVERY === 0 || !f.live) this._emit(f);
     }
     if (this.onTick) {
@@ -233,37 +201,17 @@ export class FieldRunner {
 
   forceAll(reason = 'forced') { this._forceAll(reason); this._checkDone(); }
 
-  _snapshotDue(f) {
-    if (!f.live || this.snapshotEvery === SNAP_EVERY) return true;
-    const last = this.snapshotAt.get(f.fieldId);
-    if (last != null && this.ticks - last < this.snapshotEvery) return false;
-    this.snapshotAt.set(f.fieldId, this.ticks);
-    return true;
-  }
-
-  _emitStart(f) {
-    if (!this.emit || !Array.isArray(f.battle._startUnitStats)) return;
-    try {
-      const meta = f.battle.fieldMeta({ includeUnitStats: true });
-      if (!Array.isArray(meta.unitStats)) return;
-      const msg = { t: 'm.field', ...meta, fieldId: f.fieldId, kind: f.kind, live: !!f.live };
-      for (const pid of this.m.watchersOf(f.fieldId)) this.m.sendTo(pid, msg);
-    } catch (e) { this.m.reportError(`field ${f.fieldId} start stats`, e); }
-  }
-
   _emit(f) {
-    this.m._syncNormalLayers?.(f, battleLayerGains(f.battle));
     let ev = [];
     try { ev = f.battle.drainEvents() || []; } catch (e) { this.m.reportError(`field ${f.fieldId} drainEvents`, e); }
     if (!this.emit) return;
     const watchers = this.m.watchersOf(f.fieldId);
     if (!watchers.length) return;
     let snapMsg = null;
-    if (this._snapshotDue(f)) {
-      try { snapMsg = snapFrame(f.fieldId, f.battle.snapshot()); } catch (e) { this.m.reportError(`field ${f.fieldId} snapshot`, e); }
-    }
-    const evMsg = ev.length ? eventFrame(f.fieldId, f.battle, ev) : null;
-    if (evMsg && snapMsg) evMsg.gt = snapMsg.gt;
+    try { snapMsg = snapFrame(f.fieldId, f.battle.snapshot()); } catch (e) { this.m.reportError(`field ${f.fieldId} snapshot`, e); }
+    const time = Number(f.battle.time);
+    const gt = snapMsg ? snapMsg.gt : Number.isFinite(time) ? time : 0;
+    const evMsg = ev.length ? { t: 'b.ev', fieldId: f.fieldId, gt, ev } : null;
     for (const pid of watchers) {
       if (evMsg) this.m.sendTo(pid, evMsg);
       if (snapMsg) this.m.sendTo(pid, snapMsg);
@@ -353,19 +301,22 @@ export class HeadlessJob {
     this._out = null;
   }
 
-  run(budgetMs = Infinity, now = perfNow) {
+  run(budgetMs = Infinity, now = perfNow, control = null) {
     if (this.done) return true;
-    const timed = Number.isFinite(budgetMs);
+    // `control` is a test-match slice (server/match/testTrace.js testSlice). Replay ignores the wall clock.
+    const replaying = !!(control && control.replaying);
+    const timed = !replaying && Number.isFinite(budgetMs);
     const t0 = timed ? now() : 0;
     let b = this.battle;
     try {
       let k = 0;
-      while (!b.finished && this.n < this.cap) {
+      while (!b.finished && this.n < this.cap) { // loop-cap: step cap
         b.step();
         this.n++;
         k++;
+        if (control) control.note(1);
         if (this.n % this.every === 0) this.timeline.push(timelineSample(b));
-        if (timed && (k & 15) === 0 && !b.finished && now() - t0 >= budgetMs) return false;
+        if ((k & 15) === 0 && !b.finished && (replaying ? control.stop() : timed && now() - t0 >= budgetMs)) return false;
       }
       if (!b.finished) b.forceEnd('timeout');
     } catch (e) {
@@ -409,7 +360,7 @@ export function timelineAt(timeline, gt) {
   if (!Array.isArray(timeline) || !timeline.length) return [0, 0, 0, null];
   let lo = 0, hi = timeline.length - 1;
   if (gt >= timeline[hi][0]) return timeline[hi];
-  while (lo < hi) {
+  while (lo < hi) { // loop-cap: binary search
     const mid = (lo + hi + 1) >> 1;
     if (timeline[mid][0] <= gt) lo = mid; else hi = mid - 1;
   }
@@ -464,7 +415,7 @@ export class HeadlessPacer {
     const b = entry.battle;
     let k = 0;
     try {
-      while (!b.finished && b.tickCount < cap && k < max) { b.step(); k++; }
+      while (!b.finished && b.tickCount < cap && k < max) { b.step(); k++; } // loop-cap: tick cap
     } catch (e) {
       this.m.reportError('pacer skip', e);
       try { b.forceEnd('timeout'); } catch { /* ignore */ }
@@ -711,8 +662,8 @@ export function specBounds(spec, gd = null) {
   for (const k of keyCounts.keys()) for (const d of derivedKeys(gd, k)) derived.add(d);
   const maxTotal = spawnCount * 4 + 100;
   // 联防: `${childKey}|${sourcePlayerId}` → how many content-spawned children the enemies that leaker sent in can leave
-  // (offspringPerParent per parent; maxTotal when the data gives no bound) — a survivor of a split / summon is billed
-  // only to a leaker whose own enemies can have produced it
+  // (offspringPerParent per parent; maxTotal when the data gives no bound) — a reported child must belong to a leaker
+  // whose own enemies can have produced it, including a child marked `uniteRuntime` (which is not billed)
   const derivedSourceCounts = new Map();
   for (const s of Array.isArray(spec && spec.spawns) ? spec.spawns : []) {
     if (!s || typeof s.enemyKey !== 'string' || typeof s.sourcePlayerId !== 'string') continue;
@@ -732,6 +683,7 @@ export function specBounds(spec, gd = null) {
     if (!p || typeof p.playerId !== 'string') continue;
     const chess = new Map();
     const all = new Map();
+    const names = new Map();
     // unit types this player can field: its board's chess / tokens, their summons, and the ownerless summons of
     // bonds / bands (炎佑, 预备干员) — the only names a statistic of a unit created in battle (no board uid) may carry
     const defIds = new Set(gd ? ownerlessSummons(gd) : []);
@@ -739,6 +691,11 @@ export function specBounds(spec, gd = null) {
       if (!u || !Number.isInteger(u.uid)) continue;
       const defId = u.kind === 'token' ? u.tokenId : u.chessId;
       all.set(u.uid, defId);
+      if (gd) {
+        const base = gd.chess?.(defId) || gd.token?.(defId);
+        const rec = u.standIn === true ? gd.standIn?.(defId) : u.diy && base?.isDiy ? diyRecordOf(base, u.diy, gd.raw) : base;
+        if (typeof rec?.name === 'string') names.set(u.uid, rec.name);
+      }
       if (typeof defId === 'string') defIds.add(defId);
       if (u.kind !== 'token') {
         chess.set(u.uid, defId);
@@ -752,7 +709,8 @@ export function specBounds(spec, gd = null) {
       const v = Number(b && b.layers);
       if (Number.isFinite(v) && v > 0) startLayers.set(id, v);
     }
-    players.set(p.playerId, { chess, all, defIds, bonds: gd ? layerBondsOf(p, gd) : null, startLayers, layerAllow: gd ? layerAllowanceOf(p, gd) : new Map() });
+    const bonds = gd ? layerBondsOf(p, gd) : null, layerAllow = gd ? layerAllowanceOf(p, gd) : new Map();
+    players.set(p.playerId, { chess, all, names, defIds, bonds, startLayers, layerAllow });
   }
   const round = Number(spec && spec.round) || 0;
   return {
@@ -765,16 +723,16 @@ export function specBounds(spec, gd = null) {
 }
 
 /**
- * 联防: the most enemies settlement can bill each leaker — what it sent in plus what those enemies can leave behind
- * (splits / summons within offspringPerParent, maxTotal without a data bound): validateClientResult's (key, leaker)
- * budgets summed per leaker. Bounds the live counter (Match._uniteLeft; user playtest #6 item 7).
+ * 联防: the live ×N clamp — how many of a leaker's enemies the escaped wave sent in (`keySourceCounts` only).
+ * Settlement bills that same set (`uniteSurvivors` skips `uniteRuntime` children; player report 2026-10-16, PR #675),
+ * so the counter must not use the wider sent + offspring ceiling. Match._uniteLeft (user playtest #6 item 7).
  * @param {object[]} spawns the 联防 spawns (unite.js plan.leaked: { enemyKey, sourcePlayerId, … })
  * @returns {Map<string, number>} leaker id → bound
  */
 export function uniteBillBounds(spawns, gd = null) {
   const B = specBounds({ spawns: Array.isArray(spawns) ? spawns : [] }, gd);
   const out = new Map();
-  for (const [ks, n] of [...B.keySourceCounts, ...B.derivedSourceCounts]) {
+  for (const [ks, n] of B.keySourceCounts) {
     const pid = ks.slice(ks.lastIndexOf('|') + 1);
     if (pid) out.set(pid, (out.get(pid) || 0) + n);
   }
@@ -799,7 +757,9 @@ const sameMods = (a, b) => {
  * spawn are bounded by the total) — boss fields excepted (their leaks cost team LP through b.progress); a leak is
  * `counted: false` only for enemies that never count (data notCountInTotal, countInTotal false, boss / part entries,
  * content spawns); 联防: leaks + never-spawned re-entries per (enemy, leaker) ≤ what that leaker sent in, and a split /
- * summon only on a leaker who sent in its parent, ≤ the parents' data offspring count (offspringPerParent); per-bond layer
+ * summon only on a leaker who sent in its parent, ≤ the parents' data offspring count (offspringPerParent); a leak
+ * marked `uniteRuntime` is accepted only through that offspring budget (never the scheduled count budget) and the flag is
+ * stored only then, and only on a 联防 spec; per-bond layer
  * gains ≤ 60 + 4·round + what the player's layer 特质 can add to that bond (layerAllowanceOf: their per-battle caps, no
  * flat bound when one is uncapped) and ≤ the room left under BOND_LAYER_CAP (999) from the bond's starting layers, only
  * on bonds the player's lineup / band / effects / items name, none when the spec disables gains; coins ≤ the spawns' bounty coins;
@@ -815,6 +775,7 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
   const bad = (reason) => ({ ok: false, reason });
   try {
     if (!spec || !raw || typeof raw !== 'object' || !raw.perPlayer || typeof raw.perPlayer !== 'object') return bad('shape');
+    if (requiresTraitLayerAuthority(spec, gd)) return bad('trait layers require server authority');
     const B = specBounds(spec, gd);
     const bossLike = spec.kind === 'boss' || spec.kind === 'hidden';
     if (!['cleared', 'timeout', 'forced'].includes(raw.reason)) return bad('reason');
@@ -847,6 +808,7 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
       const p = raw.perPlayer[pid];
       if (!p || typeof p !== 'object') return bad('player');
       const own = B.players.get(pid);
+      if (p.creditedKills !== undefined && (!Number.isInteger(p.creditedKills) || p.creditedKills < 0 || p.creditedKills > 1e9)) return bad('kill credit');
       // `killed` counts every counted knock-out — a runtime split child / summon too — while `total` counts only the
       // enemies the round scheduled, so `killed ≤ total` no longer holds (PR #157 capsule semantics): bound it by
       // maxTotal (the spec's content-spawn allowance) instead, exactly like `total`
@@ -877,14 +839,26 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
         const modsOf = (s) => (s && s.mods ? { ...s.mods } : null);
         const mods = match ? modsOf(match) : parent ? modsOf(parent) : modsOf(src);
         let sourcePlayerId = typeof l.sourcePlayerId === 'string' ? l.sourcePlayerId : null;
+        // set only after a 联防 `uniteRuntime` leak spends the offspring budget below — never copied off another field
+        let keepRuntime = false;
         if (spec.kind === 'unite') {
           if (!sourcePlayerId || !B.sources.has(sourcePlayerId)) sourcePlayerId = src && typeof src.sourcePlayerId === 'string' ? src.sourcePlayerId : null;
-          // whose LP a surviving enemy costs: never more of (key, leaker) than that leaker sent into the 联防 — or, for a
-          // split / summon, than the enemies that leaker sent in can leave behind
-          if (!takeSource(key, sourcePlayerId) && !takeDerived(key, sourcePlayerId)) return bad('leak source');
+          // whose LP a surviving enemy costs. An unflagged leak spends the wave that leaker sent in, then the offspring
+          // those enemies' data allow (official enemy_database talentBlackboard: DeadSpawn.enemy_key / .cnt).
+          // `uniteRuntime` exempts a runtime child from LP (player report 2026-10-16, PR #675). It must spend only
+          // `takeDerived`: copying the flag after `takeSource` let every scheduled body pay 0 LP. Refuse an impossible
+          // flag so the server re-simulates even with SP_VERIFY=off. Residual [ASSUMED]: this budget cannot prove origin;
+          // a key that is both a scheduled body and another enemy's child (27 such keys in the current tables) can
+          // still be flagged within that offspring cap;
+          // only SP_VERIFY=all closes it.
+          if (l.uniteRuntime === true) {
+            if (!takeDerived(key, sourcePlayerId)) return bad('unite runtime');
+            keepRuntime = true;
+          } else if (!takeSource(key, sourcePlayerId) && !takeDerived(key, sourcePlayerId)) return bad('leak source');
         } else if (sourcePlayerId !== pid && !B.players.has(sourcePlayerId)) sourcePlayerId = pid;
         const lpr = finiteIn(l.lpr, 0, 1000) ? l.lpr : 1;
         const e = { enemyKey: key, mods, lpr, sourcePlayerId, tag: src ? (src.tag ?? null) : (typeof l.tag === 'string' ? l.tag : null), counted, spawned: true };
+        if (keepRuntime) e.uniteRuntime = true; // stored only after the derived take succeeded, and only for a 联防 spec
         if (l.boss) e.boss = true;
         leaked.push(e);
       }
@@ -928,7 +902,7 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
         const rec = gd ? (gd.chess?.(defId) || gd.token?.(defId)) : null;
         if (gd && !rec) continue;
         unitStats.push({
-          uid: Number.isInteger(u.uid) ? u.uid : null, defId, name: rec && typeof rec.name === 'string' ? rec.name : defId, kind: u.kind === 'token' ? 'token' : 'op',
+          uid: Number.isInteger(u.uid) ? u.uid : null, defId, name: (onBoard && own.names.get(u.uid)) || (typeof rec?.name === 'string' ? rec.name : defId), kind: u.kind === 'token' ? 'token' : 'op',
           dmg: Math.max(0, Number(u.dmg) || 0), kills: Math.max(0, Math.trunc(Number(u.kills) || 0)), heal: Math.max(0, Number(u.heal) || 0),
           taken: Math.max(0, Number(u.taken) || 0), attacks: Math.max(0, Math.trunc(Number(u.attacks) || 0)),
         });
@@ -938,6 +912,7 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
         killed: p.killed, total: p.total, leaked, perfect: countedLeaks === 0, layerGains, coins,
         damageDealt: stat(p.damageDealt), bossDamage: stat(p.bossDamage), healingDone: stat(p.healingDone), deaths: Math.trunc(stat(p.deaths)),
         unitsEnd, unitStats,
+        creditedKills: Number.isInteger(p.creditedKills) ? p.creditedKills : unitStats.reduce((n, u) => n + u.kills, 0),
       };
       // the HUD capsule's numerator: kept only when the client reported one (an absent value must stay absent — the
       // teammate UI then falls back to `killed`, never to a fabricated 0); clamped to the denominator

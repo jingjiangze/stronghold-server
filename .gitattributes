@@ -8,10 +8,6 @@
 *.mjs text eol=lf
 *.js  text eol=lf
 *.py  text eol=lf
-# The edge layer's nginx config is read inside a Linux container: a CRLF checkout would hand nginx a
-# config with stray CRs. `text=auto` already normalises the *index*, but the checkout side depends on
-# the builder's autocrlf — this says it outright.
-*.conf text eol=lf
 # Text the tests read and match line by line (CSS rules, HTML, data, docs): LF everywhere, so a Windows checkout
 # (core.autocrlf=true) runs `node --test` exactly like Linux and macOS.
 *.css  text eol=lf
@@ -19,8 +15,6 @@
 *.json text eol=lf
 *.md   text eol=lf
 *.yml  text eol=lf
-# Preserve the exact bytes/hashes of upstream moderation licenses, including their original whitespace.
-deploy/stardust/auth/NAME-*-LICENSE.txt -text whitespace=-blank-at-eol
 # binary assets
 *.png binary
 *.jpg binary

@@ -348,13 +348,7 @@ describe('public/js/ui/emotes.js helpers', () => {
     assert.deepEqual(links, [{ rel: 'stylesheet', href: EMOTE_CSS_HREF }]);
     assert.equal(ensureEmoteCss(undefined), false);
     assert.ok(existsSync(path.join(ROOT, 'public', EMOTE_CSS_HREF)));
-    const index = readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
-    const href = /href="([^"]*css\/emotes\.css)"/.exec(index)?.[1];
-    assert.equal(href, '/css/emotes.css', 'stylesheet uses the single root route');
-    assert.equal(new URL(href, 'https://game.example/').pathname, '/css/emotes.css');
-    let selector;
-    assert.equal(ensureEmoteCss({ head: doc.head, querySelector: (s) => { selector = s; return {}; } }), false);
-    assert.equal(selector, 'link[rel="stylesheet"][href$="css/emotes.css"]', 'root stylesheet links are detected');
+    assert.match(readFileSync(path.join(ROOT, 'public/index.html'), 'utf8'), /href="\/css\/emotes\.css"/);
   });
 
   test('a hung emote manifest is missing when the clock fires (glyph), and a later retry replaces it', async () => {
@@ -446,8 +440,8 @@ describe('public/js/ui/emotes.js helpers', () => {
     } finally { console.warn = warn; }
   });
 
-  test('art keeps its eight-second clock while core data gets a separate bounded deadline', async () => {
-    const { createDataStore, ART_MANIFEST_TIMEOUT_MS, CORE_DATA_TIMEOUT_MS } = await import('../../public/js/data.js');
+  test('the art-manifest clock is not armed for other files; the default wait is ART_MANIFEST_TIMEOUT_MS', async () => {
+    const { createDataStore, ART_MANIFEST_TIMEOUT_MS } = await import('../../public/js/data.js');
     assert.equal(ART_MANIFEST_TIMEOUT_MS, 8000);
     const arms = [];
     let release;
@@ -468,8 +462,7 @@ describe('public/js/ui/emotes.js helpers', () => {
     try {
       const chess = store.load('chess');
       await new Promise((r) => setImmediate(r));
-      assert.equal(CORE_DATA_TIMEOUT_MS, 30000);
-      assert.deepEqual(arms, [CORE_DATA_TIMEOUT_MS], 'chess is not on the shorter emote clock');
+      assert.deepEqual(arms, [], 'chess is not on the emote clock');
       assert.equal(store.status('chess'), 'loading');
       release();
       await chess;

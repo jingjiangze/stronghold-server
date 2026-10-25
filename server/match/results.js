@@ -91,7 +91,7 @@ export function buildResult(m, outcome) {
   const gd = m.gd;
   const { victory, hiddenReached, hiddenCleared } = outcome;
   const players = [...m.players.values()].sort((a, b) => a.seat - b.seat);
-  const titles = assignTitles(gd, players, victory);
+  const titles = assignTitles(gd, players.filter(ps => !Number.isInteger(ps.aiTakeoverRound)), victory);
   const teamRounds = victory ? gd.bossRound + (hiddenCleared ? 1 : 0) : Math.max(0, Math.min(m.round, gd.bossRound) - 1);
   const rows = players.map((ps) => {
     const roundsPassed = !ps.alive && ps.eliminatedRound != null ? Math.max(0, ps.eliminatedRound - 1) : teamRounds;
@@ -104,8 +104,6 @@ export function buildResult(m, outcome) {
       // of the official mode, 2026-10-06); `standInFor` = the replaced operator's charId, like the sim's UnitInfo
       const si = typeof ps.fieldsStandIn === 'function' && ps.fieldsStandIn(piece.id) ? gd.standIn(piece.id) : null;
       if (si && si.standInFor) e.standInFor = si.standInFor;
-      const skinId = typeof ps.skinIdFor === 'function' ? ps.skinIdFor(ps.gd.chess(piece.id)) : null;
-      if (skinId) e.skinId = skinId;
       return e;
     });
     // the team's clear counts for the players still in; an eliminated / departed teammate did not pass the boss round
@@ -115,10 +113,12 @@ export function buildResult(m, outcome) {
       seat: ps.seat,
       name: ps.name,
       isBot: ps.isBot,
+      ...(Number.isInteger(ps.aiTakeoverRound) ? { aiTakeoverRound: ps.aiTakeoverRound } : {}),
       left: ps.left,
       alive: ps.alive,
       victory: cleared,
       roundsPassed,
+      creditedKills: ps.creditedKills,
       eliminatedRound: ps.eliminatedRound,
       lp: Math.max(0, ps.lp),
       bandId: ps.bandId,
@@ -130,12 +130,12 @@ export function buildResult(m, outcome) {
         bossDamage: Math.round(ps.stats.bossDamage), activatedLayers: ps.activatedLayers(), lpLost: ps.stats.lpLost,
         perfectRounds: ps.stats.perfectRounds,
       },
-      title: titles.get(ps.playerId) ?? null,
-      trophies: trophiesFor(gd, roundsPassed, cleared && hiddenCleared),
-      reward: rewardFor(gd, roundsPassed),
+      title: m.test === true || Number.isInteger(ps.aiTakeoverRound) ? null : titles.get(ps.playerId) ?? null,
+      trophies: m.test === true || Number.isInteger(ps.aiTakeoverRound) ? 0 : trophiesFor(gd, roundsPassed, cleared && hiddenCleared),
+      reward: m.test === true || Number.isInteger(ps.aiTakeoverRound) ? 0 : rewardFor(gd, roundsPassed),
     };
   });
-  return {
+  const out = {
     t: 'm.result',
     victory,
     roundsPassed: teamRounds,
@@ -147,10 +147,22 @@ export function buildResult(m, outcome) {
     modeId: m.modeId,
     difficulty: m.difficulty,
     stageId: m.stageId,
+    // a non-default official version's match (DESIGN §35.23): its registry id — the page records and draws the settlement
+    // with that version even when it never saw the room (the lobby's replay after a kick / grace timeout); absent for
+    // the default, so its result stays byte-identical
+    ...(m.version ? { version: m.version } : {}),
     bossId: m.bossId,
     hiddenBossId: m.hiddenBossId,
     seed: m.seed,
     durationMs: Math.max(0, m.sched.now() - m.startedAt),
     players: rows,
   };
+  // A test match is marked on the settlement the replay stores. The keys are absent otherwise, so a normal
+  // result stays byte-identical. Test results award nothing and are never persisted by the client.
+  if (m.test === true) {
+    out.test = true;
+    out.testActions = m.testActions | 0;
+    if (m.testReplayable === false) out.testReplayable = false;
+  }
+  return out;
 }

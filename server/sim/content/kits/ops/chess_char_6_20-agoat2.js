@@ -2,7 +2,7 @@
 // Conventions of the tier-6 kits: ../shared/tier6.js; kit contract and rules: ../README.md.
 
 import { COLS } from '../../../constants.js';
-import { num, bv, tbb, parseN, WHOLE_FIELD, bstate, aura } from '../shared/tier6.js';
+import { num, bv, tbb, textCount, WHOLE_FIELD, bstate, aura } from '../shared/tier6.js';
 
 // ------------------------------------------------------------------------------------------------------------------
 // 纯烬艾雅法拉 chess_char_6_20 (行医) — S3 火山回响; 氤氲; 火山灰疗愈
@@ -10,7 +10,7 @@ import { num, bv, tbb, parseN, WHOLE_FIELD, bstate, aura } from '../shared/tier6
 function agoat2(bb, chess, def) {
   const t0 = tbb(def, 0), t1 = tbb(def, 1), tb = def?.traitBb || {};
   const hs = num(bb['attack@heal_scale'], 1);
-  const shots = Math.max(1, parseN(def?.skill?.description, /(\d+)连发/, 1));
+  const shots = Math.max(1, textCount(def?.skill?.description, /(\d+)连发/, 1, 'burst'));
   const elemLoad = (a) => (a.elem ? a.elem.burn + a.elem.neural + a.elem.necrosis + a.elem.apoptosis + a.elem.erosion : 0);
   const skills = {
     // S1 无声润物 (toggle, heal): ATK +atk, one extra heal target, every ally of her range recovers ep_heal_ratio × ATK
@@ -41,11 +41,12 @@ function agoat2(bb, chess, def) {
         const er = num(unit.profile?.heal?.elementHealRatio, num(tb.ep_heal_ratio, 0.5));
         const allies = battle.alliesInGrid(unit);
         for (const a of allies) {
-          if (er > 0) battle.reduceElement(a, unit.s.atk * er);
+          if (er > 0) battle.healElement({ target: a, amount: unit.s.atk * er });
           if (a.hp < a.s.maxHp) battle.heal(unit, a, unit.s.atk, { skillHeal: true });
         }
         const S = bstate(battle);
-        S.agoatVeils ??= [];
+        // PRTS: recasting this source refreshes its shared pool instead of adding another shield.
+    S.agoatVeils = (S.agoatVeils ?? []).filter(v => v.src !== unit);
         S.agoatVeils.push({ keys: new Set(unit.rangeKeys || []), pool: unit.s.atk * bv(bb, 'atk_scale', 5), until: battle.time + num(bb.duration, 12), src: unit });
         battle.fx('shield', { x: unit.x, y: unit.y, id: unit.id, duration: num(bb.duration, 12) });
         if (!S.agoatVeilHook) {
@@ -64,7 +65,7 @@ function agoat2(bb, chess, def) {
               if (take >= eff - 1e-9) { d.cancel = true; return; }
               d.mul *= (eff - take) / eff;
             }
-          }, { priority: -50 });
+          }, { priority: -2000 });
         }
       },
     },
@@ -94,7 +95,7 @@ function agoat2(bb, chess, def) {
           if (ctx.attacker !== unit || !unit.skill?.active || !ctx.targets.length || ctx.targets.length >= shots) return;
           const base = ctx.targets.slice();
           const out = [];
-          for (let i = 0; i < shots; i++) out.push(base[i % base.length]);
+          for (let i = 0; i < shots; i++) out.push(base[i % base.length]); // loop-cap: textCount burst
           ctx.targets = out;
         }, { owner: unit });
       } },

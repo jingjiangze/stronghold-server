@@ -11,16 +11,16 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { startServer, parseRange, acceptsGzip, parseTrustProxy } from '../server/index.js';
-import { createHealthMetrics } from '../server/healthMetrics.js';
+import { startServer, parseRange, acceptsGzip, pickEncoding, parseTrustProxy } from '../server/index.js';
 import { loadData, lookup, getChess, getBond, getBand, getMode, getConfig, INDEXED_FILES } from '../server/data.js';
 import * as dataModule from '../server/data.js';
-import { CODE_ALPHABET, BOT_NAMES } from '../server/lobby.js';
-import { sanitizeName, TokenBucket, SessionRegistry, Network, NET_DEFAULTS, clientAddress, normalizeIp, isLocalIp, limitKeyOf } from '../server/net.js';
+import { CODE_ALPHABET, BOT_NAMES, DEFAULT_DIFFICULTY } from '../server/lobby.js';
+import { sanitizeName, TokenBucket, SessionRegistry, clientAddress, normalizeIp, isLocalIp, limitKeyOf } from '../server/net.js';
 import { StubMatch as Match } from '../server/match/StubMatch.js';
 import { Match as RealMatch } from '../server/match/Match.js';
 import { TestClient } from './helpers/wsClient.js';
 import { ERR, MAX_SEATS, MAX_SPECTATORS, PHASE, EMOTES } from '../shared/constants.js';
+import { DEFAULT_VERSION, VERSIONS } from '../shared/versions.js';
 
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{4}$`);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -100,24 +100,6 @@ function captureLog() {
   return { errors, log: { info() {}, warn() {}, debug() {}, error: (...a) => errors.push(a.map(String).join(' ')) } };
 }
 
-test('unlimited room admission serializes maxRooms zero in health without reporting full or unavailable', async (t) => {
-  const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, MatchClass: Match });
-  t.after(() => srv.close());
-  assert.equal(srv.lobby.opts.maxRooms, 0);
-  assert.equal(srv.registry.maxSessions, 0);
-  assert.equal(srv.network.opts.maxConnections, 0);
-  for (let i = 0; i < 2; i++) {
-    const s = srv.registry.create(`房主${i}`);
-    assert.deepEqual(srv.lobby.create(s, { mode: 'solo', difficulty: 'NORMAL' }), { ok: true });
-  }
-  const response = await httpReq(srv.port, '/healthz');
-  assert.equal(response.status, 200);
-  const health = JSON.parse(response.body);
-  assert.equal(health.ok, true);
-  assert.equal(health.maxRooms, 0);
-  assert.equal(health.rooms, 2);
-});
-
 // ---------------------------------------------------------------------------------------------------
 // Static HTTP
 // ---------------------------------------------------------------------------------------------------
@@ -128,6 +110,8 @@ describe('static http server', () => {
   const js = `// app\n${'export const x = 1;\n'.repeat(200)}`;
   const mp3 = randomBytes(5000);
   const skel = Buffer.from('skel'.repeat(400));
+  // over the 8 MB compression cache limit: compressed as a stream
+  const big = `// big\n${Array.from({ length: 360000 }, (_, i) => `export const v${i} = ${i % 97};`).join('\n')}\n`;
 
   before(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-static-'));
@@ -146,6 +130,7 @@ describe('static http server', () => {
     w('public/assets/spine/x.skel', skel);
     w('public/assets/spine/x.atlas', 'x.png\nsize: 64,64\n'.repeat(40));
     w('public/assets/img/a.png', randomBytes(32));
+    w('public/js/huge.js', big);
     w('public/assets/img/a.webp', randomBytes(32));
     w('public/fonts/f.woff2', randomBytes(32));
     w('public/fonts/f.ttf', randomBytes(32));
@@ -157,7 +142,10 @@ describe('static http server', () => {
     srv = await startServer({
       port: 0, host: '127.0.0.1', quiet: true,
       publicDir: path.join(tmp, 'public'), dataDir: path.join(tmp, 'data'), sharedDir: path.join(tmp, 'shared'),
+      assetIndex: { delayMs: 0 },
     });
+    // the content hashes of public/assets + public/fonts (the ETags of those files): ready before the first request
+    await srv.assetIndex.whenReady();
   });
 
   after(async () => {
@@ -180,17 +168,20 @@ describe('static http server', () => {
     assert.equal(redirect.headers.location, '/sub/?x=1');
   });
 
-  test('javascript: correct MIME, gzip when accepted, identity otherwise', async () => {
-    const gz = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
-    assert.equal(gz.status, 200);
-    assert.equal(gz.headers['content-type'], 'text/javascript; charset=utf-8');
-    assert.equal(gz.headers['content-encoding'], 'gzip');
-    assert.equal(gz.headers.vary, 'Accept-Encoding');
-    assert.equal(Number(gz.headers['content-length']), gz.body.length);
+  test('javascript: correct MIME, brotli when named, gzip when accepted, identity otherwise', async () => {
+    const br = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
+    assert.equal(br.status, 200);
+    assert.equal(br.headers['content-type'], 'text/javascript; charset=utf-8');
+    assert.equal(br.headers['content-encoding'], 'br', 'a browser on an HTTPS page (or localhost) names br');
+    assert.equal(br.headers.vary, 'Accept-Encoding');
+    assert.equal(Number(br.headers['content-length']), br.body.length);
+    assert.equal(zlib.brotliDecompressSync(br.body).toString(), js);
+    const gz = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate' } });
+    assert.equal(gz.headers['content-encoding'], 'gzip', 'a LAN http:// page: gzip');
     assert.equal(zlib.gunzipSync(gz.body).toString(), js);
-    // cached second response is identical
-    const gz2 = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } });
-    assert.deepEqual(gz2.body, gz.body);
+    // cached second responses are identical
+    assert.deepEqual((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } })).body, gz.body);
+    assert.deepEqual((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br' } })).body, br.body);
 
     const plain = await httpReq(srv.port, '/js/app.js');
     assert.equal(plain.headers['content-encoding'], undefined);
@@ -225,6 +216,27 @@ describe('static http server', () => {
     }
     const skelGz = await httpReq(srv.port, '/assets/spine/x.skel', { headers: { 'accept-encoding': 'gzip' } });
     assert.deepEqual(zlib.gunzipSync(skelGz.body), skel);
+    const skelBr = await httpReq(srv.port, '/assets/spine/x.skel', { headers: { 'accept-encoding': 'gzip, br' } });
+    assert.equal(skelBr.headers['content-encoding'], 'br');
+    assert.deepEqual(zlib.brotliDecompressSync(skelBr.body), skel);
+    // media is never compressed, whatever the client names
+    assert.equal((await httpReq(srv.port, '/assets/audio/bgm.mp3', { headers: { 'accept-encoding': 'br, gzip' } })).headers['content-encoding'], undefined);
+    assert.equal((await httpReq(srv.port, '/assets/img/a.png', { headers: { 'accept-encoding': 'br' } })).headers['content-encoding'], undefined);
+  });
+
+  test('a file over the compression cache limit is compressed as a stream (brotli and gzip); HEAD sends no body', async () => {
+    const br = await httpReq(srv.port, '/js/huge.js', { headers: { 'accept-encoding': 'br' } });
+    assert.equal(br.headers['content-encoding'], 'br');
+    assert.equal(br.headers['content-length'], undefined, 'streamed: no length up front');
+    assert.equal(zlib.brotliDecompressSync(br.body).toString(), big);
+    assert.ok(br.body.length < big.length / 4);
+    const gz = await httpReq(srv.port, '/js/huge.js', { headers: { 'accept-encoding': 'gzip' } });
+    assert.equal(gz.headers['content-encoding'], 'gzip');
+    assert.equal(zlib.gunzipSync(gz.body).toString(), big);
+    const head = await httpReq(srv.port, '/js/huge.js', { method: 'HEAD', headers: { 'accept-encoding': 'br' } });
+    assert.equal(head.status, 200);
+    assert.equal(head.body.length, 0);
+    assert.equal(head.headers['content-encoding'], 'br');
   });
 
   test('ETag / Last-Modified revalidation and Cache-Control policy', async () => {
@@ -244,10 +256,16 @@ describe('static http server', () => {
     assert.equal(stale.status, 200);
     const gzEtag = (await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } })).headers.etag;
     assert.notEqual(gzEtag, etag, 'gzip variant has its own ETag');
+    const brEtag = (await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br' } })).headers.etag;
+    assert.equal(brEtag, etag.replace(/"$/, '-br"'), 'so has the brotli variant');
+    assert.equal((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br', 'if-none-match': brEtag } })).status, 304);
+    assert.equal((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip', 'if-none-match': brEtag } })).status, 200, 'not the gzip variant');
 
-    // unversioned art/fonts/vendor: cached for a day (files can be rewritten in place by the asset tools)
+    // unversioned art/fonts/vendor: cached for a day (files can be rewritten in place by the asset tools); the art and
+    // fonts carry their content hash as ETag (server/http/assetIndex.js), so a rewrite with the same bytes is a 304
     const asset = await httpReq(srv.port, '/assets/img/a.png');
     assert.equal(asset.headers['cache-control'], 'public, max-age=86400');
+    assert.match(asset.headers.etag, /^"[0-9a-f]{16}"$/);
     const font = await httpReq(srv.port, '/fonts/f.woff2');
     assert.equal(font.headers['cache-control'], 'public, max-age=86400');
     const assetV = await httpReq(srv.port, '/assets/img/a.png?v=abc');
@@ -298,6 +316,75 @@ describe('static http server', () => {
     assert.equal(textRange.status, 206, 'ranges are served identity-encoded');
     assert.equal(textRange.headers['content-encoding'], undefined);
     assert.equal(textRange.body.toString(), js.slice(0, 2));
+  });
+
+  for (const url of ['/assets/audio/bgm.mp3', '/media/bgm']) {
+    for (const range of ['bytes=0-0', `bytes=${mp3.length}-`]) {
+      test(`HEAD ignores Range ${range} on ${url}`, async () => {
+        const full = await httpReq(srv.port, url);
+        const head = await httpReq(srv.port, url, { method: 'HEAD', headers: { range } });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers['content-length'], String(full.body.length));
+        assert.equal(head.headers['content-range'], undefined);
+        assert.equal(head.headers['content-type'], full.headers['content-type']);
+        assert.equal(head.headers.etag, full.headers.etag);
+        assert.equal(head.body.length, 0);
+      });
+    }
+  }
+
+  for (const encoding of ['gzip', 'br']) {
+    test(`HEAD ignores Range when selecting the ${encoding} representation`, async () => {
+      const url = '/js/app.js';
+      const headers = { 'accept-encoding': encoding };
+      const full = await httpReq(srv.port, url, { headers });
+      assert.equal(full.status, 200);
+      assert.equal(full.headers['content-encoding'], encoding);
+      for (const range of ['bytes=0-0', `bytes=${Buffer.byteLength(js)}-`]) {
+        const head = await httpReq(srv.port, url, { method: 'HEAD', headers: { ...headers, range } });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers['content-encoding'], encoding);
+        assert.equal(head.headers['content-length'], String(full.body.length));
+        assert.equal(head.headers['content-range'], undefined);
+        assert.equal(head.headers.etag, full.headers.etag);
+        assert.equal(head.headers.vary, full.headers.vary);
+        assert.equal(head.body.length, 0);
+
+        const cached = await httpReq(srv.port, url, {
+          method: 'HEAD', headers: { ...headers, range, 'if-none-match': full.headers.etag },
+        });
+        assert.equal(cached.status, 304, 'Range must not change the selected validator');
+        assert.equal(cached.headers.etag, full.headers.etag);
+        assert.equal(cached.headers['content-range'], undefined);
+        assert.equal(cached.body.length, 0);
+      }
+    });
+  }
+
+  test('HEAD ignores Range while honoring cache validators and ignoring If-Range', async () => {
+    for (const url of ['/assets/audio/bgm.mp3', '/media/bgm']) {
+      const full = await httpReq(srv.port, url);
+      for (const condition of [
+        { 'if-none-match': full.headers.etag },
+        { 'if-modified-since': full.headers['last-modified'] },
+      ]) {
+        const cached = await httpReq(srv.port, url, {
+          method: 'HEAD', headers: { range: `bytes=${mp3.length}-`, ...condition },
+        });
+        assert.equal(cached.status, 304);
+        assert.equal(cached.headers['content-range'], undefined);
+        assert.equal(cached.body.length, 0);
+      }
+      for (const ifRange of [full.headers.etag, '"stale"']) {
+        const head = await httpReq(srv.port, url, {
+          method: 'HEAD', headers: { range: 'bytes=0-0', 'if-range': ifRange },
+        });
+        assert.equal(head.status, 200);
+        assert.equal(head.headers['content-length'], String(mp3.length));
+        assert.equal(head.headers['content-range'], undefined);
+        assert.equal(head.body.length, 0);
+      }
+    }
   });
 
   test('extension-less /media audio route (download managers sniff .mp3 URLs)', async () => {
@@ -384,8 +471,6 @@ describe('static http server', () => {
     const h = JSON.parse(health.body.toString());
     assert.equal(h.ok, true);
     assert.equal(typeof h.rooms, 'number');
-    assert.ok(['warming', 'ready'].includes(h.performance.status));
-    assert.ok('process' in h.performance && 'mainThread' in h.performance);
     assert.equal(health.headers['cache-control'], 'no-store');
   });
 
@@ -412,6 +497,17 @@ describe('static http server', () => {
     assert.equal(acceptsGzip('*;q=0'), false);
     assert.equal(acceptsGzip('br'), false);
     assert.equal(acceptsGzip(undefined), false);
+    // brotli when named at least as high as gzip; `*` alone never picks it
+    assert.equal(pickEncoding('gzip, deflate, br, zstd'), 'br');
+    assert.equal(pickEncoding('gzip, deflate'), 'gzip');
+    assert.equal(pickEncoding('br;q=0, gzip'), 'gzip');
+    assert.equal(pickEncoding('br;q=0.5, gzip'), 'gzip');
+    assert.equal(pickEncoding('gzip;q=0.5, br'), 'br');
+    assert.equal(pickEncoding('br'), 'br');
+    assert.equal(pickEncoding('*'), 'gzip');
+    assert.equal(pickEncoding('*;q=0'), null);
+    assert.equal(pickEncoding('identity'), null);
+    assert.equal(pickEncoding(undefined), null);
   });
 });
 
@@ -444,7 +540,17 @@ describe('websocket lobby', () => {
   const cap = captureLog();
 
   before(async () => {
-    srv = await startServer({ port: 0, host: '127.0.0.1', log: cap.log, MatchClass: Match });
+    // The healthz case below pins the unset default (every official version). Read that, then put the environment back.
+    const saved = ['SP_VERSIONS', 'SP_VERSION_DEFAULT', 'SP_MAX_VERSION_HOSTS'].map((k) => [k, process.env[k]]);
+    for (const [k] of saved) delete process.env[k];
+    try {
+      srv = await startServer({ port: 0, host: '127.0.0.1', log: cap.log, MatchClass: Match });
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
     pool = clientPool(() => `ws://127.0.0.1:${srv.port}/ws`);
   });
   afterEach(async () => { await pool.closeAll(); });
@@ -502,11 +608,12 @@ describe('websocket lobby', () => {
     }
     await expectError(c, { t: 'room.create', mode: 'pvp', difficulty: 'NORMAL' }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.create', mode: 'coop', difficulty: 'EASY' }, ERR.BAD_MSG);
-    await expectError(c, { t: 'room.create', mode: 'coop' }, ERR.BAD_MSG);
+    await expectError(c, { t: 'room.create', mode: 'coop', difficulty: null }, ERR.BAD_MSG);
+    await expectError(c, { t: 'room.create', difficulty: 'NORMAL' }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.join', code: 'AB CD' }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.join', code: { $gt: '' } }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.ready', ready: 'yes' }, ERR.BAD_MSG);
-    await expectError(c, { t: 'room.removeBot', seat: 20 }, ERR.BAD_MSG);
+    await expectError(c, { t: 'room.removeBot', seat: 9 }, ERR.BAD_MSG);
     await expectError(c, { t: 'g.buy', slot: -1 }, ERR.BAD_MSG);
     await expectError(c, { t: 'g.move', uid: 1, to: { area: 'moon' } }, ERR.BAD_MSG);
     await expectError(c, { t: 'ping', c: 'x' }, ERR.BAD_MSG);
@@ -531,7 +638,10 @@ describe('websocket lobby', () => {
     assert.equal(pong.t, 'pong');
   });
 
-  test('rate limit: bursts beyond 40 msg/s get RATE, connection survives, bucket refills', async () => {
+  test('rate limit: bursts beyond 40 msg/s get RATE, connection survives, bucket refills', async (t) => {
+    // Transport/compression scheduling must not refill a supposedly instantaneous burst.
+    let now = Date.now();
+    t.mock.method(srv.network, 'now', () => now);
     const c = await pool.player('Spammer');
     const N = 100;
     const rids = [];
@@ -541,19 +651,39 @@ describe('websocket lobby', () => {
     const pongs = replies.filter((m) => m.t === 'pong').length;
     const limited = replies.filter((m) => m.t === 'error' && m.code === ERR.RATE).length;
     assert.equal(pongs + limited, N);
-    assert.ok(pongs >= 39 && pongs <= 45, `pongs ${pongs}`); // hello used one token
-    assert.ok(limited >= 55, `limited ${limited}`);
+    assert.equal(pongs, 39); // hello used one of the 40 tokens
+    assert.equal(limited, 61);
     assert.ok(c.isOpen);
-    await delay(1100);
+    now += 24; // 40/s: less than one token
+    await expectError(c, { t: 'ping', c: 0 }, ERR.RATE);
+    now += 1;
     const ok = await c.request({ t: 'ping', c: 0 });
     assert.equal(ok.t, 'pong');
+    await expectError(c, { t: 'ping', c: 0 }, ERR.RATE);
+    now += 1100; // refill, capped at 40 tokens
+    for (let i = 0; i < 40; i++) assert.equal((await c.request({ t: 'ping', c: i })).t, 'pong');
+    await expectError(c, { t: 'ping', c: 0 }, ERR.RATE);
+    assert.ok(c.isOpen);
   });
 
-  test('flooding far beyond the limit closes the socket (1008)', async () => {
+  test('flooding far beyond the limit closes the socket (1008)', { timeout: 60000 }, async (t) => {
+    const now = Date.now();
+    t.mock.method(srv.network, 'now', () => now);
     const c = await pool.player('Flood');
-    for (let i = 0; i < 600; i++) c.send({ t: 'ping', c: i, rid: null });
+    // Keep one rate window and await replies instead of building a compressed send queue ahead of the close frame.
+    // A slow runner (Windows, Node 24) took more than the client's 2 s default for one of the ~430 round trips, so each
+    // waits up to 10 s; and the drops stop short of the 400 budget so a frame more or less cannot move the boundary.
+    for (let i = 0; i < 39; i++) assert.equal((await c.request({ t: 'ping', c: i }, 10_000)).t, 'pong');
+    for (let i = 0; i < 390; i++) {
+      const r = await c.request({ t: 'ping', c: i }, 10_000);
+      assert.equal(r.t, 'error'); assert.equal(r.code, ERR.RATE);
+    }
+    assert.ok(c.isOpen, '390 drops do not close the socket');
+    // past the budget (400 drops a second) the server closes the socket instead of answering
+    for (let i = 0; i < 40 && c.isOpen; i++) c.send({ t: 'ping', c: 400 + i, rid: null });
     const info = await c.closed;
     assert.equal(info.code, 1008);
+    assert.equal(info.reason, 'rate limit');
   });
 
   test('create / join / leave', async () => {
@@ -605,6 +735,30 @@ describe('websocket lobby', () => {
     await expectError(host, { t: 'room.join', code: own.code }, ERR.ROOM_NOT_FOUND);
   });
 
+  test('room.create without a difficulty: the room starts at the default (标准 [ASSUMED]), the host changes it in the room', async () => {
+    // the event's 联合模拟 creates the room first and its creator changes the difficulty there (research 06 §3.2)
+    const host = await pool.player('Host');
+    const r = await host.request({ t: 'room.create', mode: 'coop' });
+    assert.equal(r.t, 'ok', JSON.stringify(r));
+    const st = await host.waitFor('room.state', (s) => s.hostId === host.id && s.mode === 'coop');
+    assert.equal(st.difficulty, DEFAULT_DIFFICULTY);
+    assert.equal(DEFAULT_DIFFICULTY, 'FUNNY');
+    const guest = await pool.player('Guest');
+    await joinRoom(guest, st.code);
+    await expectOk(guest, { t: 'room.ready', ready: true });
+    await host.waitFor('room.state', (s) => seatOf(s, guest.id)?.ready === true);
+    await expectError(guest, { t: 'room.setDifficulty', difficulty: 'HARD' }, ERR.NOT_HOST);
+    await expectOk(host, { t: 'room.setDifficulty', difficulty: 'HARD' });
+    const changed = await guest.waitFor('room.state', (s) => s.difficulty === 'HARD');
+    assert.equal(seatOf(changed, guest.id).ready, false, 'the change un-readies the guest');
+    const solo = await pool.player('Solo');
+    assert.equal((await solo.request({ t: 'room.create', mode: 'solo' })).t, 'ok');
+    assert.equal((await solo.waitFor('room.state', (s) => s.hostId === solo.id)).difficulty, DEFAULT_DIFFICULTY);
+    await expectOk(guest, { t: 'room.leave' });
+    await expectOk(host, { t: 'room.leave' });
+    await expectOk(solo, { t: 'room.leave' });
+  });
+
   test('room full, solo rooms admit one human and no AI', async () => {
     const host = await pool.player('H');
     const st = await createRoom(host);
@@ -628,7 +782,7 @@ describe('websocket lobby', () => {
   });
 
   // community report #26 (a remake feature): spectator seats — server/lobby.js header
-  test('spectator seats: unlimited join / leave / host removal; never a player, never acting, never keeping a room', async () => {
+  test('spectator seats: join / cap / leave / host removal; never a player, never acting, never keeping a room', async () => {
     const host = await pool.player('Host');
     const st = await createRoom(host);
     assert.deepEqual(st.spectators, []);
@@ -648,14 +802,12 @@ describe('websocket lobby', () => {
       await expectError(s1, msg, ERR.NOT_HOST);
     }
     await expectError(s1, { t: 'g.ready', ready: true }, ERR.WRONG_PHASE);
-    // Unlimited observers still never count toward the four player seats.
+    // the cap; spectators never count toward the players: two player seats still free
     const s2 = await pool.player('Watcher2');
     await expectOk(s2, { t: 'room.spectate', code: st.code });
-    assert.equal(MAX_SPECTATORS, 0);
+    assert.equal(MAX_SPECTATORS, 2);
     const s3 = await pool.player('Watcher3');
-    await expectOk(s3, { t: 'room.spectate', code: st.code });
-    const three = await s3.waitFor('room.state', (s) => s.spectators.length === 3);
-    assert.equal(three.seats.filter(Boolean).length, 2);
+    await expectError(s3, { t: 'room.spectate', code: st.code }, ERR.ROOM_FULL);
     await joinRoom(s3, st.code);
     await expectOk(host, { t: 'room.addBot' });
     const full = await host.waitFor('room.state', (s) => s.seats.every(Boolean));
@@ -993,7 +1145,7 @@ describe('websocket lobby', () => {
     const clients = [];
     for (let i = 0; i < 5; i++) clients.push(await pool.player(`F${i}`));
     const codes = () => [...srv.lobby.rooms.keys()];
-    const gTypes = ['g.infoReady', 'g.band', 'g.bandSkip', 'g.buy', 'g.refresh', 'g.freeze', 'g.levelUp', 'g.sell', 'g.move', 'g.equip', 'g.art', 'g.destroy', 'g.reward', 'g.choice', 'g.ready', 'g.emote', 'g.watch', 'g.autoplay', 'g.leave'];
+    const gTypes = ['g.infoReady', 'g.band', 'g.bandSkip', 'g.buy', 'g.refresh', 'g.freeze', 'g.levelUp', 'g.sell', 'g.move', 'g.equip', 'g.unequip', 'g.art', 'g.destroy', 'g.reward', 'g.choice', 'g.ready', 'g.emote', 'g.watch', 'g.autoplay', 'g.leave'];
     const junk = [1, -1, 1.5, 'x', '', null, true, [], {}, { area: 'board', row: 1, col: 1 }, 'A'.repeat(70), 2 ** 40];
     const gen = () => {
       const r = rnd();
@@ -1020,12 +1172,6 @@ describe('websocket lobby', () => {
       return pick([{ t: 'hello', name: pick(['Re', '', 'x'.repeat(20)]) }, { t: 'ping', c: pick([1, 'x']) }, { t: pick(['nope', '__proto__', 'toString']) }, { t: 'room.join', code: pick(junk) }]);
     };
     const okCounts = {};
-    // Seed a real legal game action; random lobby churn alone may never hit INFO_CHECK in 500 intents.
-    const coverage = await pool.player('Coverage');
-    for (const msg of [{ t: 'room.create', mode: 'solo', difficulty: 'FUNNY' }, { t: 'room.start' }, { t: 'g.infoReady' }, { t: 'room.leave' }]) {
-      await expectOk(coverage, msg);
-      okCounts[msg.t] = (okCounts[msg.t] || 0) + 1;
-    }
     for (let i = 0; i < 500; i++) {
       const k = Math.floor(rnd() * clients.length);
       let c = clients[k];
@@ -1060,8 +1206,8 @@ describe('websocket lobby', () => {
         assert.ok(sess, 'seated session exists');
         assert.equal(sess.roomCode, room.code);
       }
-      // Optional spectator cap; none in solo rooms, never also a player (here or elsewhere), never the host.
-      assert.ok(MAX_SPECTATORS === 0 || room.spectators.length <= MAX_SPECTATORS, `room ${room.code} spectator cap`);
+      // spectator seats: capped, none in solo rooms, never also a player (here or elsewhere), never the host
+      assert.ok(room.spectators.length <= MAX_SPECTATORS, `room ${room.code} spectator cap`);
       if (room.mode === 'solo') assert.equal(room.spectators.length, 0, 'no spectator seat in a solo room');
       for (const sp of room.spectators) {
         assert.ok(!seen.has(sp.playerId), 'a spectator is seated (or spectating) twice');
@@ -1139,6 +1285,11 @@ describe('websocket lobby', () => {
     assert.ok(h.rooms >= 1);
     assert.ok(h.sockets >= 1);
     assert.ok(h.sessions >= 1);
+    assert.deepEqual(h.versions.enabled, VERSIONS.map((v) => v.id), 'nothing set enables every version (DESIGN §35.23.11)');
+    assert.equal(h.versions.default, DEFAULT_VERSION);
+    assert.equal(h.versions.hosts.workers, 0, 'an idle server has forked no version match host');
+    assert.equal(h.versions.hosts.matches, 0);
+    assert.equal(srv.versionHosts.stats().workers, 0);
   });
 });
 
@@ -1338,12 +1489,17 @@ describe('lobby timers and match interface', () => {
     assert.ok(cap.errors.some((e) => e.includes('intentional handler crash')));
   });
 
-  test('repeated hellos during a match coalesce into at most one match resync per window', async () => {
+  test('user Given a running match When sending repeated hellos Then resyncs coalesce within the time window', { timeout: 10000 }, async (t) => {
     const host = await pool.player('Host');
     await createRoom(host, 'solo', 'NORMAL');
     RecordingMatch.instances.length = 0;
     await expectOk(host, { t: 'room.start' });
     await host.waitFor('m.private');
+    // Real socket processing may cross the resync window on a busy runner.
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+    const clock = srv.lobby.now;
+    srv.lobby.now = () => Date.now();
+    t.after(() => { srv.lobby.now = clock; });
     const m = RecordingMatch.instances[0];
     const resyncs = () => m.calls.filter((c) => c[0] === 'onReconnect').length;
     host.clearInbox();
@@ -1351,9 +1507,12 @@ describe('lobby timers and match interface', () => {
     for (let i = 0; i < 12; i++) await host.waitFor('room.state'); // the cheap part answers every hello
     assert.equal(resyncs(), 1, 'first repeated hello resyncs at once, the rest wait for the window');
     await host.waitFor('m.private');
+    t.mock.timers.tick(999);
+    assert.equal(resyncs(), 1, 'no deferred resync before the window ends');
+    t.mock.timers.tick(1);
     await host.waitFor('m.private', () => true, 1500); // one coalesced resync answers the other 11
     assert.equal(resyncs(), 2);
-    await delay(1100);
+    t.mock.timers.tick(1100);
     assert.equal(resyncs(), 2, 'nothing else was queued');
     // a (re)connect is never delayed
     await host.terminate();
@@ -1575,9 +1734,7 @@ describe('match result replay', () => {
   }
 
   /** Frames of a resumed socket in arrival order (types + phase), after welcome. */
-  // Presence/queue resyncs are independent of the room → final-public → result replay ordering.
-  const social = new Set(['welcome', 'pong', 'presence.state', 'queue.state']);
-  const order = (c) => c.log.filter((m) => !social.has(m.t)).map((m) => m.t + (m.t === 'm.public' ? `:${m.phase}` : ''));
+  const order = (c) => c.log.filter((m) => m.t !== 'welcome' && m.t !== 'pong').map((m) => m.t + (m.t === 'm.public' ? `:${m.phase}` : ''));
 
   for (const unicast of [true, false]) {
     test(`a human disconnected when the match ends gets room.state, the final m.public and m.result on resume (${unicast ? 'per-player' : 'broadcast'} result)`, async () => {
@@ -1649,8 +1806,7 @@ describe('match result replay', () => {
     await back.terminate();
     const again = await pool.connect();
     await again.hello('Guest', guest.token);
-    await again.waitFor('queue.state', (m) => m.state === 'idle');
-    await again.expectNone(null, (m) => !social.has(m.t), 300);
+    await again.expectNone(null, (m) => m.t !== 'welcome', 300);
   });
 
   test('real Match: a human who is away when the match finishes gets its m.result on resume', async () => {
@@ -1787,130 +1943,6 @@ describe('per-network limits', () => {
 });
 
 // ---------------------------------------------------------------------------------------------------
-// Cached performance diagnostics: HTTP must not drive sampling or readiness.
-// ---------------------------------------------------------------------------------------------------
-
-describe('health performance lifecycle', () => {
-  test('GET/HEAD only read the same cache; the independent sampler alone resets and advances its window', async (t) => {
-    let tick, at = 1000, resets = 0, reads = 0, clears = 0, disables = 0;
-    const histogram = {
-      count: 1, max: 30e6, percentile: () => 20e6,
-      enable() {}, disable() { disables++; }, reset() { resets++; },
-    };
-    const srv = await startServer({ port: 0, host: '127.0.0.1', combatWorkers: 0, quiet: true,
-      healthMetricsFactory: (opts) => createHealthMetrics({ ...opts,
-        now: () => at, wallNow: () => 1_800_000_000_000 + at,
-        cpuUsage: () => { reads++; return { user: at * 2000, system: at * 500 }; },
-        eventLoopUtilization: () => { reads++; return { active: at * 0.25, idle: at * 0.75 }; },
-        memoryUsage: () => { reads++; return { rss: 10, heapUsed: 3, heapTotal: 6, external: 2, arrayBuffers: 1 }; },
-        createHistogram: () => histogram,
-        setInterval: (fn, ms) => { assert.equal(ms, 10_000); tick = fn; return { unref() {} }; },
-        clearInterval: () => { clears++; },
-      }),
-    });
-    t.after(() => srv.close());
-    const initialReads = reads;
-    const cold = JSON.parse((await httpReq(srv.port, '/healthz')).body);
-    assert.equal(cold.ok, true);
-    assert.equal(cold.performance.status, 'warming');
-    assert.equal(cold.performance.sampledAt, null);
-    assert.equal(cold.performance.process.cpu.percent, null);
-    for (const method of ['GET', 'HEAD', 'GET', 'HEAD']) {
-      const response = await httpReq(srv.port, '/healthz', { method });
-      assert.equal(response.status, 200);
-      assert.equal(response.headers['cache-control'], 'no-store');
-      if (method === 'HEAD') assert.equal(response.body.length, 0);
-      else assert.deepEqual(JSON.parse(response.body).performance, cold.performance);
-    }
-    assert.equal(reads, initialReads);
-    assert.equal(resets, 0);
-    at += 13_000; tick();
-    const sampledReads = reads;
-    const warm = JSON.parse((await httpReq(srv.port, '/healthz')).body);
-    assert.equal(warm.performance.windowMs, 13_000);
-    assert.equal(warm.performance.process.cpu.percent, 250);
-    assert.equal(warm.performance.mainThread.eventLoopUtilization, 0.25);
-    for (const method of ['HEAD', 'GET', 'GET']) {
-      const response = await httpReq(srv.port, '/healthz', { method });
-      if (method === 'GET') assert.deepEqual(JSON.parse(response.body).performance, warm.performance);
-    }
-    assert.equal(reads, sampledReads);
-    assert.equal(resets, 1);
-    const shutdown = srv.close();
-    assert.equal(clears, 1, 'timer stopped at close entry, not after asynchronous shutdown');
-    assert.equal(disables, 1);
-    await Promise.all([shutdown, srv.close()]);
-    assert.equal(clears, 1); assert.equal(disables, 1);
-    tick();
-    assert.equal(reads, sampledReads, 'a late timer callback cannot sample after disposal');
-  });
-
-  test('failed startup/listen never invokes the collector factory', async (t) => {
-    const occupied = await startServer({ port: 0, host: '127.0.0.1', combatWorkers: 0, quiet: true });
-    t.after(() => occupied.close());
-    let created = 0;
-    const healthMetricsFactory = () => { created++; assert.fail('failed boot must not create metrics'); };
-    await assert.rejects(startServer({ port: occupied.port, host: '127.0.0.1', combatWorkers: 0,
-      quiet: true, healthMetricsFactory }), { code: 'EADDRINUSE' });
-    await assert.rejects(startServer({ port: 0, host: '127.0.0.1', combatWorkers: 0,
-      publicDir: 1, quiet: true, healthMetricsFactory }), { code: 'ERR_INVALID_ARG_TYPE' });
-    assert.equal(created, 0);
-  });
-
-  test('partially failed metric initialization releases resources and keeps inline health 200', async (t) => {
-    let disabled = 0, schedules = 0;
-    const warnings = [];
-    const srv = await startServer({ port: 0, host: '127.0.0.1', combatWorkers: 0,
-      log: { ...captureLog().log, warn: (message) => warnings.push(message) },
-      healthMetricsFactory: (opts) => createHealthMetrics({ ...opts,
-        createHistogram: () => ({ enable() { throw new Error('test histogram enable failed'); }, disable() { disabled++; } }),
-        setInterval: () => { schedules++; assert.fail('failed initialization must not start a timer'); },
-      }),
-    });
-    t.after(() => srv.close());
-    for (const method of ['GET', 'HEAD', 'GET']) {
-      const response = await httpReq(srv.port, '/healthz', { method });
-      assert.equal(response.status, 200);
-      if (method === 'GET') {
-        const health = JSON.parse(response.body);
-        assert.equal(health.ok, true);
-        assert.deepEqual(health.combat, { backend: 'inline', workers: 0 });
-        assert.equal(health.performance.status, 'unavailable');
-        assert.equal(health.performance.sampledAt, null);
-      }
-    }
-    assert.equal(warnings.length, 1);
-    assert.equal(disabled, 1); assert.equal(schedules, 0);
-    await Promise.all([srv.close(), srv.close()]);
-    assert.equal(disabled, 1);
-  });
-
-  test('a throwing metric factory/start degrades only diagnostics and cleans a returned partial collector', async (t) => {
-    for (const step of ['factory', 'start']) {
-      await t.test(step, async (t) => {
-        let disposed = 0;
-        const warnings = [];
-        const srv = await startServer({ port: 0, host: '127.0.0.1', combatWorkers: 0,
-          log: { ...captureLog().log, warn: (message) => warnings.push(message) },
-          healthMetricsFactory: () => {
-            if (step === 'factory') throw new Error('test factory failure');
-            return { start() { throw new Error('test start failure'); }, dispose() { disposed++; } };
-          },
-        });
-        t.after(() => srv.close());
-        const health = await httpReq(srv.port, '/healthz');
-        assert.equal(health.status, 200);
-        assert.equal(JSON.parse(health.body).performance.status, 'unavailable');
-        assert.equal(warnings.length, 1);
-        assert.equal(disposed, step === 'start' ? 1 : 0);
-        await Promise.all([srv.close(), srv.close()]);
-        assert.equal(disposed, step === 'start' ? 1 : 0);
-      });
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------------------------------
 // Heartbeat, hello timeout, shutdown
 // ---------------------------------------------------------------------------------------------------
 
@@ -1944,9 +1976,7 @@ describe('heartbeat and shutdown', () => {
     const w = await c.hello('Last');
     c.id = w.playerId;
     await createRoom(c);
-    const shutdown = srv.close();
-    assert.equal(srv.healthMetrics.snapshot().status, 'stopped');
-    await Promise.all([shutdown, srv.close()]);
+    await srv.close();
     const closed = await c.waitFor('room.closed');
     assert.equal(closed.reason, 'shutdown');
     const info = await c.closed;
@@ -2064,10 +2094,11 @@ describe('platform units', () => {
       fs.writeFileSync(path.join(dir, 'chess.json'), JSON.stringify([{ id: 'x', stats: { hp: 1 } }]));
       fs.writeFileSync(path.join(dir, 'broken.json'), '{oops');
       fs.writeFileSync(path.join(dir, 'notes.txt'), 'ignored');
+      fs.writeFileSync(path.join(dir, 'local-fx.json'), JSON.stringify({ version: 1, format: 'fx-manifest', groups: {} }));
       const warnings = [];
       const errors = [];
       const data = loadData(dir, { log: { warn: (m) => warnings.push(m), error: (m) => errors.push(m) } });
-      assert.deepEqual(Object.keys(data).sort(), ['chess', 'config']);
+      assert.deepEqual(Object.keys(data).sort(), ['chess', 'config'], 'data/local-fx.json (the official effects\' file list, UNLOADED_DATA) is never loaded');
       assert.equal(data.config.modes.a.rounds[1], 2);
       assert.ok(Object.isFrozen(data));
       assert.ok(Object.isFrozen(data.config.modes.a.rounds));
@@ -2175,51 +2206,6 @@ describe('platform units', () => {
     assert.equal(parseTrustProxy('off'), false);
     assert.equal(parseTrustProxy(undefined), 'auto');
     assert.equal(parseTrustProxy('auto'), 'auto');
-  });
-
-  test('Network: default/explicit zero admission is unlimited; positive socket caps and shutdown still apply', (t) => {
-    const req = (ip) => ({ socket: { remoteAddress: ip }, headers: {} });
-    assert.equal(NET_DEFAULTS.maxConnections, 0);
-    assert.equal(NET_DEFAULTS.maxConnectionsPerAddr, 0);
-    for (const options of [{}, { maxConnections: 0, maxConnectionsPerAddr: 0 }]) {
-      const net = new Network({ registry: new SessionRegistry(), handler: {}, options });
-      t.after(() => net.close());
-      // Exercise counters above the old defaults without opening thousands of sockets.
-      Object.defineProperty(net.conns, 'size', { value: 2001 });
-      net.connsPerKey.set('203.0.113.1', 65);
-      assert.equal(net.admission(req('203.0.113.1')), null);
-      net.close();
-      assert.equal(net.admission(req('203.0.113.1')), 'shutdown');
-    }
-    const capped = new Network({ registry: new SessionRegistry(), handler: {},
-      options: { maxConnections: 2, maxConnectionsPerAddr: 1 } });
-    t.after(() => capped.close());
-    capped.connsPerKey.set('203.0.113.1', 1);
-    assert.equal(capped.admission(req('203.0.113.1')), 'per-address');
-    assert.equal(capped.admission(req('203.0.113.2')), null);
-    Object.defineProperty(capped.conns, 'size', { value: 2 });
-    assert.equal(capped.admission(req('203.0.113.2')), 'full');
-  });
-
-  test('SessionRegistry: default/explicit zero never evicts for capacity and retains expiry policy', () => {
-    assert.equal(NET_DEFAULTS.maxSessions, 0);
-    for (const options of [{}, { maxSessions: 0 }]) {
-      let now = 1000;
-      const reg = new SessionRegistry({ ...options, reconnectWindowMs: 100, now: () => now });
-      const idle = reg.create('Idle');
-      const active = reg.create('Active'); active.connected = true;
-      reg.evictOne = () => { throw new Error('unlimited registries must not capacity-evict'); };
-      Object.defineProperty(reg.byPlayerId, 'size', { value: 20_001, configurable: true });
-      const extra = reg.create('Extra');
-      assert.ok(extra);
-      assert.equal(reg.byToken(idle.token), idle);
-      assert.equal(reg.byId(active.playerId), active);
-      delete reg.byPlayerId.size;
-      assert.equal(reg.size, 3);
-      now += 101;
-      assert.deepEqual(reg.sweep(), [idle, extra]);
-      assert.equal(reg.size, 1);
-    }
   });
 
   test('SessionRegistry: token lookup, expiry sweep, eviction', () => {

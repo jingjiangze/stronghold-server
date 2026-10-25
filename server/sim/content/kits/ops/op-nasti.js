@@ -72,6 +72,7 @@
 // passive buff of the ability); the combined range one step deep; the 小工程师's 1 s heal / SP timer runs from its deployment.
 
 import { num, talentBb, traitBb, skillRec, up, giveSp, holdProtect } from '../shared/tier1.js';
+import { burstLimit, stepOf } from '../../../../../shared/plugins/steps.js';
 import { absoluteRangeKeys } from '../../../targeting.js';
 import { COLS } from '../../../constants.js';
 import { frontOf } from '../../../dir.js';
@@ -225,7 +226,7 @@ export default {
       const cost1 = heal1 * num(tb0['nasti_nstbld_m1[heal_m456].cnt'], 1), cost2 = heal2 * num(tb0['nasti_nstbld_m2[heal_m456].cnt'], 1);
       return {
         skill: null,
-        // its heal of the 高台 ignores the 高台's 禁疗 ("_ignoreHealFree"): it heals through it (damage.js heal healThrough)
+        // its heal of the 高台 ignores the 高台's 禁疗 ("_ignoreHealFree"): it heals through it (attack/heal.js heal healThrough)
         trait: { noAttack: true, healThrough: (h, t) => !!t && t.mem?.nastiPlatform === true && t.ownerUnit === owner },
         talents: [],
         install(battle) {
@@ -346,7 +347,12 @@ export default {
           onEnd({ battle, unit, skill }) {
             const s = unit.mem.nastiS2;
             // the last shield tick that lands with the end (every interval of the duration)
-            if (s && s.shield && up(unit)) while (s.n < Math.floor(skill.duration / s2Every + 1e-9)) s.shield();
+            if (s && s.shield && up(unit)) {
+              const every = stepOf('attack@nasti_s2[update_shield].interval', s2Every, 0.5);
+              const bursts = every > 0 ? Math.min(burstLimit(8), Math.floor(Number(skill.duration) / every + 1e-9)) : 0;
+              let guard = 0;
+              while (s.n < bursts && guard++ < bursts) s.shield(); // loop-cap: burstLimit duration/interval
+            }
             unit.mem.nastiS2 = null;
             // 激活的装置在娜斯提技能结束时离场
             for (const d of devicesUp(unit)) if (d.defId === NSTCHR && d.mem.nastiActive) battle.kill(d, null);

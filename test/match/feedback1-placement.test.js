@@ -22,8 +22,7 @@ import { buildDeployMap, canPlace as boardCanPlace, legalTiles, positionClass, p
 import { PLACE_ON_RANGED, meleeOnHighGround } from '../../shared/highGround.js';
 import { ERR } from '../../shared/constants.js';
 import { DATA, makeMatch, give, giveItem, checkInvariants, chessOfTier } from './harness.js';
-import { botPrep, planLayout, fieldModel, LAYOUT_PARAMS, REHEARSAL_VARIANTS } from '../../server/match/bot.js';
-import { createRng } from '../../server/sim/rng.js';
+import { botPrep, planLayout, fieldModel } from '../../server/match/bot.js';
 import { placementContext, canPlace as clientCanPlace, boardTargets, deployMap as clientDeployMap } from '../../public/js/ui/gameLogic.js';
 import { makeBattle } from '../helpers/battleHarness.js';
 import { renderMessage } from '../../shared/i18n.js';
@@ -182,7 +181,7 @@ test('#9 re-orienting the tactician: a summon still inside the new range stays, 
   m.dispose();
 });
 
-test('#9 hand and temp full: a re-orientation that would push 狼群 out is refused (HAND_FULL); a move drops it until the next round', () => {
+test('#9 full visible bench: a re-orientation is refused (HAND_FULL); moving the owner queues its wolf stack', () => {
   const { h, m, ps } = prep();
   const vigil = give(m, ps, VIGIL);
   assert.deepEqual(move(m, vigil.uid, board(10, 4), 'RIGHT'), { ok: true });
@@ -192,11 +191,11 @@ test('#9 hand and temp full: a re-orientation that would push 狼群 out is refu
   const toasts = [];
   const toast = m.toast.bind(m);
   m.toast = (p, kind, text) => { toasts.push(renderMessage(text)); return toast(p, kind, text); }; // string or msg()
-  // Fill the storage with a fixed operator gift: it may legitimately exceed its stock (invariants.js item cap), so
-  // force-stowing it is a legal state, unlike an arbitrary shop equip whose held copies may never pass its cap.
-  const golden = Object.keys(DATA.items).find((id) => DATA.items[id].isGolden && DATA.items[id].itemType === 'EQUIP' && m.gd.isUnlimitedGiftItem(id));
-  while (ps.hand.includes(null)) giveItem(m, ps, golden);
-  while (ps.temp.includes(null)) giveItem(m, ps, golden, 'temp');
+  // One distinct golden per empty slot: goldens do not merge, and each base stays within its shared cap.
+  const fillers = Object.values(DATA.items).filter((r) => r.isGolden && r.itemType === 'EQUIP' && (m.gd.itemPoolCopies(r.id) ?? 0) >= 2).map((r) => r.id);
+  let n = 0;
+  while (ps.hand.includes(null)) giveItem(m, ps, fillers[n++]);
+  while (ps.temp.includes(null)) giveItem(m, ps, fillers[n++], 'temp');
   // facing LEFT would leave (11,5) outside her range and the wolf has nowhere to go: refused, nothing changes
   assert.equal(move(m, vigil.uid, board(10, 4), 'LEFT').error, ERR.HAND_FULL);
   assert.equal(ps.board.get('10,4').dir, 'RIGHT');
@@ -209,7 +208,9 @@ test('#9 hand and temp full: a re-orientation that would push 狼群 out is refu
   // range (rows 8–10, cols 9–12) leaves the wolf out: it leaves the board — no illegal placement reaches the battle
   assert.deepEqual(move(m, vigil.uid, board(9, 9), 'RIGHT'), { ok: true });
   assert.equal(ps.board.get('11,5'), undefined, 'outside her range with nowhere to go: removed');
-  assert.ok(toasts.some((t) => t.includes('狼群') && t.includes('下回合返还')), toasts.join(' / '));
+  assert.ok(!toasts.some((t) => t.includes('狼群') && t.includes('下回合返还')), toasts.join(' / '));
+  assert.equal(stackOf(ps, WOLF), wolf, 'the original stack is retained in overflow');
+  assert.equal(ps.temp.length, 6);
   assert.equal(ps.battleInput().units.filter((u) => u.kind === 'token').length, 0);
   checkInvariants(m);
   // …and its stack comes back at the next round start (grantTokensFor, "干员所属召唤物会于下一回合返还")
@@ -339,6 +340,8 @@ test('高台 data: no chess stores placement; 「可以放置于远程位」 is 
   for (const t of Object.values(DATA.tokens)) assert.equal(t.placement, undefined, t.tokenId);
   const widened = Object.values(DATA.chess).filter((c) => meleeOnHighGround(c)).map((c) => c.chessId).sort();
   assert.deepEqual(widened, HOLDERS.slice().sort());
+  const flagged = Object.values(DATA.chess).filter((c) => c.placeOnRanged === true).map((c) => c.chessId).sort();
+  assert.deepEqual(flagged, HOLDERS.slice().sort(), 'placeOnRanged is exactly those six');
   for (const id of HOLDERS) {
     const c = DATA.chess[id];
     assert.equal(c.position, 'MELEE', id);
@@ -498,83 +501,4 @@ test('高台 bots: every trait holder, normal and elite, takes a 高台 that cov
   assert.equal(map.get(hk), 'ranged', `elite 歌蕾蒂娅 still gets a 高台 (${hk})`);
   checkInvariants(m);
   m.dispose();
-});
-
-function cachedPlanParity(m, ps, pieces, occupied = new Set()) {
-  const state = () => JSON.stringify({ board: [...ps.board], hand: ps.hand, temp: ps.temp, pool: m.pool.snapshot(),
-    funds: ps.funds, lp: ps.lp, uidSeq: m.uidSeq, loadout: ps.loadout, layers: ps.layers });
-  const before = state();
-  let first;
-  for (const variant of REHEARSAL_VARIANTS) {
-    const params = { ...LAYOUT_PARAMS, ...variant }, rng = m.rngBots.state();
-    const cached = planLayout(m, ps, pieces, params, { occupied }), after = m.rngBots.state();
-    m.rngBots = createRng(rng);
-    const uncached = planLayout(m, ps, pieces, params, { occupied, cacheScoring: false });
-    assert.deepEqual([...cached], [...uncached], 'same tiles and order');
-    assert.deepEqual([...cached.dirs], [...uncached.dirs], 'same directions');
-    assert.equal(m.rngBots.state(), after, 'same draws, including rejected directions');
-    assert.equal(state(), before, 'planning does not mutate board, equipment, pool, economy or UID');
-    first ??= cached;
-  }
-  return first;
-}
-
-test('layout scoring cache: v014 trait qualification, equip/board/direction changes and terrain overrides are not cached', () => {
-  const { m, ps } = prep(HIGH_STAGE, 11);
-  try {
-    const glad = give(m, ps, GLAD_E), ulpia = give(m, ps, 'chess_char_5_05_a');
-    assert.equal(ps.setLoadout({ [GLAD_N]: { module: HOK_Y } }), true);
-    const plan = cachedPlanParity(m, ps, [glad, ulpia]);
-    assert.equal(ps.deployMap().get(plan.get(glad.uid)), 'ranged', 'a trait holder still prefers a 高台');
-    assert.equal(ps.deployMap().get(plan.get(ulpia.uid)), 'melee', '乌尔比安 remains ground-only');
-    const allGround = new Set([...ps.deployMap()].filter(([, cls]) => cls === 'melee').map(([k]) => k));
-    for (const module of ['none', HOK_X, HOK_Y]) {
-      assert.equal(ps.setLoadout({ [GLAD_N]: { module } }), true);
-      const highOnly = cachedPlanParity(m, ps, [glad, ulpia], allGround);
-      assert.equal(highOnly.has(glad.uid), true, `${module}: the trait keeps 高台 permission`);
-      assert.equal(highOnly.has(ulpia.uid), false, `${module}: a ground-only unit never inherits it`);
-    }
-    const [r, c] = rc(plan.get(ulpia.uid));
-    assert.deepEqual(move(m, ulpia.uid, board(r, c), plan.dirOf(ulpia.uid)), { ok: true });
-    cachedPlanParity(m, ps, [glad, ulpia]);
-    assert.deepEqual(move(m, ulpia.uid, board(r, c), 'UP'), { ok: true });
-    cachedPlanParity(m, ps, [glad, ulpia]);
-    const next = [...ps.deployMap()].find(([k, cls]) => cls === 'melee' && k !== tileKey(r, c))[0];
-    assert.deepEqual(move(m, ulpia.uid, board(...rc(next)), 'LEFT'), { ok: true });
-    const itemId = Object.keys(DATA.items).find(id => DATA.items[id].itemType === 'EQUIP' && DATA.items[id].tier === 1 && !DATA.items[id].isGolden);
-    const item = giveItem(m, ps, itemId);
-    assert.deepEqual(ps.equip(item.uid, ulpia.uid), { ok: true });
-    cachedPlanParity(m, ps, [glad, ulpia]);
-    const blocked = plan.get(glad.uid);
-    ps.tileOverrides[blocked] = 'none'; ps.invalidateDeployMap(); ps.recompute();
-    const changed = cachedPlanParity(m, ps, [glad, ulpia]);
-    assert.ok(![...changed.values()].includes(blocked), 'the overwritten 高台 is no longer eligible');
-    ps.tileOverrides[blocked] = 'melee'; ps.invalidateDeployMap(); ps.recompute();
-    cachedPlanParity(m, ps, [glad, ulpia], new Set([next]));
-    checkInvariants(m);
-  } finally { m.dispose(); }
-});
-
-test('layout scoring cache: 流形 stays inside its moved/re-oriented owner range and uses the current deploy map', () => {
-  const { m, ps } = prep(HIGH_STAGE, 11);
-  try {
-    const owner = give(m, ps, MLYSS), ownerPlan = cachedPlanParity(m, ps, [owner]);
-    const [r, c] = rc(ownerPlan.get(owner.uid));
-    assert.deepEqual(move(m, owner.uid, board(r, c), ownerPlan.dirOf(owner.uid)), { ok: true });
-    let placed = 0;
-    for (const dir of ['RIGHT', 'UP', 'DOWN', 'LEFT']) {
-      assert.deepEqual(move(m, owner.uid, board(r, c), dir), { ok: true });
-      const flow = [...ps.hand.filter(Boolean), ...ps.board.values()].find(p => p.kind === 'token' && p.id === MANIFOLD);
-      assert.ok(flow, 'the actual 流形 stack/board piece');
-      const occupied = new Set([...ps.board].filter(([, p]) => p.uid !== flow.uid).map(([k]) => k));
-      const plan = cachedPlanParity(m, ps, [flow], occupied);
-      const k = plan.get(flow.uid);
-      if (!k) continue;
-      assert.ok(ps.summonRange(flow).has(k), `${dir}: ${k} inside the current owner range`);
-      assert.deepEqual(move(m, flow.uid, board(...rc(k)), plan.dirOf(flow.uid)), { ok: true });
-      placed++;
-      checkInvariants(m);
-    }
-    assert.ok(placed > 0, 'a real legal summon placement was exercised');
-  } finally { m.dispose(); }
 });

@@ -3,10 +3,11 @@
 // b.snap  = { fieldId, t, units: [[id, x, y, hp, maxHp, sp, spMax, flags, anim]], dp, killed, total, resolved }
 //   (hp of a countdown summon — unit.countdown, content/tokens.js startCountdown — is maxHp × the share of its life left)
 // UnitInfo = { id, kind, side, ownerId, defId, name, tier, golden, spine, avatar, x, y, facing, dir, maxHp, motion?, boss?, uid?,
-//   form?, skillIndex?, ammoSkill?, moduleId?, items?, standInFor?, diy?, skinId?, potential?, cultivate? }
-//   (ammoSkill = an ally whose skill is an ammo magazine: the HP bar shows its rounds as cells, b.snap `ammo`;
-//   standInFor = the replaced operator's charId of a 补位
+//   form?, skillIndex?, ammoSkill?, moduleId?, items?, standInFor?, diy?, skin? }  (ammoSkill = an ally whose skill is an ammo
+//   magazine: the HP bar shows its rounds as cells, b.snap `ammo`; standInFor = the replaced operator's charId of a 补位
 //   stand-in; diy = a 自选 piece's pick { charId, skillIndex, uniEquipId } — defId is its slot, spine / avatar the operator's;
+//   skin = the owning player's chosen skinId, docs/SKINS.md — the client draws that appearance instead of the operator's,
+//   falling back to the default model when it is not installed;
 //   form = the unit's current model form — an enemy's, content/enemies/helpers.js setForm:
 //   掠海漂移体 'crawl', 暴鸰 'bombed', 转译基底·α's forms …; a 傀儡师 fighting as its 替身 'doll', professions.js — a view built
 //   after the change, a field opened mid-battle, draws it: render/units.js FORMS)
@@ -19,15 +20,17 @@
 import { UF, ANIM } from '../../shared/constants.js';
 import { DIE_ANIM_TIME, ATTACK_ANIM_TIME, DEPLOY_ANIM_TIME } from './constants.js';
 import { enemyStealthed } from './targeting.js';
-import { skinFor } from '../../shared/skins.js';
-import { unitStatsEntry } from '../../shared/protocol.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const r1 = (v) => Math.round(v * 10) / 10;
 
-/** Static per-unit info sent on spawn / in m.field; opening metadata may supply already-computed stats. */
-export function unitInfo(u, stats = null) {
+/** Static per-unit info sent on spawn / in m.field. */
+export function unitInfo(u) {
   const d = u.def || {};
+  const interval = u.s?.interval;
+  const atkInterval = Number.isFinite(interval) && interval > 0 ? Math.round(interval * 1000) / 1000 : undefined;
+  // Seed from the first published value, before a later buff can change the interval.
+  if (u._rateSent === undefined) u._rateSent = atkInterval;
   return {
     id: u.id,
     kind: u.kind,
@@ -37,14 +40,22 @@ export function unitInfo(u, stats = null) {
     name: u.name,
     tier: d.tier ?? (d.rank === 'BOSS' ? 3 : d.rank === 'ELITE' ? 2 : 1),
     golden: !!d.golden,
+    // The unit's OWN attack interval in game seconds (units.js `s.interval`: bat × batPct × 100 / aspd, i.e. with the buffs
+    // this record carries). The renderer stretches the attack clip over it (render/attackRate.js): without it a view started
+    // from the operator's base-record guess and swung in slow motion until two attacks had been measured.
+    atkInterval,
     spine: d.spine ?? d.charId ?? u.defId,
+    // 皮肤 (docs/SKINS.md): the owning player's chosen skinId. `undefined` (not null) on purpose — JSON.stringify drops
+    // it, so an install with no skins produces the exact same wire format as before and the §8.2 contract holds; the key
+    // only appears where a skin is actually in play.
+    skin: u.skin ?? undefined,
     avatar: d.avatar ?? d.charId ?? u.defId,
-    ...(u.side === 'ally' && u.kind === 'op' && skinFor(d.charId, u.skinId) ? { skinId: u.skinId } : {}),
+    ...(d.voice ? { voice: d.voice } : {}),
     x: r2(u.x),
     y: r2(u.y),
     facing: u.facing ?? 1,
     dir: u.dir ?? 'RIGHT',
-    maxHp: Math.max(1, Math.round((stats && typeof stats === 'object' ? stats : u.s).maxHp)),
+    maxHp: Math.max(1, Math.round(u.s.maxHp)),
     motion: u.motion === 'FLY' ? 'FLY' : undefined,
     boss: u.isBoss ? true : undefined,
     // the unit's current model form (an enemy's content/enemies/helpers.js setForm, a 傀儡师's 替身 — render/units.js FORMS): a
@@ -131,9 +142,9 @@ export function unitTuple(u, t) {
 }
 
 /**
- * The three optional HUD readouts of b.snap (events.js snapshot(): `ammo`, `wolves`, `neg`; each only for a living,
- * deployed, visible unit and only when it has one). They ride beside the 9-field tuples — the tuple, and the SP
- * fraction the ammo skill still puts in it, stay as they are.
+ * The optional HUD readouts of b.snap (events.js snapshot(); each only for a living, deployed, visible unit and only
+ * when it has one). They ride beside the 9-field tuples — the tuple, and the SP fraction the ammo skill still puts in
+ * it, stay as they are.
  *
  * `ammoView(u)` = `[rounds left, rounds in the magazine]` of a running ammo skill (whole numbers; the magazine is the
  * activation's real total — extra bullets and refills included — that unitTuple's SP fraction runs on): the segmented
@@ -144,6 +155,26 @@ export function ammoView(u) {
   if (u.side !== 'ally' || !sk || !sk.active || sk.kind !== 'ammo') return null;
   const left = Math.max(0, Math.ceil(sk.ammoLeft - 1e-9));
   return [left, Math.max(1, Math.ceil((sk.ammoMax || sk.ammo || 0) - 1e-9), left)];
+}
+
+/** 琳琅诗怀雅's skill purse: zero is a balance; no purse is null. Display only. */
+export function coinView(u) {
+  const n = u.mem?.coins, max = u.skill?.bb?.sp;
+  if (u.side !== 'ally' || !Number.isSafeInteger(n) || n < 0 || !Number.isSafeInteger(max) || max < 1) return null;
+  return [Math.min(n, max), max];
+}
+
+/**
+ * `mysticView(u)` = `[stored attack energies, the trait's maximum]` of a 秘术师 (professions.js installMystic keeps the
+ * count in `trait.stored` — the trait's storeEnergy adds one when the attack finds no target, releaseEnergy empties the
+ * lot into the next one — and the cap is `profile.storeMax`: the trait's 最多3个, 4 for 深靛's MSC-X module, TUNE
+ * mystic): the number under the HP bar. Zero is a count. Kits that keep a store of their own (维伊's 转置能量, 黑键's
+ * elite energies) replace `storeEnergy` and never set `trait.stored`: no row. Display only.
+ */
+export function mysticView(u) {
+  const n = u.trait?.stored, max = u.profile?.storeMax;
+  if (u.side !== 'ally' || !Number.isSafeInteger(n) || n < 0 || !Number.isSafeInteger(max) || max < 1) return null;
+  return [Math.min(n, max), max];
 }
 
 /**
@@ -169,17 +200,52 @@ export function negView(u) {
   return v > 0 ? Math.min(1, Math.max(0.01, r2(v))) : null;
 }
 
-/** Units included in a snapshot: deployed & visible, plus recently dead ones (DIE animation).
- * Optional detail DTOs follow the exact same selection, using only the stats already read by the tuple.
+/**
+ * `layerView(u)` = the hit-negating 护盾 layers a unit holds (the sum of its buffs' shieldHits — 泥岩's 沃土予身), null
+ * without any. Display only: render/vfx/talentfx.js shows the official effect of that many layers (mudrok_buff_03 / 02 /
+ * 01_start).
  */
-export function snapshotUnits(units, t, unitStats = null) {
+export function layerView(u) {
+  let n = 0;
+  for (const b of u.buffs) if (b.shieldHits > 0) n += b.shieldHits;
+  return n >= 1 ? Math.min(999, Math.floor(n)) : null;
+}
+
+/**
+ * `chargeView(u)` = `[charges stored, the skill's maximum]` of an ally whose skill stores charges (maxCharges > 1, 卡涅利安):
+ * the 技能充能 the official sand armour shows (render/vfx/skillfx.js, the `[eff_cond]` buffs). Display only.
+ */
+export function chargeView(u) {
+  const sk = u.skill;
+  if (u.side !== 'ally' || !sk || sk.noSkill || !(sk.maxCharges > 1)) return null;
+  return [Math.max(0, Math.min(sk.maxCharges, Math.floor(sk.charges || 0))), sk.maxCharges];
+}
+
+/**
+ * `moteView(u)` = a unit's orbiting 「微尘」: `[count, wide]` (wide = the S2 半径扩大), null without a ring: 魔王's T1
+ * 过往尘埃 (kits/ops/chess_char_4_25-cetsyr.js sets `unit.moteRing`, read when the snapshot is taken; at most three, six
+ * while S2 runs) — display only: render/motes.js draws that many motes circling her, the sim's own mote logic (a mote
+ * touching an operator, respawn after 6 s, S2 hitting enemies instead) is untouched.
+ */
+export function moteView(u) {
+  if (typeof u.moteRing !== 'function') return null;
+  const v = u.moteRing();
+  if (!Array.isArray(v) || !Number.isFinite(v[0])) return null;
+  const n = Math.max(0, Math.min(MOTE_MAX, Math.floor(v[0])));
+  if (n <= 0) return null;
+  return [n, v[1] ? 1 : 0];
+}
+
+/** Upper bound of the mote count a snapshot may carry (the sim's own caps: 3, six while S2 runs). */
+export const MOTE_MAX = 9;
+
+/** Units included in a snapshot: deployed & visible, plus recently dead ones (DIE animation). */
+export function snapshotUnits(units, t) {
   const out = [];
   for (const u of units) {
     if (u.hidden) continue;
-    if ((u.alive && u.deployed) || (!u.alive && t - u.deathAt < DIE_ANIM_TIME && u.deathAt > -Infinity)) {
-      out.push(unitTuple(u, t));
-      if (unitStats) unitStats.push(unitStatsEntry(u, u._s || null));
-    }
+    if (u.alive && u.deployed) out.push(unitTuple(u, t));
+    else if (!u.alive && t - u.deathAt < DIE_ANIM_TIME && u.deathAt > -Infinity) out.push(unitTuple(u, t));
   }
   return out;
 }

@@ -8,9 +8,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkBuildOnce, startBuildGuard, fetchBuild, BUILD_CHECK_MS, BUILD_FETCH_TIMEOUT_MS } from '../../public/js/ui/buildGuard.js';
 
-/** A fake fetch answering /client-build with `build` (null → the frame carries none). */
+/** A fake fetch answering /healthz with `build` (null → the frame carries none). */
 const fetchOf = (build) => async (url, init) => {
-  assert.equal(url, '/client-build');
+  assert.equal(url, '/healthz');
   assert.equal(init.cache, 'no-store');
   return { ok: true, status: 200, json: async () => ({ ok: true, build }) };
 };
@@ -24,19 +24,6 @@ test('fetchBuild: the tag, or null when unreachable / not reported / too slow', 
   const t0 = Date.now();
   assert.equal(await fetchBuild(() => new Promise(() => {}), { timeoutMs: 20 }), null);
   assert.ok(Date.now() - t0 < BUILD_FETCH_TIMEOUT_MS, 'gives up on its own timeout');
-});
-
-test('fetchBuild requests only the single root marker, independent of page pathname', async () => {
-  const previous = Object.getOwnPropertyDescriptor(globalThis, 'location');
-  try {
-    Object.defineProperty(globalThis, 'location', { configurable: true, value: { pathname: '/_release/old/public/' } });
-    assert.equal(await fetchBuild(async url => {
-      assert.equal(url, '/client-build');
-      return { ok: true, json: async () => ({ build: 'old-build' }) };
-    }), 'old-build');
-  } finally {
-    if (previous) Object.defineProperty(globalThis, 'location', previous); else delete globalThis.location;
-  }
 });
 
 test('checkBuildOnce: first sighting, unchanged, changed, and unknown when the server says nothing', async () => {
@@ -93,7 +80,7 @@ test('startBuildGuard: records this page\'s build in memory, reloads once on a N
   assert.equal(m.guard.stale(), true);
 });
 
-test('startBuildGuard: a NEW build that is then not served twice is dropped (unstable build / reverts)', async () => {
+test('startBuildGuard: a NEW build that is then not served twice is dropped (rolling deploy / reverts)', async () => {
   const m = manual();
   await new Promise((r) => setTimeout(r, 0));
   m.setBuild('bbb');
@@ -105,7 +92,7 @@ test('startBuildGuard: a NEW build that is then not served twice is dropped (uns
   assert.equal(m.calls.reload, 0, 'never saw the same new build twice in a row');
 });
 
-test('startBuildGuard: an unreadable /client-build never reloads — not even after a new build was seen', async () => {
+test('startBuildGuard: an unreadable /healthz never reloads — not even after a new build was seen', async () => {
   const m = manual();
   await new Promise((r) => setTimeout(r, 0));
   m.setBuild('bbb');
@@ -148,4 +135,36 @@ test('startBuildGuard: stop() ends the watch', async () => {
   assert.equal(m.calls.reload, 0);
   assert.equal(m.guard.stale(), false);
   assert.equal(BUILD_CHECK_MS, 60_000);
+});
+
+test('onHealth: told every /healthz body a check reads — what else the page reads of the server before any hello (DESIGN §32 P1a)', async () => {
+  const bodies = [];
+  const fetchFn = async () => ({ ok: true, json: async () => ({ build: 'aaa', content: { vanilla: 'c'.repeat(64), sets: 0, plugins: 2 } }) });
+  assert.equal(await fetchBuild(fetchFn, { onHealth: (b) => bodies.push(b) }), 'aaa');
+  assert.deepEqual(bodies.map((b) => b.content.plugins), [2]);
+  assert.equal(await fetchBuild(fetchFn, { onHealth: () => { throw new Error('listener trouble'); } }), 'aaa', 'its listener cannot break the check');
+  await checkBuildOnce({ fetchFn, onHealth: (b) => bodies.push(b) });
+  assert.equal(bodies.length, 2);
+  const g = startBuildGuard({ fetchFn, reload: () => {}, setInterval: () => 1, clearInterval: () => {}, onHealth: (b) => bodies.push(b) });
+  for (let i = 0; i < 20 && bodies.length < 3; i++) await new Promise((r) => setTimeout(r, 1));
+  g.stop();
+  assert.equal(bodies.length, 3, 'the guard\'s first check hands it over');
+  const main = (await import('node:fs')).readFileSync(new URL('../../public/js/main.js', import.meta.url), 'utf8');
+  const callback = /onHealth:\s*(\(h\) => \{[\s\S]*?\n\s*\}),/.exec(main)?.[1];
+  assert.ok(callback, 'main wires the health callback');
+  let state = { installedPlugins: 0, installedNotices: false };
+  let writes = 0;
+  // Execute the actual callback with a small store; changes in formatting do not change this contract.
+  const onHealth = new Function('pluginCount', 'store', `return (${callback});`)(
+    (content) => Number.isInteger(content?.plugins) && content.plugins > 0 ? content.plugins : 0,
+    { get: () => state, set: (patch) => { state = { ...state, ...patch }; writes++; } },
+  );
+  onHealth({ content: { plugins: 2, notices: true } });
+  assert.deepEqual(state, { installedPlugins: 2, installedNotices: true });
+  onHealth({ content: { plugins: 2, notices: true } });
+  assert.equal(writes, 1, 'unchanged hints do not notify subscribers');
+  onHealth({ content: { notices: true } });
+  assert.deepEqual(state, { installedPlugins: 0, installedNotices: true }, 'language-only notices reach the title');
+  onHealth({});
+  assert.deepEqual(state, { installedPlugins: 0, installedNotices: false }, 'a notice-free server clears the hint');
 });

@@ -1,6 +1,6 @@
 // server/match/match/platform.js — Match methods: the platform interface of the server/match/Match.js header
 // (server/lobby.js ⇄ Match) — start, handle (validation, error isolation, flush; the intents themselves: intents.js
-// _handle), setLoadout (INFO_CHECK only), onDisconnect / onReconnect and the full resync of one human, onLeave and 中途退出
+// _handle), setLoadout (INFO_CHECK; rule-enabled PREP), onDisconnect / onReconnect and the full resync of one human, onLeave and 中途退出
 // = elimination (_quit), dispose.
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
@@ -9,6 +9,7 @@ import { PHASE, ERR } from '../../../shared/constants.js';
 import { syntheticResult } from '../fields.js';
 import { FLOW_TICKER_PRIORITY, OK, fail } from './common.js';
 import { msg } from '../../../shared/i18n.js';
+import { ruleOption } from '../../../shared/plugins/rules.js';
 
 const GAME_TYPES = new Set(Object.keys(C2S).filter((t) => Object.hasOwn(C2S, t) && (t.startsWith('g.') || t.startsWith('b.'))));
 
@@ -36,11 +37,27 @@ export class MatchPlatform {
   handle(playerId, msg) {
     const ps = this.players.get(playerId) || this.spectators.get(playerId);
     if (!ps || ps.isBot || ps.left) return fail(ERR.NOT_IN_ROOM);
+    return this._handleSeatIntent(ps, msg);
+  }
+
+  /** Shared human / external-AI semantic validation and dispatch. C2S schema: net.js / the adapter. */
+  _handleSeatIntent(ps, msg) {
     // a spectator seat only watches (the platform routes nothing else of it)
-    if (ps.spectator && (!msg || msg.t !== 'g.watch')) return fail(ERR.SPECTATOR);
+    if (ps.spectator && (!msg || msg.t !== 'g.watch')) {
+      // g.test shares the host's rate bucket (applyTestCommand audits SPECTATOR after the stamp).
+      if (this.test && msg?.t === 'g.test') {
+        let res;
+        try { res = this.applyTestCommand(ps, msg); }
+        catch (e) { this.reportError('handle g.test', e); res = fail(ERR.INTERNAL); }
+        try { this.flush(); } catch (e) { this.reportError('flush', e); }
+        return res && res.error ? res : OK;
+      }
+      return fail(ERR.SPECTATOR);
+    }
     if (this.disposed || this.ended) {
-      // a battle report that crossed the match end (the last b.progress of a field) is stale: ignored, never an error
-      // (DESIGN §14 — an error frame without a rid would surface as a toast in the browser)
+      // A report that crossed the match end (the last b.progress of a field, a delegated rehearsal's answer) is stale:
+      // ignored, never an error (DESIGN §14 — an error frame without a rid would surface as a toast in the browser).
+      if (msg && msg.t === 'b.rehearsalResult') return OK;
       return this.clientCombat && msg && (msg.t === 'b.progress' || msg.t === 'b.result') ? OK : fail(ERR.WRONG_PHASE);
     }
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string' || !GAME_TYPES.has(msg.t)) return fail(ERR.BAD_MSG);
@@ -56,10 +73,16 @@ export class MatchPlatform {
     return OK;
   }
 
+  /** Host-only asynchronous input, journalled by testTrace; never a C2S message. */
+  externalReply(id, reply, failed) {
+    this.guard(() => this.externalAI?.receive(id, reply, failed));
+  }
+
   /**
    * room.loadout during the match (DESIGN §16): only while INFO_CHECK runs (the briefing's 干员调配 entry); the lobby
    * already checked it against the data (PlayerState.setLoadout re-checks it). `ops` (0.2.2): the per-operator 潜能 /
-   * 练度 that come with it (undefined = unchanged).
+   * 练度 that come with it (undefined = unchanged). A room whose prepLoadout rule is prep also accepts one merge
+   * during PREP while that seat has not pressed 准备 (DESIGN §34.15). INFO_CHECK stays a full replace.
    * @param {string} playerId
    * @param {Record<string, { skill: number, module: string|null }> | null} loadout
    * @param {Record<string, { potential: number, cultivate: number }> | null} [ops]
@@ -68,24 +91,45 @@ export class MatchPlatform {
   setLoadout(playerId, loadout, ops = undefined) {
     const ps = this.players.get(playerId);
     if (!ps || ps.isBot || ps.left) return fail(ERR.NOT_IN_ROOM);
-    if (this.disposed || this.ended || this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE, 'loadout locked for this match');
+    const prep = this.phase === PHASE.PREP && ruleOption(this.rules, 'prepLoadout') === 'prep';
+    if (this.disposed || this.ended || (this.phase !== PHASE.INFO_CHECK && !prep)) return fail(ERR.WRONG_PHASE, 'loadout locked for this match');
+    if (prep && ps.ready) return fail(ERR.WRONG_PHASE, 'loadout locked for this match');
     let res = OK;
     this.guard(() => {
-      if (!ps.setLoadout(loadout, ops)) { res = fail(ERR.BAD_TARGET, 'loadout does not match the game data'); return; }
-      this.markPrivate(ps);
+      const before = prep ? ps.allChess().map((owner) => ({ owner, loadout: ps.loadoutFor(ps.gd.chess(owner.id)) })) : [];
+      if (!ps.setLoadout(loadout, ops, prep ? { merge: true } : undefined)) { res = fail(ERR.BAD_TARGET, 'loadout does not match the game data'); return; }
+      if (prep) {
+        for (const { owner, loadout: previous } of before) {
+          const next = ps.loadoutFor(ps.gd.chess(owner.id));
+          if (['skillIndex', 'moduleId', 'potential', 'cultivate'].some((key) => previous[key] !== next[key])) ps._reconcileTokensFor(owner);
+        }
+        ps.recompute();
+      } else this.markPrivate(ps);
     });
     return res;
   }
 
-  /** Display preferences may change only during the briefing; the lobby keeps later edits for the next match. */
-  setSkins(playerId, choices) {
+  /**
+   * room.skins during the match (docs/SKINS.md): accepted in ANY phase, unlike the loadout just above. The loadout is
+   * locked at INFO_CHECK because it changes what a unit does; a skin changes only what it looks like, and it is public —
+   * a teammate picking a different model mid-match is harmless, so `markPublic` carries it to everyone on the next
+   * broadcast. The lobby already filtered the shape (freezeSkins); PlayerState.setSkins re-checks it and refuses a
+   * bad map without clearing the choice already stored.
+   * @param {string} playerId
+   * @param {Record<string, string> | null} skins
+   * @returns {{ ok: true } | { error: string, detail?: string }}
+   */
+  setSkins(playerId, skins) {
     const ps = this.players.get(playerId);
     if (!ps || ps.isBot || ps.left) return fail(ERR.NOT_IN_ROOM);
-    if (this.disposed || this.ended || this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE, 'skins locked for this match; stored for the next match');
     let res = OK;
     this.guard(() => {
-      if (!ps.setSkins(choices)) { res = fail(ERR.BAD_MSG, 'invalid skin choices'); return; }
+      // an empty selection is a valid one: it clears every skin. A bad map leaves the stored choice alone.
+      if (!ps.setSkins(skins)) { res = fail(ERR.BAD_MSG, 'bad skin selection'); return; }
+      // [ASSUMED] Live cosmetic changes refresh every existing prep view, using the same dirty path as a move.
+      // The public choice also reaches current battle renderers; no running sim or BattleSpec is changed.
       this.markPrivate(ps);
+      this.markPublic();
     });
     return res;
   }
@@ -100,6 +144,8 @@ export class MatchPlatform {
       // a paused solo battle resumes (the server takes the field over; nobody is left to resume it)
       this._resume();
       if (this.clientCombat) this._authorityLost(ps, 'disconnect');
+      // a rehearsal this host was running falls back to the server (DESIGN §14; a no-op without tasks)
+      this._rehearsalHostChanged();
       this.markPublic();
     });
   }
@@ -138,22 +184,24 @@ export class MatchPlatform {
     } else if (this.lastResultMsg) {
       this.sendTo(playerId, { ...this.lastResultMsg, playerId });
     }
-    this._sendDamageTo(playerId);
   }
 
   onLeave(playerId) {
     const ps = this.players.get(playerId);
     if (!ps || ps.isBot || ps.left || this.disposed) return;
     this.guard(() => {
-      this._cancelBotPrep(ps);
       ps.left = true;
       this.cancelSetupVote();
+      // A seat that is gone for good takes its reroll cooldown with it (it cannot ask again in this match anyway).
+      this._rerollStartAt.delete(playerId);
       ps.connected = false;
       ps.autoplay = false;
       this.watchers.delete(playerId);
       if (this.ended) return;
       this._resume();
       if (this.clientCombat) this._authorityLost(ps, 'left');
+      // a rehearsal the departed seat was running falls back to the server (DESIGN §14; a no-op without tasks)
+      this._rehearsalHostChanged();
       this.markPublic();
       if (!this.order.some((p) => !p.isBot && !p.left)) {
         this.finish({ victory: false, reason: 'abandoned' });
@@ -170,7 +218,6 @@ export class MatchPlatform {
    * survived when leaving.
    */
   _quit(ps) {
-    this._cancelBotPrep(ps);
     this.maybeEndInfo();
     if (!ps.alive) return;
     const phase = this.phase;
@@ -196,6 +243,7 @@ export class MatchPlatform {
     }
     ps.lp = 0;
     ps.eliminate(passedRound);
+    this.offersChanged();
     this.tickerText(msg('{name}博士中途退出了模拟', { name: ps.name }), FLOW_TICKER_PRIORITY);
     if (this.bossWaves && (phase === PHASE.ROUND_START || phase === PHASE.SP_DRAFT || phase === PHASE.PREP)) {
       // before the boss fight: pair the players left again (the prep preview shows the new partner / template); a
@@ -218,11 +266,13 @@ export class MatchPlatform {
 
   dispose() {
     if (this.disposed) return;
-    this._freezeDamage(false);
     this.disposed = true;
-    for (const ps of this.order) this._cancelBotPrep(ps);
+    this.externalAI?.close();
     if (this.runner) { try { this.runner.stop(); } catch { /* ignore */ } }
     this._stopClientCombat();
+    this._cancelRehearsal();
+    // a plugin interaction window's own deadline timer (MatchOffers); the tracked timers below cover the rest
+    if (typeof this.offersDispose === 'function') { try { this.offersDispose(); } catch { /* ignore */ } }
     for (const h of this._timers) { try { this.sched.clearTimeout(h); } catch { /* ignore */ } }
     this._timers.clear();
     if (this._pubTimer) { try { this.sched.clearTimeout(this._pubTimer); } catch { /* ignore */ } this._pubTimer = null; }

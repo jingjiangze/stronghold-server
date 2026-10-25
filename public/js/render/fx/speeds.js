@@ -6,8 +6,8 @@ import { PROJ } from '../style.js';
  * The sim's projectile speeds (server/sim/constants.js PROJECTILE_SPEEDS — pure data, served read-only at
  * /sim/constants.js with the rest of the client-side sim, DESIGN §14): a shot's visual flight ends when the sim lands it,
  * i.e. with its damage number. Loaded once in a browser (the game already has the module from its battle runner);
- * until it arrives — and in Node, where the browser's /sim/ tree is not on disk — style.js PROJ speeds (a copy the
- * unit tests keep equal to the sim's) stand in.
+ * until it arrives — and in Node, where '/sim/' is no module path — style.js PROJ speeds (a copy the unit tests keep
+ * equal to the sim's) stand in.
  */
 let simSpeeds = null;
 
@@ -21,11 +21,8 @@ export function setSimProjectileSpeeds(table, boomerangReturn = null) {
   if (Number(boomerangReturn) > 0) simSpeeds.boomerangReturn = Number(boomerangReturn);
 }
 
-// The specifier is relative to this module, like every other import in the tree, and never '/sim/…': the whole
-// client tree can be served from a CDN under a path prefix (e.g. /app/<tag>/), where a root-absolute specifier
-// would resolve against the origin and leave that prefix. test/module-specifiers.test.js keeps this true.
 if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
-  import('../../../sim/constants.js').then((m) => { if (m?.PROJECTILE_SPEEDS) setSimProjectileSpeeds(m.PROJECTILE_SPEEDS, m.BOOMERANG_RETURN_SPEED); }, () => {});
+  import('/sim/constants.js').then((m) => { if (m?.PROJECTILE_SPEEDS) setSimProjectileSpeeds(m.PROJECTILE_SPEEDS, m.BOOMERANG_RETURN_SPEED); }, () => {});
 }
 
 /**

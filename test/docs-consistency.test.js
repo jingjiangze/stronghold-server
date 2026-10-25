@@ -42,7 +42,7 @@ import * as SIM_CONST from '../server/sim/constants.js';
 import { MULTI_ROUND_BOUNTY_BATTLES } from '../server/match/choices.js';
 import { SELF_BOUND, PART_TRANSFER, BLADE_TRANSFER, DRONE_LINK_BASE } from '../server/sim/content/bosses.js';
 import * as BOARD from '../server/match/board.js';
-import * as DAMAGE from '../server/sim/damage.js';
+import * as DAMAGE from '../server/sim/attack.js';
 import { SUB } from '../server/sim/professions.js';
 import { ENEMY_REACH } from '../public/js/render/pick.js';
 import { BAND_TURN_SECONDS } from '../server/match/Match.js';
@@ -340,7 +340,7 @@ test('user playtest #4 (DESIGN §18): picking by tile, timers, 机变 two taps, 
   assert.match(DESIGN, /\*\*爆发冷却\*\*/);
   // player report F5 after 0.1.0 (DESIGN §21.24): the entries carry the tile the operator lies on
   assert.match(DESIGN, /`down: \[\[id, respawnAt \(game s\), respawnTime \(s\), state, row, col\]\]`/);
-  assert.match(SIM, /`burstLocked\(unit\)` in damage\.js/);
+  assert.match(SIM, /`burstLocked\(unit\)` in attack\.js/);
   assert.match(SIM, /损伤抵抗 = the target's data `epResistance`/);
   assert.ok(!/800 phys; no lock/.test(SIM), 'SIM §3: operators\' 侵蚀 locks too');
   assert.match(SIM, /`down: \[\[id, respawnAt, respawnTime, state, row, col\]\]`/);
@@ -348,7 +348,7 @@ test('user playtest #4 (DESIGN §18): picking by tile, timers, 机变 two taps, 
   const special = DATA.items.chess_item_4_09_e_a;
   assert.ok(special.shopExcluded && special.shopExcludedBy, '灼燃维式重锤 is never sold');
   assert.match(dataRow('shopExcluded`, `shopExcludedBy'), /isShopItem/);
-  assert.match(PLAYING, /突变细胞只来自昆图斯的策略/);
+  assert.match(PLAYING, /突变细胞来自昆图斯的策略，也会出现在凯瑟琳【定向投放】里（调度中心仍不出售）/);
   // (#11 revisited by user playtest #6: the drone is a hand piece again, still only on the field when her skill fires)
   assert.equal(DATA.tokens.token_10000_silent_healrb.placeable, true, '赫默\'s drone is a hand piece (user playtest #6)');
   assert.match(dataRow('displayType`, `placeable'), /manually deployable summon/);
@@ -594,11 +594,8 @@ test('playtest6b follow-up (DESIGN §20.10–§20.13): leader HP, 直接乘算, 
   assert.match(s209, /`shared\/constants\.js BOND_LAYER_CAP = 0`/);
   assert.match(s209, /`shared\/constants\.js BOSS_HIT_LIMIT = 0`/);
   assert.match(s209, /Settled by the user \("保持固定血量"\)[^\n]*aliveScaling` is \*\*false\*\*[^\n]*Replaced on 2026-10-06 by the owner's decision[^\n]*§25\.13\.4/);
-  // 2026-10-11 决策（D1）：上游优先，Boss 血量跟随上游 jingjiangze v0.2.4（PR #209 的按存活玩家分池规则）。
-  assert.equal(DATA.config.bossHpScale.perPlayer, true, 'follow upstream: pool per player alive at fight start (PR #209)');
-  assert.equal(DATA.config.bossHpScale.aliveScaling, false, 'the fixed pool\'s optional scaling stays off (upstream)');
-  assert.equal(DATA.config.bossHpScale.solo, 1, 'solo follows upstream (=1, not the quarter-pool factor)');
-  assert.match(doc('docs/DESIGN.md'), /intentional difference from upstream 0\.2\.0/);
+  assert.equal(DATA.config.bossHpScale.perPlayer, true, 'the owner adopted the per-player pool (2026-10-06)');
+  assert.equal(DATA.config.bossHpScale.aliveScaling, false, 'the fixed pool\'s optional × alive / 4 stays off');
   assert.equal(SIM_CONST.DIRECT_BONUS_STACKING, 'add');
   assert.match(s209, /DIRECT_BONUS_STACKING = 'multiply'/);
   // the normative lines
@@ -609,7 +606,7 @@ test('playtest6b follow-up (DESIGN §20.10–§20.13): leader HP, 直接乘算, 
   const s63 = DESIGN.slice(DESIGN.indexOf('### 6.3'), DESIGN.indexOf('### 6.4'));
   assert.match(s52, /are 直接乘算 and go into `Σpct`/);
   assert.match(s53, /`Battle\.applyStrongest`/);
-  assert.match(s55, /\*\*限伤\*\*[^\n]*`ceil\(final\) ≥ 300000` is cancelled[^\n]*before HP shields/);
+  assert.match(s55, /\*\*限伤\*\*[^\n]*`ceil\(estimate\) ≥ 300000` is cancelled[^\n]*before the injury effects/);
   assert.match(s62, /elite onto the consumed deployed copy's tile, else to the hand \(§20\.11\)/);
   assert.ok(!/A merge's elite always goes to the hand/.test(DESIGN), '§6.2: the hand-first wording is gone');
   assert.match(s63, /`BOND_LAYER_CAP` = 999 layers \(the client's `MAX_GARRISON_STACK`/);
@@ -711,7 +708,7 @@ test('player feedback after 0.1.0 (DESIGN §21, v0.1.1): every report mapped, th
   assert.match(sec(8), /`m\.ticker \{text, id, type, priority, playerId\}`/);
   assert.match(META, /The strip queues by `priority`, highest first/);
   // UnitInfo / unitStats / rewardOffer shapes (§8)
-  assert.match(sec(8), /skillIndex\?, moduleId\?, items\?, form\? \}/);
+  assert.match(sec(8), /skillIndex\?, moduleId\?, items\?, form\?, skin\? \}/);
   assert.match(sec(8), /moveSpeed, range\?, base: \{…same\}\}/);
   assert.match(sec(8), /rewardOffer: null \| \{ tier, source: 'merge'\|'special', label, queued, slots/);
   // §6.6 describes the new bot; the old one-liner is gone
@@ -851,10 +848,12 @@ test('the deliberate trigger deviation (DESIGN §21.29): six 重装 skills DEFAU
   assert.match(DESIGN, /every MANUAL 重装 skill, §21\.12 — but the six of the deliberate deviation, §21\.29/);
   assert.match(DESIGN, /\*\*partly reverted by §21\.29\*\*/);
   assert.match(DESIGN, /\| Six 重装 skills' trigger \(§21\.29\) \|/);
-  // the builder's table is per chess (灰毫 S1 is the generic skcom_atk_up[3]) and the data follows it
-  const bd = doc('tools/build-data.mjs');
+  // the builder's table is per operator charId and skill (灰毫 S1 is the generic skcom_atk_up[3]; the seasons reuse chess
+  // ids for other operators) and the data follows it
+  assert.match(doc('tools/build-data.mjs'), /import \{ createOfficialUnitBuilders \} from '\.\.\/server\/plugins\/officialUnitBuilder\.js'/);
+  const bd = doc('server/plugins/officialUnitBuilder.js');
   assert.match(bd, /const TRIGGER_DEVIATIONS = Object\.freeze\(\{/);
-  for (const k of ["chess_char_1_04_a: { skchr_udflow_2: 'DEFAULT' }", "chess_char_1_20_a: { skchr_liskam_2: 'DEFAULT' }", "chess_char_2_18_a: { 'skcom_atk_up[3]': 'DEFAULT', skchr_ashlok_2: 'DEFAULT' }", "chess_char_5_08_a: { skchr_horn_2: 'DEFAULT', skchr_horn_3: 'DEFAULT' }"]) assert.ok(bd.includes(k), k);
+  for (const k of ["char_4137_udflow: { skchr_udflow_2: 'DEFAULT' },", "char_107_liskam: { skchr_liskam_2: 'DEFAULT' },", "char_431_ashlok: { 'skcom_atk_up[3]': 'DEFAULT', skchr_ashlok_2: 'DEFAULT' },", "char_4039_horn: { skchr_horn_2: 'DEFAULT', skchr_horn_3: 'DEFAULT' },", "char_2026_yu: { skchr_yu_2: 'SKILL_RANGE' },"]) assert.ok(bd.includes(k), k);
   for (const id of ['chess_char_1_04_b', 'chess_char_2_18_b', 'chess_char_5_08_b']) {
     for (const s of DATA.chess[id].skills.filter((x) => x.trigger.rawRule === 'TAKE_DAMAGE' && x.trigger.rule === 'DEFAULT')) assert.ok(bd.includes(s.skillId), `${id} ${s.skillId}`);
   }
@@ -902,8 +901,7 @@ test('干员战斗语音 (DESIGN §21.30): the manifest data, the official prior
   }
   // a battle slot usually carries several lines (选中干员 / 部署 have two), so the battle set alone stays well above 10 each
   assert.ok(lines.length >= charIds.length * 10, `${lines.length} voice lines for ${charIds.length} operators`);
-  // the manifest URL carries the manifest's cache-busting `?v=…`: match the path, tolerate the query
-  for (const u of lines) assert.match(u, /^\/assets\/audio\/voice\/cn\/char_[^/]+\/cn_\d+\.mp3(\?v=[\w.-]+)?$/);
+  for (const u of lines) assert.match(u, /^\/assets\/audio\/voice\/cn\/char_[^/]+\/cn_\d+\.mp3$/);
   // the official scheduling numbers (audio_data.json battleVoice.voiceTypeOptions)
   assert.equal(VOICE_PRIORITY.start, 100);
   assert.equal(VOICE_PRIORITY.faceEnemy, 90);
@@ -924,7 +922,11 @@ test('干员战斗语音 (DESIGN §21.30): the manifest data, the official prior
   assert.equal(manifest.stats.voiceJpChars, charIds.length);
   assert.match(doc('docs/ASSETS.md'), /voiceJp: \{ \[charId\]: \{ …the slots of `voice` \} \}/);
   assert.match(doc('docs/DEPLOY.md'), /`FULL_ZIP_JP_VOICE` 改成 `false` 时/);
-  assert.match(PLAYING, /「语音语言」选 \*\*中文 \/ 日本語\*\*（默认中文，和界面语言无关/);
+  assert.match(doc('docs/ASSETS.md'), /voiceEn\?: \{ \[charId\]: \{ …the slots of `voice` \} \}/);
+  assert.match(doc('docs/ASSETS.md'), /voiceNativeLangType\?: \{ \[charId\]:/);
+  assert.match(doc('docs/DEPLOY.md'), /`FULL_ZIP_OPTIONAL_VOICE`/);
+  assert.match(doc('docs/DEPLOY.md'), /5712 个文件，约 169 MB，zip 后约 157 MB/);
+  assert.match(PLAYING, /「语音语言」选 \*\*中文 \/ 日本語 \/ English \/ 한국어\*\*（默认中文，和界面语言无关/);
   assert.match(PLAYING, /会说一句官方的「选中干员」语音，休整期也一样/);
   assert.match(SIM, /\['engage', id\]/);
   // the code: every slot the client asks for comes from a running battle's own stream — the three prep-only lines

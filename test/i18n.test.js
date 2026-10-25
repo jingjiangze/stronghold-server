@@ -133,7 +133,7 @@ test('public/i18n/en.json: valid, English values, placeholders kept, the pilot s
 });
 
 test('the whole client, shared and the server messages: no Chinese literal left unwrapped, every msgid in public/i18n/en.json (extract 0, check --strict)', async () => {
-  // what tools/i18n.mjs scans: public/js (not dev / vendor / assets / fonts), shared, server — server/sim only for the
+  // what tools/i18n.mjs scans: public/js (not dev / vendor / assets / fonts), public/studio, shared, server — server/sim only for the
   // texts it sends (msg() / ctx.toast), its own t() / N_() are other helpers
   const SKIP = new Set(['node_modules', 'vendor', 'assets', 'fonts', 'dev']);
   const files = [];
@@ -145,7 +145,7 @@ test('the whole client, shared and the server messages: no Chinese literal left 
       else if (/\.m?js$/.test(name)) files.push(r);
     }
   };
-  for (const root of ['public/js', 'shared', 'server']) visit(root);
+  for (const root of ['public/js', 'public/studio', 'shared', 'server']) visit(root);
   assert.ok(files.length > 300, `${files.length} files`);
   const missing = [];
   let used = 0;
@@ -161,6 +161,24 @@ test('the whole client, shared and the server messages: no Chinese literal left 
   }
   assert.ok(used >= 1350, `msgid uses: ${used} (1 404 at phase 2)`);
   assert.deepEqual(missing, []);
+});
+
+// GitHub #849 (docs: PR #850): a computed msgid — t(flag ? '甲' : '乙'), t(table[k] || '默认') — is invisible to extract and
+// check, so its strings could go untranslated silently. The ternary goes around the calls instead (DESIGN §35.49).
+test('tools/i18n.mjs: a ternary inside t() is not extracted; the 0.3.2 call sites put it around literal t() calls', async () => {
+  const inside = await scanSource("export const f = (x) => t(x ? '参数甲' : '参数乙');", 'x.js');
+  assert.deepEqual(inside.msgids.map((m) => m.msgid), [], 'the rule docs/I18N.md §1 states: neither string is seen');
+  const around = await scanSource("export const f = (x) => (x ? t('参数甲') : t('参数乙'));", 'x.js');
+  assert.deepEqual(around.msgids.map((m) => m.msgid), ['参数甲', '参数乙']);
+  // the msgids found on the line of a call site (located by a marker on that line)
+  const onLine = async (f, marker) => {
+    const src = readFileSync(path.join(ROOT, f), 'utf8');
+    const line = src.split('\n').findIndex((l) => l.includes(marker)) + 1;
+    assert.ok(line > 0, `${f}: ${marker}`);
+    return (await scanSource(src, f)).msgids.filter((m) => m.line === line).map((m) => m.msgid);
+  };
+  assert.deepEqual(await onLine('public/js/screens/loadout.js', 'title=${ioDiy ?'), ['导出自选编队', '导入自选编队']);
+  assert.deepEqual(await onLine('public/js/ui/pluginPanel.js', 't(CLASS_NAMES[p.class])'), ['脚本（沙箱）', '插件', '非官方']);
 });
 
 test('tools/i18n.mjs: msgids of template literals name their params; the codemod wraps text, attributes and nested strings', async () => {

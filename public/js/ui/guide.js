@@ -3,7 +3,8 @@
 // downloads from the public mirror (data/assets.json → ui['guide/<key>']; GitHub issue #42) — data.js artUrls; a page
 // whose picture fails to load tries its next URL. The pages are stored squashed to 1024² (both copies) and are
 // displayed stretched back to 16:9. Three chapters (基础规则 / 调度手册 / 进阶图鉴), ‹ › buttons, ←/→ (A/D) keys, page
-// dots, thumbnails; Esc or the backdrop closes. Adjacent pages are preloaded.
+// dots, thumbnails; Esc or the backdrop closes. Only the next page is preloaded (a page is 0.9–1.5 MB; the one before
+// has usually just been seen, so preloading it too doubled the download — host bandwidth, layer 0).
 // With no page listed the viewer shows the official loading-screen tips (config.tips) instead, and so does a page none
 // of whose copies loads (`guideStage`: data/assets.json lists the downloaded pages but the files are not on disk — a
 // `git pull` and restart without setup, an older asset folder, a failed download the shrink guard kept); the chapter
@@ -11,14 +12,16 @@
 //
 // Global & imperative so every screen can open it: `openGuide(page?)`; <GuideHost/> is mounted once by main.js
 // (and by the dev mock harness); <GuideButton/> is the standard trigger (title, lobby, room, in-match menu).
+// Official versions (DESIGN §35.23): with another version on screen a line under the header says the pictures are
+// 第二期下半's and some rules of that version differ [ASSUMED: a remake note until the version notes page of M3]; the
+// tips follow its config.
 
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, MicroLabel, Button, Spinner } from './components.js';
 import { createStore, useStore } from '../store.js';
 import { data, useData, artUrls, nextArtUrl } from '../data.js';
 import { t, N_ } from '../../../shared/i18n.js';
-import { MaterialImage } from './materialImage.js';
-import { loadMaterialImage } from '../materialFallback.js';
+import { DEFAULT_VERSION, shownVersion, versionLabel } from '../versions.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -68,6 +71,19 @@ export function guideStage(page, failed) {
   return src ? { kind: 'image', src } : { kind: 'tips' };
 }
 
+/**
+ * The one page the viewer preloads while page `i` is shown: the next one (wrapping around), its first URL that has not
+ * failed — null without pages. The previous page is not preloaded (see the header).
+ * @param {Array<{ urls?: string[] }>} pages guidePages()
+ * @param {number} i
+ * @param {Set<string>} [failed]
+ */
+export function guidePreloadUrl(pages, i, failed) {
+  const n = Array.isArray(pages) ? pages.length : 0;
+  if (!n || n < 2) return null;
+  return nextArtUrl(pages[(((i + 1) % n) + n) % n]?.urls, failed);
+}
+
 /** Open/closed + current page. */
 export const guideStore = createStore({ open: false, page: 0 });
 
@@ -88,7 +104,10 @@ export function GuideButton({ class: cls, size = 'sm', variant = 'ghost', label 
 
 function preload(url) {
   if (!url || typeof Image === 'undefined') return;
-  void loadMaterialImage(url).catch(() => {});
+  const img = new Image();
+  img.decoding = 'async';
+  img.crossOrigin = 'anonymous';
+  img.src = url;
 }
 
 /** Fallback body when no tutorial page can be shown: the official tips as a numbered list. */
@@ -109,6 +128,7 @@ export function GuideHost() {
   const [loaded, setLoaded] = useState(() => new Set());
   const [failed, setFailed] = useState(() => new Set());
   const boxRef = useRef(null);
+  const version = useStore(shownVersion);
   const n = pages.length;
   const i = n ? Math.min(Math.max(0, page), n - 1) : 0;
   const cur = pages[i] || null;
@@ -135,8 +155,7 @@ export function GuideHost() {
 
   useEffect(() => {
     if (!open || !n) return;
-    preload(nextArtUrl(pages[(i + 1) % n]?.urls, failed));
-    preload(nextArtUrl(pages[(i + n - 1) % n]?.urls, failed));
+    preload(guidePreloadUrl(pages, i, failed));
   }, [open, i, n, failed]);
 
   if (!open) return null;
@@ -163,11 +182,12 @@ export function GuideHost() {
         </nav>` : null}
         <button type="button" class="guide__close" aria-label=${t('关闭')} title=${t('关闭 (Esc)')} onClick=${closeGuide}><${Icon} name="close" /></button>
       </header>
+      ${version !== DEFAULT_VERSION ? html`<p class="guide__vernote" data-testid="guide-version-note"><${Icon} name="info" />${t('玩法说明的图片来自第二期下半，「{version}」中部分规则不同', { version: versionLabel(version) })}</p>` : null}
 
       ${src ? html`<div class="guide__stage">
         <button type="button" class="guide__nav guide__prev" aria-label=${t('上一页')} onClick=${() => go(i - 1)}><${Icon} name="chevronLeft" /></button>
         <div class=${cx('guide__page', isLoaded && 'is-loaded')}>
-          <${MaterialImage} key=${src} src=${src} alt=${t(cur.title)} draggable=${false}
+          <img key=${src} src=${src} alt=${t(cur.title)} draggable=${false}
             onLoad=${() => setLoaded((s) => new Set(s).add(src))}
             onError=${() => setFailed((s) => new Set(s).add(src))} />
           ${!isLoaded ? html`<span class="guide__loading"><${Spinner} size="md" /></span>` : null}

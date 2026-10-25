@@ -19,21 +19,6 @@ const COMBAT = new Set([PHASE.COMBAT, PHASE.UNITE, PHASE.FINAL_ASSAULT, PHASE.HI
 /** The server runs client-side combat (m.public.combatMode). */
 export const isClientCombat = (pub) => !!pub && pub.combatMode === 'client';
 
-/** Only the admitted relay exposes a second UNITE generation within the same match round. */
-export const uniteRelayRound = (pub) => pub?.phase === PHASE.UNITE && pub.uniteRounds === 2
-  && (pub.uniteRound === 1 || pub.uniteRound === 2) ? pub.uniteRound : null;
-export const uniteRelayKey = (pub) => uniteRelayRound(pub) ? `${pub.round}:${pub.uniteRound}` : null;
-
-/** A new relay public state may arrive before its field; never re-enter the previous helpers' battle. */
-export function currentRelayField(pub, field) {
-  const single = pub?.phase === PHASE.UNITE && pub.uniteRounds === 1 && pub.uniteRound === 1
-    && typeof pub.unite?.battleId === 'string';
-  if (!uniteRelayRound(pub) && !single) return true;
-  const current = fields(pub).find(f => f.kind === 'unite');
-  return !!current && field?.fieldId === current.fieldId
-    && (!pub.unite?.battleId || !field.battleId || field.battleId === pub.unite.battleId);
-}
-
 const players = (pub) => (Array.isArray(pub?.players) ? pub.players.filter(isObj) : []);
 const fields = (pub) => (Array.isArray(pub?.fields) ? pub.fields.filter(isObj) : []);
 
@@ -166,6 +151,17 @@ export function layerCamera(field, layer, mySide = 'L') {
   const rect = field?.rect;
   if (layer === 'L' || layer === 'R') return { rect, side: layer, half: true };
   return { rect, side: mySide };
+}
+
+/**
+ * The one occupied half ('L' | 'R') of a 联防 field with a lone helper, else null. That field
+ * (act1autochess_escaped_single) routes every enemy through the helper's half and the other half holds no player, so
+ * the camera starts on the helper's half and the ‹ › pill keeps 全景 (GitHub #635, PR #637).
+ */
+export function loneHalf(field) {
+  if (field?.kind !== 'unite') return null;
+  const occupied = ['L', 'R'].filter((side) => Object.values(sidesOf(field)).includes(side));
+  return occupied.length === 1 ? occupied[0] : null;
 }
 
 /**

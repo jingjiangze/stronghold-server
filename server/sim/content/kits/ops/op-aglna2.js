@@ -59,8 +59,8 @@
 
 import { num, talentBb, skillRec, batMod, up, installAura, toggleBuff } from '../shared/tier1.js';
 import { absoluteRangeKeys, canTargetEnemy, sortEnemyTargets } from '../../../targeting.js';
-import { bodyInKeys } from '../../../body.js';
-import { hasHp } from '../../../damage.js';
+import { bodyInRange } from '../../../body.js';
+import { hasHp } from '../../../attack.js';
 import { RESIST_STATUSES } from '../../../buffs.js';
 import { TICK } from '../../../constants.js';
 import { hypot } from '../../../detmath.js';
@@ -335,7 +335,7 @@ export default {
           if (slow > 0) {
             const keys = unit.rangeKeySet;
             for (const e of battle.enemies) {
-              if (!e.alive || e.hidden || !e.isFlying || !keys || !bodyInKeys(e, keys)) continue;
+              if (!e.alive || e.hidden || !e.isFlying || !keys || !bodyInRange(e, keys)) continue;
               battle.applyStrongest(e, 'aglna2:airSlow', { duration: MOVE_CHECK * 2, value: slow, mods: (v) => ({ moveMul: 1 - v }), source: unit });
             }
           }

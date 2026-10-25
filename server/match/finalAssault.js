@@ -32,12 +32,12 @@
 //     (player report after 0.1.0: "隐藏boss还没打就出了造成50%伤害播报").
 //   * Hidden Core eligibility (after an R14 win): difficulty in hiddenCore.difficulties, the mode has a hidden round,
 //     Σ activated layers of the alive players measured at the end of the boss round's prep > threshold (solo 350 /
-//     co-op 1200) and team LP > minTeamLpExclusive (1).
+//     co-op 1200) and team LP > minTeamLpExclusive (1, so at least 2 left: PRTS's user-contributed 「剩余生命值 > 1」,
+//     which the community's measurement 路标月报#2 matches — GitHub #645).
 
 import { BOSS_ROW_OFFSET, COLS, BOSS_POOL_MIN_HP } from '../sim/constants.js';
 import { mirrorDir, normDir } from '../sim/dir.js';
 import { bossPoolShareOf } from './gamedata.js';
-import { MAX_PLAYER_CAPACITY } from '../../shared/playerCapacity.js';
 
 /**
  * BOSS_HIT ticker thresholds (activity_table autoChessData.broadcastList comment_boss_hit_1..3, paramList 0.2 / 0.5 /
@@ -57,7 +57,15 @@ export function bossFieldPlacement(side, row, col, dir = 'RIGHT') {
   return side === 'R' ? { row: r, col: COLS - 1 - col, dir: mirrorDir(d) } : { row: r, col, dir: d };
 }
 
-/** Seeded initial pairing; `previous` carries player-id pairs through prep, combat and Hidden Core. */
+/**
+ * The seed salt of a boss round's pairing draw: the Final Assault's 'boss-pairs' (unchanged since 0.2.5), the Hidden
+ * Core its own `boss-pairs:<round>` — it draws pairs and sides anew (GitHub #845, DESIGN §35.27).
+ */
+export function bossPairSalt(gd, round) {
+  return round === gd.hiddenRound && round !== gd.bossRound ? `boss-pairs:${round}` : 'boss-pairs';
+}
+
+/** Seeded pairing; `previous` carries player-id pairs from a round's plan through its prep and combat. */
 export function pairPlayers(alive, rng, previous = null) {
   const sorted = alive.slice().sort((a, b) => a.seat - b.seat);
   const groups = [];
@@ -77,16 +85,14 @@ export function pairPlayers(alive, rng, previous = null) {
 }
 
 /** Shared boss HP for a boss id with `aliveCount` alive players (GameData.bossPoolShare / bossPoolShareOf; omitted ⇒ a full team). */
-export function bossPoolHp(gd, bossId, aliveCount, { experimental = false } = {}) {
+export function bossPoolHp(gd, bossId, aliveCount) {
   const boss = gd.boss(bossId);
   const diff = gd.difficulty;
   let base = boss && boss.bloodPoint && Number.isFinite(boss.bloodPoint[diff]) ? boss.bloodPoint[diff] : null;
   if (base == null && boss && boss.bloodPoint) base = Object.values(boss.bloodPoint).find((v) => Number.isFinite(v)) ?? null;
   if (base == null) base = 500000;
   const tune = typeof gd.bossHpMul === 'function' ? gd.bossHpMul(bossId) : 1;
-  const enlarged = experimental && !gd.isSolo && Number.isInteger(aliveCount) && aliveCount > 4 && aliveCount <= MAX_PLAYER_CAPACITY;
-  // Only the opt-in >4-seat fight extends this fork's alive/4 rule; normal config/solo scaling are untouched.
-  const share = enlarged ? aliveCount / 4 : typeof gd.bossPoolShare === 'function' ? gd.bossPoolShare(aliveCount)
+  const share = typeof gd.bossPoolShare === 'function' ? gd.bossPoolShare(aliveCount)
     : bossPoolShareOf(gd.mode && gd.mode.bossHpScale, gd.config && gd.config.bossHpScale, !!gd.isSolo, aliveCount);
   return Math.max(1, Math.round(base * share * tune));
 }
@@ -122,11 +128,10 @@ export class SharedBossPool {
  * @param {import('./gamedata.js').GameData} gd
  * @param {{ layerSum: number, teamLp: number }} s
  */
-export function hiddenEligible(gd, { layerSum, teamLp, aliveCount = 4, experimental = false }) {
+export function hiddenEligible(gd, { layerSum, teamLp }) {
   const hc = gd.hiddenCore;
   if (!gd.hiddenRound || !hc.difficulties.includes(gd.difficulty)) return false;
-  const scale = experimental && !gd.isSolo && Number.isInteger(aliveCount) && aliveCount > 4 && aliveCount <= MAX_PLAYER_CAPACITY ? aliveCount / 4 : 1;
-  const threshold = gd.isSolo ? hc.single : hc.multi * scale;
+  const threshold = gd.isSolo ? hc.single : hc.multi;
   return layerSum > threshold && teamLp > hc.minTeamLpExclusive;
 }
 

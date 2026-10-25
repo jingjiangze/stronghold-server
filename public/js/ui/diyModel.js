@@ -12,11 +12,15 @@
 // (`sp.pref.diy` = { v: 1, picks }) and sent with C2S `room.diy { picks }` (the server keeps the legal picks and drops
 // the rest — shared/protocol.js checkDiyPicks — so a stale pick never gets the roster refused). Out of match: the next
 // match takes it. 导出 / 导入 use a versioned envelope like the 干员持有 list.
+// Per version (DESIGN §35.23, M1): each official version has its own slots and pools, so its picks are kept apart —
+// `sp.pref.diy` for 第二期下半 (unchanged) and `sp.pref.diy.<slug>` for another version (diyPrefKey); the export names its
+// version (`version`, only a non-default one).
 
 import { DIY_LIMITS, checkDiyPicks } from '../../../shared/protocol.js';
 import { diySlotIds, diySlot, diyPool, isPrototypePick, lockedSelection, isDiyModule, diyRecord } from '../../../shared/diy.js';
 import { unitForm } from '../../../shared/standIn.js';
 import { N_ } from '../../../shared/i18n.js';
+import { DEFAULT_VERSION, versionById, versionSlug } from '../../../shared/versions.js';
 
 /** localStorage key (store.js loadPref/savePref prefix `sp.pref.`) and format version. */
 export const DIY_PREF = 'diy';
@@ -59,6 +63,15 @@ export function parseStoredDiy(raw) {
 
 /** Serialised form for localStorage. */
 export const toStoredDiy = (picks) => ({ v: DIY_VERSION, picks: cleanPicks(picks) });
+
+/**
+ * The localStorage key (store.js prefix `sp.pref.`) of a version's picks: 'diy' for 第二期下半, 'diy.<slug>' else.
+ * @param {string|null|undefined} version a registry id
+ */
+export function diyPrefKey(version) {
+  const v = versionById(version);
+  return !v || v.id === DEFAULT_VERSION ? DIY_PREF : `${DIY_PREF}.${versionSlug(v)}`;
+}
 
 /** Number of filled slots. */
 export const diyCount = (picks) => Object.keys(cleanPicks(picks)).length;
@@ -147,9 +160,9 @@ export function pickOptions(slotId, picks, data, kitted) {
  * The record a slot shows for a pick (shared/diy.js diyRecord: the operator at the slot's normal form, or the elite).
  * @param {string} slotId @param {any} pick @param {any} data @param {{ elite?: boolean }} [opts]
  */
-export function slotRecord(slotId, pick, data, { elite = false } = {}) {
+export function slotRecord(slotId, pick, data, { elite = false, potential = null } = {}) {
   if (!isObj(pick)) return null;
-  try { return diyRecord(slotId, pick, { elite, data }); } catch { return null; }
+  try { return diyRecord(slotId, pick, { elite, data, potential }); } catch { return null; }
 }
 
 /** Set (or with null, clear) one slot. Returns a new roster (the input is not changed). */
@@ -162,13 +175,14 @@ export function setPick(picks, slotId, pick) {
 
 // ---- export / import -------------------------------------------------------------------------------------------------
 
-/** Portable payload of a roster, as downloaded / copied by 导出. */
-export function exportDiy(picks, { now = Date.now() } = {}) {
+/** Portable payload of a roster, as downloaded / copied by 导出 (`version`: its version, only a non-default one). */
+export function exportDiy(picks, { now = Date.now(), version = null } = {}) {
   const clean = cleanPicks(picks);
   return {
     kind: DIY_EXPORT_KIND,
     v: DIY_VERSION,
     exportedAt: new Date(Number.isFinite(now) ? now : Date.now()).toISOString(),
+    ...(version && version !== DEFAULT_VERSION && versionById(version) ? { version } : {}),
     count: Object.keys(clean).length,
     picks: clean,
   };

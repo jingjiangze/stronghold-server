@@ -1,5 +1,5 @@
 // Multi-device support (desktop Chrome / Edge / Firefox / Safari, iPad and Android tablets in landscape, phones in
-// landscape ≥ 640×360 CSS px). Everything is feature-detected — never UA-sniffed:
+// landscape ≥ 640×360 CSS px). Capabilities are feature-detected; isIOS only selects explanatory copy:
 //
 //   detectFeatures()        { touch, coarse, hover, fullscreen, standalone, reducedMotion, importMaps, … } of this browser
 //   installDeviceSupport()  once at boot (main.js): <html> classes (sp-touch / sp-coarse / sp-hover / sp-fs /
@@ -13,6 +13,7 @@
 //                           variant (iPadOS / older Safari); iPhone Safari has no element fullscreen → unsupported and the
 //                           button hides. Android: after entering, the orientation is locked to landscape when allowed.
 //   FullscreenButton        HUD / title button (hidden where unsupported), follows fullscreenchange.
+//   useScreenWakeLock(active) screen wake lock while active and visible, restored on foreground and released on cleanup.
 //   long-press              a still touch of LONG_PRESS_MS on a DOM control → a synthetic `contextmenu` (= detail) when
 //                           the browser sends none (iOS Safari); when a handler took it (preventDefault: detail card,
 //                           tooltip) the click of the release is swallowed — otherwise the slow tap stays a tap.
@@ -21,7 +22,7 @@
 
 import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { pwaInstall } from '../pwa.js';
-import { html, Icon, Modal, Button, Fragment } from './components.js';
+import { html, Icon, Button } from './components.js';
 import { t } from '../../../shared/i18n.js';
 
 /** A touch held this long without moving opens the detail (contextmenu) on DOM controls. */
@@ -29,6 +30,14 @@ export const LONG_PRESS_MS = 520;
 const LONG_PRESS_SLOP = 10;
 
 const mq = (win, q) => { try { return !!win.matchMedia?.(q)?.matches; } catch { return false; } };
+
+/** iOS/iPadOS hint copy only; never a browser-capability gate. */
+export function isIOS(win = globalThis) {
+  const nav = win.navigator || {};
+  const ua = nav.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua)
+    || ((nav.platform === 'MacIntel' || /Macintosh/.test(ua)) && nav.maxTouchPoints > 1);
+}
 
 /**
  * Whether the SCREEN (not the viewport) is in landscape: a split-view iPad or a narrow desktop window has a portrait
@@ -99,6 +108,30 @@ export function featureClasses(f) {
 /** prefers-reduced-motion: reduce */
 export function reducedMotion(win = globalThis) { return mq(win, '(prefers-reduced-motion: reduce)'); }
 
+/** The short-screen block of the stylesheets (css/screens/lobby.css: landscape phones), for text CSS cannot swap. */
+export const SHORT_SCREEN_QUERY = '(max-height: 520px)';
+
+/**
+ * Whether a media query matches, kept current through its change events (a rotation, a resized window); false where
+ * matchMedia is missing. The lobby passes SHORT_SCREEN_QUERY's answer to 选择同盟方式 (its key field's placeholder).
+ * @param {string} query
+ * @param {any} [win]
+ */
+export function useMediaQuery(query, win = globalThis) {
+  const [on, setOn] = useState(() => mq(win, query));
+  useEffect(() => {
+    let m = null;
+    try { m = win.matchMedia?.(query); } catch { m = null; }
+    if (!m) return undefined;
+    const sync = () => setOn(!!m.matches);
+    sync();
+    if (typeof m.addEventListener === 'function') { m.addEventListener('change', sync); return () => m.removeEventListener('change', sync); }
+    if (typeof m.addListener === 'function') { m.addListener(sync); return () => m.removeListener(sync); } // Safari < 14
+    return undefined;
+  }, [query]);
+  return on;
+}
+
 /**
  * Keep a class on <html> while a component is mounted and `on` holds (replaces CSS :has(), which Firefox ESR 115 and
  * Safari < 15.4 lack): the match screen sets sp-in-match, the connection banner sp-conn.
@@ -114,6 +147,57 @@ export function useDocClass(name, on = true) {
   }, [name, !!on]);
 }
 
+/** Hold a screen wake lock while visible; the disposer releases it. */
+export function installScreenWakeLock(win = globalThis) {
+  const doc = win.document;
+  const wakeLock = win.navigator?.wakeLock;
+  if (!doc || !wakeLock) return () => {};
+  let sentinel = null;
+  let generation = 0;
+  const release = async (lock) => { try { await lock?.release(); } catch { /* best effort */ } };
+  const cancelRetry = () => {
+    doc.removeEventListener('pointerdown', onGesture, true);
+    doc.removeEventListener('touchstart', onGesture, true);
+  };
+  const onGesture = () => {
+    cancelRetry(); // a touch can also send a pointer event
+    if (doc.visibilityState === 'visible') void acquire(generation, false);
+  };
+  const acquire = async (request, retry = true) => {
+    try {
+      const lock = await wakeLock.request('screen');
+      // A visibility change or cleanup can finish before the request.
+      if (request !== generation || doc.visibilityState !== 'visible') void release(lock);
+      else sentinel = lock;
+    } catch {
+      if (retry && request === generation && doc.visibilityState === 'visible') {
+        doc.addEventListener('pointerdown', onGesture, true);
+        doc.addEventListener('touchstart', onGesture, { capture: true, passive: true });
+      }
+    }
+  };
+  const update = () => {
+    const request = ++generation;
+    cancelRetry();
+    void release(sentinel);
+    sentinel = null;
+    if (doc.visibilityState === 'visible') void acquire(request);
+  };
+  doc.addEventListener('visibilitychange', update);
+  void update();
+  return () => {
+    ++generation;
+    cancelRetry();
+    doc.removeEventListener('visibilitychange', update);
+    void release(sentinel);
+    sentinel = null;
+  };
+}
+
+export function useScreenWakeLock(active) {
+  useEffect(() => active ? installScreenWakeLock() : undefined, [!!active]);
+}
+
 // ---- fullscreen ----------------------------------------------------------------------------------------------------
 
 export const fullscreen = {
@@ -124,18 +208,9 @@ export const fullscreen = {
     if (!el) return false;
     try {
       if (typeof el.requestFullscreen === 'function') await el.requestFullscreen({ navigationUI: 'hide' });
-      else if (typeof el.webkitRequestFullscreen === 'function') {
-        el.webkitRequestFullscreen();
-        if (!this.active(win)) await new Promise(resolve => {
-          const d = win.document;
-          let timer;
-          const finish = () => { clearTimeout(timer); d.removeEventListener('webkitfullscreenchange', finish); d.removeEventListener('webkitfullscreenerror', finish); resolve(); };
-          d.addEventListener('webkitfullscreenchange', finish); d.addEventListener('webkitfullscreenerror', finish);
-          timer = setTimeout(finish, 1500);
-        });
-      } else return false;
+      else if (typeof el.webkitRequestFullscreen === 'function') el.webkitRequestFullscreen();
+      else return false;
     } catch { return false; }
-    if (!this.active(win)) return false;
     // Android Chrome: a landscape game may lock the orientation while fullscreen (refused elsewhere — ignored)
     try { await win.screen?.orientation?.lock?.('landscape'); } catch { /* not allowed here */ }
     return true;
@@ -152,50 +227,43 @@ export const fullscreen = {
   toggle(win = globalThis) { return this.active(win) ? this.exit(win) : this.enter(win); },
 };
 
-/** Fullscreen toggle (hidden where the browser has no element fullscreen, e.g. iPhone Safari). */
-export function FullscreenButton({ class: cls = '', showUnavailable = false }) {
+export function useFullscreen() {
   const [on, setOn] = useState(() => fullscreen.active());
-  const [ok] = useState(() => fullscreen.supported());
-  const [busy, setBusy] = useState(false);
-  const [help, setHelp] = useState(null);
   useEffect(() => {
     const d = globalThis.document;
     if (!d) return undefined;
     const upd = () => setOn(fullscreen.active());
     d.addEventListener('fullscreenchange', upd);
     d.addEventListener('webkitfullscreenchange', upd);
+    upd();
     return () => { d.removeEventListener('fullscreenchange', upd); d.removeEventListener('webkitfullscreenchange', upd); };
   }, []);
-  if (!ok && !showUnavailable) return null;
-  const label = ok ? on ? t('退出全屏') : t('全屏') : t('查看全屏说明');
-  const toggle = async () => {
-    if (!ok) { setHelp('unsupported'); return; }
-    if (busy) return;
-    setBusy(true);
-    try { if (!await fullscreen.toggle()) setHelp('denied'); }
-    finally { setBusy(false); setOn(fullscreen.active()); }
-  };
-  return html`<${Fragment}>
-    <button type="button" class=${`fsbtn tapx ${cls}`} aria-label=${label} title=${label} aria-pressed=${on ? 'true' : 'false'}
-        aria-haspopup=${ok ? undefined : 'dialog'} disabled=${busy} onClick=${toggle}>
-      <${Icon} name=${on ? 'collapse' : 'expand'} />
-    </button>
-    <${Modal} open=${!!help} title=${t('全屏模式')} micro="DISPLAY MODE" ariaLabel=${t('全屏模式说明')} trapFocus=${true}
-        class="fullscreen-help" onClose=${() => setHelp(null)} actions=${html`<${Button} onClick=${() => setHelp(null)}>${t('知道了')}<//>`}>
-      <p>${help === 'unsupported' ? t('当前浏览器不支持网页原生全屏。部分手机浏览器（包括部分 iPhone 浏览器）无法由网页隐藏地址栏。') : t('浏览器未允许进入全屏。请直接点击全屏按钮重试，或检查浏览器权限。')}</p>
-      <p>${t('如果浏览器菜单提供“添加到主屏幕”，可以尝试从主屏幕以独立窗口打开。系统状态栏是否隐藏仍由浏览器与系统决定。')}</p>
-      <p>${t('我们不会把普通网页模式标记为“已经全屏”。')}</p>
-    <//>
-  <//>`;
+  return on;
 }
 
-/** Only a browser-issued install offer shows a button; installed and unsupported environments stay quiet. */
-export function PwaInstallButton({ class: cls = '', size = 'sm' }) {
+/** Fullscreen toggle (hidden where the browser has no element fullscreen, e.g. iPhone Safari). */
+export function FullscreenButton({ class: cls = '' }) {
+  const on = useFullscreen();
+  const [ok] = useState(() => fullscreen.supported());
+  if (!ok) return null;
+  const label = on ? t('退出全屏') : t('全屏');
+  return html`<button type="button" class=${`fsbtn tapx ${cls}`} aria-label=${label} title=${label} aria-pressed=${on ? 'true' : 'false'}
+      onClick=${() => fullscreen.toggle()}>
+    <${Icon} name=${on ? 'collapse' : 'expand'} />
+  </button>`;
+}
+
+/**
+ * Only a browser-issued install offer shows a button; installed and unsupported environments stay quiet.
+ * `square`: the glyph alone (the lobby's top bar, beside ⚙ / 📖), the name stays title / aria-label.
+ */
+export function PwaInstallButton({ class: cls = '', size = 'sm', square = false }) {
   const [available, setAvailable] = useState(pwaInstall.available);
   useEffect(() => pwaInstall.subscribe(setAvailable), []);
   if (!available) return null;
-  return html`<${Button} variant="secondary" size=${size} icon="download" class=${cls}
-    data-testid="pwa-install" onClick=${() => pwaInstall.request()}>${t('添加到桌面')}<//>`;
+  return html`<${Button} variant="secondary" size=${size} icon="homePlus" square=${square} class=${cls}
+    title=${t('添加到桌面')} aria-label=${t('添加到桌面')}
+    data-testid="pwa-install" onClick=${() => pwaInstall.request()}>${square ? null : t('添加到桌面')}<//>`;
 }
 
 export function updateRotateHintPwaI18n(doc = globalThis.document) {

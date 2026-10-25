@@ -3,11 +3,13 @@
 import { GEO } from '../../../../shared/constants.js';
 import { attackRangeGrid } from '../../../../shared/loadoutRecord.js';
 import { meleeOnHighGround } from '../../../../shared/highGround.js';
+import { summonPlacementGrid } from '../../../../shared/summonPlacement.js';
 import { pieceDir, rangeTiles } from '../facing.js';
 import { isObj, tileKey } from './shared.js';
 import { boardTileOf, fieldTile } from './camera.js';
 import { deployedRecord, fieldsStandIn, standInOf } from './standIn.js';
 import { t } from '../../../../shared/i18n.js';
+import { morphSlotPolicy } from '../../../../shared/plugins/rules.js';
 
 
 // ---- placement (canPlace mirror) ------------------------------------------------------------------------
@@ -192,9 +194,10 @@ export function indexPieces(priv) {
  * cards, `stageOverrides`), like the server's per-player deploy map, on the field the pieces are deployed on
  * (`field` = `deployFieldOf(pub, myId)`: the own board, or the player's half of the boss field in a boss round).
  * @param {{ priv:any, stage:any, editable:boolean, field?:'normal'|'bossL'|'bossR', getChess?:(id:string)=>any,
- *   getToken?:(id:string)=>any, getItem?:(id:string)=>any, getEffect?:(id:string)=>any }} o
+ *   getToken?:(id:string)=>any, getItem?:(id:string)=>any, getEffect?:(id:string)=>any,
+ *   morphMode?:'official'|'plus' }} o
  */
-export function placementContext({ priv, stage, editable, field = 'normal', getChess = () => null, getToken = () => null, getItem = () => null, getEffect = () => null, backups = null }) {
+export function placementContext({ priv, stage, editable, field = 'normal', getChess = () => null, getToken = () => null, getItem = () => null, getEffect = () => null, backups = null, morphMode = 'official' }) {
   const pieces = indexPieces(priv);
   const boardAt = new Map();
   for (const e of pieces.values()) if (e.area === 'board') boardAt.set(tileKey(e.row, e.col), e);
@@ -210,14 +213,15 @@ export function placementContext({ priv, stage, editable, field = 'normal', getC
   const deploy = field === 'bossL' || field === 'bossR'
     ? deploySets(stage, field, ov)
     : deploySets(effectiveStage(stage, ov));
-  return { priv, pieces, boardAt, handAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups };
+  return { priv, pieces, boardAt, handAt, deploy, cap, count, field, editable: !!editable, getChess, getToken, getItem, backups, morphMode: morphMode === 'plus' ? 'plus' : 'official' };
 }
 
 /**
- * Deploy position ('MELEE'|'RANGED'|'ALL') of a chess/token piece, or null for items. A MELEE chess whose trait reads
- * 「可以放置于远程位」 (shared/highGround.js: 歌蕾蒂娅, 崖心, 见行者, normal and elite, any module) is 'ALL': any deployable
- * tile, the 高台 included (server/match/board.js positionClass; the owner's decision of 2026-10-05). Every other MELEE
- * chess is ground-only.
+ * Deploy position ('MELEE'|'RANGED'|'ALL') of a chess/token piece, or null for items. A MELEE chess whose Chinese
+ * trait reads 「可以放置于远程位」 (shared/highGround.js `placeOnRanged`, else the Simplified line: 歌蕾蒂娅, 崖心, 见行者,
+ * normal and elite, any module) is 'ALL': any deployable tile, the 高台 included (server/match/board.js positionClass;
+ * the owner's decision of 2026-10-05). The record here is the localized one (GitHub #676). Every other MELEE chess is
+ * ground-only.
  */
 export function piecePosition(ctx, piece) {
   if (!isObj(piece)) return null;
@@ -250,15 +254,18 @@ export function tileAllows(ctx, piece, row, col) {
 /**
  * Board tiles ('r,c') where a summon whose text reads "只能部署在召唤者攻击范围内" may stand (tokens.json `ownerRange`:
  * 伺夜's 狼群, 缪尔赛思's 流形 — the tactical point; player report #9 after 0.1.0): its owner's attack range (the
- * loadout's grid, shared/loadoutRecord.js attackRangeGrid, rotated by the owner's facing around its tile). Null when
+ * loadout's grid, shared/loadoutRecord.js attackRangeGrid, rotated by the owner's facing around its tile).
+ * Jessica's shield uses the four-adjacent-tile grid instead, independent of facing/skill/module. Null when
  * the piece is not range-bound or its owner is not on the board. `owner` ({ row, col, piece }) replaces the owner's
  * current position (a summon swapped with its own owner). Mirror of server/match/PlayerState.js summonRange.
  * @param {ReturnType<typeof placementContext>} ctx
  * @returns {Set<string> | null}
  */
 export function summonRange(ctx, piece, owner = null) {
-  if (!isObj(piece) || piece.kind !== 'token' || ctx?.getToken?.(piece.id)?.ownerRange !== true) return null;
-  return ownerRangeOf(ctx, piece, owner);
+  if (!isObj(piece) || piece.kind !== 'token') return null;
+  const grid = summonPlacementGrid(piece.id);
+  if (!grid && ctx?.getToken?.(piece.id)?.ownerRange !== true) return null;
+  return ownerRangeOf(ctx, piece, owner, grid);
 }
 
 /**
@@ -273,14 +280,14 @@ export function summonExcluded(ctx, piece, owner = null) {
   return ownerRangeOf(ctx, piece, owner);
 }
 
-/** The attack-range tiles of a summon piece's owner on the board (summonRange / summonExcluded), or null. */
-function ownerRangeOf(ctx, piece, owner = null) {
+/** The attack or fixed placement range of a summon piece's owner on the board, or null. */
+function ownerRangeOf(ctx, piece, owner = null, placementGrid = null) {
   let at = owner;
   if (!at) for (const e of ctx.boardAt.values()) if (e.piece.uid === piece.ownerUid && e.piece.kind === 'chess') { at = e; break; }
   const rec = at && ctx.getChess(at.piece.id);
   if (!rec) return null;
   let grid = null;
-  try { grid = attackRangeGrid(deployedRecord(rec, ctx.priv, ctx.getChess, ctx.backups) || rec); } catch { /* the data grid */ }
+  try { grid = placementGrid || attackRangeGrid(deployedRecord(rec, ctx.priv, ctx.getChess, ctx.backups) || rec); } catch { /* the data grid */ }
   return new Set(rangeTiles(grid || rec.rangeGrid, at.row, at.col, pieceDir(at.piece)).map(([r, c]) => tileKey(r, c)));
 }
 
@@ -367,7 +374,7 @@ export function canPlace(ctx, uid, target) {
     // dropped onto its own owner (the two swap); an outside-bound one (战术锚点) outside it
     const ownerSwap = src.area === 'board' && occ && occ.piece.uid === piece.ownerUid ? { row: src.row, col: src.col, piece: occ.piece } : null;
     const range = summonRange(ctx, piece, ownerSwap);
-    if (range && !range.has(tileKey(row, col))) return no('BAD_TILE', t('只能部署在召唤者攻击范围内'));
+    if (range && !range.has(tileKey(row, col))) return no('BAD_TILE', summonPlacementGrid(piece.id) ? t('只能部署在召唤者相邻四格') : t('只能部署在召唤者攻击范围内'));
     const out = summonExcluded(ctx, piece, ownerSwap);
     if (out && out.has(tileKey(row, col))) return no('BAD_TILE', t('只能部署在召唤者攻击范围外'));
     if (src.area === 'board') {
@@ -412,7 +419,15 @@ const PROMOTE_KEYS = new Set(['use_equip_upgrade_char', 'equip_round_start_upgra
  * @param {any} targetPiece
  */
 export function equipReplaces(ctx, uid, targetPiece) {
-  if (!Array.isArray(targetPiece?.items) || targetPiece.items.length < 2) return false;
+  const items = targetPiece?.items;
+  if (ctx?.morphMode === 'plus') {
+    if (!Array.isArray(items)) return false;
+    const policy = morphSlotPolicy('plus', (it) => !!ctx.getItem?.(typeof it === 'string' ? it : it?.id)?.canGiveBond);
+    const incoming = ctx.getItem?.(ctx.pieces?.get(uid)?.piece?.id);
+    // a morph does not occupy a slot, so it never opens the replace dialog
+    if (!policy.occupies(incoming)) return false;
+    if (policy.slotsUsed(items) < policy.slotCap(2)) return false;
+  } else if (!Array.isArray(items) || items.length < 2) return false;
   const rec = ctx.getItem(ctx.pieces.get(uid)?.piece?.id);
   if (!consumedOnEquip(rec)) return !equipMerges(ctx, uid);
   const promotes = Array.isArray(rec.buffs) && rec.buffs.some((b) => PROMOTE_KEYS.has(b?.key));

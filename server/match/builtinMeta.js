@@ -55,7 +55,7 @@ function rollSameBond(ctx, bonds, maxTier, exclude = null) {
 }
 
 /** 信标: the living teammate (not the caller) with the most members of `bonds` ("相应盟约人数最多"), ties at random; null without one. */
-function mostBondMate(ctx, bonds) {
+function mostBondMate(ctx, bonds, minCount = 0) {
   const mates = ctx.teammates();
   if (!mates.length) return null;
   let best = -1;
@@ -64,7 +64,7 @@ function mostBondMate(ctx, bonds) {
     const score = bonds.reduce((s, b) => s + t.bondCount(b), 0);
     if (score > best) { best = score; pick = [t]; } else if (score === best) pick.push(t);
   }
-  return ctx.rng.pick(pick) || null;
+  return best >= minCount ? ctx.rng.pick(pick) || null : null;
 }
 
 const ITEM_HANDLERS = {
@@ -143,21 +143,20 @@ const ITEM_HANDLERS = {
     },
   },
   // 拟态物质 「若已拥有至少2名该初始干员，则再获得1名该初始干员；否则随机获得1名同盟约初始干员」: the 否则 is the owned < 2
-  // case only. With 2 copies owned and none left in the pool (an elite holds 3 of a Ⅵ阶's 5) the grant fails and the
-  // item gives nothing (research 06 §7: some effects fail at the copy cap) — it never falls back to a same-bond operator
-  // (GitHub #207).
+  // case only. The original experiment BV1eLXXBqEgF (3:00) distinguishes this item from pool-weighted grants:
+  // it samples eligible operator identities and can grant beyond stock. All obtained copies still occupy the pool.
   use_equip_reward_char_chess: {
     onEquip(ctx, ev) {
       const base = ctx.gd.baseIdOf(ev.target.id);
       const owned = [...ctx.board(), ...ctx.hand(), ...ctx.temp()].filter((p) => p && p.kind === 'chess' && !p.golden && ctx.gd.baseIdOf(p.id) === base).length;
       if (owned >= 2) {
-        // 0.2.4 supersedes the 0.2.0 #207 empty-pool failure: the 3rd copy is granted even when the pool is out (the
-        // grant overdraws — the piece records the deficit), matching the measured 「已拥有至少2名…则再获得1名」.
         if (!ctx.grantChess(base, { requirePool: false })) toastNothing(ctx, ev);
         return;
       }
-      const id = rollSameBond(ctx, ctx.pieceBonds(ev.target.uid), 6);
-      if (!id || !ctx.grantChess(id)) toastNothing(ctx, ev);
+      const bonds = new Set(ctx.pieceBonds(ev.target.uid));
+      const id = ctx.rollChess({ maxTier: 6, ignoreCounts: true,
+        filter: cid => ctx.gd.chess(cid)?.bonds?.some(b => bonds.has(b)) });
+      if (!id || !ctx.grantChess(id, { requirePool: false })) toastNothing(ctx, ev);
     },
   },
   use_equip_reward_special_goods_char_chess: {
@@ -211,6 +210,40 @@ const ITEM_HANDLERS = {
         ctx.setCounter(k, 0);
         const id = rollSameBond(ctx, ctx.pieceBonds(holder.uid), ctx.shopLevel());
         if (id) ctx.grantChess(id);
+      }
+    },
+  },
+  sell_char_count_gain_equip_owner_original: {
+    onSold(ctx) {
+      const { piece, holder } = ctx.source;
+      if (!piece || !holder) return;
+      const need = Math.max(1, int(paramsOf(ctx, piece).count, 8));
+      const key = `pack:${piece.uid}`;
+      if (ctx.incCounter(key) >= need) {
+        ctx.setCounter(key, 0);
+        ctx.grantChess(ctx.gd.baseIdOf(holder.id));
+      }
+    },
+  },
+  use_equip_give_char_to_player_most_bond: {
+    onEquip(ctx, ev) {
+      const target = ctx.piece(ev.target.uid);
+      if (!target) return;
+      if (ctx.chessRecord(target.id)?.diyFor) { ev.error = 'BAD_TARGET'; return; }
+      const bonds = ctx.pieceBonds(target.uid);
+      const to = mostBondMate(ctx, bonds, 1);
+      ctx.destroyPiece(target.uid);
+      if (to) ctx.addEffect({ id: `gift:${ev.item.uid}`, key: 'effect:builtin_gift', hidden: true, battle: false, params: { toPlayerId: to.playerId, chessId: target.id, bonds } });
+      else ctx.grantChess(target.id);
+    },
+  },
+  use_equip_add_goods_rule_with_refresh_shop: {
+    onEquip(ctx, ev) {
+      const bonds = ctx.pieceBonds(ev.target.uid);
+      // [ASSUMED] Special refresh replaces every slot, including frozen equipment slots; it is not a manual refresh.
+      for (let i = 0; i < ctx.shopSlots().length; i++) {
+        const id = rollSameBond(ctx, bonds, ctx.shopLevel());
+        ctx.setShopSlot(i, id ? { kind: 'chess', id } : null);
       }
     },
   },
@@ -287,7 +320,8 @@ const EFFECT_HANDLERS = {
       to.giftTicker(ctx.name, p.chessId, ctx.playerId);
     },
   },
-  // 整备: the next purchased item becomes advanced (golden)
+  // 整备: the next purchased item becomes advanced (golden). upgradeItem leaves it normal, and this
+  // charge unspent, when the shared stock has no room for the golden's second copy.
   builtin_next_buy_golden_item: {
     onBuy(ctx, ev) {
       const ref = ctx.source.ref;

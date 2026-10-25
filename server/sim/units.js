@@ -5,7 +5,7 @@
 //   res           = clamp((base + Σflat) × Πmul, 0, 100)
 //   aspd          = clamp(base + Σaspd, 20, 600)          (base is 100 for almost everyone; floor 20 = PRTS 数值范围)
 //   interval      = bat × (1 + ΣbatPct) × 100 / aspd      (ΣbatPct floored at −0.9)
-//   moveSpeed     = (base + ΣmoveFlat) × ΠmoveMul          (tiles/s = moveSpeed × MOVE_SCALE)
+//   moveSpeed     = max(mem.moveSpeedFloor ?? 0, (base + ΣmoveFlat) × ΠmoveMul)   (tiles/s = moveSpeed × MOVE_SCALE)
 //   massLevel     = max(0, base + ΣmassFlat)                (重量: displacement, 浮空 halving; 失重 = massFlat −1)
 // Changing maxHp keeps the HP ratio. The sim keeps floats; rounding happens only in snapshots.
 
@@ -38,6 +38,10 @@ export class Unit {
     this.name = init.name ?? init.def?.name ?? this.defId;
     this.ownerId = init.ownerId ?? null;  // playerId (enemies: field owner)
     this.uid = init.uid ?? null;          // match piece uid (ops/tokens from the board)
+    // 干员皮肤 (docs/SKINS.md): the owning player's chosen skinId, carried from PlayerBattleInput.skin through
+    // _makeAlly; snapshot's unitInfo puts it on the wire so every client draws that player's model. null = default.
+    // Display only: no rule reads `this.skin`, and Battle.result() does not include it.
+    this.skin = init.skin ?? null
     this.ownerUnit = init.ownerUnit ?? null; // summoner (tokens)
     this.x = init.x ?? 0;
     this.y = init.y ?? 0;
@@ -60,12 +64,20 @@ export class Unit {
     this.buffs = [];
     this._dirty = true;
     this._s = null;
+    // cached isFlying (the hot loops ask it per candidate blocker / target): valid while the aggregated stats object
+    // (flags) and `motion` are the ones it was computed from
+    this._flyS = null;
+    this._flyMotion = null;
+    this._flying = false;
     this.hp = this.base.maxHp;
     this.alive = true;
     this.deployed = false;
     this.removed = false;       // permanently gone (enemies, tokens, retreated-for-good)
     this.blocking = [];         // ops: enemies currently blocked
     this.blockedBy = null;      // enemies: blocker unit
+    // enemies: listed on more than one tile of the per-tick range index (their 0.1 collider straddles an edge —
+    // battle/queries.js _buildEnemyIndex); declared here so the index writing it never changes a unit's shape
+    this._ebMulti = false;
     this.motion = init.motion ?? 'GROUND'; // enemies: 'WALK' | 'FLY'
     this.profile = null;        // resolved profession/attack profile
     this.skill = null;          // SkillRuntime
@@ -80,7 +92,7 @@ export class Unit {
     this.aggroSeq = 0;          // 仇恨 order: usually deploySeq; initial summons and prepared map characters are exceptions
     this.spawnSeq = 0;
     this.elem = { burn: 0, neural: 0, necrosis: 0, apoptosis: 0, erosion: 0 };
-    this.burstPending = null;   // { [element]: true } while that element's burst resolves (damage.js burstLocked)
+    this.burstPending = null;   // { [element]: true } while that element's burst resolves (attack/element.js burstLocked)
     this.tags = new Set(init.tags || []);
     this.mem = {};              // free scratch space for content (per unit)
     // a countdown summon's life on the field ({ from, until } battle times; content/tokens.js startCountdown, cleared by
@@ -150,7 +162,7 @@ export class Unit {
       maxHp, atk, def, res, aspd, bat,
       interval: (bat * 100) / aspd,
       blockCnt: Math.max(0, fin(Math.round(b.blockCnt + a('blockCnt')), 0)),
-      moveSpeed: Math.max(0, fin((b.moveSpeed + a('moveFlat')) * m('moveMul'), fin(b.moveSpeed, 0))),
+      moveSpeed: Math.max(this.mem.moveSpeedFloor ?? 0, fin((b.moveSpeed + a('moveFlat')) * m('moveMul'), fin(b.moveSpeed, 0))),
       rangeExtend: Math.max(0, Math.round(a('rangeExtend'))),
       // 阻挡半径倍率 − 1 (PRTS 数值范围 BLOCK_RADIUS_SCALE "影响阻挡模式为飞行阻挡的单位的阻挡半径"): Battle._checkBlock
       blockRadiusScale: Math.max(0, fin(a('blockRadiusScale'), 0)),
@@ -170,9 +182,10 @@ export class Unit {
       artsDealtMul: m('artsDealtMul'),
       dmgTakenMul: m('dmgTakenMul'),
       physTakenMul: m('physTakenMul'),
+      artsAttackAddition: a('artsAttackAddition'),
       artsTakenMul: m('artsTakenMul'),
       trueTakenMul: m('trueTakenMul'),
-      elemTakenMul: m('elemTakenMul'),           // 元素损伤倍率: element gauge fills (damage.js applyElement)
+      elemTakenMul: m('elemTakenMul'),           // 元素损伤倍率: element gauge fills (attack/element.js applyElement)
       elementalTakenMul: m('elementalTakenMul'), // 元素脆弱: 元素伤害 (the 'elemental' HP damage type)
       healingDealtMul: m('healingDealtMul'),
       healingTakenMul: m('healingTakenMul'),
@@ -180,12 +193,17 @@ export class Unit {
       spRecovery: Math.max(0, fin((b.spRecovery + a('spRecoveryFlat')) * m('spRecoveryMul'), 0)),
       spCostFlat: a('spCostFlat'),
       redeployMul: m('redeployMul'),
+      costMul: m('costMul'),
       hpRegen: fin(b.hpRecoveryPerSec + a('hpRegen') + a('hpRegenRatio') * maxHp, 0),
       shield,
       flags: flags || EMPTY,
     };
     s.flags.stun = !!(flags.stun || flags.freeze || flags.sleep || flags.levitate);
+    // the renderer's pacing hint (server/sim/battle/events.js _emitRateChanges): this unit's own attack interval moved,
+    // so a 'rate' event has to go out — set here instead of comparing every unit's stats on every tick
+    if (!this._s || Math.abs(this._s.interval - s.interval) > 1e-9) this._rateDirty = true;
     this._s = s;
+    this._flyS = null; // drop the cached answer's reference to the previous stats object
     this._dirty = false;
     if (this.alive && prevMax > 0 && Math.abs(prevMax - maxHp) > 1e-9) {
       this.hp = clamp(fin(this.hp * (maxHp / prevMax), maxHp), 0, maxHp);
@@ -208,13 +226,19 @@ export class Unit {
    * `motion`, never this.
    */
   get isFlying() {
-    if (this.side === 'enemy') {
-      const f = this.s.flags;
-      if (f.levitate) return true;
-      if (f.groundbind) return false;
-      return this.motion === 'FLY' || !!f.float;
-    }
-    return this.motion === 'FLY';
+    // Our units: `motion` alone decides, and reading it must not touch `this.s` — the lazy stats getter re-applies the
+    // max-HP ratio to `hp`, so asking this question earlier than the sim used to would move a unit's HP.
+    if (this.side !== 'enemy') return this.motion === 'FLY';
+    // An enemy's answer needs the flags. A fresh stats object means they were recomputed (buffs added / expired);
+    // `motion` is compared by value because content writes it directly (forms, 起飞). Both unchanged → the cache stands.
+    const s = this.s;
+    if (s === this._flyS && this.motion === this._flyMotion) return this._flying;
+    const f = s.flags;
+    const v = f.levitate ? true : f.groundbind ? false : this.motion === 'FLY' || !!f.float;
+    this._flyS = s;
+    this._flyMotion = this.motion;
+    this._flying = v;
+    return v;
   }
 
   get hpRatio() { const mh = this.s.maxHp; return mh > 0 ? this.hp / mh : 0; }
@@ -233,9 +257,12 @@ export class Unit {
   isEnemy() { return this.side === 'enemy'; }
   isAlly() { return this.side === 'ally'; }
 
+  /** Entity class, independent of team: enemy-record allies such as 炎佑 retain enemy element rules. */
+  get isEnemyEntity() { return this.kind === 'enemy' || String(this.defId).startsWith('enemy_'); }
+
   /** Element gauge capacity: 1000, leaders (enemy rank BOSS) 2000 (official "·我方" burst terms). */
   get gaugeMax() {
-    return this.side === 'enemy' && (this.isBoss || (this.def && this.def.rank === 'BOSS')) ? ELEMENT_GAUGE_MAX_LEADER : ELEMENT_GAUGE_MAX;
+    return this.isEnemyEntity && (this.isBoss || (this.def && this.def.rank === 'BOSS')) ? ELEMENT_GAUGE_MAX_LEADER : ELEMENT_GAUGE_MAX;
   }
 
   /** Element gauge helper */

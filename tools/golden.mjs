@@ -10,6 +10,7 @@
 //   node tools/golden.mjs --update        recompute and rewrite test/golden/*.json   (npm run golden:update)
 //   options: --family roster,bonds,fields,matches,standins   --fast (the test's default subset)   --only <id,id>
 //            --jobs N (worker threads, default: up to 4)   --list   --coverage (skills cast, stages, enemies…)
+//            --version <id> historical data and test/golden/<slug>/ (default: act2autochess)
 //            --twice  determinism: compute twice in this process (the second pass in reverse order) and compare
 //
 // Families (all scenarios are generated from data/*.json in a fixed order — no randomness outside the seeds):
@@ -59,7 +60,9 @@
 // Damage / healing sums are rounded to integers and HP to 2 decimals (float dust from a reassociated sum is not a
 // gameplay change; anything that changes a fight changes the snapshot hashes too).
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { toolVersion } from './versions/runtime.mjs';
+import { DEFAULT_VERSION, versionById, versionSlug } from '../shared/versions.js';
+import { readFileSync, writeFileSync, mkdirSync, writeSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { availableParallelism } from 'node:os';
@@ -84,26 +87,15 @@ import { GEO } from '../shared/constants.js';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 /** The default player's 潜能 / 练度 of every owned operator (shared/potential.js; the owner's decision of 2026-10-08). */
 const DEFAULT_CULTIVATION = Object.freeze({ potential: POTENTIAL_DEFAULT, cultivate: CULTIVATE_DEFAULT });
-export const GOLDEN_DIR = join(ROOT, 'test', 'golden');
+export const GOLDEN_DIR = join(ROOT, 'test', 'golden', ...(toolVersion === DEFAULT_VERSION ? [] : [versionSlug(versionById(toolVersion))]));
 export const FAMILY_NAMES = Object.freeze(['roster', 'bonds', 'fields', 'matches', 'standins', 'diy']);
 
 const QUIET = Object.freeze({ warn() {}, error() {}, info() {}, log() {}, debug() {} });
-// The reference corpus is upstream 0.2.0. Our runtime's alive/4 override is tested separately, not baked into its goldens.
-const liveData = getData({ log: QUIET });
-const data = {
-  ...liveData,
-  config: {
-    ...liveData.config,
-    bossHpScale: { ...liveData.config.bossHpScale, perPlayer: true, coop: 1, solo: 1, aliveScaling: false },
-    modes: Object.fromEntries(Object.entries(liveData.config.modes).map(([id, mode]) => [id, {
-      ...mode,
-      bossHpScale: { bloodPointKey: mode.bossHpScale?.bloodPointKey ?? null, unaffectedByEnemyScale: mode.bossHpScale?.unaffectedByEnemyScale ?? true },
-    }])),
-  },
-};
+const data = getData({ log: QUIET });
 const ds = new DataSource(data, null); // what Match and browsers use (no research fallback)
 const gdCache = new Map();
-const gdFor = (modeId) => { let g = gdCache.get(modeId); if (!g) { g = new GameData(data, modeId); gdCache.set(modeId, g); } return g; };
+const availableMode = (modeId) => data.config.modes[modeId] ? modeId : modeId.replace('_abyss', '_hard');
+const gdFor = (modeId) => { modeId = availableMode(modeId); let g = gdCache.get(modeId); if (!g) { g = new GameData(data, modeId); gdCache.set(modeId, g); } return g; };
 const byId = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -153,6 +145,7 @@ export function runBattle(sc, probe = {}) {
   const snapEvery = probe.snapEvery ?? SNAP_EVERY;
   const drainEvery = probe.drainEvery ?? DRAIN_EVERY;
   const spec = buildBattleSpec({
+    version: toolVersion,
     battleId: sc.id, fieldId: sc.fieldId ?? 'g', kind: sc.kind, seed: sc.seed, modeId: sc.modeId, round: sc.round,
     stageId: sc.stageId, rect: sc.rect, timeLimit: sc.timeLimit, players: sc.players, spawns: sc.spawns, routes: sc.routes,
     flags: sc.flags, enemyOverrides: sc.enemyOverrides ?? {}, waveId: sc.waveId ?? null, bossId: sc.bossId ?? null,
@@ -728,22 +721,22 @@ export function matchScenarios() {
   // match reaches the Final Assault and — Σ activated layers over the threshold — the Hidden Core
   out.push({ id: 'solo-HARD-9-boosted', mode: 'solo', difficulty: 'HARD', bots: 1, seed: 9, boost: { lp: 400, layers: 300 } });
   out.push({ id: 'coop2-ABYSS-10-boosted', mode: 'coop', difficulty: 'ABYSS', bots: 2, seed: 10, boost: { lp: 400, layers: 300 } });
-  // 0.2.0 补位: a human seat (AI 托管, offline: its battles run on the server) that does not own a few NORMAL chess.
-  // Seed 22: the 0.2.5 measured-stock economy (data/config.json poolCopiesOverrides / coopPoolMultiplier) moved the
-  // shop draws, so seed 14 no longer fields a stand-in — re-picked so the seat still exercises the 补位 feature.
-  out.push({ id: 'coop2-NORMAL-22-standins', mode: 'coop', difficulty: 'NORMAL', bots: 1, seed: 22, human: { notOwned: MATCH_NOT_OWNED } });
+  // 0.2.0 补位: a human seat (AI 托管, offline: its battles run on the server) that does not own a few NORMAL chess
+  out.push({ id: 'coop2-NORMAL-14-standins', mode: 'coop', difficulty: 'NORMAL', bots: 1, seed: 14, human: { notOwned: MATCH_NOT_OWNED } });
   // 0.2.0 自选编队: a human seat (AI 托管, offline) that slots 推进之王 and prototypes into the four DIY slots
   // (its 调度中心 starts at level 5, like the boosted runs' raised LP: the 自选 pieces are sold from level 5 / 6, which the
   // AI otherwise reaches only with a full board, where a single new operator rarely improves its lineup)
   out.push({ id: `coop2-NORMAL-${MATCH_DIY_SEED}-diy`, mode: 'coop', difficulty: 'NORMAL', bots: 1, seed: MATCH_DIY_SEED, human: { diy: MATCH_DIY, shopLevel: 5 } });
-  // 0.2.4/0.2.5 coverage: the stand-ins / 自选 seats again on other seeds (the digest's standIns / diy lists per round).
-  // The 0.2.5 sync dropped these two definitions while keeping their digests — restored so the corpus and the golden
-  // files list the same scenarios again (test/golden.test.js).
+  // The measured shared-stock changes leave the original seeds without a fielded DIY/stand-in operator. Keep those
+  // original outcomes, and add companion seeds that still exercise the complete shop → deployment → battle path.
   out.push({ id: 'coop2-NORMAL-1-coverage-standins', mode: 'coop', difficulty: 'NORMAL', bots: 1, seed: 1, human: { notOwned: MATCH_NOT_OWNED } });
   out.push({ id: 'coop2-NORMAL-5-coverage-diy', mode: 'coop', difficulty: 'NORMAL', bots: 1, seed: 5, human: { diy: MATCH_DIY, shopLevel: 5 } });
+  // A player without any NORMAL operators must use stand-ins regardless of which operators its AI buys.
+  out.push({ id: 'coop2-NORMAL-1-unowned-roster', mode: 'coop', difficulty: 'NORMAL', bots: 1, seed: 1,
+    human: { notOwned: STANDIN_CHESS.filter((c) => !c.isGolden).map((c) => c.chessId) } });
   const humanAbout = (h) => (h.notOwned ? ` + 1 human seat (AI 托管) without ${h.notOwned.length} operators (补位 stand-ins)`
     : ` + 1 human seat (AI 托管) with ${Object.keys(h.diy || {}).length} 自选 picks${h.shopLevel ? ` and its 调度中心 at level ${h.shopLevel} from the first prep` : ''}`);
-  return out.map((m) => ({ ...m, family: 'matches', kind: 'match', about: `${m.mode} ${m.difficulty}, ${m.bots} bot seat(s)${m.human ? humanAbout(m.human) : ''}, seed ${m.seed}${m.clientCombat === false ? ', server-run combat' : ''}${m.boost ? `, LP ${m.boost.lp} and ${m.boost.layers} layers per bond from the first prep` : ''}` }));
+  return out.filter((m) => data.config.modes[`mode_${m.mode === 'solo' ? 'single' : 'multi'}_${m.difficulty.toLowerCase()}`]).map((m) => ({ ...m, family: 'matches', kind: 'match', about: `${m.mode} ${m.difficulty}, ${m.bots} bot seat(s)${m.human ? humanAbout(m.human) : ''}, seed ${m.seed}${m.clientCombat === false ? ', server-run combat' : ''}${m.boost ? `, LP ${m.boost.lp} and ${m.boost.layers} layers per bond from the first prep` : ''}` }));
 }
 
 /**
@@ -758,9 +751,7 @@ const MATCH_DIY = Object.freeze({
   chess_char_6_diy1_a: { charId: 'char_609_acguad' },
   chess_char_6_diy2_a: { charId: 'char_617_sharp2' },
 });
-// Seed 71: the 0.2.5 measured-stock economy moved the shop draws, so seed 70 no longer fields a 自选 piece (the
-// 调度中心 still starts at level 5; the seat exercises the 自选编队 feature the digest records).
-const MATCH_DIY_SEED = 71;
+const MATCH_DIY_SEED = 70;
 
 /**
  * The NORMAL chess the 补位 match's human seat does not own: operators its AI fields with seed 14 (the digest's `standIns`
@@ -782,11 +773,6 @@ function boardStr(ps) {
 const bondsStr = (bonds) => Object.entries(bonds || {}).filter(([, b]) => b && (b.active || b.layers > 0)).map(([id, b]) => `${id} ${b.tier}/${b.layers}`).sort(byId).join(', ');
 const MATCH_ROW_COLS = Object.freeze(['alive', 'lp', 'prepFunds', 'funds', 'pending', 'level', 'deployed', 'board', 'layers', 'bonds', 'killed', 'total', 'leaks', 'gold']);
 
-// Official 0.2.1 reference only: rewards remain deferred until SETTLE; its original-map rule matches the fork.
-class OfficialReferenceMatch extends Match {
-  _syncNormalLayers() {} // Runtime realtime gains are tested separately.
-}
-
 export function runMatch(cfg) {
   const sched = new VirtualScheduler();
   const seats = [];
@@ -803,7 +789,7 @@ export function runMatch(cfg) {
   let summary = null;
   const logged = [];
   const log = { info() {}, debug() {}, warn() {}, error: (...a) => logged.push(a.map(String).join(' ').slice(0, 120)) };
-  const m = new OfficialReferenceMatch({
+  const m = new Match({
     roomCode: 'GOLD', mode: cfg.mode, difficulty: cfg.difficulty, seats, seed: cfg.seed, data, log, scheduler: sched,
     send: () => true, broadcast: () => {}, onEnd: (s) => { summary = s; },
     clientCombat: cfg.clientCombat !== false, verify: 'off',
@@ -1055,7 +1041,7 @@ const ABOUT = {
  * fields (one of them a Hidden Core), six matches (solo 标准 / 绝境, co-op 2 / 4, the boosted Hidden Core run, the 补位
  * match) and the normal-record stand-in battles.
  */
-const FAST_MATCHES = new Set(['solo-FUNNY-1', 'solo-HARD-1', 'coop2-NORMAL-3', 'coop4-ABYSS-7', 'solo-HARD-9-boosted', 'coop2-NORMAL-22-standins', `coop2-NORMAL-${MATCH_DIY_SEED}-diy`, 'coop2-NORMAL-1-coverage-standins', 'coop2-NORMAL-5-coverage-diy']);
+const FAST_MATCHES = new Set(['solo-FUNNY-1', 'solo-HARD-1', 'coop2-NORMAL-3', 'coop4-ABYSS-7', 'solo-HARD-9-boosted', 'coop2-NORMAL-14-standins', `coop2-NORMAL-${MATCH_DIY_SEED}-diy`, 'coop2-NORMAL-1-coverage-standins', 'coop2-NORMAL-5-coverage-diy', 'coop2-NORMAL-1-unowned-roster']);
 const FAST_FIELDS = new Set(['boss-boss_1-pair', 'boss-boss_4-solo', 'boss-boss_7-pair', 'hidden-boss_9-pair', 'unite-1', 'unite-2']);
 export function isFast(sc) {
   if (sc.family === 'matches') return FAST_MATCHES.has(sc.id);
@@ -1072,7 +1058,10 @@ export function scenariosOf(family) {
     const gen = GENERATORS[family];
     if (!gen) throw new Error(`unknown golden family ${family}`);
     const list = gen();
-    for (const sc of list) sc.fast = isFast(sc);
+    for (const sc of list) {
+      if (sc.modeId) sc.modeId = availableMode(sc.modeId);
+      sc.fast = isFast(sc);
+    }
     scenarioCache.set(family, list);
   }
   return scenarioCache.get(family);
@@ -1160,7 +1149,7 @@ export function compareFamily(stored, computed) {
 }
 
 export function formatDiffs(family, list, { maxScenarios = 12, maxDiffs = 8 } = {}) {
-  const fmt = (v) => { const s = v === undefined ? '(missing)' : typeof v === 'string' ? v : (JSON.stringify(v) ?? String(v)); return s.length > 160 ? `${s.slice(0, 157)}…` : s; };
+  const fmt = (v) => { const s = typeof v === 'string' ? v : (JSON.stringify(v) ?? String(v)); return s.length > 160 ? `${s.slice(0, 157)}…` : s; };
   const lines = [`golden ${family}: ${list.length} scenario(s) differ`];
   for (const { scenario, diffs } of list.slice(0, maxScenarios)) {
     lines.push(`  ${scenario}:`);
@@ -1216,7 +1205,7 @@ export async function computeDigests(families, { select = () => true, jobs = 1, 
     let failed = null;
     const n = Math.min(jobs, queue.length);
     for (let w = 0; w < n; w++) {
-      const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { golden: true } });
+      const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { golden: true, version: toolVersion } });
       live++;
       const feed = () => { const t = queue.shift(); if (t) worker.postMessage(t); else worker.postMessage(null); };
       worker.on('message', (msg) => {
@@ -1245,6 +1234,7 @@ function order(out, families) {
 export function goldenDocument(family, digests) {
   const list = scenariosOf(family);
   return {
+    ...(toolVersion !== DEFAULT_VERSION ? { version: toolVersion } : {}),
     family,
     about: ABOUT[family],
     note: 'Generated by `npm run golden:update` (tools/golden.mjs). A refactor must never change this file; see test/golden/README.md.',
@@ -1301,6 +1291,17 @@ if (!isMainThread && workerData && workerData.golden) {
   });
 }
 
+/** Blocking write of `text` to stdout. A pipe may accept only part of one write; loop until all of it is in the kernel. */
+function writeStdoutSync(text) {
+  const buf = Buffer.from(text);
+  let offset = 0;
+  while (offset < buf.length) {
+    const n = writeSync(1, buf, offset, buf.length - offset);
+    if (n <= 0) throw new Error('golden --list: stdout accepted no bytes');
+    offset += n;
+  }
+}
+
 const isMain = isMainThread && process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   const argv = process.argv.slice(2);
@@ -1315,7 +1316,15 @@ if (isMain) {
   const select = (sc) => (!only || only.has(sc.id)) && (!opt.fast || sc.fast);
   const jobs = Math.max(1, Number(opt.jobs) || Math.min(4, Math.max(1, availableParallelism() - 1)));
   if (opt.list) {
-    for (const f of families) for (const sc of scenariosOf(f)) if (select(sc)) console.log(`${f}\t${sc.id}\t${sc.fast ? 'fast' : ''}\t${sc.about ?? ''}`.slice(0, 220));
+    const lines = [];
+    for (const f of families) for (const sc of scenariosOf(f)) if (select(sc)) lines.push(`${f}\t${sc.id}\t${sc.fast ? 'fast' : ''}\t${sc.about ?? ''}`.slice(0, 220));
+    // A POSIX pipe takes stdout asynchronously, and process.exit() abandons writes still queued in
+    // userland (Node's documented pipe behaviour). Ubuntu's Node 22 job lost the tail of this list for
+    // act2autochess@V2_1: the child exited 0 and the captured lines stopped at diy-103, while the same
+    // commit's smaller version lists, Windows (pipes write synchronously) and Node 24 printed diy-126.
+    // writeSync blocks until the kernel has accepted every byte. The list is generated from the version
+    // directory's tracked JSON and the kit sources; it does not read data/local-assets.json, data/local-fx.json or .cache.
+    if (lines.length) writeStdoutSync(`${lines.join('\n')}\n`);
     process.exit(0);
   }
   const t0 = performance.now();

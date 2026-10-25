@@ -65,8 +65,8 @@ import { num, up, traitBb, talentBb, skillRec, once } from '../shared/tier1.js';
 import { isElite, onElementHit, elementDmg } from '../shared/tier6.js';
 import { releaseSkillSummon, startCountdown } from '../../tokens.js';
 import { absoluteRangeKeys } from '../../../targeting.js';
-import { bodyInKeys } from '../../../body.js';
-import { hasHp, burstLocked } from '../../../damage.js';
+import { bodyInRange } from '../../../body.js';
+import { hasHp, burstLocked } from '../../../attack.js';
 import { MIN_DAMAGE_RATIO } from '../../../constants.js';
 import { hypot } from '../../../detmath.js';
 
@@ -95,7 +95,7 @@ const keysAt = (grid, u) => new Set(absoluteRangeKeys(grid, u.tileR, u.tileC, u.
 
 /**
  * 神经损伤 of a fixed value that ignores the target's 损伤抵抗 (PRTS 群体性谵妄 备注 "不受目标损伤抗性影响": the client's
- * ApplyFixedElementDamage): the share the engine takes off (damage.js elementIntake) is added back first.
+ * ApplyFixedElementDamage): the share the engine takes off (attack/element.js elementIntake) is added back first.
  */
 function fixedNeural(battle, src, e, amount, sourceless = false) {
   if (!(amount > 0) || !hasHp(e)) return 0;
@@ -287,7 +287,7 @@ export default {
           onStart({ battle, unit }) {
             for (const c of cagesOf(battle, unit)) c.mem.cageUntil = null;   // phatm2_s_3[token_clear_cooldown]
             for (const e of [...battle.enemies]) {
-              if (!e.alive || e.hidden || !e.s.flags.burstLock || !bodyInKeys(e, unit.rangeKeySet)) continue;
+              if (!e.alive || e.hidden || !e.s.flags.burstLock || !bodyInRange(e, unit.rangeKeySet)) continue;
               splash(battle, unit, e, splashR);
               if (e.alive && e.findBuff('neuralBurst')) cageAt(battle, unit, e, false);
             }
@@ -295,7 +295,7 @@ export default {
           onTick({ battle, unit, dt }) {
             if (!(s3Recover > 0)) return;
             for (const e of battle.enemies) {
-              if (!e.alive || e.hidden || !bodyInKeys(e, unit.rangeKeySet)) continue;
+              if (!e.alive || e.hidden || !bodyInRange(e, unit.rangeKeySet)) continue;
               const lock = e.findBuff('neuralBurst');
               if (lock && Number.isFinite(lock.timeLeft)) lock.timeLeft -= dt * s3Recover;
             }
@@ -328,7 +328,7 @@ export default {
           if (dreamValue > 0) {
             battle.on('enemyAttackStart', (c) => {
               const e = c.enemy;
-              if (!up(unit) || !e || !hasHp(e) || !bodyInKeys(e, unit.rangeKeySet)) return;
+              if (!up(unit) || !e || !hasHp(e) || !bodyInRange(e, unit.rangeKeySet)) return;
               elementDmg(battle, unit, e, 'neural', dreamValue, ['talent']);
             }, { owner: unit });
           }
@@ -378,7 +378,7 @@ export default {
         }, { owner: unit });
         battle.on('elementBurst', (c) => {
           const e = c.target;
-          if (c.element !== 'neural' || !skillOn(unit, S3) || !up(unit) || !e || e.side !== 'enemy' || !e.alive || !bodyInKeys(e, unit.rangeKeySet)) return;
+          if (c.element !== 'neural' || !skillOn(unit, S3) || !up(unit) || !e || e.side !== 'enemy' || !e.alive || !bodyInRange(e, unit.rangeKeySet)) return;
           cageAt(battle, unit, e, true);
         }, { owner: unit });
       },

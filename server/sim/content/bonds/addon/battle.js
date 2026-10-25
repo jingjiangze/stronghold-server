@@ -53,7 +53,13 @@
 //                      ATK/HP +(base + per·L) until it leaves the field; knocked out after a jump it lies where it fell
 //                      and comes back there (the engine's rest tile, Battle._layBody — PRTS 卫戍协议/帮助 "原地留下一个
 //                      “倒地干员”…自动部署至该位置"; its own home when it fell on another board piece's home);
-//                      L ≥ power_bond_stack_cnt: every operator ASPD +power_attack_speed
+//                      L ≥ power_bond_stack_cnt: every operator ASPD +power_attack_speed.
+//                      Ordinary polls order candidates by remaining path distance, then id (the 0.2.3 rule). The one
+//                      reselect right after a revive — knocked out, and back before the respawn timer (不屈 / 阿戈尔 /
+//                      复活, or the same kill + immediate redeploy) — orders by taunt, then that distance, and jumps
+//                      while the operator is not blocking. An enemy already standing on its tile counts: the 0.25 s
+//                      poll runs before that tick's block pass, so the reselect refreshes contact first. A retreat,
+//                      a move, a redeploy that waited out its timer, and Raid's own jump do not arm that reselect.
 //   不屈 indomShip     ground operator knocked out → p = min(1, base + per·L) immediate free redeploy where it lies
 //                      (the engine's rest tile); tier 2: every operator on the field +sp SP
 //   协防 emptyShip     all operators phys/arts taken ×(1 − damage_resistance); members dealt ×damage_scale_normal
@@ -67,13 +73,13 @@
 
 import { canTargetEnemy, enemyStealthed, extendedGrid } from '../../../targeting.js';
 import { normDir, rotateOffset, localOrder, localBefore } from '../../../dir.js';
-import { bodyKeys, bodyInKeys } from '../../../body.js';
-import { isHpLoss } from '../../../damage.js';
+import { bodyKeys, bodyInRange } from '../../../body.js';
+import { isHpLoss, reserveTransfer } from '../../../attack.js';
 import { BOSS_ROW_OFFSET } from '../../../constants.js';
 import { GEO } from '../../../../../shared/constants.js';
 import {
   num, bondRecord, buffParams, bondTier, bondLayers, isMember, isElite, isGroundOp, onField, playerOps, passiveBuff,
-  fxOn, N4, N8, directMods, COLS,
+  fxOn, N4, N8, directMods, COLS, isFirstPeriod,
 } from '../../support/index.js';
 
 export const ID = Object.freeze({
@@ -133,7 +139,7 @@ function applyPassives(battle, st) {
     const mods = directMods({ atk: num(bb.base_atk) + num(bb.atk_per_stack) * L(battle, st, ID.preci) });
     if (wide) { mods.defIgnorePct = num(bb.power_def_penetrate); mods.resIgnorePct = num(bb.power_magic_resist_penetrate); }
     for (const u of st.ops) {
-      if (st.members[ID.preci].has(u) || (wide && u.def?.position === 'RANGED')) passiveBuff(battle, u, KEY.preci, mods);
+      if (isFirstPeriod() ? u.def?.position === 'RANGED' : st.members[ID.preci].has(u) || (wide && u.def?.position === 'RANGED')) passiveBuff(battle, u, KEY.preci, mods);
     }
   }
   if (t[ID.stead]) {
@@ -152,6 +158,8 @@ function applyPassives(battle, st) {
     const milestone = num(bb.power_bond_stack_cnt, Infinity);
     if (lv >= milestone) {
       const mods = { aspd: num(bb.power_attack_speed) };
+      if (bb.power_cost_scale != null) mods.costMul = num(bb.power_cost_scale, 1);
+      if (bb.power_respawn_time != null) mods.redeployMul = num(bb.power_respawn_time, 1);
       for (const u of st.ops) passiveBuff(battle, u, KEY.raidAspd, mods);
       if (!st.raidMilestone) { st.raidMilestone = true; for (const u of st.members[ID.raid]) if (onField(u)) { fxOn(battle, 'bondMilestone', u, KEY.raid, 'aspd'); break; } }
     }
@@ -172,7 +180,7 @@ function applyPassives(battle, st) {
     const lv = L(battle, st, ID.skillful);
     const v = num(bb.base_attack_speed) + num(bb.attack_speed_per_stack) * lv;
     if (!st.auraMods || st.auraMods.aspd !== v) st.auraMods = { aspd: v };
-    st.auraWide = lv >= num(bb.power_bond_stack_cnt, Infinity);
+    st.auraWide = isFirstPeriod() || lv >= num(bb.power_bond_stack_cnt, Infinity);
   }
 }
 
@@ -194,7 +202,7 @@ function applyStatic(battle, st) {
     const taken = Math.max(0, 1 - num(bb.damage_resistance));
     for (const u of st.ops) {
       passiveBuff(battle, u, KEY.empty, { physTakenMul: taken, artsTakenMul: taken });
-      if (st.members[ID.empty].has(u)) {
+      if (isFirstPeriod() || st.members[ID.empty].has(u)) {
         passiveBuff(battle, u, KEY.emptyDmg, { dmgDealtMul: num(isElite(u) ? bb.damage_scale_extra : bb.damage_scale_normal, 1) });
       }
     }
@@ -287,13 +295,18 @@ function raidBoard(battle, r, c) {
 
 /**
  * Landing tile [row, col] of a jump to enemy `e`, or null: a tile from which the member's range (`reach`, raidReach)
- * covers the enemy's body (a huge enemy: any tile it occupies — body.js), within RAID_SEARCH tiles (Chebyshev) of the
- * enemy, inside the field rect and on a board of its field (Battle.onFieldBoard — "再部署" goes where a player of the
- * field deploys: its own board or a teammate's half when both halves are taken, the two-helper 联防 field and a pair
- * field — the owner's decision of 2026-10-07, DESIGN §26.1; never a boss field's hand row 0 or 临时整备区 row 1, both
- * inside BOSS_RECT and buildable high ground, nor the empty other half of the one-helper 联防 map or a solo boss field;
+ * covers the enemy's body (a huge enemy: any tile it occupies — body.js) — and is within RAID_SEARCH tiles (Chebyshev) of
+ * that body, measured as the gap to the body's nearest tile, never to the tile the enemy's position rounds to: the
+ * anchor tile is not the body, and a huge leader's hitArea offset plus its route anchor split one body differently
+ * (community report of 2026-10-13), which moved the window and, in the hidden round's leader alone, lost every landing
+ * on the far side of that body — inside the field rect and on a board of its field (Battle.onFieldBoard — "再部署" goes
+ * where a player of the field deploys: its own board or a teammate's half when both halves are taken, the two-helper
+ * 联防 field and a pair field — the owner's decision of 2026-10-07, DESIGN §26.1; never a boss field's hand row 0 or
+ * 临时整备区 row 1, both inside BOSS_RECT and buildable high ground, nor the empty other half of the one-helper 联防
+ * map or a single-mode boss field;
  * community reports of 2026-10-06, items 40 and 16.3: a ranged member landed on the 临时整备区 row of a solo leader
- * round, and on the right half of the one-helper 联防 map), that the member's
+ * round, and on the right half of the one-helper 联防 map). #475 additionally opens the empty deployment half only
+ * in multiplayer boss/hidden battles (raidBoard, approved 2026-10-10, §29.13). The tile must be one that the member's
  * position may be deployed on (grid.canStand: never the 深水区 —
  * player report #3 after 0.1.0 —, and for a melee member low ground only, never a 高台: GitHub #148) and that is free
  * (Battle.isReservedTile: no living unit, no knocked-out operator's body — player report F5 —, no waiting piece's tile).
@@ -311,13 +324,23 @@ function raidTile(battle, u, e, reach) {
   const er = Math.round(e.y), ec = Math.round(e.x);
   const ranged = u.def?.position === 'RANGED';
   const body = bodyKeys(e);
+  // The window is measured to the tiles the enemy occupies, never to the tile its position rounds to: a huge unit's
+  // hitArea offset and its route anchor split the same body differently (enemy_9021_acduml dx 0 from col 10 and
+  // enemy_9021_acduml_2 dx 1 from col 9 are one body, cols 8–12), and the anchor-relative window dropped every landing
+  // on the far side of that body — the hidden round's leader then stopped being jumped to at all.
+  let bR0 = Infinity, bR1 = -1, bC0 = Infinity, bC1 = -1;
+  for (const k of body) {
+    const br = Math.floor(k / COLS), bc = k - br * COLS;
+    bR0 = Math.min(bR0, br); bR1 = Math.max(bR1, br); bC0 = Math.min(bC0, bc); bC1 = Math.max(bC1, bc);
+  }
   const path = !ranged && u.s.blockCnt > 0 ? battle.groundPathTiles() : null;
   let best = null, bp = 2, bd = Infinity, bo = null;
   for (const k of body) {
     const br = Math.floor(k / COLS), bc = k - br * COLS;
     for (let i = 0; i < reach.length; i += 2) {
       const r = br - reach[i], c = bc - reach[i + 1], dr = r - er, dc = c - ec;
-      if (Math.abs(dr) > RAID_SEARCH || Math.abs(dc) > RAID_SEARCH) continue;
+      const wr = Math.min(Math.max(r, bR0), bR1) - r, wc = Math.min(Math.max(c, bC0), bC1) - c;   // gap to the body
+      if (Math.abs(wr) > RAID_SEARCH || Math.abs(wc) > RAID_SEARCH) continue;
       if (!battle.grid.inRect(r, c) || !raidBoard(battle, r, c) || !battle.grid.canStand(r, c, { ranged }) || battle.isReservedTile(r, c)) continue;
       const t = r * COLS + c;
       const p = path && battle.grid.tile(r, c).pass === 'ALL' && (path.has(t) || body.includes(t)) ? 0 : 1;   // its block applies
@@ -349,17 +372,17 @@ function raidGroundEnemy(u, e) {
 function raidStealthInRange(battle, u) {
   const keys = u.rangeKeySet || u.rangeKeys;
   if (!keys) return false;
-  for (const e of battle.enemies) if (e.alive && enemyStealthed(e) && raidGroundEnemy(u, e) && bodyInKeys(e, keys)) return true;
+  for (const e of battle.enemies) if (e.alive && enemyStealthed(e) && raidGroundEnemy(u, e) && bodyInRange(e, keys)) return true;
   return false;
 }
 
 /**
- * Jump candidates of player `pid`, in priority order: the ground enemies of raidGroundEnemy (visible, or 隐匿; not
- * flying, asleep or untargetable) — those of the player's own field (`ownerId`), the others only when it has none —,
- * the most advanced first (least remaining path distance, then the earliest spawned) [ASSUMED, research 02 §3.18].
- * The same list for every member of the player (the checks read the enemy, not the attacker).
+ * Jump candidates of player `pid`: the ground enemies of raidGroundEnemy (visible, or 隐匿; not flying, asleep or
+ * untargetable) — those of the player's own field (`ownerId`), the others only when it has none. Ordinary polls sort
+ * by remaining path distance, then stable id. `taunt` is only the one reselect after a revive (maintainer 2026-10-10):
+ * highest taunt, then that distance, then id. The two orders are not one shared list.
  */
-function raidTargets(battle, u, pid) {
+function raidTargets(battle, u, pid, { taunt = false } = {}) {
   const own = [], other = [];
   for (const e of battle.enemies) {
     if (!raidGroundEnemy(u, e)) continue;
@@ -367,16 +390,38 @@ function raidTargets(battle, u, pid) {
   }
   const list = own.length ? own : other;
   const dist = new Map(list.map((e) => [e, num(battle.remainingDistance ? battle.remainingDistance(e) : 0)]));
-  list.sort((a, b) => dist.get(a) - dist.get(b) || a.id - b.id);
+  list.sort((a, b) => (taunt ? num(b.s.taunt) - num(a.s.taunt) : 0) || dist.get(a) - dist.get(b) || a.id - b.id);
   return list;
+}
+
+/**
+ * The block pass has not run yet this tick (the poll is in the scheduled phase, and `_deploy` clears `blocking`).
+ * Refresh contact the same way `updateEnemy` does before an enemy moves: an enemy already on this tile is blocked
+ * now, so a revive does not treat that tile as empty and jump away.
+ */
+function raidRefreshContact(battle, u) {
+  for (const e of battle.enemies) {
+    if (!e.alive || e.blockedBy || e.hidden) continue;
+    if (Math.abs(Math.round(e.y) - u.tileR) > 1 || Math.abs(Math.round(e.x) - u.tileC) > 1) continue;
+    battle._checkBlock(e);
+  }
 }
 
 function raidPoll(battle, st) {
   const bb = st.bb[ID.raid];
-  const idle = num(bb.no_attack_duration, 10);
-  let targets = null; // the player's candidates (raidTargets), shared by its members until a jump changes the field
+  const idle = num(bb.no_attack_duration, isFirstPeriod() ? Infinity : 10);
+  // Ordinary and post-revive orders stay separate: one poll can hold a member of each.
+  let plain = null, taunted = null;
   for (const u of st.members[ID.raid]) {
     if (!onField(u) || !u.canAct) continue;
+    // Maintainer 2026-10-10: one fresh target check after revival when unblocked, even with enemies in attack range.
+    // Ordinary later polls retain their original empty-range rule and distance order. A Raid jump cannot arm another check.
+    const revived = u.mem.raidReviveSeq === u.deploySeq;
+    if (revived) {
+      u.mem.raidReviveSeq = 0;
+      raidRefreshContact(battle, u);
+    }
+    if (revived && u.blocking.some((e) => e.alive && e.blockedBy === u)) continue;
     const since = Math.max(u.lastAttackAt ?? -Infinity, u.deployedAt ?? -Infinity, u.mem[KEY.raid] ?? -Infinity);
     // 技能就绪: a charged skill, or a passive skill that is on (GitHub #49: skills.js `ready` is false for every passive,
     // so 缄默德克萨斯 / 宴 … only ever jumped on the idle trigger; the reporter's footage of the official game shows
@@ -390,10 +435,10 @@ function raidPoll(battle, st) {
     const deploySkillOn = !!(sk && sk.active && (sk.kind === 'passive' || sk.spType === 'none'));
     const ready = !!(sk && !sk.noSkill && ((sk.ready && !(sk.active && sk.isTimed)) || deploySkillOn));
     const idleOk = battle.time - since >= idle - 1e-9;
-    if (!(ready || idleOk)) continue;
+    if (!(revived || ready || idleOk)) continue;
     // 「若范围内没有敌人」: a targetable enemy, or a 隐匿 ground one (the owner's decision of 2026-10-08, raidGroundEnemy)
-    if (battle.enemiesInKeys(u.rangeKeys || [], u, u.profile).length || raidStealthInRange(battle, u)) continue;
-    const list = (targets ??= raidTargets(battle, u, st.pid));
+    if (!revived && (battle.enemiesInKeys(u.rangeKeys || [], u, u.profile).length || raidStealthInRange(battle, u))) continue;
+    const list = revived ? (taunted ??= raidTargets(battle, u, st.pid, { taunt: true })) : (plain ??= raidTargets(battle, u, st.pid));
     if (!list.length) continue;
     // either trigger: raidTile only offers tiles with the target in range (without that a ready skill that finds no
     // target would redeploy — firing every 部署时 effect — at every poll; the idle trigger, which lacked it up to
@@ -402,8 +447,9 @@ function raidPoll(battle, st) {
     for (let i = 0; i < list.length && i < RAID_TARGETS; i++) {
       const tile = raidTile(battle, u, list[i], reach);
       if (!tile) continue;
-      targets = null; // the retreat / redeploy handlers (部署时 effects) may change the enemies: the next member re-sorts
+      plain = taunted = null; // the retreat / redeploy handlers (部署时 effects) may change the enemies: the next member re-sorts
       const res = raidRedeploy(battle, u, tile[0], tile[1]);
+      u.mem.raidReviveSeq = 0;
       if (!res) continue;
       u.mem[KEY.raid] = battle.time; // with deployedAt: the idle time starts again from the landing
       if (res === 'raid') {
@@ -444,6 +490,15 @@ export function install(battle) {
   for (const st of states) { byPid[st.pid] = st; applyPassives(battle, st); applyStatic(battle, st); }
   const has = (id, tier = 1) => states.some((st) => (st.tiers[id] ?? 0) >= tier);
 
+  if (states.some((st) => st.tiers[ID.preci] >= 2 && num(st.bb[ID.preci]?.silence) > 0)) {
+    battle.on('attack', ({ attacker, targets }) => {
+      const st = attacker && byPid[attacker.ownerId];
+      if (!st || st.tiers[ID.preci] < 2 || attacker.def?.position !== 'RANGED') return;
+      const duration = num(st.bb[ID.preci]?.silence);
+      if (duration > 0) for (const target of targets) if (target?.side === 'enemy' && target.alive) battle.applyStatus(target, 'silence', { duration, source: attacker });
+    });
+  }
+
   // live layers
   if (states.some((st) => Object.keys(st.tiers).some((id) => LAYERED.has(id)))) {
     battle.on('layerGain', (c) => {
@@ -472,6 +527,13 @@ export function install(battle) {
   if (has(ID.raid)) {
     const raid = states.filter((st) => st.tiers[ID.raid] && st.members[ID.raid].size);
     if (raid.length) {
+      battle.on('deploy', (c) => {
+        const u = c.unit;
+        // Only a revive: the previous exit was a knock-out and the operator is back before its respawn timer.
+        // A retreat (宴 / 史尔特尔 / 伊内丝 / 耀骑士临光), a move, a timer redeploy and the initial deploy stay on the old poll.
+        if (!u || c.initial || c.move || u.removeReason !== 'killed' || !(u.respawnAt > battle.time + 1e-9)) return;
+        if (raid.some((st) => st.members[ID.raid].has(u))) u.mem.raidReviveSeq = u.deploySeq;
+      });
       battle.every(RAID_POLL, () => { for (const st of raid) raidPoll(battle, st); });
     }
   }
@@ -553,19 +615,19 @@ export function install(battle) {
   const stead = has(ID.stead, 2);
   const arcane = has(ID.arcane);
   if (stead) {
-    battle.on('hit', (c) => {
+    battle.on('hpDamage', (c) => {
       const t = c.target, dmg = c.dmg;
-      if (!t || t.side !== 'ally' || t.kind !== 'op' || !dmg || dmg.cancel || dmg.steadShare || dmg.steadCut || dmg.type === 'element') return;
+      if (!t || t.side !== 'ally' || t.kind !== 'op' || dmg.tags?.includes('bond:stead:share')) return;
       const st = byPid[t.ownerId];
       if (!st || (st.tiers[ID.stead] ?? 0) < 2 || st.members[ID.stead].has(t)) return;
-      let any = false;
-      for (const m of st.members[ID.stead]) if (onField(m)) { any = true; break; }
-      if (!any) return;
+      const members = [...st.members[ID.stead]].filter(onField);
+      if (!members.length) return;
       const ratio = Math.max(0, Math.min(1, num(st.bb[ID.stead].damage_resistance)));
-      if (!(ratio > 0) || ratio >= 1) return;
-      dmg.mul *= 1 - ratio;
-      dmg.steadCut = ratio;
-    }, { priority: -20 });
+      reserveTransfer(c, ratio, 'bond:stead:share', (amount, tags) => {
+        for (const m of members) battle.dealDamage({ source: null, target: m, amount: amount / members.length,
+          type: 'true', dodgeMode: 'ignore', calculation: 'resolved', tags });
+      });
+    }, { priority: -2000 }); // [ASSUMED] existing parallel-share contract with Skadi; research 12.
   }
   if (stead || arcane) {
     battle.on('damaged', (c) => {
@@ -575,26 +637,12 @@ export function install(battle) {
         if (!stead || t.kind !== 'op') return;
         const st = byPid[t.ownerId];
         if (!st || (st.tiers[ID.stead] ?? 0) < 2) return;
-        if (dmg.steadCut) {
-          const ratio = dmg.steadCut;
-          dmg.steadCut = 0;
-          const share = (num(c.amount) / (1 - ratio)) * ratio;
-          if (!(share > 0)) return;
-          const on = [];
-          for (const m of st.members[ID.stead]) if (onField(m)) on.push(m);
-          // the share is already mitigated and already carries the attacker's damage multipliers: deal it sourceless
-          // (the member's own damage-taken modifiers and shields still apply), never re-scaled by the attacker
-          for (const m of on) {
-            const d = battle.makeDamage({ amount: share / on.length, type: 'true', canDodge: false, tags: ['bond:stead:share'] });
-            d.steadShare = true;
-            battle.dealDamage(null, m, d);
-          }
-          return;
-        }
         // a 流失 never uses a thorn chance (PRTS 作战机制 "生命流失不会触发反伤"); 无来源 damage does, hitting nobody (备注
         // "可被无来源伤害消耗反伤机会")
-        if (dmg.steadShare || dmg.steadThorn || c.type === 'element' || isHpLoss(dmg) || !st.members[ID.stead].has(t)) return;
+        if (dmg.tags?.includes('bond:stead:share') || dmg.steadThorn || c.type === 'element' || isHpLoss(dmg) || !st.members[ID.stead].has(t)) return;
         const bb = st.bb[ID.stead];
+        // Season one has damage sharing, without a retaliation clause: emit no zero-damage hit either.
+        if (bb.base_damage_value == null && bb.damage_value_per_stack == null) return;
         const last = t.mem[STEAD_CD] ?? -Infinity;
         if (battle.time - last < num(bb.cd_duration) - 1e-9) return;
         t.mem[STEAD_CD] = battle.time;
@@ -606,7 +654,7 @@ export function install(battle) {
         const d = battle.makeDamage({ amount: num(bb.base_damage_value) + num(bb.damage_value_per_stack) * L(battle, st, ID.stead), type: 'arts', canDodge: false, sourceless: true });
         d.steadThorn = true;
         battle.dealDamage(t, src, d);
-        if (src.alive) battle.applyStatus(src, 'fragile', { duration: num(bb['weak[limit]'], 5), value: num(bb.damage_scale, 1) - 1, source: t });
+        if (src.alive && bb.damage_scale != null) battle.applyStatus(src, 'fragile', { duration: num(bb['weak[limit]'], 5), value: num(bb.damage_scale, 1) - 1, source: t });
         return;
       }
       if (!arcane || c.type !== 'arts' || t.side !== 'enemy' || !t.alive) return;

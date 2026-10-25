@@ -17,7 +17,9 @@
 //   * the per-player stock (initDiyStock, called by the match once its bans are drawn): each slotted DIY piece has copies
 //     of its own — the tier's pool copies, 8 at tier 5 and 5 at tier 6 [ASSUMED: research 0.2.0 §2.5, the excel has no
 //     stock field] — drawn by this player only; it never enters the shared pool (PR #71's shared shop was the mistake to
-//     avoid). A piece all of whose bonds are switched off this match (本局禁用: the drawn bans and the mode's static list)
+//     avoid); in co-op its copies double like the shared pool's (gamedata.js poolCopies × coopPoolMultiplier: 16 / 10 —
+//     the maintainer's decision of 2026-10-15, GitHub #650, DESIGN §32.14.31). A piece all of whose bonds are switched
+//     off this match (本局禁用: the drawn bans and the mode's static list)
 //     gets no stock and so leaves the shop, like a preset chess whose bonds are all off (PRTS 卫戍协议：盟约 "禁用盟约有可能
 //     影响自选的支援干员"); 协防 (emptyShip) is never banned, so a prototype always stays. poolOf(baseId) routes every copy
 //     taken or returned for a slotted slot to that stock (buy, reward picks, merges, promotions, sells, temp, elimination).
@@ -60,9 +62,7 @@ export class DiyStock {
   cap(baseId) { return this.entries.get(baseId)?.cap ?? 0; }
   left(baseId) { return Math.max(0, this.entries.get(baseId)?.left ?? 0); }
 
-  /** Take up to n copies; returns the number taken (0 for a base id without stock). `overdraw` mirrors the shared
-   *  pool (pool.js SharedPool.take): an operator card already shown in the shop or a reward can still be taken after
-   *  exhaustion and overdraws (a negative raw left, the debt — GitHub #498). */
+  /** Take up to n copies; returns the number taken (0 for a base id without stock). */
   take(baseId, n = 1, { overdraw = false } = {}) {
     const e = this.entries.get(baseId);
     if (!e || !(n > 0)) return 0;
@@ -83,7 +83,7 @@ export class DiyStock {
   /** { baseId: left } (tests / diagnostics). */
   snapshot() {
     const o = {};
-    for (const [id, e] of this.entries) o[id] = e.left;
+    for (const [id, e] of this.entries) o[id] = Math.max(0, e.left);
     return o;
   }
 }
@@ -209,7 +209,7 @@ export class PlayerDiy {
 
   /** The copy accounting of base chess `baseId` for this player: its own stock for a slotted DIY slot, else the shared pool. */
   poolOf(baseId) {
-    return this.diyStock && this.diyStock.has(baseId) ? this.diyStock : this.pool;
+    return this.diyStock && this.diyStock.has(baseId) ? this.diyStock : this.m.pool;
   }
 
   /**

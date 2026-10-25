@@ -30,22 +30,21 @@
 // The handler object (implemented by server/lobby.js) receives:
 //   onHello(session, { resumed, repeat })  after `welcome` was sent
 //   welcomeInfo() → object (optional)      extra fields of every `welcome` (never one of its own keys): the lobby's
-//                                          `diyKitted` (0.2.0 自选编队 — which operators a DIY slot may field)
-//   onMessage(session, msg) → { ok: true } | { error: ERR code, detail?: string } | undefined
+//                                          `diyKitted` (0.2.0 自选编队 — which operators a DIY slot may field) and
+//                                          `content` ({ vanilla: <cs> }, the server's content hash — DESIGN §32)
+//   onMessage(session, msg) → { ok: true } | { error: ERR code, detail?: string } | undefined — or a Promise of one
+//                                          (a room whose match runs in a match host worker, DESIGN §32.6: the reply
+//                                          goes out when it settles; a rejection is INTERNAL)
 //   routeGame(session, msg) → same (optional): client-side combat reports `b.progress` / `b.result` (DESIGN §14) go
 //                                          straight to the running match through it; without it they reach onMessage
 //   onDisconnect(session)                  the session's socket closed (session kept for the reconnect window)
 //   onExpire(session)                      the session was purged (disconnected longer than the window)
 
+import { prepareStateFrame, negotiateStateDelta, resetStateDelta, setStateDeltaRoom } from './stateTransport.js';
 import { randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
-import { C2S, validateC2S, normalizeServerLoad, normalizeLoadDetails } from '../shared/protocol.js';
-import { normalizeClusterLoad } from '../shared/cluster-load.js';
-import { ERR, ERR_TEXT, PROTOCOL_VERSION, MATCHMAKING_VERSION } from '../shared/constants.js';
-import { PLAYER_CAPACITY_VERSION } from '../shared/playerCapacity.js';
-import { isCompressibleType, transportStats } from '../packages/ws-compression/wsCompression.js';
-import { sanitizeName } from '../shared/names.js';
-export { sanitizeName };
+import { C2S, validateC2S } from '../shared/protocol.js';
+import { ERR, ERR_TEXT, NAME_MAX_LEN, PROTOCOL_VERSION } from '../shared/constants.js';
 
 /** Tunables (all overridable through the Network / SessionRegistry constructors). */
 export const NET_DEFAULTS = Object.freeze({
@@ -57,22 +56,31 @@ export const NET_DEFAULTS = Object.freeze({
   reconnectWindowMs: 10 * 60_000, // disconnected sessions stay resumable this long
   snapDropBytes: 1 << 20,       // skip b.snap while bufferedAmount exceeds this
   hardBufferBytes: 16 << 20,    // terminate a socket whose send queue exceeds this
-  maxConnections: 0,            // concurrent sockets (0 = unlimited; enforced at upgrade time)
-  maxConnectionsPerAddr: 0,     // concurrent sockets per client network key (0 = unlimited); see clientAddress
-  maxSessions: 0,               // registry cap (0 = unlimited); finite caps evict oldest idle sessions first
+  maxConnections: 2000,         // concurrent sockets (enforced by index.js at upgrade time)
+  maxConnectionsPerAddr: 64,    // concurrent sockets per client network key (0 = unlimited); see clientAddress
+  maxSessions: 20_000,          // registry cap; oldest idle sessions are evicted first
+  maxOnline: 0,                 // authenticated players admitted at once (0 = unlimited); a resume is never refused
   heavyPerSec: 2,               // refill of the bucket for resend-heavy intents (HEAVY_TYPES)
   heavyBurst: 6,
   trustProxy: 'auto',           // forwarding headers: 'auto' = from loopback/private peers only, true = always, false = never
-  allowAsyncHandlers: false,    // explicit coordinator opt-in; ordinary lobby dispatch remains synchronous
 });
 
 /**
  * Intents that also draw from the per-connection heavy bucket: g.watch (its reply is a large state resend, m.field),
  * room.loadout (a ≤ 160-entry map and ≤ 256 operator settings validated against the game data; the client debounces its
- * edits), room.ownership (a ≤ 160-id list), room.diy (≤ 8 自选 picks), room.skins (whitelisted display choices) and room.spectate
- * (taking a spectator seat in a running match resends its state like a watcher's g.watch — server/lobby.js spectate).
+ * edits), room.ownership
+ * (a ≤ 160-id list, the same way), room.diy (≤ 8 自选 picks checked against the data, the same way), room.spectate
+ * (taking a spectator seat in a running match resends its state like a watcher's g.watch — server/lobby.js spectate) and
+ * room.setPlugins (a new visual set: every member downloads its art manifest — server/plugins/visualSet.js).
+ * room.skins (docs/SKINS.md) is a small `{ [charId]: skinId }` map, sent on every edit of the appearance; a changed map
+ * re-broadcasts room.state to a waiting room (its seat cards wear it: room.state seats[].skins). room.card (名片干员, PR
+ * #643 split 6): every accepted change re-broadcasts room.state to the room. room.rerollSetup (重刷本局): with one human a
+ * start completes at once and clears that seat's 30 s cooldown, and each reroll rebuilds the opening and resends m.public
+ * to every connection (server/match/match/setupVote.js, DESIGN §35.47). Any seated player may start it (#860).
+ * room.proposeVersion (DESIGN §35.23) stays host-proposed: an accepted proposal by a lone human switches the room's
+ * version — every page then downloads that version's data.
  */
-export const HEAVY_TYPES = new Set(['g.watch', 'room.loadout', 'room.ownership', 'room.diy', 'room.skins', 'queue.join', 'room.spectate']);
+export const HEAVY_TYPES = new Set(['g.watch', 'room.loadout', 'room.ownership', 'room.diy', 'room.spectate', 'room.setPlugins', 'room.skins', 'room.card', 'room.rerollSetup', 'room.proposeVersion', 'state.resync']);
 
 /** Close codes (see header). */
 export const CLOSE = Object.freeze({ REPLACED: 4001, HELLO_TIMEOUT: 4002, POLICY: 1008, SHUTDOWN: 1001 });
@@ -123,16 +131,16 @@ export class Session {
     this.notOwned = null;
     /** @type {Readonly<Record<string, { charId: string, skillIndex: number, uniEquipId: string|null }>> | null} checked 自选 picks (lobby-owned, 0.2.0 自选编队) */
     this.diy = null;
-    /** @type {Readonly<Record<string, string>>} display-only skin choices (lobby-owned) */
-    this.skins = Object.freeze({});
+    /** @type {Readonly<Record<string, string>> | null} chosen operator skins (lobby-owned, docs/SKINS.md): keyed by
+     * charId; PUBLIC, unlike the loadout (a teammate sees your skin through Match.publicView().players[].skins) */
+    this.skins = null;
+    /** @type {string | null} 名片干员 (lobby-owned, PR #643 split 6): the charId whose portrait fills this player's seat card in
+     * the waiting room; PUBLIC (room.state seats[].card), cosmetic */
+    this.card = null;
     /** @type {string} client address of the latest connection (logging) */
     this.addr = '?';
     /** @type {string | null} per-network limit key of the latest connection (null = not limited), see clientAddress */
     this.limitKey = null;
-    /** Explicit hello capability; legacy clients without it cannot enter public matchmaking. */
-    this.matchmakingVersion = null;
-    /** Legacy clients remain compatible with ordinary rooms, not expanded rooms. */
-    this.playerCapacityVersion = null;
     /**
      * @type {number | null} lobby-owned extension of the reconnect window for this session (ms; null = the registry's
      * window). A solo run keeps its session resumable for the official `singleReconnectTime` (24 h) — see lobby.js.
@@ -166,7 +174,7 @@ export class SessionRegistry {
    * @returns {Session | null}
    */
   create(name) {
-    if (this.maxSessions > 0 && this.byPlayerId.size >= this.maxSessions && !this.evictOne()) return null;
+    if (this.byPlayerId.size >= this.maxSessions && !this.evictOne()) return null;
     let playerId;
     do playerId = 'p_' + randomBytes(5).toString('hex'); while (this.byPlayerId.has(playerId));
     let token;
@@ -283,21 +291,16 @@ const onSendDone = (err) => { void err; }; // errors surface through the socket'
  * congested (> 1 MB queued), and terminates sockets whose queue exceeds 16 MB.
  * @param {import('ws').WebSocket | null | undefined} ws
  * @param {string} data
- * @param {{ droppable?: boolean, compress?: boolean }} [opts]
+ * @param {{ droppable?: boolean }} [opts]
  * @returns {boolean} true when the frame was queued
  */
-export function sendRaw(ws, data, { droppable = false, compress = false } = {}) {
+export function sendRaw(ws, data, { droppable = false } = {}) {
   if (!ws || ws.readyState !== WS_OPEN || typeof data !== 'string') return false;
   try {
     const queued = ws.bufferedAmount;
-    if (queued > NET_DEFAULTS.hardBufferBytes) { transportStats.countTerminated(); ws.terminate(); return false; }
-    // Skipping happens BEFORE ws.send on purpose: with context takeover a frame that entered the deflate
-    // context and was then not delivered would desynchronize the client's inflate context (see
-    // server/ws-compression/plumbing.mjs).
-    if (droppable && queued > NET_DEFAULTS.snapDropBytes) { transportStats.countSkipped(); return false; }
-    const wantCompress = compress === true;
-    ws.send(data, { compress: wantCompress }, onSendDone);
-    transportStats.countSent(Buffer.byteLength(data, 'utf8'), wantCompress);
+    if (queued > NET_DEFAULTS.hardBufferBytes) { ws.terminate(); return false; }
+    if (droppable && queued > NET_DEFAULTS.snapDropBytes) return false;
+    ws.send(data, onSendDone);
     return true;
   } catch {
     return false;
@@ -311,12 +314,21 @@ export const isDroppable = (msg) => !!msg && msg.t === 'b.snap';
  * Encode and send one message to a socket. Never throws.
  * @param {import('ws').WebSocket | null | undefined} ws
  * @param {object} msg
+ * @param {string | null} [encoded] bytes a caller already produced; must be this message when it is a state kind
  * @returns {boolean}
  */
-export function send(ws, msg) {
-  const data = encode(msg);
+export function send(ws, msg, encoded = null) {
+  const bytes = encoded == null ? encode(msg) : encoded;
+  if (bytes == null) return false;
+  // state kinds go through the delta transport: it owns the per-connection baseline, so commit() only runs after the
+  // frame was really queued (a dropped or terminated socket must not advance it).
+  const frame = prepareStateFrame(ws, msg, bytes);
+  // Pre-encoded bytes that are not a JSON object cannot be a baseline: fall back to the full frame encoded here.
+  const data = frame.usable ? frame.data : encode(msg);
   if (data == null) return false;
-  return sendRaw(ws, data, { droppable: isDroppable(msg), compress: isCompressibleType(msg?.t) });
+  const ok = sendRaw(ws, data, { droppable: isDroppable(msg) });
+  if (ok && frame.usable) frame.commit();
+  return ok;
 }
 
 /**
@@ -325,9 +337,10 @@ export function send(ws, msg) {
  * @param {object} msg
  * @returns {boolean}
  */
-export function sendSession(session, msg) {
+export function sendSession(session, msg, encoded = null) {
   if (!session || !session.connected) return false;
-  return send(session.ws, msg);
+  setStateDeltaRoom(session.ws, session.roomCode ?? null);
+  return send(session.ws, msg, encoded);
 }
 
 /** @param {unknown} rid */
@@ -352,6 +365,29 @@ export function errorMsg(code, rid, detail) {
   if (validRid(rid)) m.rid = rid;
   if (detail) m.detail = String(detail).slice(0, 120);
   return m;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Names
+// ---------------------------------------------------------------------------------------------------
+
+// Control chars, zero-width & bidi controls, BOM.
+const STRIP_RANGES = [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff]];
+const hexEscape = (n) => '\\u' + n.toString(16).padStart(4, '0');
+const STRIP_RE = new RegExp('[' + STRIP_RANGES.map(([a, b]) => (a === b ? hexEscape(a) : `${hexEscape(a)}-${hexEscape(b)}`)).join('') + ']', 'g');
+const LONE_SURROGATE_RE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+
+/**
+ * Normalize a nickname: strip control/invisible characters and lone surrogates, collapse whitespace,
+ * trim, cap at NAME_MAX_LEN code points. Returns null when nothing printable remains.
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+export function sanitizeName(raw) {
+  if (typeof raw !== 'string') return null;
+  let s = raw.normalize('NFC').replace(LONE_SURROGATE_RE, '').replace(/\s+/g, ' ').replace(STRIP_RE, '').replace(/ {2,}/g, ' ').trim();
+  s = [...s].slice(0, NAME_MAX_LEN).join('').trim();
+  return s.length > 0 ? s : null;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -483,7 +519,6 @@ class Connection {
     this.heavy = new TokenBucket(opts.heavyPerSec, opts.heavyBurst, now);
     this.dropWindowAt = now;
     this.drops = 0;
-    this.pendingHandlers = 0;
     /** true once the server initiated the close; frames still in flight are ignored */
     this.closing = false;
   }
@@ -506,22 +541,15 @@ export class Network {
    *   handler: { onHello?: Function, onMessage: Function, onDisconnect?: Function, onExpire?: Function, welcomeInfo?: Function },
    *   log?: { info: Function, warn: Function, error: Function, debug?: Function },
    *   now?: () => number,
-   *   getLoadState?: () => string,
-   *   getLoadDetails?: () => unknown,
-   *   getClusterLoad?: () => unknown,
    *   options?: Partial<typeof NET_DEFAULTS>,
    * }} opts
    */
-  constructor({ registry, handler, log = noopLog, now = Date.now, getLoadState = null, getLoadDetails = null, getClusterLoad = null, options = {} }) {
+  constructor({ registry, handler, log = noopLog, now = Date.now, options = {} }) {
     this.registry = registry;
     this.handler = handler;
     this.log = log;
     this.now = now;
-    this.getLoadState = typeof getLoadState === 'function' ? getLoadState : null;
-    this.getLoadDetails = typeof getLoadDetails === 'function' ? getLoadDetails : null;
-    this.getClusterLoad = typeof getClusterLoad === 'function' ? getClusterLoad : null;
     this.opts = { ...NET_DEFAULTS, ...options };
-    if (typeof this.opts.allowAsyncHandlers !== 'boolean') throw new TypeError('invalid asynchronous network handler option');
     /** @type {Map<import('ws').WebSocket, Connection>} */
     this.conns = new Map();
     /** @type {Map<string, number>} open sockets per client network key */
@@ -537,6 +565,15 @@ export class Network {
   /** Number of open sockets. */
   get connectionCount() { return this.conns.size; }
 
+  /** Number of authenticated sessions bound to a live socket (what the online cap counts). */
+  get onlineCount() {
+    let n = 0;
+    for (const conn of this.conns.values()) {
+      if (conn.session?.connected && conn.session.ws === conn.ws) n++;
+    }
+    return n;
+  }
+
   /**
    * Upgrade-time admission check (server/http/websocket.js): null to accept, otherwise the reason to refuse.
    * @param {import('node:http').IncomingMessage} req
@@ -544,7 +581,7 @@ export class Network {
    */
   admission(req) {
     if (this.closed) return 'shutdown';
-    if (this.opts.maxConnections > 0 && this.conns.size >= this.opts.maxConnections) return 'full';
+    if (this.conns.size >= this.opts.maxConnections) return 'full';
     const { key } = clientAddress(req, this.opts.trustProxy);
     const cap = this.opts.maxConnectionsPerAddr;
     if (key && cap > 0 && (this.connsPerKey.get(key) || 0) >= cap) return 'per-address';
@@ -567,12 +604,6 @@ export class Network {
     ws.on('pong', () => { conn.alive = true; if (conn.session && conn.session.ws === ws) conn.session.lastSeen = this.now(); });
     ws.on('error', (e) => { this.log.debug?.('[net] socket error', e?.code || e?.message); });
     ws.on('close', () => { try { this.onClose(conn); } catch (e) { this.log.error('[net] close handler crashed', e); } });
-    // The other half of a pack's `server.preDispatch` declaration: a hook that must say something at connection time
-    // (a challenge, a greeting) cannot wait for `hello` — that is why the bus is consulted before ping/hello above.
-    // Without such a pack this is a no-op; the bus catches a throwing hook per pack, this catches the rest.
-    if (typeof this.opts.onConnection === 'function') {
-      try { this.opts.onConnection(conn); } catch (e) { this.log.error('[net] onConnection hook crashed', e); }
-    }
   }
 
   /** @param {Connection} conn @param {object} msg */
@@ -611,47 +642,8 @@ export class Network {
     const reason = validateC2S(msg);
     if (reason) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, reason)); return; }
 
-    // A pack's declared pre-dispatch hook (the mod-manager contract's `server.preDispatch`; assembled by
-    // server/modBridge.js out of server/modDispatch.js). The placement is the intersection of three constraints, and
-    // missing any one of them fails silently:
-    //   * AFTER the `Object.hasOwn(C2S, msg.t)` check and `validateC2S` above — the hook may trust the field shapes,
-    //     and a type this server does not have must be rejected as an unknown type, not delivered to a hook;
-    //   * BEFORE the `ping` / `hello` branches below — a gate's own message types are not `hello`, and the reply a
-    //     hook sends on connection often arrives before the client says hello;
-    //   * BEFORE `if (!conn.session)` ("hello required") below — after it, anything sent before hello is answered
-    //     "hello required" and the gate can never close.
-    // Returning true means the hook consumed the message (and owns the reply, which must carry the `rid` it got).
-    //
-    // With no pack declaring one, `this.opts.preDispatch` is undefined: this typeof check does not enter, no object is
-    // created, no log line is written, and no second `socket.on('message')` exists (that would double-dispatch
-    // side-effecting types like `room.create` / `g.buy`) — onFrame behaves exactly as it did without this line.
-    if (typeof this.opts.preDispatch === 'function') {
-      try {
-        if (this.opts.preDispatch(conn, msg)) return;
-      } catch (e) {
-        // The bus catches a throwing hook per pack already; this is the last line of defence for the frame handler.
-        this.log.error('[net] preDispatch hook crashed', e);
-      }
-    }
-
     if (msg.t === 'ping') {
       const pong = { t: 'pong', c: msg.c, s: now };
-      if (this.getLoadState) {
-        try { pong.loadState = normalizeServerLoad(this.getLoadState()); }
-        catch { pong.loadState = 'unknown'; } // diagnostics cannot interrupt heartbeat replies
-      }
-      if (this.getLoadDetails) {
-        try {
-          const details = normalizeLoadDetails(this.getLoadDetails());
-          if (details !== null) pong.loadDetails = details;
-        } catch { /* diagnostics cannot interrupt heartbeat replies */ }
-      }
-      if (this.getClusterLoad) {
-        try {
-          const cluster = normalizeClusterLoad(this.getClusterLoad());
-          if (cluster !== null) pong.clusterLoad = cluster;
-        } catch { /* diagnostics cannot interrupt heartbeat replies */ }
-      }
       if (validRid(rid)) pong.rid = rid;
       this.reply(conn, pong);
       return;
@@ -660,15 +652,16 @@ export class Network {
     if (!conn.session) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'hello required')); return; }
     if (HEAVY_TYPES.has(msg.t) && !conn.heavy.take(now)) { this.reply(conn, errorMsg(ERR.RATE, rid, `${msg.t} too often`)); return; }
 
-    if (this.opts.allowAsyncHandlers && conn.pendingHandlers >= 64) { this.reply(conn, errorMsg(ERR.RATE, rid)); return; }
-    const session = conn.session;
-    const respond = res => {
-      if (this.closed || conn.closing || conn.session !== session || session.ws !== conn.ws) return;
-      if (res && res.error) {
-        if (msg.t === 'b.progress' && !validRid(rid)) return;
-        this.reply(conn, errorMsg(isErrCode(res.error) ? res.error : ERR.INTERNAL, rid, res.detail));
-      } else if (validRid(rid)) this.reply(conn, { t: 'ok', rid });
-    };
+    // A client that missed a delta asks for a full frame (shared/stateDelta.js StateReceiver). Dropping the baseline is
+    // the point: the next frame of every state channel is then a full one, which is what restores the client. The state
+    // itself is resent by the same resync a repeated hello runs (the lobby throttles it with resyncMinGapMs).
+    if (msg.t === 'state.resync') {
+      resetStateDelta(conn.ws);
+      const resent = this.handler.onMessage(conn.session, { t: 'state.resync' });
+      this.answer(conn, msg, rid, resent ?? { ok: true });
+      return;
+    }
+
     let res;
     try {
       // client-side combat reports (b.progress / b.result, DESIGN §14) belong to the running match like 'g.*' intents:
@@ -680,15 +673,31 @@ export class Network {
       res = { error: ERR.INTERNAL };
     }
     if (res && typeof res.then === 'function') {
-      if (!this.opts.allowAsyncHandlers) {
-        Promise.resolve(res).catch(() => {});
-        respond({ error: ERR.INTERNAL });
-        return;
-      }
-      conn.pendingHandlers++;
-      Promise.resolve(res).then(respond, () => respond({ error: ERR.INTERNAL }))
-        .catch(() => {}).finally(() => { conn.pendingHandlers--; });
-    } else respond(res);
+      // an answer that has to wait (DESIGN §32.6: a room whose match runs in a match host worker answers once the worker
+      // has — server/lobby.js keeps each such room's messages in order): sent when it settles; a rejection is INTERNAL.
+      // A vanilla room never answers this way, so its replies go out exactly as before
+      Promise.resolve(res).then((r) => this.answer(conn, msg, rid, r), (e) => {
+        this.log.error(`[net] handler failed on ${msg.t}`, e);
+        this.answer(conn, msg, rid, { error: ERR.INTERNAL });
+      });
+      return;
+    }
+    this.answer(conn, msg, rid, res);
+  }
+
+  /**
+   * The direct reply to a handled message: `error` (with the ERR code) or `ok` when the request carried a rid. Never
+   * throws (a socket closed meanwhile simply gets nothing).
+   * @param {Connection} conn @param {any} msg @param {unknown} rid @param {any} res the handler's result
+   */
+  answer(conn, msg, rid, res) {
+    if (res && res.error) {
+      // fire-and-forget battle progress (no rid) that reached no running match — the match just ended, the room went
+      // back to the lobby — is stale, not a client mistake: never answered (DESIGN §14; a rid-less error frame would
+      // surface as an error toast in the browser)
+      if (msg.t === 'b.progress' && !validRid(rid)) return;
+      this.reply(conn, errorMsg(isErrCode(res.error) ? res.error : ERR.INTERNAL, rid, res.detail));
+    } else if (validRid(rid)) this.reply(conn, { t: 'ok', rid });
   }
 
   /** @param {Connection} conn @param {any} msg @param {number} now */
@@ -698,31 +707,8 @@ export class Network {
       this.reply(conn, errorMsg(ERR.BAD_MSG, rid, `version mismatch: server ${PROTOCOL_VERSION}`));
       return;
     }
-    if (msg.matchmakingVersion != null && msg.matchmakingVersion !== MATCHMAKING_VERSION) {
-      this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'matchmaking version mismatch'));
-      return;
-    }
-    // Validate before looking up a reconnect token, detaching another socket or mutating a session.
-    // A legacy rejected name keeps its identity/token intact until the owner submits a valid name.
-    // Only the legal form is enforced here: R13 dictionary screening belongs to the workshop mod
-    // `name-guard` (server.preDispatch on hello) now, so sensitive names are accepted server-side.
     const name = sanitizeName(msg.name);
-    if (!name) { this.reply(conn, errorMsg(ERR.NAME_REJECTED, rid, 'invalid_name')); return; }
-    if (msg.playerCapacityVersion != null && msg.playerCapacityVersion !== PLAYER_CAPACITY_VERSION) {
-      this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'player capacity version mismatch'));
-      return;
-    }
-    // Check an existing room's capability before replacing its socket or changing any session metadata.
-    const previous = conn.session || (msg.token ? this.registry.byToken(msg.token) : null);
-    let admission;
-    try { admission = this.handler.helloAdmission?.(previous, msg); } catch (e) {
-      this.log.error('[net] hello admission crashed', e);
-      this.reply(conn, errorMsg(ERR.INTERNAL, rid)); return;
-    }
-    if (admission?.error) {
-      this.reply(conn, errorMsg(isErrCode(admission.error) ? admission.error : ERR.INTERNAL, rid, admission.detail));
-      return;
-    }
+    if (!name) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'bad field name')); return; }
 
     let session = conn.session;
     let resumed = false;
@@ -738,6 +724,17 @@ export class Network {
         resumed = true;
         if (session.ws && session.ws !== conn.ws) this.detachReplaced(session.ws);
       } else {
+        // The online cap (SP_MAX_ONLINE) decides *new players only*: a token that still resolves resumed above and never
+        // reaches this check, so a full server does not lock out the people already playing. "A resume is never refused"
+        // holds at this layer alone — the socket cap (maxConnections, checked at the upgrade in
+        // server/http/websocket.js, answering 503 before a socket exists) still applies, and the `noReplace` / claimAt
+        // decision above still answers SESSION_IN_USE for a token whose session is live on another socket. This check is
+        // what the player sees as 服务器已满 (ERR.SERVER_FULL).
+        if (this.opts.maxOnline > 0 && this.onlineCount >= this.opts.maxOnline) {
+          this.reply(conn, errorMsg(ERR.SERVER_FULL, rid, 'server full (online cap)'));
+          try { conn.ws.close(CLOSE.POLICY, 'server full'); } catch { /* ignore */ }
+          return;
+        }
         session = this.registry.create(name);
         if (!session) { this.reply(conn, errorMsg(ERR.INTERNAL, rid, 'server full')); return; }
       }
@@ -751,16 +748,14 @@ export class Network {
     session.lastSeen = now;
     session.addr = conn.ip;
     session.limitKey = conn.key;
-    session.matchmakingVersion = msg.matchmakingVersion ?? null;
-    session.playerCapacityVersion = msg.playerCapacityVersion ?? null;
+    // Opt-in state deltas (shared/stateDelta.js): a hello may name the version it decodes. A repeated hello keeps the
+    // baseline it already has, a client that never names one (or names an unknown version) keeps getting plain frames.
+    negotiateStateDelta(conn.ws, msg.delta);
 
     let extra = null;
     try { extra = this.handler.welcomeInfo?.() ?? null; } catch (e) { this.log.error('[net] welcomeInfo crashed', e); }
-    // Keep the type first for bounded ingress inspection; optional metadata cannot replace identity fields.
-    const welcome = { t: 'welcome', playerId: session.playerId, token: session.token, name: session.name, serverNow: now, version: PROTOCOL_VERSION, resumed };
-    if (extra && typeof extra === 'object') for (const [key, value] of Object.entries(extra)) {
-      if (!Object.hasOwn(welcome, key) && key !== '__proto__') welcome[key] = value;
-    }
+    const welcome = { ...(extra && typeof extra === 'object' ? extra : null), t: 'welcome', playerId: session.playerId, token: session.token, name: session.name, serverNow: now, version: PROTOCOL_VERSION, resumed };
+    if (session.aiTakeoverFrom) { welcome.takeoverFrom = session.aiTakeoverFrom; session.aiTakeoverFrom = null; }
     if (validRid(rid)) welcome.rid = rid;
     this.reply(conn, welcome);
     try {
@@ -800,25 +795,53 @@ export class Network {
 
   /** Ping every socket; terminate the ones that did not answer since the previous heartbeat. */
   heartbeat() {
+    // A closed server has no connection left to keep alive, and a shutting-down one must not be walked: nothing to do.
+    // The pass yields between chunks, so a large connection set cannot hold the event loop for the whole sweep.
+    // A pass still yielding when the next tick fires is skipped rather than started a second time on top of itself.
+    if (this.closed || this._heartbeatPending) return;
+    this._heartbeatPending = true;
+    this._heartbeatPass()
+      .catch((e) => this.log.debug?.('[net] heartbeat error', e?.message))
+      .finally(() => { this._heartbeatPending = false; });
+  }
+
+  /**
+   * One heartbeat pass: the same per-connection step, in chunks of 128 with a yield in between. Fewer connections
+   * than one chunk still run through in a single tick, exactly like the old synchronous loop.
+   *
+   * Each connection is pinged at most once per pass. The pass stops when the server closes, and a connection that
+   * was removed or replaced while the pass was yielding is skipped — the map no longer holds that same object — and
+   * is left to the next pass instead of being acted on twice or after its owner already dropped it.
+   */
+  async _heartbeatPass() {
     const now = this.now();
-    for (const conn of this.conns.values()) {
-      try {
-        if (conn.closing) {
-          // Closing handshake never completed within a heartbeat interval → drop the TCP connection.
-          if (!conn.alive) conn.ws.terminate();
-          conn.alive = false;
-          continue;
-        }
-        if (!conn.session && now - conn.openedAt > this.opts.helloTimeoutMs) {
-          conn.close(CLOSE.HELLO_TIMEOUT, 'hello timeout');
-          continue;
-        }
-        if (!conn.alive) { conn.ws.terminate(); continue; }
+    let seen = 0;
+    for (const [key, conn] of [...this.conns.entries()]) {
+      if (this.closed) return;
+      if (this.conns.get(key) !== conn) continue;
+      this._heartbeatConn(conn, now);
+      if (++seen % 128 === 0) await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  /** The per-connection step of a heartbeat (unchanged behaviour: hello timeout, dead-socket terminate, ping). */
+  _heartbeatConn(conn, now) {
+    try {
+      if (conn.closing) {
+        // Closing handshake never completed within a heartbeat interval → drop the TCP connection.
+        if (!conn.alive) conn.ws.terminate();
         conn.alive = false;
-        conn.ws.ping();
-      } catch (e) {
-        this.log.debug?.('[net] heartbeat error', e?.message);
+        return;
       }
+      if (!conn.session && now - conn.openedAt > this.opts.helloTimeoutMs) {
+        conn.close(CLOSE.HELLO_TIMEOUT, 'hello timeout');
+        return;
+      }
+      if (!conn.alive) { conn.ws.terminate(); return; }
+      conn.alive = false;
+      conn.ws.ping();
+    } catch (e) {
+      this.log.debug?.('[net] heartbeat error', e?.message);
     }
   }
 

@@ -30,9 +30,10 @@ async function exists(p) { try { return (await stat(p)).isFile(); } catch { retu
  * Convert downloaded fonts to WOFF2 (skipping up-to-date outputs) and write fonts.css.
  * @param {string} fontsDir absolute public/fonts directory
  * @param {(m:string)=>void} log
+ * @param {{verified?:boolean, available?:(rel:string)=>boolean}} [opts]
  * @returns {Promise<{ files: Record<string, {family:string, weight:number, woff2?:string, original?:string}>, css: string|null, errors: string[] }>}
  */
-export async function buildFonts(fontsDir, log = console.log) {
+export async function buildFonts(fontsDir, log = console.log, { verified = false, available = () => !verified } = {}) {
   await mkdir(fontsDir, { recursive: true });
   const files = {};
   const errors = [];
@@ -40,6 +41,10 @@ export async function buildFonts(fontsDir, log = console.log) {
   for (const f of FONTS) {
     const orig = join(fontsDir, `${f.name}.${f.ext}`);
     const woff2 = join(fontsDir, `${f.name}.woff2`);
+    if (!available(`${f.name}.${f.ext}`)) {
+      errors.push(`unverified font ${f.name}.${f.ext}`);
+      continue;
+    }
     if (!(await exists(orig))) { errors.push(`missing font ${f.name}.${f.ext}`); continue; }
     const entry = { family: f.family, weight: f.weight, original: `/fonts/${f.name}.${f.ext}` };
     try {
@@ -67,10 +72,8 @@ export async function buildFonts(fontsDir, log = console.log) {
     }
     files[f.name] = entry;
     const srcs = [];
-    // CSS is served both locally under a release prefix and from the immutable static origin.
-    // Keep manifest URLs root-relative, but resolve faces next to fonts.css rather than the site root.
-    if (entry.woff2) srcs.push(`url('./${f.name}.woff2') format('woff2')`);
-    srcs.push(`url('./${f.name}.${f.ext}') format('${f.ext === 'ttf' ? 'truetype' : 'opentype'}')`);
+    if (entry.woff2) srcs.push(`url('${entry.woff2}') format('woff2')`);
+    srcs.push(`url('${entry.original}') format('${f.ext === 'ttf' ? 'truetype' : 'opentype'}')`);
     faces.push(`@font-face {\n  font-family: '${f.family}';\n  font-style: ${f.style};\n  font-weight: ${f.weight};\n` +
       `  font-display: swap;\n  src: ${srcs.join(',\n       ')};\n}`);
   }
@@ -82,7 +85,8 @@ export async function buildFonts(fontsDir, log = console.log) {
       ` * Usage: font-family: Bender, Rajdhani, 'Noto Sans SC', sans-serif;\n` +
       ` *        font-family: 'Novecento Wide', 'Saira Condensed', 'Noto Sans SC', sans-serif; */\n\n` +
       faces.join('\n\n') + '\n';
-    await writeFile(join(fontsDir, 'fonts.css'), css);
+    await writeFile(join(fontsDir, 'fonts.css.tmp'), css);
+    await rename(join(fontsDir, 'fonts.css.tmp'), join(fontsDir, 'fonts.css'));
   }
   return { files, css, errors };
 }

@@ -25,10 +25,6 @@ import { pickModeAttacks, skillModeLetter, SLOT_MODE_LETTER } from '../tools/ass
 const P = (f) => `player/${f.startsWith('p_imp') ? 'p_imp' : 'p_atk'}/${f}.mp3`;
 const LEIZI2 = 'char_1043_leizi2';
 const manifest = JSON.parse(readFileSync(new URL('../data/assets.json', import.meta.url), 'utf8'));
-// The committed manifest is the weishucdn one: every asset URL carries a cache-busting `?v=` (a deliberate fork
-// feature). The mode convention is about the FILE NAME, not the URL, so the manifest URLs are compared / read bare.
-const bare = (u) => String(u).replace(/\?[^]*$/, '');
-const bareMap = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, bare(v)]));
 
 /** 司霆惊蛰's own banks, exactly as excel/audio_data.json lists them. */
 const LEIZI2_BANKS = new Map([
@@ -81,33 +77,39 @@ test('skillModeLetter / SLOT_MODE_LETTER: 技能1 / 2 / 3 = _d / _h / _s (+ digi
 test('the committed manifest carries her three mode attacks under the skill indexes', () => {
   const u = manifest.audio.sfx.units[LEIZI2];
   assert.equal(u.attack, undefined, 'she has no normal-mode attack bank — that was the silent attack');
-  assert.deepEqual(bareMap(u.attacks), {
+  assert.deepEqual(u.attacks, {
     0: '/assets/audio/sfx/player/p_atk/p_atk_lzxqlkl_d1.mp3',
     1: '/assets/audio/sfx/player/p_atk/p_atk_lzxqlkl_h2.mp3',
     2: '/assets/audio/sfx/player/p_atk/p_atk_lzxqlkl_s.mp3',
   });
   // her activation sounds (the other half of the chain) name the same modes: _d / _h / _s for 技能1 / 2 / 3
-  assert.deepEqual(bareMap(u.skills), {
+  assert.deepEqual(u.skills, {
     0: '/assets/audio/sfx/player/p_skill/p_skill_lzxqlkl_d.mp3',
     1: '/assets/audio/sfx/player/p_skill/p_skill_lzxqlkl_h.mp3',
     2: '/assets/audio/sfx/player/p_skill/p_skill_lzxqlkl_s.mp3',
   });
-  assert.equal(bare(u.hit), '/assets/audio/sfx/player/p_imp/p_imp_lzxqlkl_n.mp3', 'her normal impact is untouched');
+  assert.equal(u.hit, '/assets/audio/sfx/player/p_imp/p_imp_lzxqlkl_n.mp3', 'her normal impact is untouched');
 });
 
-test('every manifest unit with both tables agrees with the mode convention (d / h / s = 技能1 / 2 / 3)', () => {
+test('every manifest attacks entry is a skill-mode file, or the mode\'s own plain file; the slot is not the filename letter (#679)', () => {
+  // The letter used to be the slot (d/h/s = 技能1/2/3). 玛恩纳's S2 file is `_d` and his S3 file is `_h`, so that
+  // guess dropped S3. Slots now follow the operator's mode list (assignSkillModeSfx); the file is `_d/_h/_s`, or (PR #848,
+  // DESIGN §35.38) a plain mode bank's file that differs from the unit's normal swing (寒芒克洛丝's S1 `p_atk_krossbow_n`).
   const units = manifest.audio.sfx.units;
   let both = 0;
   for (const [id, u] of Object.entries(units)) {
     if (!u?.attacks || !u?.skills) continue;
     both++;
     for (const [i, url] of Object.entries(u.attacks)) {
-      const a = skillModeLetter(bare(url));
-      assert.ok(a, `${id}: attacks[${i}] is a skill-mode file (${url})`);
-      assert.equal(a, SLOT_MODE_LETTER[i], `${id}: attacks[${i}] is 技能${Number(i) + 1} (the _${a} mode)`);
+      const own = skillModeLetter(url) !== null || (typeof u.attack === 'string' && u.attack !== url);
+      assert.ok(own, `${id}: attacks[${i}] is a skill-mode file or the mode's own plain file (${url})`);
     }
   }
   assert.ok(both >= 5, `some operators carry both tables (found ${both})`);
+  const mlynar = units.char_4064_mlynar?.attacks || {};
+  assert.equal(mlynar['0'], undefined);
+  assert.match(mlynar['1'] || '', /p_imp_loyalsword_d\.mp3$/);
+  assert.match(mlynar['2'] || '', /p_imp_loyalsword_h\.mp3$/);
 });
 
 test('no operator takes a skill-mode file as its normal attack or impact (community report #54 stays fixed)', () => {
@@ -117,7 +119,7 @@ test('no operator takes a skill-mode file as its normal attack or impact (commun
     for (const kind of ['attack', 'hit']) {
       const url = u?.[kind];
       if (typeof url !== 'string') continue;
-      assert.equal(skillModeLetter(bare(url)), null, `${id}.${kind} = ${url} is a skill mode's file`);
+      assert.equal(skillModeLetter(url), null, `${id}.${kind} = ${url} is a skill mode's file`);
     }
   }
 });

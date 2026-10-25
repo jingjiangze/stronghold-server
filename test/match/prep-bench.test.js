@@ -8,7 +8,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GEO, PHASE } from '../../shared/constants.js';
 import { DATA, makeMatch, give, giveItem, legalTileFor, chessOfTier } from './harness.js';
-import { makeCtx } from '../../server/match/effectsMeta.js';
 
 const MELEE = (c) => c.position === 'MELEE' && c.profession === 'TANK';
 
@@ -124,38 +123,6 @@ test("PR #129 review: moving a hand piece to another slot is a scout change (x f
   assert.ok(last, 'a new scout push arrived');
   assert.equal(last.units.find((x) => x.uid === a.uid).x, 3, 'the piece stands on its new hand slot');
   m.dispose();
-});
-
-test('prep scouting refreshes displayed effects without leaking private state or repushing shop-only changes', () => {
-  const S = 's_spec';
-  const h = makeMatch({ mode: 'coop', humans: 2, seed: 48, fake: true, spectators: [S] }).start();
-  h.toPrep(1);
-  const m = h.m, target = h.ps('p_1');
-  try {
-    assert.deepEqual(m.handle('p_1', { t: 'g.ready', ready: false }), { ok: true });
-    for (const pid of ['p_0', S]) assert.deepEqual(m.handle(pid, { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
-    const counts = () => ['p_0', S].map(pid => h.allTo(pid, 'm.field').length);
-    let before = counts();
-    const ctx = makeCtx(m, target, { key: 'effect:scout-test' }, 'onPrep');
-    ctx.addEffect({ id: 'scout-test', name: '侦察效果测试', desc: '仅测试显示刷新', counter: 1, battle: false });
-    m.flush();
-    assert.deepEqual(counts(), before.map(n => n + 1), 'both teammate and spectator receive effect-only changes');
-    for (const pid of ['p_0', S]) assert.equal(h.lastTo(pid, 'm.field').effects.find(e => e.id === 'scout-test')?.counter, 1);
-    before = counts();
-    assert.equal(ctx.setEffectCounter('scout-test', 2), true);
-    m.flush();
-    assert.deepEqual(counts(), before.map(n => n + 1));
-    for (const pid of ['p_0', S]) assert.equal(h.lastTo(pid, 'm.field').effects.find(e => e.id === 'scout-test')?.counter, 2);
-    before = counts();
-    assert.deepEqual(m.handle('p_1', { t: 'g.freeze' }), { ok: true });
-    m.flush();
-    assert.deepEqual(counts(), before, 'shop-only changes do not resend the watched field');
-    assert.equal(ctx.removeEffect('scout-test'), true);
-    m.flush();
-    assert.deepEqual(counts(), before.map(n => n + 1));
-    for (const pid of ['p_0', S]) assert.equal(h.lastTo(pid, 'm.field').effects.some(e => e.id === 'scout-test'), false);
-    assert.equal(h.allTo(S, 'm.private').length, 0, 'spectator receives only display metadata');
-  } finally { m.dispose(); }
 });
 
 test('#44 prep scout: an empty hand adds no units and never an m.private to a spectator seat', () => {

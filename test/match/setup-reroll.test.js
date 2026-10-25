@@ -98,31 +98,6 @@ test('four humans must agree; rerolls the entire official setup and stock, prese
   assert.equal(m.phase, PHASE.BAND_DRAFT);
 });
 
-for (const capacity of [4, 8, 12, 16, 20]) for (const independent of [false, true]) {
-  test(`setup reroll replaces every ${capacity}-seat ${independent ? 'independent' : 'shared'} pool atomically`, t => {
-    const h = makeMatch({ humans: capacity, seed: 123, difficulty: 'HARD', experimental: {
-      disableSharedPool: independent, ...(capacity > 4 ? { playerCapacity: capacity } : {}),
-    } }).start();
-    t.after(() => h.m.dispose());
-    const m = h.m, groups = m.poolGroups, playerPools = m.playerPools;
-    const oldPools = groups.map(g => g.pool), shape = groups.map(({ id, playerIds, scale }) => ({ id, playerIds, scale }));
-    assert.deepEqual(m.requestSetupReroll('p_0', 0), { ok: true });
-    for (const ps of m.order.slice(1)) assert.deepEqual(approve(m, ps.playerId), { ok: true });
-    assert.equal(m.setupRevision, 1);
-    assert.notEqual(m.poolGroups, groups);
-    assert.deepEqual(m.poolGroups.map(({ id, playerIds, scale }) => ({ id, playerIds, scale })), shape);
-    if (playerPools) assert.notEqual(m.playerPools, playerPools);
-    for (const ps of m.order) {
-      const group = m.poolGroups.find(g => g.playerIds.includes(ps.playerId)), pool = m.poolFor(ps);
-      assert.strictEqual(pool, group.pool);
-      assert.ok(!oldPools.includes(pool), 'no player retains a pre-reroll transaction pool');
-      for (const id of m.gd.visibleChess) assert.equal(pool.has(id), !m.bannedChess.includes(id));
-    }
-    if (!independent) assert.strictEqual(m.pool, m.poolGroups[0].pool);
-    h.invariants();
-  });
-}
-
 test('reject/cancel restores exact remaining countdown and keeps setup and ready flags', (t) => {
   const h = makeMatch({ humans: 2, timerScale: 0.5 }).start();
   t.after(() => h.m.dispose());
@@ -138,8 +113,10 @@ test('reject/cancel restores exact remaining countdown and keeps setup and ready
   assert.equal(m.setupRevision, 0);
   assert.equal(h.ps('p_1').infoReady, true);
   assert.equal(m.deadline, h.sched.now() + remaining, 'real remaining ms, no extra timer scaling');
-  m.requestSetupReroll('p_0', 0);
-  assert.deepEqual(m.cancelSetupReroll('p_0', m.setupVote.id), { ok: true });
+  // The rejected vote did not give p_0 its cooldown back, but any other seat can still open one.
+  assert.equal(m.requestSetupReroll('p_0', 0).error, ERR.RATE);
+  assert.deepEqual(m.requestSetupReroll('p_1', 0), { ok: true });
+  assert.deepEqual(m.cancelSetupReroll('p_0', m.setupVote.id), { ok: true }, 'any seated player may cancel');
   assert.equal(m.deadline, h.sched.now() + remaining);
   h.sched.advance(remaining - 1);
   assert.equal(m.phase, PHASE.INFO_CHECK);
@@ -163,12 +140,13 @@ test('reroll cancels queued all-ready transition; stale ready and previous vote 
     assert.equal(m.handle('p_1', msg).error, ERR.BAD_TARGET);
   }
   assert.equal(m.requestSetupReroll('p_0', 0).error, ERR.BAD_TARGET);
-  assert.equal(m.requestSetupReroll('p_0', 1).error, ERR.RATE);
-  h.sched.advance(300);
-  assert.deepEqual(m.requestSetupReroll('p_0', 1), { ok: true });
+  assert.deepEqual(m.requestSetupReroll('p_0', 1), { ok: true }, 'a completed reroll opens a fresh window');
+  assert.equal(m.requestSetupReroll('p_0', 1).error, ERR.WRONG_PHASE, 'one vote at a time');
   assert.equal(approve(m, 'p_1', oldVote).error, ERR.BAD_TARGET);
   assert.equal(m.cancelSetupReroll('p_0', oldVote).error, ERR.BAD_TARGET);
   assert.equal(m.setupVote.agreed.size, 1);
+  assert.deepEqual(m.cancelSetupReroll('p_1', m.setupVote.id), { ok: true });
+  assert.equal(m.requestSetupReroll('p_0', 1).error, ERR.RATE, 'a cancelled vote does not give the cooldown back');
 });
 
 test('solo and one human with bots refresh immediately without a forced timer; fixed rules remain fixed', (t) => {
@@ -194,7 +172,7 @@ test('solo and one human with bots refresh immediately without a forced timer; f
 });
 
 test('disconnect and leave cancel rather than count as consent; reconnect sees current vote/setup', (t) => {
-  const h = makeMatch({ humans: 3 }).start();
+  const h = makeMatch({ humans: 3, timerScale: 4 }).start();
   t.after(() => h.m.dispose());
   const m = h.m;
   const before = snapshot(m);
@@ -209,14 +187,17 @@ test('disconnect and leave cancel rather than count as consent; reconnect sees c
   assert.equal(m.requestSetupReroll('p_0', 0).error, ERR.NOT_READY);
   m.onReconnect('p_1');
   assert.equal(h.lastTo('p_1', 'm.public').rerollVote, null);
-  m.requestSetupReroll('p_0', 0);
+  assert.equal(m.requestSetupReroll('p_0', 0).error, ERR.RATE, 'the cancelled vote keeps p_0 on cooldown');
+  assert.deepEqual(m.requestSetupReroll('p_2', 0), { ok: true }, 'another seat is free to ask');
+  assert.deepEqual(m.cancelSetupReroll('p_1', m.setupVote.id), { ok: true }, 'any seated player may cancel');
+  h.sched.advance(30_000);
+  assert.deepEqual(m.requestSetupReroll('p_0', 0), { ok: true }, 'after the cooldown the same seat may ask again');
   m.onLeave('p_1');
   assert.equal(m.setupVote, null);
   assert.equal(m.setupRevision, 0);
-  h.sched.advance(300);
-  m.requestSetupReroll('p_0', 0);
+  assert.deepEqual(m.requestSetupReroll('p_2', 0), { ok: true });
   assert.deepEqual(m.setupVote.voters, ['p_0', 'p_2']);
-  approve(m, 'p_2');
+  approve(m, 'p_0');
   assert.equal(m.setupRevision, 1);
 });
 
@@ -241,7 +222,7 @@ test('autoplay humans still explicitly consent; dispose stops a paused vote and 
 test('failed DIY stock preparation leaves every opening field and player stock intact', (t) => {
   const h = makeMatch({ humans: 2, difficulty: 'HARD' }).start();
   t.after(() => h.m.dispose());
-  const m = h.m, before = snapshot(m), pool = m.pool, stage = m.stage, groups = m.poolGroups, playerPools = m.playerPools;
+  const m = h.m, before = snapshot(m), pool = m.pool, stage = m.stage;
   const stocks = m.order.map((ps) => ps.diyStock), banned = m.order.map((ps) => ps.diyBanned);
   h.sched.advance(1000);
   const remaining = m.deadline - h.sched.now();
@@ -251,7 +232,6 @@ test('failed DIY stock preparation leaves every opening field and player stock i
   assert.equal(approve(m, 'p_1').error, ERR.INTERNAL);
   h.ps('p_1').buildDiyStock = original;
   assert.deepEqual(snapshot(m), before); assert.equal(m.pool, pool); assert.equal(m.stage, stage);
-  assert.strictEqual(m.poolGroups, groups); assert.strictEqual(m.playerPools, playerPools);
   for (const [i, ps] of m.order.entries()) { assert.equal(ps.diyStock, stocks[i]); assert.equal(ps.diyBanned, banned[i]); }
   assert.equal(m.setupRevision, 0); assert.equal(m.setupVote, null);
   assert.equal(m.deadline - h.sched.now(), remaining);

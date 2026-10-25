@@ -14,7 +14,8 @@
 //  1_15 盟约·辅助干员  every damage she deals attaches all three elements, neural → burn → apoptosis (see pithst).
 //  6_01 蕾缪安   locks every 0.5 s while an enemy is in range (ends early — and bombs — when the range empties);
 //                the shells then follow one every 0.3 s (PRTS), each landing 0.3 s after it is fired [ASSUMED flight];
-//                the 1.5 radius (PRTS "碰撞箱判定") is read as the centre distance like every engine radius; knocked
+//                the 1.5 radius (PRTS "碰撞箱判定") takes an enemy whose 0.1 collider overlaps it
+//                (foesInColliderRadius, 0.3.0); the 0.8 inner ring stays a centre distance [ASSUMED]; knocked
 //                out / withdrawn after the end, she fires no further shell (those already in the air still land);
 //                "wanted" needs a continuous 8 s stay in some 拉特兰 range; wanted targets are added to her range tiles.
 //  6_02 圣聆初雪 "诱导" (ba.attract 无法被阻挡并向目标位置移动) = the engine `attract` status for attract_time: the enemy
@@ -80,8 +81,8 @@
 //       gate); spreads go to the thinnest 4-neighbour; the 20 % DoT ticks once per second.
 //  6_03 S2 teleport = the ground-reachable (grid path) enemies of the skill grid moved onto his tile, in the cast's
 //       tick (PRTS: 0.13 s after the damage), leaders included unless 自缚.
-//  6_04 S1 transfer: the ally takes ×(1 − share), she takes the rest as true damage from the attacker; module 新生代
-//       "30点伤害减免" = +30 effective DEF (physical) / −30 ÷ (1 − RES) before mitigation (arts).
+//  6_04 S1 transfer: reserves a post-barrier share, received as HP loss. Module 新生代 grants per-type strongest
+//       flat 伤害减免 through an ordered aura buff, independent of defence/resistance penetration.
 //  6_06 S2 the ASPD stacks last the whole battle; S1 "异常状态时可以释放" = cleanse + cast (tick check).
 //  6_07 S2 passive counts the OTHER allies of the talent-1 area.
 //  6_08 S2 carriers = operators of her range (ground first, then lowest HP); a fireball shoots an enemy of the carrier's
@@ -109,9 +110,10 @@
 // `skill.addTriggerRange`; element-type damage skips the `hit` hook, so element (损伤) amplification uses the
 // `elementHit` hook (`onElementHit`: × dmg.mul before the gauge fill).
 
+import { textCount, textFinite } from '../../../../../shared/plugins/textNumber.js';
 import { absoluteRangeKeys } from '../../../targeting.js';
 import { COLS, ROWS, PULL_STOP_RADIUS } from '../../../constants.js';
-import { hasHp } from '../../../damage.js';
+import { hasHp } from '../../../attack.js';
 import { hypot } from '../../../detmath.js';
 
 // ------------------------------------------------------------------------------------------------------------------
@@ -143,7 +145,8 @@ function moduleBb(chess) {
   }
   return out;
 }
-const parseN = (text, re, d) => { const m = String(text ?? '').match(re); return m ? +m[1] : d; };
+/** Finite capture. Counts go through textCount; a percent or a duration stays uncapped. */
+const parseN = (text, re, d) => textFinite(text, re, d);
 const live = (u) => !!u && u.alive && u.deployed && !u.removed && !u.hidden;
 const isElite = (e) => !!e && (e.isBoss || e.def?.rank === 'ELITE' || e.def?.rank === 'BOSS');
 const hasBond = (u, id) => !!(u && u.def && Array.isArray(u.def.bonds) && u.def.bonds.includes(id));
@@ -278,7 +281,7 @@ function aura(battle, unit, period, fn) {
 }
 
 export {
-  num, bv, tbb, tdesc, moduleBb, parseN, live, isElite, hasBond, keyOf, opsOf, ANY, enemiesIn, isTok, onDefaultSkill,
+  num, bv, tbb, tdesc, moduleBb, parseN, textCount, live, isElite, hasBond, keyOf, opsOf, ANY, enemiesIn, isTok, onDefaultSkill,
   selectedSkill, batOf, instantKind, skillGridOf, ABNORMAL, hasAbnormal, cleanseAbnormal, AROUND8, N4, WHOLE_FIELD,
   bstate, freeTiles, bestTile, onElementHit, elementDmg, pullToward, aura,
 };

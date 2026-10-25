@@ -17,9 +17,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PHASE, GEO } from '../../shared/constants.js';
+import { unscaled } from '../helpers/uiSize.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => unscaled(readFileSync(path.join(ROOT, p), 'utf8'));
 
 // the browser data store reads the real data files from disk (ChessDetail / ChoiceOverlay renders below)
 globalThis.fetch = async (url) => {
@@ -340,7 +341,7 @@ describe('8: 特质 right under the detail card\'s header', () => {
     const blocks = ChessDetail({ chess: c, piece: null, editable: false, bonds: [], loadout: null });
     const gb = blocks.find((b) => b.key === 'garrison');
     const img = [...walk(gb.type(gb.props))].find((n) => hasClass(n, 'dgarrison__icon'));
-    assert.match(String(img.props.src), /garrisonTypeIcon\/s_icon_gold\.png(?:\?v=[\w.-]+)?$/, 'the path, tolerating the manifest\'s cache-busting query');
+    assert.match(String(img.props.src), /garrisonTypeIcon\/s_icon_gold\.png$/);
   });
 
   test('css: a compact gold-accented block; stats in a 4 × 2 grid so the skill stays close', () => {

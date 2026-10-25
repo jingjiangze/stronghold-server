@@ -1,5 +1,4 @@
 // public/js/render/app/info.js — battle-unit info handed to a view, and which deaths draw particles.
-import { skinFor } from '../../../../shared/skins.js';
 
 /**
  * 'die' reason of an operator that enters the battle already knocked out — a 联防 helper's operator down at the end of
@@ -29,8 +28,10 @@ export function renderInfo(u) {
     id: u.id, uid: u.uid ?? null, kind: u.kind || 'enemy', side: u.side === 'ally' ? 'ally' : 'enemy', ownerId: u.ownerId ?? null,
     defId: u.defId ?? null, name: u.name ?? '', tier: u.tier ?? 1, golden: !!u.golden, spine: u.spine ?? u.defId ?? null,
     avatar: u.avatar ?? u.defId ?? null, x: Number(u.x) || 0, y: Number(u.y) || 0, facing: u.facing === -1 ? -1 : 1,
-    ...(u.kind === 'op' && u.side === 'ally' && skinFor(u.spine, u.skinId) ? { skinId: u.skinId } : null),
     maxHp: Number(u.maxHp) || 1, boss: !!u.boss, motion: u.motion,
+    // the unit's OWN attack interval (UnitInfo.atkInterval, the sim's `s.interval` with its buffs): the view paces the
+    // attack clip over it (render/attackRate.js) — dropping it here sent every view back to the operator-record guess
+    atkInterval: Number.isFinite(u.atkInterval) && u.atkInterval > 0 ? u.atkInterval : undefined,
     // deploy direction of allies (UnitInfo.dir, DESIGN §3): the model (Back for UP, mirrored for LEFT) and the
     // ground wedge follow it; absent = unknown (legacy frames) → derived from `facing`, no wedge
     dir: typeof u.dir === 'string' ? u.dir : undefined,
@@ -57,5 +58,9 @@ export function renderInfo(u) {
     diy: u.diy && typeof u.diy === 'object' && typeof u.diy.charId === 'string'
       ? { charId: u.diy.charId, skillIndex: Number.isInteger(u.diy.skillIndex) ? u.diy.skillIndex : null, uniEquipId: typeof u.diy.uniEquipId === 'string' ? u.diy.uniEquipId : null }
       : undefined,
+    // 干员皮肤 (docs/SKINS.md): the owning player's chosen skinId, sent with the snapshot (UnitInfo.skin) — the view asks
+    // assets.js for that appearance's Spine / avatar and falls back to the operator's own model when the manifest has no
+    // such skin. render/app.js clears it for another player's unit while 设置「显示其他玩家的皮肤」 is off.
+    skin: typeof u.skin === 'string' && u.skin ? u.skin : null,
   };
 }

@@ -47,8 +47,8 @@
 
 import { num, talentBb, moduleBb, traitBb, skillRec, up, batMod } from '../shared/tier1.js';
 import { canTargetEnemy } from '../../../targeting.js';
-import { bodyInKeys } from '../../../body.js';
-import { hasHp } from '../../../damage.js';
+import { bodyInRange } from '../../../body.js';
+import { hasHp, cancelDamage } from '../../../attack.js';
 
 const S1 = 'skchr_ascln_1';
 const S2 = 'skchr_ascln_2';
@@ -93,7 +93,9 @@ export function addDread(battle, src, e, tb) {
     key, duration: dur, mods, source: src, interval: iv > 0 ? iv : 1, data: { n }, tags: ['talent', 'dot'],
     onTick: ({ battle: b, unit: t, buff }) => {
       if (!up(src)) { b.removeBuff(t, buff); return; }
-      if (ratio > 0) b.dealDamage(src, t, { amount: src.s.atk * ratio * buff.data.n, type: 'arts', canDodge: false, tags: ['talent', 'dot', DREAD_TAG] });
+      if (!(ratio > 0)) return;
+      b.dealDamage({ source: src, target: t, amount: src.s.atk * ratio * buff.data.n, type: 'arts',
+        attackType: 'BUFF', applyWay: 'MELEE', dodgeMode: 'ignore', tags: ['talent', 'dot', DREAD_TAG] });
     },
   });
 }
@@ -107,7 +109,7 @@ function missCut(st, e, type) {
   let cut = 0;
   for (const s of st.srcs) {
     const v = type === 'arts' ? s.arts : s.phys;
-    if (v > cut && up(s.unit) && s3On(s.unit) && s.unit.rangeKeySet && bodyInKeys(e, s.unit.rangeKeySet)) cut = v;
+    if (v > cut && up(s.unit) && s3On(s.unit) && s.unit.rangeKeySet && bodyInRange(e, s.unit.rangeKeySet)) cut = v;
   }
   return Math.min(1, cut);
 }
@@ -126,8 +128,8 @@ function missHit(battle, st, ctx) {
     if (d.attackId) st.last.set(e, { id: d.attackId, miss });
   }
   if (!miss) return;
-  d.cancel = true;
-  ctx.stopPropagation = true;
+  const cancelled = cancelDamage(d, 'miss');
+  if (cancelled) ctx.stopPropagation = true;
   const t = ctx.target;
   if (t) battle.fx('dodge', { x: t.x, y: t.y, id: t.id });
   // 敌人未命中自身: the 阿斯卡纶 it aimed at heals (once per missed attack)
@@ -236,7 +238,7 @@ export default {
           // a ground enemy of her range knocked out ⇒ one 死亡拘审 layer on the selectable ground enemies within the radius
           battle.on('death', (ctx) => {
             const v = ctx.unit;
-            if (ctx.reason !== 'killed' || !v || v.side !== 'enemy' || v.isFlying || !up(unit) || !unit.skill?.active || !unit.rangeKeySet || !bodyInKeys(v, unit.rangeKeySet)) return;
+            if (ctx.reason !== 'killed' || !v || v.side !== 'enemy' || v.isFlying || !up(unit) || !unit.skill?.active || !unit.rangeKeySet || !bodyInRange(v, unit.rangeKeySet)) return;
             battle.fx('aoe', { x: v.x, y: v.y, radius, id: unit.id, skill: 'ascln:endowment' });
             for (const e of battle.foesInRadius(v.x, v.y, radius, true)) {
               if (e !== v && !e.isFlying && canTargetEnemy(unit, e, ANY)) addDread(battle, unit, e, t0);

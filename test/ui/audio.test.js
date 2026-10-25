@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bgmKeyFor, resolveBgm, SfxLimiter, AudioManager, normalAttackSfx, installAudio, audio, combatTrackFor, COMBAT_TRACK_SWITCH_ROUND, VoiceGate, resultSpeaker, resultVoiceSlot, VOICE_PRIORITY, VOICE_COOLDOWN_MS, voiceLine } from '../../public/js/audio.js';
+import { bgmKeyFor, resolveBgm, SfxLimiter, AudioManager, normalAttackSfx, installAudio, audio, combatTrackFor, COMBAT_TRACK_SWITCH_ROUND, VoiceGate, resultSpeaker, resultVoiceSlot, VOICE_PRIORITY, VOICE_COOLDOWN_MS, voiceLine, VOICE_TREES } from '../../public/js/audio.js';
 import { mediaUrl } from '../../public/js/media.js';
 import { PHASE } from '../../shared/constants.js';
 import { makeBattle, chessRec } from '../helpers/battleHarness.js';
@@ -15,15 +15,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const manifest = JSON.parse(readFileSync(path.join(ROOT, 'data', 'assets.json'), 'utf8'));
 
 // audio.js 取音频时**先请求无扩展名的 /media/…**（正是为了躲开下载管理器对 .mp3 后缀的嗅探），
-// 原路径失败先尝试同版本 OpenI；/media/ 两边都缺失才兼容 manifest 原始地址。「某个音效响了没有」不能拿原始地址去比对——
+// 只有那样 404 了才回退到 manifest 里的原始地址。所以「某个音效响了没有」不能拿原始地址去比对——
 // 那样断言的是一个客户端永远不会请求的 URL。下面两个助手把比对放到同一条换算上。
 /** 这个 manifest 地址被请求过吗（/media/ 形式或 404 后的原始形式）。 */
 const asked = (urls, raw) => urls.includes(mediaUrl(raw)) || urls.includes(raw);
 /** 这个 manifest 地址被请求了几次。 */
 const askedCount = (urls, raw) => urls.filter((u) => u === mediaUrl(raw) || u === raw).length;
-// 清单（上游 weishucdn v0.2.4）给每条地址都烘进了一个缓存破坏参数 `?v=v0.2.4-…`（这是分叉的既定特性，不从清单里剥掉）。
-// 断言某个文件「就是它」时按去掉 query 的路径比，才既锁死资源路径、又不被那串版本号误伤。
-const bare = (u) => String(u).split('?')[0];
 
 describe('bgm selection', () => {
   test('route and phase → key', () => {
@@ -332,8 +329,8 @@ describe('operator battle voice', () => {
     assert.deepEqual(voiceLine({ voice: audioM.voice }, 'char_a', 'place', 'jp'), { url: '/a/voice/cn/char_a/cn_023.mp3', fallback: null }, 'a manifest without voiceJp');
     // the real manifest: every operator with a Chinese line has its Japanese twin
     const real = voiceLine(manifest.audio, 'char_263_skadi', 'select', 'jp', () => 0);
-    assert.equal(bare(real.url), '/assets/audio/voice/jp/char_263_skadi/cn_021.mp3');
-    assert.equal(bare(real.fallback), '/assets/audio/voice/cn/char_263_skadi/cn_021.mp3');
+    assert.match(real.url, /^\/assets\/audio\/voice\/jp\/char_263_skadi\/cn_021\.mp3$/);
+    assert.equal(real.fallback, '/assets/audio/voice/cn/char_263_skadi/cn_021.mp3');
 
     // the manager: the setting picks the tree; a JP file the host lacks (404) plays the Chinese one, holding the channel
     const fw = fakeWindow();
@@ -367,14 +364,62 @@ describe('operator battle voice', () => {
       assert.match(a.voiceNode?.url ?? '', /^\/a\/voice\/cn\/char_a\/cn_02[12]\.mp3$/, '中文 again');
       a._stopVoice();
       a.setVoiceLang('kr');
-      assert.equal(a.voiceLang, 'cn', 'no other dub: anything but jp is 中文');
-      // Upstream 0.2.5's voice control (owner 2026-10-08): the interface language is the shared LangToggle, the dub is
-      // a radio over VOICE_LANGS, and audio.setVoiceLang clamps anything but 'jp' to 中文.
+      assert.equal(a.voiceLang, 'kr', '한국어 is a dub');
+      a.setVoiceLang('xx');
+      assert.equal(a.voiceLang, 'cn', 'an unknown value stays 中文');
+      // the settings store hands the choice over (installAudio and ui/settings.js)
       const settings = readFileSync(path.join(ROOT, 'public/js/ui/settings.js'), 'utf8');
-      assert.match(settings, /<\$\{LangToggle\}/);
-      assert.match(settings, /VOICE_LANGS\.map\(/);
-      assert.doesNotMatch(settings, /audio\.setVoiceLang\(s\.voiceLang\)/, 'a volume edit must not reset the selected dub');
       assert.match(settings, /audio\.setVoiceLang\(s\.voiceLang, s\.voiceOverrides\)/);
+      assert.match(settings, /t\('语音语言'\)/);
+      assert.match(settings, /audio\.setVoiceNative\(s\.voiceNative\)/);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  test('English, Korean and the own-language dub use the same fallback as 日本語; 试听 skips the gate', async () => {
+    assert.deepEqual(VOICE_TREES, { jp: 'voiceJp', en: 'voiceEn', kr: 'voiceKr', native: 'voiceNative' });
+    const id = 'char_102_texas';
+    const audioM = {
+      voice: { [id]: { select: '/a/voice/cn/char_a/cn_021.mp3', place: '/a/voice/cn/char_a/cn_023.mp3' } },
+      voiceEn: { [id]: { select: '/a/voice/en/char_a/cn_021.mp3' } },
+      voiceKr: { [id]: { place: '/a/voice/kr/char_a/cn_023.mp3' } },
+      voiceNative: { [id]: { select: '/a/voice/native/char_a_ita/cn_021.mp3' } },
+    };
+    assert.deepEqual(voiceLine(audioM, id, 'select', 'en'), { url: '/a/voice/en/char_a/cn_021.mp3', fallback: '/a/voice/cn/char_a/cn_021.mp3' });
+    assert.deepEqual(voiceLine(audioM, id, 'place', 'kr'), { url: '/a/voice/kr/char_a/cn_023.mp3', fallback: '/a/voice/cn/char_a/cn_023.mp3' });
+    assert.deepEqual(voiceLine(audioM, id, 'select', 'native'), { url: '/a/voice/native/char_a_ita/cn_021.mp3', fallback: '/a/voice/cn/char_a/cn_021.mp3' });
+    assert.deepEqual(voiceLine(audioM, id, 'place', 'en'), { url: '/a/voice/cn/char_a/cn_023.mp3', fallback: null }, 'a slot the EN tree lacks: the Chinese line');
+    assert.deepEqual(voiceLine(audioM, id, 'place', 'native'), { url: '/a/voice/cn/char_a/cn_023.mp3', fallback: null });
+
+    const fw = fakeWindow();
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+    try {
+      const a = new AudioManager({ win: fw.win, getManifest: () => ({ audio: { sfx: { ui: {}, battle: {}, units: {} }, ...audioM } }) });
+      a.voiceGate = new VoiceGate({ gapMs: 60_000 });
+      a.install();
+      fw.fire('pointerdown');
+      await tick();
+      assert.equal(a.voice(id, 'place', { unitKey: 1 }), true);
+      await tick();
+      assert.equal(a.voice(id, 'place', { unitKey: 1 }), false, 'the battle line is on cooldown');
+      assert.equal(a.previewVoice(id, 'en'), true, '试听 takes the channel and skips the cooldown');
+      await tick();
+      assert.equal(a.voiceNode?.url, '/a/voice/en/char_a/cn_021.mp3');
+      a.setVoiceLang('cn', { [id]: 'native' });
+      a.setVoiceNative(false);
+      assert.equal(a.previewVoice(id), true, 'no lang: the operator\'s own choice');
+      await tick();
+      assert.equal(a.voiceNode?.url, '/a/voice/native/char_a_ita/cn_021.mp3');
+      a.setVoiceLang('kr', {});
+      a.setVoiceNative(true);
+      assert.equal(a.voice(id, 'select'), true, '本土语言 wins over the global KR dub');
+      await tick();
+      assert.equal(a.voiceNode?.url, '/a/voice/native/char_a_ita/cn_021.mp3');
+      a.volumes.muted = true;
+      assert.equal(a.previewVoice(id, 'en'), false, 'muted stays silent');
     } finally {
       globalThis.fetch = origFetch;
     }
@@ -410,7 +455,7 @@ describe('operator battle voice', () => {
       assert.equal(a.voice('char_zz', 'place', { unitKey: 1 }), false, 'unknown operator');
       a._stopVoice(); a.voiceGate.reset();
       // the battle events drive the lines: 行动出发 (the first deploy), 部署 (the rest), 行动开始, 作战中N
-      a.setFieldUnits([{ id: 11, side: 'ally', spine: 'char_a', kind: 'op', skillIndex: 2 }, { id: 12, side: 'ally', spine: 'char_b', kind: 'op' }]);
+      a.setFieldUnits([{ id: 11, side: 'ally', spine: 'model_other', voice: 'char_a', kind: 'op', skillIndex: 2 }, { id: 12, side: 'ally', spine: 'char_b', kind: 'op' }]);
       a.handleBattleEvents([['deploy', 11]]);
       await new Promise((r) => setTimeout(r, 10));
       assert.equal(a.voiceNode?.url, '/v/a_start.mp3', 'the first operator deployed says 行动出发');
@@ -437,63 +482,6 @@ describe('operator battle voice', () => {
     } finally {
       globalThis.fetch = origFetch;
     }
-  });
-
-  for (const [language, url] of [['cn', '/cn/line.mp3'], ['jp', '/jp/line.mp3'], ['en', '/cn/line.mp3']]) test(`listener voice language ${language} plays that dub (anything but jp is 中文) without changing unit identity`, async () => {
-    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3' } },
-      voiceJp: { char_a: { place: '/jp/line.mp3' } } } };
-    const a = new AudioManager({ win: fw.win, getManifest: () => vm });
-    a.install(); fw.fire('pointerdown'); a.setVoiceLang(language);
-    a._buffer = async () => ({ duration: 1.5 });
-    assert.equal(a.voice('char_a', 'place', { unitKey: 1 }), true);
-    await new Promise(resolve => setTimeout(resolve, 10));
-    assert.equal(a.voiceNode.url, url);
-    const bgm = { loopUrl: '/bgm.mp3' }; a.bgm = bgm;
-    const volumes = { ...a.volumes }, token = a.voiceToken;
-    a.setVoiceLang(language);
-    assert.equal(a.voiceToken, token, 'same preference does not interrupt');
-    a.setVoiceLang(language === 'cn' ? 'jp' : 'cn');
-    assert.equal(a.bgm, bgm); assert.deepEqual(a.volumes, volumes);
-  });
-
-  test('missing or failed listener-language lines fall back to Chinese without freeing the voice gate early', async () => {
-    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3', skill1: '/cn/skill.mp3' } },
-      voiceJp: { char_a: { place: '/jp/line.mp3' } } } };
-    const a = new AudioManager({ win: fw.win, getManifest: () => vm });
-    a.install(); fw.fire('pointerdown'); a.setVoiceLang('jp'); a.voiceGate = new VoiceGate({ gapMs: 0 });
-    const asked = [];
-    a._buffer = async url => { asked.push(url); return url.startsWith('/jp/') ? null : { duration: 1.5 }; };
-    assert.equal(a.voice('char_a', 'place', { unitKey: 1 }), true);
-    await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(asked, ['/jp/line.mp3', '/cn/line.mp3']); assert.equal(a.voiceNode.url, '/cn/line.mp3');
-    a._stopVoice(); a.voiceGate.reset(); asked.length = 0;
-    assert.equal(a.voice('char_a', 'skill1', { unitKey: 1 }), true);
-    await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(asked, ['/cn/skill.mp3']);
-    a._stopVoice(); a.voiceGate.reset(); asked.length = 0;
-    a._buffer = async url => { asked.push(url); return null; };
-    assert.equal(a.voice('char_a', 'place', { unitKey: 2 }), true);
-    await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(asked, ['/jp/line.mp3', '/cn/line.mp3']); assert.equal(a.voiceGate.playing, null);
-  });
-
-  test('changing language during decoding prevents the old line and its fallback from taking the new channel', async () => {
-    const fw = fakeWindow(), vm = { audio: { voice: { char_a: { place: '/cn/line.mp3' } },
-      voiceJp: { char_a: { place: '/jp/line.mp3' } } } };
-    const a = new AudioManager({ win: fw.win, getManifest: () => vm });
-    a.install(); fw.fire('pointerdown'); a.voiceGate = new VoiceGate({ gapMs: 0 });
-    const urls = []; let releaseOld;
-    a._buffer = url => {
-      urls.push(url);
-      return url.startsWith('/jp/') ? new Promise(resolve => { releaseOld = resolve; }) : Promise.resolve({ duration: 1.5 });
-    };
-    a.setVoiceLang('jp'); assert(a.voice('char_a', 'place', { unitKey: 1 }));
-    a.setVoiceLang('cn'); assert(a.voice('char_a', 'place', { unitKey: 2 }));
-    await new Promise(resolve => setTimeout(resolve, 10));
-    const gate = a.voiceGate.playing, node = a.voiceNode;
-    releaseOld(null); await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(urls, ['/jp/line.mp3', '/cn/line.mp3']);
-    assert.equal(a.voiceNode, node); assert.equal(a.voiceNode.url, '/cn/line.mp3'); assert.equal(a.voiceGate.playing, gate);
   });
 
   test('voice: a stale callback never frees the channel the newest line holds (review on #73)', async () => {
@@ -640,6 +628,63 @@ describe('AudioManager', () => {
       globalThis.fetch = origFetch;
     }
   });
+  test('BGM is not downloaded while the music is muted or at volume 0; the wanted track starts once it is audible', async () => {
+    const fw = fakeWindow();
+    const origFetch = globalThis.fetch;
+    const urls = [];
+    globalThis.fetch = async (u) => { urls.push(u); return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; };
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+    const lobby = manifest.audio.bgm.lobby.loop;
+    const prep = manifest.audio.bgm.prep.loop;
+    assert.notEqual(lobby, prep, 'premise: two different loops');
+    try {
+      const a = new AudioManager({ win: fw.win, getManifest: () => manifest });
+      a.setVolumes({ muted: true });
+      a.install();
+      a.playBgm('lobby');
+      fw.fire('pointerdown');
+      await tick();
+      assert.equal(a.unlocked, true);
+      assert.equal(a.bgmSilent, true);
+      assert.ok(!asked(urls, lobby) && !asked(urls, manifest.audio.bgm.lobby.intro), 'muted: nothing fetched at unlock');
+      a.playBgm('prep');
+      await tick();
+      assert.ok(!asked(urls, prep), 'muted: a phase change fetches nothing');
+      assert.equal(a.wantBgm, 'prep', 'the wanted track is remembered');
+      a.setVolumes({ muted: false });
+      await tick();
+      assert.ok(asked(urls, prep), 'unmuted: the track the screen wants now is fetched');
+      assert.ok(!asked(urls, lobby), 'never the track wanted before');
+      assert.equal(a.bgm?.loopUrl, prep);
+
+      // BGM volume 0 is silent too: another track stops and is not fetched; SFX keep playing
+      a.setVolumes({ bgm: 0 });
+      a.playBgm('lobby');
+      await tick();
+      assert.ok(!asked(urls, lobby), 'BGM volume 0: no download');
+      assert.equal(a.bgm, null, 'the other track stopped');
+      a.sfx('buy');
+      await tick();
+      assert.ok(asked(urls, manifest.audio.sfx.ui.buy), 'SFX are not gated by the BGM volume');
+      a.setVolumes({ bgm: 0.5 });
+      await tick();
+      assert.ok(asked(urls, lobby), 'audible again: fetched');
+      assert.equal(a.bgm?.loopUrl, lobby);
+
+      // the loop that already plays keeps playing through a silent phase change, and is not fetched again
+      a.setVolumes({ muted: true });
+      const n = urls.length;
+      const started = fw.made.started;
+      a.playBgm('lobby');
+      a.setVolumes({ muted: false });
+      await tick();
+      assert.equal(a.bgm?.loopUrl, lobby);
+      assert.equal(urls.length, n, 'no new request');
+      assert.equal(fw.made.started, started, 'no restart');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
   test('fetch failures are swallowed', async () => {
     const fw = fakeWindow();
     const origFetch = globalThis.fetch;
@@ -661,7 +706,28 @@ describe('AudioManager', () => {
       console.warn = origWarn;
     }
   });
-  test('音频先走 /media/；OpenI 也缺失时保留原地址静态托管兼容', async () => {
+  test('a served manifest\'s content-hashed audio URL is fetched as /media/~<hash>/…, falling back to the hashed .mp3 URL', async () => {
+    const H = '0123456789abcdef';
+    const raw = manifest.audio.bgm.prep.loop.replace(/^\/assets\//, `/assets/~${H}/`);
+    const served = { ...manifest, audio: { ...manifest.audio, bgm: { ...manifest.audio.bgm, prep: { loop: raw } } } };
+    const fw = fakeWindow();
+    const urls = [];
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (u) => { urls.push(u); return u.startsWith('/media/') ? { ok: false, status: 404 } : { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; };
+    try {
+      const a = new AudioManager({ win: fw.win, getManifest: () => served });
+      a.install();
+      fw.fire('pointerdown');
+      a.playBgm('prep');
+      await new Promise((r) => setTimeout(r, 20));
+      assert.deepEqual(urls, [raw.replace(/^\/assets\/(~[0-9a-f]{16})\/audio\/(.+)\.mp3$/, '/media/$1/$2'), raw]);
+      assert.match(urls[0], new RegExp(`^/media/~${H}/bgm/`));
+      assert.equal(a.bgm?.loopUrl, raw);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+  test('音频先走无扩展名的 /media/ 路由；只有它 404 才回退到带扩展名的原地址', async () => {
     const raw = manifest.audio.bgm.prep.loop;
     const media = mediaUrl(raw);
     assert.notEqual(media, raw, '前提：manifest 地址确实会被换算成 /media/ 路径');
@@ -673,7 +739,7 @@ describe('AudioManager', () => {
       const origFetch = globalThis.fetch;
       globalThis.fetch = async (u) => {
         urls.push(u);
-        return u.startsWith(media) ? { ok: false, status: 404 } : { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+        return u === media ? { ok: false, status: 404 } : { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
       };
       try {
         const a = new AudioManager({ win: fw.win, getManifest: () => manifest });
@@ -714,7 +780,7 @@ describe('AudioManager', () => {
       const origFetch = globalThis.fetch;
       globalThis.fetch = async (u) => {
         urls.push(u);
-        if (!u.startsWith(media)) return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+        if (u !== media) return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
         return {
           ok: true,
           status: 200,
@@ -730,8 +796,7 @@ describe('AudioManager', () => {
         a.playBgm('prep');
         await new Promise((r) => setTimeout(r, 25));
         assert.ok(urls.includes(raw), '内容不是音频时回退到原地址');
-        assert.equal(cancelled, 2, '丢掉两个用不上的响应，别把连接挂着');
-        assert.ok(urls.includes(media + '?sp_source=openi'), '先尝试同版本 OpenI');
+        assert.equal(cancelled, 1, '丢掉那个用不上的响应，别把连接挂着');
       } finally { globalThis.fetch = origFetch; }
     }
 
@@ -762,62 +827,6 @@ describe('AudioManager', () => {
         assert.equal(cancelled, 0);
       } finally { globalThis.fetch = origFetch; }
     }
-  });
-
-  for (const type of ['application/octet-stream', 'binary/octet-stream', ' Application/Octet-Stream ; charset=binary', 'BINARY/OCTET-STREAM']) test(`generic audio media ${type} decodes without cancelling or requesting the raw URL`, async () => {
-    const fw = fakeWindow(), raw = manifest.audio.bgm.prep.loop, media = mediaUrl(raw), urls = [];
-    const origFetch = globalThis.fetch;
-    let cancelled = 0;
-    globalThis.fetch = async url => {
-      urls.push(url);
-      return { ok: true, headers: { get: () => type }, body: { cancel: async () => { cancelled++; } }, arrayBuffer: async () => new ArrayBuffer(8) };
-    };
-    try {
-      const a = new AudioManager({ win: fw.win, getManifest: () => manifest });
-      a.ctx = new fw.win.AudioContext();
-      assert.equal((await a._buffer(raw)).duration, 1.5);
-      assert.deepEqual(urls, [media]);
-      assert.equal(cancelled, 0);
-    } finally { globalThis.fetch = origFetch; }
-  });
-
-  for (const type of ['text/html; charset=utf-8', 'application/json', 'image/png', 'application/octet-streamx']) test(`non-audio media ${type} cancels and tries OpenI before the raw compatibility URL`, async () => {
-    const fw = fakeWindow(), raw = manifest.audio.bgm.prep.loop, media = mediaUrl(raw), urls = [];
-    const origFetch = globalThis.fetch;
-    let cancelled = 0;
-    globalThis.fetch = async url => {
-      urls.push(url);
-      return url === media
-        ? { ok: true, headers: { get: () => type }, body: { cancel: async () => { cancelled++; } }, arrayBuffer: async () => { throw new Error('the rejected media body must not be read'); } }
-        : { ok: true, headers: { get: () => 'audio/mpeg' }, arrayBuffer: async () => new ArrayBuffer(8) };
-    };
-    try {
-      const a = new AudioManager({ win: fw.win, getManifest: () => manifest });
-      a.ctx = new fw.win.AudioContext();
-      assert.equal((await a._buffer(raw)).duration, 1.5);
-      assert.deepEqual(urls, [media, media + '?sp_source=openi']);
-      assert.equal(cancelled, 1);
-    } finally { globalThis.fetch = origFetch; }
-  });
-
-  for (const type of ['application/octet-stream', 'binary/octet-stream']) test(`failed ${type} voice decoding still falls back to Chinese`, async () => {
-    const fw = fakeWindow(), cn = '/assets/audio/voice/cn/char_a/cn_001.mp3', jp = '/assets/audio/voice/jp/char_a/cn_001.mp3', urls = [];
-    const vm = { audio: { voice: { char_a: { place: cn } }, voiceJp: { char_a: { place: jp } } } };
-    const origFetch = globalThis.fetch;
-    globalThis.fetch = async url => {
-      urls.push(url);
-      return { ok: true, headers: { get: () => type }, arrayBuffer: async () => Uint8Array.of(url.includes('/jp/') ? 1 : 0).buffer };
-    };
-    try {
-      const a = new AudioManager({ win: fw.win, getManifest: () => vm, random: () => 0 });
-      a.install(); fw.fire('pointerdown'); a.setVoiceLang('jp'); a.voiceGate = new VoiceGate({ gapMs: 0 });
-      a.ctx.decodeAudioData = (body, ok, fail) => new Uint8Array(body)[0] === 1 ? fail(new Error('invalid recording')) : ok({ duration: 1.5 });
-      assert.equal(a.voice('char_a', 'place', { unitKey: 1 }), true);
-      await new Promise(resolve => setTimeout(resolve, 10));
-      assert.deepEqual(urls, [mediaUrl(jp), mediaUrl(jp) + '?sp_source=openi', mediaUrl(cn)]);
-      assert.equal(a.voiceNode.url, cn);
-      assert.equal(fw.made.started, 1);
-    } finally { globalThis.fetch = origFetch; }
   });
 
   // 「技能音效有时候不触发」 (PR #292 by @LimitlessHPPK): the sim emits the cast of a deployment that fires inside its own first
@@ -946,7 +955,7 @@ describe('impact sounds (user playtest #4 item 6)', () => {
     try {
       // 她的技能形态（_s）文件：这条断言要盯住它们一个都没响，所以先确认音效表里真的有 _s ——
       // 否则集合为空，断言会永远成立、形同虚设。
-      const ownSkill = Object.values(manifest.audio.sfx.units[AGOAT2]).filter((x) => typeof x === 'string' && /_s\.mp3(?:\?|$)/.test(x));
+      const ownSkill = Object.values(manifest.audio.sfx.units[AGOAT2]).filter((x) => typeof x === 'string' && /_s\.mp3$/.test(x));
       assert.ok(ownSkill.length > 0, '前提：她的音效表里确实有 _s（技能形态）文件');
       a.handleBattleEvents([['atk', 1, 2, 'orb'], ['heal', 2, 300], ['dmg', 2, 120, 'phys'], ['dmg', 2, 80, 'arts']]);
       await settle();
@@ -1022,7 +1031,7 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
   test('司霆惊蛰 S3: her attack rings the S3 mode\'s file while the skill runs, and only then', async () => {
     const u = manifest.audio.sfx.units[LEIZI2];
     assert.equal(u.attack, undefined, '前提：她没有普通形态的攻击音（这正是那次「没有音效」）');
-    assert.ok(u.attacks['2'] && /_s\.mp3(?:\?|$)/.test(u.attacks['2']), '前提：清单带 S3 形态的攻击音');
+    assert.ok(u.attacks['2'] && /_s\.mp3$/.test(u.attacks['2']), '前提：清单带 S3 形态的攻击音');
     const { a, urls, settle, restore } = await rig([
       { id: 1, side: 'ally', kind: 'chess', spine: LEIZI2, skillIndex: 2 }, { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
     ]);
@@ -1088,7 +1097,7 @@ describe('the running skill\'s own attack / impact sound (sfx.units[id].attacks 
 
   test('赤刃明霄陈 S3: 挥砍与斩击都用 S3 的 `_s` 对，技能外回到普通 `_n` 对', async () => {
     const u = manifest.audio.sfx.units[CHEN3];
-    assert.ok(u.attacks['2'] && u.hits['2'] && /_s\.mp3(?:\?|$)/.test(u.attacks['2']) && /_s\.mp3(?:\?|$)/.test(u.hits['2']), '前提：清单带 S3 的挥砍与斩击');
+    assert.ok(u.attacks['2'] && u.hits['2'] && /_s\.mp3$/.test(u.attacks['2']) && /_s\.mp3$/.test(u.hits['2']), '前提：清单带 S3 的挥砍与斩击');
     const { a, urls, settle, restore } = await rig([
       { id: 1, side: 'ally', kind: 'chess', spine: CHEN3, skillIndex: 2 }, { id: 2, side: 'enemy', kind: 'enemy', spine: enemyId() },
     ]);
@@ -1160,7 +1169,7 @@ describe('漏怪 sound', () => {
     try {
       const url = manifest.audio.sfx.battle.leak;
       assert.ok(url, '前提：清单里有 sfx.battle.leak');
-      assert.match(url, /b_ui_alarmenter\.mp3(?:\?|$)/, '就是原版关卡里怪进蓝门那一声');
+      assert.match(url, /b_ui_alarmenter\.mp3$/, '就是原版关卡里怪进蓝门那一声');
       a.handleBattleEvents([['leak', 7]]);
       await settle();
       assert.ok(asked(urls, url), `漏怪 plays ${url}`);

@@ -17,8 +17,8 @@ import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html, Modal, Button, TierChip, MicroLabel } from './components.js';
 import { UnitThumb, RichText, GIcon } from './gameComponents.js';
 import { localAsset } from '../data.js';
-import { MaterialImage } from './materialImage.js';
 import { t, tParts } from '../../../shared/i18n.js';
+import { morphSlotPolicy } from '../../../shared/plugins/rules.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 const isObj = (v) => !!v && typeof v === 'object';
@@ -36,8 +36,15 @@ export function replaceRequest(ctx, intent, getChess = () => null, getItem = () 
   const item = ctx?.pieces?.get(intent.fields.itemUid)?.piece;
   if (!isObj(target) || target.kind !== 'chess' || !isObj(item) || item.kind !== 'item') return null;
   const equipped = (Array.isArray(target.items) ? target.items : []).filter((it) => isObj(it) && Number.isInteger(it.uid));
-  if (equipped.length < 2) return null;
   const rec = (id) => getItem(id) || null;
+  let options = equipped;
+  if (ctx?.morphMode === 'plus') {
+    const policy = morphSlotPolicy('plus', (it) => !!rec(typeof it === 'string' ? it : it?.id)?.canGiveBond);
+    if (!policy.occupies(rec(item.id))) return null;
+    if (policy.slotsUsed(equipped) < policy.slotCap(2)) return null;
+    options = equipped.filter((it) => policy.occupies(rec(it.id)));
+    if (!options.length) return null;
+  } else if (equipped.length < 2) return null;
   const shown = getChess(target.id) || null;
   return {
     targetUid: target.uid,
@@ -47,7 +54,7 @@ export function replaceRequest(ctx, intent, getChess = () => null, getItem = () 
     targetRec: shown && (shown.standInFor || shown.diyFor) ? shown : null,
     golden: !!target.golden,
     item: { uid: item.uid, id: item.id, name: rec(item.id)?.name || t('装备') },
-    options: equipped.map((it) => ({ uid: it.uid, id: it.id, name: rec(it.id)?.name || it.id })),
+    options: options.map((it) => ({ uid: it.uid, id: it.id, name: rec(it.id)?.name || it.id })),
   };
 }
 
@@ -118,14 +125,14 @@ export function EquipReplaceDialog({ request, getItem = () => null, busy = false
       actions=${html`
         <${Button} variant="secondary" icon="close" class="eqr__cancel" onClick=${onCancel}>${t('取消')}<//>
         <${Button} variant="danger" class="eqr__ok" disabled=${!chosen} loading=${busy} data-autofocus onClick=${() => chosen && onConfirm(chosen.uid)}>
-          ${confirmIcon ? html`<${MaterialImage} class="eqr__ok-icon" src=${confirmIcon} alt="" draggable=${false} />` : null}${t('确认替换')}<//>`}>
+          ${confirmIcon ? html`<img class="eqr__ok-icon" src=${confirmIcon} alt="" draggable=${false} />` : null}${t('确认替换')}<//>`}>
       <p class="eqr__lead">${tParts('「{name}」的装备栏已满（2/2）。选择一件装备进行替换，{warn}。', { name: html`<b>${request.targetName}</b>`, warn: html`<b class="t-red">${t('被替换的装备将被销毁')}</b>` })}</p>
       <div class="eqr__top">
         <div class="eqr__op" title=${request.targetName}>
           <span class="eqr__ava"><${UnitThumb} kind="chess" id=${request.targetId} golden=${request.golden} size="md" rec=${request.targetRec || null} /></span>
           <span class="eqr__opname">${request.targetName}</span>
         </div>
-        <span class="eqr__swap" aria-hidden="true">${swapIcon ? html`<${MaterialImage} src=${swapIcon} alt="" draggable=${false} />` : html`<${GIcon} name="refresh" />`}</span>
+        <span class="eqr__swap" aria-hidden="true">${swapIcon ? html`<img src=${swapIcon} alt="" draggable=${false} />` : html`<${GIcon} name="refresh" />`}</span>
         <div class="eqr__incoming">
           <${MicroLabel} tone="mint">${t('新装备')}</${MicroLabel}>
           <${ItemCard} id=${request.item.id} item=${request.item} rec=${getItem(request.item.id)} />

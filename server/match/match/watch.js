@@ -144,7 +144,6 @@ export class MatchWatch {
     this.watchers.set(ps.playerId, f.fieldId);
     this._watchPrefSet(ps, f, playerId);
     this.sendTo(ps.playerId, this._startMsg(f, ps.playerId, { watch: !f.players.includes(ps.playerId) }));
-    this._sendDamageTo(ps.playerId);
     return OK;
   }
 
@@ -226,18 +225,15 @@ export class MatchWatch {
   _sendField(playerId, fieldId) {
     const f = this.fields.find((x) => x.fieldId === fieldId);
     if (f) {
-      if (f.remote) { f.battle.runner?.requestField(playerId, fieldId); this._sendDamageTo(playerId); return; }
-      this._sampleDamage(true);
-      this._sendDamageTo(playerId);
       let meta;
-      try { meta = f.battle.fieldMeta({ includeUnitStats: true }); } catch (e) { this.reportError('fieldMeta', e); return; }
+      try { meta = f.battle.fieldMeta(); } catch (e) { this.reportError('fieldMeta', e); return; }
       this.sendTo(playerId, { t: 'm.field', ...meta, fieldId: f.fieldId, kind: f.kind, live: !!f.live });
       try { this.sendTo(playerId, snapFrame(f.fieldId, f.battle.snapshot())); } catch (e) { this.reportError('snapshot', e); }
       return;
     }
     if (typeof fieldId === 'string' && fieldId.startsWith('n:')) {
       const target = this.players.get(fieldId.slice(2));
-      if (target && target.alive) { this.sendTo(playerId, this.prepFieldMeta(target)); this._sendDamageTo(playerId); }
+      if (target && target.alive) this.sendTo(playerId, this.prepFieldMeta(target));
     }
   }
 
@@ -258,6 +254,6 @@ export class MatchWatch {
     ps._prepScoutSig = sig;
     const dest = changed ? watchers : (to ? [to] : []);
     if (!dest.length) return;
-    for (const pid of dest) { this.sendTo(pid, meta); this._sendDamageTo(pid); }
+    for (const pid of dest) this.sendTo(pid, meta);
   }
 }

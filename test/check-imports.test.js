@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findSpecifiers, scan, classify } from '../tools/check-imports.mjs';
+import { findSpecifiers, scan } from '../tools/check-imports.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -91,25 +91,20 @@ test('sim and match rules on a fixture tree', () => {
 
 test('this repo: only the Node data loader crosses the sim boundary', () => {
   const { violations, notes } = scan(ROOT);
-  assert.deepEqual(violations, []);
-  assert.ok(notes.some(n => n.file === 'server/sim/nodeData.js' && n.resolved === 'server/data.js'));
-  assert.ok(notes.every(n => n.resolved === 'server/data.js' || n.file === 'server/sim/nodeData.js' && ['node:fs', 'node:path', 'node:url'].includes(n.spec)));
+  assert.deepEqual(violations.map((v) => `${v.file}:${v.line}: ${v.spec} [${v.code}]`), [
+    'server/sim/nodeData.js:11: node:fs [sim-node]',
+    'server/sim/nodeData.js:12: node:path [sim-node]',
+    'server/sim/nodeData.js:13: node:url [sim-node]',
+  ]);
+  assert.ok(notes.some((n) => n.file === 'server/sim/nodeData.js' && n.resolved === 'server/data.js'));
+  assert.ok(notes.every((n) => n.resolved === 'server/data.js'));
 });
 
-test('only the exact private adapter receives the narrow builtin allowance', () => {
-  for (const spec of ['node:fs', 'node:path', 'node:url']) {
-    assert.equal(classify(spec, 'server/sim/nodeData.js', 'sim').note, true);
-    assert.equal(classify(spec, 'server/sim/other.js', 'sim').code, 'sim-node');
-  }
-  assert.equal(classify('node:child_process', 'server/sim/nodeData.js', 'sim').code, 'sim-node');
-  assert.equal(classify('./nodeData.js', 'server/sim/other.js', 'sim').code, 'sim-private');
-});
-
-test('the real-tree CLI has no violations in loose or strict mode', () => {
-  for (const args of [[], ['--strict']]) {
-    const result = spawnSync(process.execPath, ['tools/check-imports.mjs', ...args], { cwd: ROOT, encoding: 'utf8' });
-    assert.equal(result.status, 0);
-    assert.match(result.stdout, /allowed note/);
-    assert.doesNotMatch(result.stdout, /\[sim-node\]/);
-  }
+test('the CLI lists hits and fails only with --strict', () => {
+  const loose = spawnSync(process.execPath, ['tools/check-imports.mjs'], { cwd: ROOT, encoding: 'utf8' });
+  assert.equal(loose.status, 0);
+  assert.match(loose.stdout, /server\/sim\/nodeData\.js:11: node:fs \[sim-node\]/);
+  const strict = spawnSync(process.execPath, ['tools/check-imports.mjs', '--strict'], { cwd: ROOT, encoding: 'utf8' });
+  assert.equal(strict.status, 1);
+  assert.match(strict.stdout, /node:fs/);
 });

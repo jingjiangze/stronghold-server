@@ -75,14 +75,6 @@ test('manifest provides opaque mint-rook 192/512 icons for both purposes with a 
   }
 });
 
-test('the same-origin install manifest keeps credentials for the existing password gate', () => {
-  const html = readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8');
-  const link = html.match(/<link rel="manifest"[^>]+>/)?.[0] || '';
-  assert.match(link, /href="\/manifest\.json"/);
-  assert.match(link, /crossorigin="use-credentials"/);
-  assert.doesNotMatch(link, /https?:\/\//);
-});
-
 test('favicon and Apple links resolve to real sizes, including all legacy ICO frames', () => {
   const html = readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8');
   const links = [...html.matchAll(/<link rel="(?:icon|apple-touch-icon)"[^>]+>/g)].map(([s]) => s);

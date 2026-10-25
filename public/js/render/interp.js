@@ -13,8 +13,9 @@
 //   * sample(): per unit, lerps x/y/hp/sp between the two snapshots bracketing renderT; flags/anim come from
 //     the older one. A unit missing from the newer snapshot (died/left mid-buffer) holds its last position
 //     until renderT reaches the newer snapshot; a unit that only exists in the newer one (spawned mid-buffer)
-//     appears when renderT reaches it. Moves longer than `teleport` tiles between two snapshots snap, and so does a
-//     unit whose deploy animation starts in between (a redeploy while it stays listed: 乌尔比安's 【移动】, a 突袭 jump).
+//     appears when renderT reaches it. Moves longer than `teleport` tiles between two snapshots snap, as do moves
+//     marked by a parasite attachment `teleport` fx (even a short blink) and units whose deploy animation starts
+//     between snapshots. Other teleport effects retain the normal distance-threshold interpolation rule.
 //   * event queue: a `b.ev` batch is stamped with its game time (`gt`, the snapshot it was drained with); a batch
 //     without one is placed inside the latest snapshot interval (newest snapshot time minus half an interval),
 //     and handed out by `takeEvents()` once renderT passes the stamp. Stale cosmetic events (> `eventMaxLag`
@@ -34,6 +35,10 @@
 //       `ammo`   [[id, rounds left, rounds in the magazine]]  → sample().ammo   [left, magazine] | null (whole numbers only)
 //       `wolves` [[id, 狼影 left, the talent's maximum]]      → sample().wolves [left, maximum]  | null
 //       `neg`    [[id, fill]] (0.01–1: the negative-HP pool's share of its cap) → sample().neg  number (0: none)
+//       `motes`  [[id, count, wide]] (魔王的「微尘」: 环绕的枚数与 S2 的宽半径) → sample().motes { n, wide } | null
+//     and two the official effects read (render/vfx/talentfx.js, skillfx.js), the same way:
+//       `layers`  [[id, n]] (the hit-negating 护盾 layers, n ≥ 1)                → sample().layers  number (0: none)
+//       `charges` [[id, stored, maximum]] (a charge skill's stored charges)   → sample().charges [stored, maximum] | null
 //     An entry that is malformed, or names a unit the snapshot does not list, is dropped; a snapshot without the list
 //     clears the readout (render/units.js: the segmented ammo bar, the wolf pips, the red bar of 斩业星熊's 我执).
 //   * `stand` [[id, until]] — the game time an enemy's attack recovery ends (sim atkStandUntil, PR #381): the position
@@ -41,10 +46,13 @@
 //     snapshot without it interpolates linearly;
 //   * `standCut` [[id, at]] — the latest time that enemy's recovery was cut or ignored: an interval with a cut inside
 //     it stays linear.
+//   * `face` [[id, ±1]] — a scripted horizontal sign (心虚设计师): sample() hands it out from the older snapshot like
+//     flags. The model applies it only while it is not sliding. Absent or malformed entries leave the velocity rule.
 // Game times in all of them (`cooldownEnd`, `respawnAt`, `until`, `at`) are on the snapshots' clock, so a view compares
 // them with renderT.
 
 import { fxForm } from '../../../shared/protocol.js';
+import { MOTE_MAX } from './motes.js';
 import { ANIM, UF } from '../../../shared/constants.js';
 
 export const TUPLE = Object.freeze({ ID: 0, X: 1, Y: 2, HP: 3, MAXHP: 4, SP: 5, SPMAX: 6, FLAGS: 7, ANIM: 8, EL: 9, EL_FILL: 10, EL_UNTIL: 11, EL_DUR: 12 });
@@ -67,7 +75,7 @@ function movementStart(a, b, id) {
 }
 
 /** Cosmetic event kinds that may be dropped when far behind (never state-changing). */
-export const COSMETIC_EVENTS = new Set(['atk', 'dmg', 'heal', 'fx', 'layer', 'bounty']);
+export const COSMETIC_EVENTS = new Set(['atk', 'dmg', 'heal', 'fx', 'layer', 'bounty', 'cast']);
 /**
  * Whether an event may be dropped when stale or shed from a full queue. An 'fx' that carries an enemy's model `form`
  * (shared/protocol.js fxForm) is state: dropping it left the view on the old model after a long main-thread stall, on a
@@ -90,7 +98,7 @@ export function frameTime(msg) {
 /**
  * Validate & normalise a b.snap payload. Returns `{ t, units: Map<id, tuple>, down: [[id, respawnAt, respawnTime,
  * state, row?, col?]] | null, ammo, wolves: Map id → [left, max] | null, neg: Map id → fill | null, stand: Map<id, until> | null,
- * standCut: Map<id, at> | null, raw }` or null when unusable. Tuples with a non-finite id/x/y are skipped; other numbers
+ * standCut: Map<id, at> | null, face: Map<id, ±1> | null, raw }` or null when unusable. Tuples with a non-finite id/x/y are skipped; other numbers
  * default to 0; a unit's `elem` entry (see header) is appended to its tuple; malformed `elem` / `down` / `ammo` / `wolves` /
  * `neg` entries are dropped. `stand` keeps finite end times after `t` of units in the snapshot; `standCut` keeps finite
  * times in [0, t] of units in it.
@@ -116,12 +124,28 @@ export function normalizeSnapshot(snap) {
       if (tu && tu.length === 9) tu.push(e[1], clamp(finite(e[2]), 0, 1), finite(e[3]), Math.max(0, finite(e[4])));
     }
   }
-  const ammo = countList(snap.ammo, units), wolves = countList(snap.wolves, units);
+  const ammo = countList(snap.ammo, units), wolves = countList(snap.wolves, units), coins = countList(snap.coins, units);
+  const energy = countList(snap.energy, units), charges = countList(snap.charges, units);
+  let layers = null;
+  if (Array.isArray(snap.layers)) {
+    for (const e of snap.layers) {
+      if (!Array.isArray(e) || !units.has(e[0]) || !Number.isSafeInteger(e[1]) || e[1] < 1) continue;
+      (layers || (layers = new Map())).set(e[0], e[1]);
+    }
+  }
   let neg = null;
   if (Array.isArray(snap.neg)) {
     for (const e of snap.neg) {
       if (!Array.isArray(e) || !units.has(e[0]) || !(typeof e[1] === 'number' && e[1] > 0)) continue;
       (neg || (neg = new Map())).set(e[0], Math.min(1, e[1]));
+    }
+  }
+  let motes = null;
+  if (Array.isArray(snap.motes)) {
+    for (const e of snap.motes) {
+      if (!Array.isArray(e) || !units.has(e[0]) || !Number.isFinite(e[1])) continue;
+      const n = Math.max(0, Math.min(MOTE_MAX, Math.floor(e[1])));
+      if (n > 0) (motes || (motes = new Map())).set(e[0], { n, wide: e[2] ? 1 : 0 });
     }
   }
   let down = null;
@@ -147,12 +171,19 @@ export function normalizeSnapshot(snap) {
       (standCut || (standCut = new Map())).set(e[0], e[1]);
     }
   }
-  return { t, units, down, ammo, wolves, neg, stand, standCut, raw: snap };
+  let face = null;
+  if (Array.isArray(snap.face)) {
+    for (const e of snap.face) {
+      if (!Array.isArray(e) || !units.has(e[0]) || (e[1] !== -1 && e[1] !== 1)) continue;
+      (face || (face = new Map())).set(e[0], e[1]);
+    }
+  }
+  return { t, units, down, ammo, wolves, coins, energy, charges, layers, neg, motes, stand, standCut, face, raw: snap };
 }
 
 /**
  * `[[id, left, max]]` → Map id → [left, max] for the ids in `units`: whole numbers with 0 ≤ left ≤ max and max ≥ 1 (the
- * `ammo` and `wolves` lists); null without a valid entry.
+ * `ammo`, `wolves`, `coins` and `energy` lists); null without a valid entry.
  */
 function countList(list, units) {
   if (!Array.isArray(list)) return null;
@@ -195,6 +226,8 @@ export class SnapshotBuffer {
     this.interval = 0.1 * this.defaultRate / 2; // game s between snapshots (estimated)
     /** @type {{t:number, ev:any}[]} */
     this.events = [];
+    /** @type {Map<number|string, number[]>} Parasite attachment blink times, retained after cosmetic fx is consumed. */
+    this.parasiteBlinkTimes = new Map();
     this.meta = null; // latest snapshot's extra fields (dp, killed, total, boss…)
     return this;
   }
@@ -237,6 +270,11 @@ export class SnapshotBuffer {
     // (no animation frames) snapshots keep arriving and must not pile up; a clock left behind is clamped.
     const horizon = s.t - this.keep * this.rate;
     while (this.snaps.length > 2 && this.snaps[1].t < horizon) this.snaps.shift();
+    for (const [id, times] of this.parasiteBlinkTimes) {
+      const kept = times.filter((t) => t > this.snaps[0].t);
+      if (kept.length) this.parasiteBlinkTimes.set(id, kept);
+      else this.parasiteBlinkTimes.delete(id);
+    }
     if (!Number.isFinite(this.renderT)) this.renderT = Math.max(this.snaps[0].t, s.t - this.delay * this.rate);
     else if (this.renderT < this.snaps[0].t) this.renderT = this.snaps[0].t;
     return true;
@@ -257,6 +295,15 @@ export class SnapshotBuffer {
     for (const ev of evs) {
       if (!Array.isArray(ev) || typeof ev[0] !== 'string') continue;
       this.events.push({ t: stamp, ev });
+      if (ev[0] === 'fx' && ev[1] === 'teleport' && ev[4]?.kind === 'parasite') {
+        const id = ev[4]?.id;
+        if ((typeof id === 'number' && Number.isFinite(id)) || (typeof id === 'string' && id)) {
+          const times = this.parasiteBlinkTimes.get(id) ?? [];
+          times.push(stamp);
+          if (times.length > 32) times.shift();
+          this.parasiteBlinkTimes.set(id, times);
+        }
+      }
       added++;
     }
     // bounded queue (hidden tab: nothing consumes it) — shed the oldest cosmetic events first
@@ -315,6 +362,12 @@ export class SnapshotBuffer {
     return ans;
   }
 
+  _parasiteBlinkAt(id, from, to) {
+    let first = Infinity;
+    for (const t of this.parasiteBlinkTimes.get(id) ?? []) if (t > from && t <= to && t < first) first = t;
+    return first;
+  }
+
   /**
    * Game time of the first snapshot after `time` (default renderT) — the newer end of the interval sample() interpolates
    * — or NaN when there is none (extrapolating). render/app.js starts a push's slide while that interval is shown.
@@ -356,17 +409,19 @@ export class SnapshotBuffer {
     const stamp = A.t;
     for (const [id, a] of A.units) {
       let o = out.get(id);
-      if (!o) { o = { id, x: 0, y: 0, hp: 0, maxHp: 0, sp: 0, spMax: 0, flags: 0, anim: 0, vx: 0, vy: 0, seen: 0, el: null, elFill: 0, elUntil: 0, elDur: 0, ammo: null, wolves: null, neg: 0 }; out.set(id, o); }
+      if (!o) { o = { id, x: 0, y: 0, hp: 0, maxHp: 0, sp: 0, spMax: 0, flags: 0, anim: 0, vx: 0, vy: 0, seen: 0, el: null, elFill: 0, elUntil: 0, elDur: 0, ammo: null, wolves: null, neg: 0, motes: null, face: null }; out.set(id, o); }
       const b = B ? B.units.get(id) : null;
       if (b) {
         const dx = b[1] - a[1], dy = b[2] - a[2];
         // (a deployment in between — the newer snapshot starts its deploy animation — lands on its tile, no slide)
-        const tele = dx * dx + dy * dy > this.teleport * this.teleport || redeployed(a, b);
+        const jumpAt = this._parasiteBlinkAt(id, A.t, B.t);
+        const tele = dx * dx + dy * dy > this.teleport * this.teleport || redeployed(a, b) || jumpAt < Infinity;
+        const afterJump = alpha >= 1 || time >= jumpAt;
         const start = movementStart(A, B, id);
         const moveSpan = B.t - start;
         const moveAlpha = moveSpan > 0 ? clamp((time - start) / moveSpan, 0, 1) : 0;
-        o.x = tele ? (alpha < 1 ? a[1] : b[1]) : a[1] + dx * moveAlpha;
-        o.y = tele ? (alpha < 1 ? a[2] : b[2]) : a[2] + dy * moveAlpha;
+        o.x = tele ? (afterJump ? b[1] : a[1]) : a[1] + dx * moveAlpha;
+        o.y = tele ? (afterJump ? b[2] : a[2]) : a[2] + dy * moveAlpha;
         o.vx = !tele && moveSpan > 0 && (start === A.t || time >= start) ? dx / moveSpan : 0;
         o.vy = !tele && moveSpan > 0 && (start === A.t || time >= start) ? dy / moveSpan : 0;
         o.hp = a[3] + (b[3] - a[3]) * alpha;
@@ -383,7 +438,8 @@ export class SnapshotBuffer {
           const moveSpan = A.t - movementStart(P, A, id);
           if (p && dtp > 0 && moveSpan > 0) {
             const dx = a[1] - p[1], dy = a[2] - p[2];
-            if (dx * dx + dy * dy <= this.teleport * this.teleport && !redeployed(p, a)) {
+            if (dx * dx + dy * dy <= this.teleport * this.teleport && !redeployed(p, a)
+              && this._parasiteBlinkAt(id, P.t, A.t) === Infinity) {
               vx = dx / moveSpan; vy = dy / moveSpan;
             }
           }
@@ -402,7 +458,13 @@ export class SnapshotBuffer {
       // the HP-bar readouts come with the older snapshot, like flags (whole rounds step with the skill flag)
       o.ammo = A.ammo ? A.ammo.get(id) || null : null;
       o.wolves = A.wolves ? A.wolves.get(id) || null : null;
+      o.coins = A.coins?.get(id) ?? null;
+      o.energy = A.energy?.get(id) ?? null;
+      o.charges = A.charges?.get(id) ?? null;
+      o.layers = A.layers?.get(id) ?? 0;
       o.neg = A.neg ? A.neg.get(id) || 0 : 0;
+      o.motes = A.motes ? A.motes.get(id) || null : null;
+      o.face = A.face ? A.face.get(id) ?? null : null;
       o.seen = stamp;
     }
     for (const id of out.keys()) if (!A.units.has(id)) out.delete(id);

@@ -157,7 +157,7 @@ describe('URL helpers (real data/assets.json)', () => {
       const av = avatarUrl(m, c.assets.avatar);
       assert.ok(av && av.startsWith('/assets/'), `avatar ${c.chessId} ${c.assets.avatar}`);
       const sp = spineEntry(m, c.assets.spine);
-      assert.ok(sp && /\.skel(\?|$)/.test(sp.skel) && sp.anims && sp.anims.idle, `spine ${c.chessId}`);
+      assert.ok(sp && sp.skel.endsWith('.skel') && sp.anims && sp.anims.idle, `spine ${c.chessId}`);
       if (c.skill?.iconId) assert.ok(skillIconUrl(m, c.skill.iconId, { fallback: false }), `skill icon ${c.chessId}`);
     }
     assert.ok(n >= 200, `checked ${n}`);
@@ -503,7 +503,8 @@ describe('createAssets store', () => {
 
   test('image cache + preload progress (failures resolve to null)', async () => {
     const loaded = [];
-    const a = createAssets({ manifest: M, loadImage: async (u) => { loaded.push(u); if (u.includes('bad')) throw new Error('x'); return { src: u }; } });
+    let fail = true;
+    const a = createAssets({ manifest: M, loadImage: async (u) => { loaded.push(u); if (u.includes('bad') && fail) throw new Error('x'); return { src: u }; } });
     const progress = [];
     const r = await a.preload(['/a.png', '/bad.png', '/a.png', null, ''], (d, t) => progress.push([d, t]));
     assert.deepEqual(r, { ok: 1, failed: 1, total: 2 });
@@ -513,6 +514,11 @@ describe('createAssets store', () => {
     assert.equal(loaded.filter((u) => u === '/a.png').length, 1, 'cached');
     assert.equal(a.imageNow('/a.png').src, '/a.png');
     assert.equal(await a.image(null), null);
+    fail = false;
+    assert.equal(await a.image('/bad.png'), null, 'ordinary consumers retain the remembered failure');
+    assert.equal((await a.image('/bad.png', { retry: true })).src, '/bad.png');
+    assert.equal(loaded.filter((u) => u === '/bad.png').length, 2, 'explicit board retry performs a new load');
+    assert.equal((await a.image('/bad.png')).src, '/bad.png');
   });
 
   test('spine acquire/release through the store with an injected loader', async () => {

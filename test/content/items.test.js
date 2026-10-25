@@ -436,7 +436,7 @@ test('双模机械臂: physical / arts damage is dealt as whichever the target r
   close(plain.b.dealDamage(plain.unit('t_op'), foe(plain), { amount: 1000, type: 'phys', canDodge: false }), 100, 'without the arm');
 });
 
-test('天马之盔 + 天马之枪 (either quality): regen 8 % max HP / s and +30 % ATK true damage per damage instance', () => {
+test('天马之盔 + 天马之枪 (either quality): regen 8 % max HP / s and 30 % scaled-input source-less true damage before the parent', () => {
   for (const [helm, lance] of [[A('5_09'), A('6_01')], [B('5_09'), A('6_01')], [A('5_09'), B('6_01')]]) {
     const h = fight({ units: [{ chessId: 't_op', row: 10, col: 3, items: [helm, lance] }], foes: [[10, 9]] });
     h.step(1);
@@ -444,7 +444,7 @@ test('天马之盔 + 天马之枪 (either quality): regen 8 % max HP / s and +30
     const e = foe(h);
     const before = e.hp;
     hitTrue(h, u, e, 1000);
-    close(before - e.hp, 1000 + 0.3 * u.s.atk, `${helm}+${lance} lance proc`);
+    close(before - e.hp, 1300, `${helm}+${lance} lance proc`);
     h.b.loseHp(u, 1000);
     const hp0 = u.hp;
     h.run(1.02);
@@ -505,6 +505,9 @@ test('海沟实验体: −180 / −300 per damage instance; (阿戈尔) hit take
     h.step(1);
     close(hitTrue(h, foe(h), h.unit('t_op'), 1000), 1000 - dr, `${id} flat DR`);
     close(hitTrue(h, foe(h), h.unit('t_op'), 100), 0, `${id} small hits are negated`);
+    h.unit('t_op').hp = h.unit('t_op').s.maxHp; // isolate the flat value from overkill HP clamping
+    h.b.addBuff(foe(h), { key: 'probe:sourceScale', mods: { dmgDealtMul: 2 } });
+    close(hitTrue(h, foe(h), h.unit('t_op'), 1000), 2000 - dr, `${id} flat reduction is not rescaled by the attacker`);
     cover(id);
   }
   const counter = (items) => {
@@ -954,10 +957,9 @@ test('拟态物质: owning 2 copies gives the 3rd (→ elite); otherwise a rando
   cover(A('5_05'), B('5_05'));
 });
 
-test('拟态物质 grants the 3rd copy with 2 owned even when the pool is out — the grant overdrafts (0.2.4 supersedes #207)', () => {
-  // the report: an elite 溯光星源 (3 of the Ⅵ阶's 5 copies) and 2 normal ones — the pool is empty. 0.2.4 changed the
-  // remake to sample eligible identities rather than remaining copies, so the 3rd copy still arrives and the pool
-  // records the deficit; the 否则 same-bond operator is still only for fewer than 2 owned.
+test('拟态物质 grants the third copy even when stock is empty; the gain still merges and occupies stock (measured pool rule)', () => {
+  // the report: an elite 溯光星源 (3 of the Ⅵ阶's 5 copies) and 2 normal ones — the pool is empty, the item text's 否则
+  // (a random same-bond operator) is only for fewer than 2 owned
   const cid = 'chess_char_6_16_a';
   const elite = DATA.chess[cid].goldenId;
   const chessIn = (ps) => [...ps.board.values(), ...ps.hand, ...ps.temp].filter((p) => p && p.kind === 'chess').map((p) => p.id).sort();
@@ -971,13 +973,13 @@ test('拟态物质 grants the 3rd copy with 2 owned even when the pool is out �
     const warns = spyWarns(m);
     const it = giveItem(m, ps, item);
     assert.deepEqual(equip(it, t), OK, item);
-    assert.deepEqual(got, [cid], `${item}: the 3rd copy arrives`);
-    assert.deepEqual(chessIn(ps), [elite, elite], `${item}: 2 normal + the granted 3rd merge into a second elite`);
-    assert.equal(m.pool.entries.get(cid).left, -1, `${item}: the grant overdrafts the pool`);
+    assert.deepEqual(got, [cid], `${item}: same operator granted despite empty stock`);
+    assert.deepEqual(chessIn(ps), [elite, elite], `${item}: the third normal copy merges`);
     assert.ok(!ps.find(it.uid), `${item}: consumed`);
-    assert.deepEqual(warns, [], `${item}: a grant says nothing`);
+    assert.deepEqual(warns, [], `${item}: a successful grant must not report an empty-pool failure`);
+    assert.equal(m.pool.entries.get(cid).left, -1, 'the sixth owned copy still occupies the pool');
   }
-  // 2 normal copies, no elite, the pool drained by other players: the 3rd still arrives and merges
+  // 2 normal copies, no elite, the pool drained by other players: the third copy is still granted.
   {
     const { m, ps, equip } = setup({ seed: 9 });
     const t = give(m, ps, cid, 'hand');
@@ -988,7 +990,6 @@ test('拟态物质 grants the 3rd copy with 2 owned even when the pool is out �
     assert.deepEqual(equip(giveItem(m, ps, A('5_05')), t), OK);
     assert.deepEqual(got, [cid]);
     assert.deepEqual(chessIn(ps), [elite]);
-    assert.equal(m.pool.entries.get(cid).left, -1);
     assert.deepEqual(warns, []);
   }
   // 2 normal copies with copies left: the 3rd merges into the elite
@@ -1005,7 +1006,7 @@ test('拟态物质 grants the 3rd copy with 2 owned even when the pool is out �
   }
 });
 
-test('拟态物质 with fewer than 2 copies and no same-bond operator left gives nothing and says so (GitHub #401)', () => {
+test('拟态物质 with fewer than 2 copies samples eligible identities independently of remaining stock', () => {
   // 缪尔赛思's only bond is 调和 and she is its only member: one copy owned, the rest of her pool taken by others
   const cid = 'chess_char_6_11_a';
   const { m, ps, equip } = setup({ seed: 9 });
@@ -1014,8 +1015,8 @@ test('拟态物质 with fewer than 2 copies and no same-bond operator left gives
   const got = spyGrants(ps);
   const warns = spyWarns(m);
   assert.deepEqual(equip(giveItem(m, ps, A('5_05')), t), OK);
-  assert.deepEqual(got, [], 'nothing granted');
-  assert.deepEqual(warns, [{ msgid: '{who}：没有可获得的同盟约干员', who: '拟态物质', name: null }]);
+  assert.deepEqual(got, [cid], 'the only eligible identity remains available even with no stock');
+  assert.deepEqual(warns, []);
 });
 
 test('博士投影: golden promotes at once; normal stays equipped and promotes at the next round start', () => {

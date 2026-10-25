@@ -92,7 +92,9 @@ describe('0.2.3 follow-up client features', { skip: !ENABLED }, () => {
       await guest.waitForFunction(() => document.body.textContent.includes('此对局仍在其他窗口中'));
       assert.equal(await owner.evaluate(() => sessionStorage.getItem('sp.token')), before.token);
       await owner.evaluate(() => globalThis.finishIdentityInit());
-      await owner.waitForFunction(() => globalThis.__SP__?.store.get().match.public?.phase === 'INFO_CHECK');
+      // the owner is the background tab now (the guest was brought to front): poll on a timer, not on animation
+      // frames, which a background tab does not run once the match screen takes a moment to load
+      await owner.waitForFunction(() => globalThis.__SP__?.store.get().match.public?.phase === 'INFO_CHECK', { polling: 100 });
       const after = await owner.evaluate(() => {
         const s = globalThis.__SP__.store.get();
         return { id: s.me.playerId, code: s.room.code, token: sessionStorage.getItem('sp.token') };
@@ -106,7 +108,7 @@ describe('0.2.3 follow-up client features', { skip: !ENABLED }, () => {
       }
     } finally { await ctx.close(); }
   });
-  test('co-op opening reroll shows a unanimous vote, clears stale readiness and can be rejected', { timeout: 45000 }, async () => {
+  test('co-op opening reroll shows a unanimous vote, clears stale readiness, lets another seat start one and a rejection cancels it', { timeout: 45000 }, async () => {
     const ctx = await browser.createBrowserContext();
     try {
       const host = await pageIn(ctx), guest = await pageIn(ctx);
@@ -120,7 +122,7 @@ describe('0.2.3 follow-up client features', { skip: !ENABLED }, () => {
         await net.request('room.join', { code }); await net.request('room.ready', { ready: true });
       }, code);
       await host.evaluate(() => globalThis.__SP__.net.request('room.start', {}));
-      for (const p of [host, guest]) await p.waitForFunction(() => globalThis.__SP__.store.get().match.public?.phase === 'INFO_CHECK');
+      for (const p of [host, guest]) await p.waitForFunction(() => globalThis.__SP__.store.get().match.public?.phase === 'INFO_CHECK', { polling: 50 });
       await guest.evaluate(() => globalThis.__SP__.net.request('g.infoReady', { setupRevision: 0 }));
       await host.waitForSelector('.brief-reroll button');
       await host.bringToFront();
@@ -128,20 +130,26 @@ describe('0.2.3 follow-up client features', { skip: !ENABLED }, () => {
       await guest.waitForSelector('.brief-reroll .btn--primary');
       assert.equal(await guest.evaluate(() => globalThis.__SP__.store.get().match.public.deadline), 0);
       await guest.bringToFront();
-      await guest.click('.brief-reroll .btn--primary');
-      for (const p of [host, guest]) await p.waitForFunction(() => globalThis.__SP__.store.get().match.public?.setupRevision === 1);
+      // The host is now a background tab: WebSocket/store updates continue, but animation-frame polling can stop.
+      // Arm its state wait before the vote so the regression covers a result arriving after the initial check.
+      await Promise.all([
+        host.waitForFunction(() => globalThis.__SP__.store.get().match.public?.setupRevision === 1, { polling: 50 }),
+        guest.click('.brief-reroll .btn--primary'),
+      ]);
+      await guest.waitForFunction(() => globalThis.__SP__.store.get().match.public?.setupRevision === 1, { polling: 50 });
       const state = await guest.evaluate(() => globalThis.__SP__.store.get().match.public);
       assert.equal(state.rerollVote, null);
       assert.ok(state.players.filter((p) => !p.isBot).every((p) => !p.ready));
-      await host.waitForFunction(() => !!document.querySelector('.brief-reroll button:not(:disabled)'));
-      // Wait out the documented server anti-burst interval before a second request.
-      await new Promise((resolve) => setTimeout(resolve, 350));
       await host.bringToFront();
-      await host.click('.brief-reroll button');
-      await guest.waitForSelector('.brief-reroll .btn--danger');
+      await host.waitForFunction(() => !!document.querySelector('.brief-reroll button:not(:disabled)'));
+      // The seat that started the first vote is still on its 30 s cooldown, so another seat starts the next vote.
       await guest.bringToFront();
-      await guest.click('.brief-reroll .btn--danger');
-      await host.waitForFunction(() => !globalThis.__SP__.store.get().match.public.rerollVote);
+      await guest.waitForFunction(() => !!document.querySelector('.brief-reroll button:not(:disabled)'));
+      await guest.click('.brief-reroll button');
+      await host.waitForSelector('.brief-reroll .btn--danger');
+      await host.bringToFront();
+      await host.click('.brief-reroll .btn--danger');
+      await guest.waitForFunction(() => !globalThis.__SP__.store.get().match.public.rerollVote, { polling: 50 });
       assert.equal(await host.evaluate(() => globalThis.__SP__.store.get().match.public.setupRevision), 1);
     } finally { await ctx.close(); }
   });

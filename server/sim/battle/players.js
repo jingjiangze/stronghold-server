@@ -13,7 +13,6 @@ import { isPotential, isCultivate } from '../../../shared/potential.js';
 import { setupUnitKit } from '../content/index.js';
 import { installTraitAttackSpeed } from '../content/traitMods.js';
 import { clone } from './util.js';
-import { skinFor } from '../../../shared/skins.js';
 
 export class BattlePlayers {
   _addPlayer(p) {
@@ -40,6 +39,7 @@ export class BattlePlayers {
       units: [],
       input: p,
     };
+    if (this.opts.morphPairing === 'plus') ps.morphPairing = 'plus';
     this.players.push(ps);
     this._perPlayer[ps.playerId] = {
       // `killed` / `total` / `leaked` / `perfect` keep the official `counted` reading (DESIGN §5.1); `killedInTotal` /
@@ -86,7 +86,7 @@ export class BattlePlayers {
    * rows 2–5, the mirrored right half of a pair (whatever coordinates the player's input uses). Never the hand / 临时
    * 整备区 rows of a boss field (rows 0–1, inside BOSS_RECT) nor the other half of a 联防 or boss field. Moves that must
    * stay where the player could deploy read it (乌尔比安's S3 【移动】, kits/ops/chess_char_5_05-ulpia.js); the 突袭
-   * landing reads onFieldBoard (any player of this field).
+   * landing reads onFieldBoard (any player of this field), with a Raid-only multiplayer boss/hidden exception (§29.13).
    */
   onOwnBoard(ps, r, c) {
     if (!ps) return false;
@@ -105,7 +105,8 @@ export class BattlePlayers {
    * the players whose units this battle holds (a teammate eliminated before it or playing another field is not one).
    * Both halves on the two-helper 联防 field and on a Final Assault / Hidden Core pair field; the own half only for a
    * lone 联防 helper and on a solo boss field; never a boss field's hand / 临时整备区 rows. The 突袭 landing reads it
-   * (bonds/addon/battle.js raidTile — the owner's decision of 2026-10-07, DESIGN §26.1).
+   * (bonds/addon/battle.js raidTile — the owner's decision of 2026-10-07, DESIGN §26.1), then separately admits the
+   * empty deployment half in multiplayer boss/hidden battles only (§29.13); this general method is unchanged.
    */
   onFieldBoard(r, c) {
     for (const ps of this.players) if (this.onOwnBoard(ps, r, c)) return true;
@@ -148,7 +149,8 @@ export class BattlePlayers {
     // choice for the same chess id in a multi-player field (the per-battle data view maps id-only lookups); `standIn:
     // true` fields the chess as its 补位 stand-in (simdata getStandIn: the stand-in's body, the chess's identity); `diy`
     // fills a 自选 slot with its pick (simdata getDiy: the slot's identity, the operator's body, skill and module);
-    // `potential` (潜能 1–6, 0.2.2) composes the def at it (never a stand-in's)
+    // `potential` (潜能 1–6, 0.2.2) composes the def at it (never a stand-in's); `skin` (docs/SKINS.md) is the
+    // appearance the owning player chose and rides through to the unit, so every client draws that model (never a rule)
     const lo = { skillIndex: inp.skillIndex ?? null, moduleId: inp.moduleId ?? null };
     if (inp.standIn === true) lo.standIn = true;
     if (inp.diy && typeof inp.diy === 'object') lo.diy = inp.diy;
@@ -157,9 +159,7 @@ export class BattlePlayers {
     if (!def) { this.log(`unknown chess ${inp.chessId}${lo.diy ? ' (illegal 自选 pick)' : ''}`); return null; }
     // a DIY slot has no body of its own (甄选干员): it fights only as a 自选 piece (its `diy` pick)
     if (def.raw?.isDiy && !def.diyFor) { this.log(`自选 slot ${inp.chessId} without a pick`); return null; }
-    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir });
-    const skin = skinFor(def.charId, inp.skinId);
-    if (skin) u.skinId = skin.id; // per-instance display only: never mutate shared defs / attack timing / skill identity
+    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, skin: inp.skin });
     u.items = [...(inp.items ?? [])];
     u.carry = inp.carryState ?? null;
     // 练度 (自持有, 0.2.2): the owned operator's ×ATK / ×DEF / ×max HP (units.js Πmul) — never a 补位 stand-in's nor a
@@ -187,7 +187,7 @@ export class BattlePlayers {
     const st = def.stats;
     const u = new Unit({
       id: ++this._idSeq, side: 'ally', kind, def, defId: def.id, name: def.name, ownerId: ps ? ps.playerId : null,
-      uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, x: c, y: r, tileR: r, tileC: c,
+      uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, skin: extra.skin ?? null, x: c, y: r, tileR: r, tileC: c,
       dir: extra.dir != null ? normDir(extra.dir) : extra.facing != null ? normDir(extra.facing) : ps ? ps.dir : 'RIGHT',
       base: {
         maxHp: st.maxHp, atk: st.atk, def: st.def, res: st.res, aspd: st.aspd, bat: st.bat, blockCnt: st.blockCnt,
@@ -209,7 +209,11 @@ export class BattlePlayers {
   /** Resolve kit/profile/skill for a unit (called by content/index.js; safe to call again). */
   _setupUnit(u, kit = null) {
     if (!kit) {
-      try { kit = setupUnitKit(this, u, this.contentMode); } catch (e) { this._internalError('setupUnitKit', e); kit = null; }
+      try { kit = setupUnitKit(this, u, this.contentMode); } catch (e) {
+        if (e?.contentFault || this.contentFault) throw e;
+        this._internalError('setupUnitKit', e);
+        kit = null;
+      }
     }
     u.kit = kit || {};
     u.profile = resolveProfile(u.def, u.kit.trait || null);

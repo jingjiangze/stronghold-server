@@ -55,7 +55,7 @@
 // Usage: node tools/fetch-assets.mjs [--concurrency=16] [--force] [--offline]
 //                                    [--dry-run] [--refresh-index] [--prune]
 //                                    [--allow-shrink] [--add-only] [--strict]
-//                                    [--local-spines] [--help]
+//                                    [--local-spines] [--no-optional-voice] [--help]
 
 import { readFile, writeFile, mkdir, rename, readdir, unlink } from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
@@ -66,16 +66,18 @@ import { restartForEnvProxy } from './assets/env-proxy.mjs';
 import { MirrorPolicy, selectDownloadSource, validateSource } from './assets/network.mjs';
 import { normalizeProxyPrefix } from './assets/sources.mjs';
 import { loadIndexes } from './assets/cache.mjs';
-import { indexAudio, VOICE_DIRS, normalizeVoiceLangs, retainInstalledVoices } from './assets/audio.mjs';
-import { buildPlan } from './assets/plan.mjs';
+import { indexAudio, VOICE_DIRS } from './assets/audio.mjs';
+import { buildPlan, charModesFromIndex, VOICE_OPTIONAL_TREES } from './assets/plan.mjs';
 import {
   processModels, findLocalEnemyModels, findLocalTokenModels, localSpineMeta, loadLocalSpines, LOCAL_ENEMY_SPINES_FILE,
   LOCAL_TOKEN_SPINES_FILE, LOCAL_ENEMY_SPINE_DIR, LOCAL_TOKEN_SPINE_DIR,
 } from './assets/spine.mjs';
 import { collectLeaves, downloadLeaves, resolveTemplate, totalBytes, contentHash, droppedEntries, MANIFEST_VERSION } from './assets/manifest.mjs';
-import { retainInstalledSkins } from './prepare-operator-skins.mjs';
 import { fontJobs, buildFonts } from './assets/fonts.mjs';
+import { statsTemplateJobs } from './assets/stats-template.mjs';
 import { skelParserAvailable } from './assets/skel.mjs';
+import { SourceVerifier } from './assets/source-verifier.mjs';
+import { versionAssetData, presentationUnion, addManifestEntries } from './assets/versions.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ASSETS = join(ROOT, 'public', 'assets');
@@ -104,15 +106,18 @@ const HELP = `Usage: node tools/fetch-assets.mjs [options]
   --concurrency=N   parallel downloads (default 16)
   --asset-source=M  direct (default) or mirror (opt-in; no public-IP lookup)
   --force           re-download files even when present
+  --source-snapshot=PATH verify raw bytes against pinned Git trees in a JSON snapshot
+                    (incompatible with --offline / --add-only / --local-spines)
   --offline         no network: post-process what is on disk and rebuild data/assets.json
   --dry-run         print the plan and exit
   --refresh-index   re-download the audio_data.json / charword_table.json / models_data.json indexes
-  --voice-lang=cn   legacy single operator voice language: cn (default) | jp | en | kr
-                    (audio.voiceJp is always the JP dub: both trees are planned)
-  --voice-langs=L   simultaneous languages (comma-separated or repeated; always retains CN fallback)
-                    e.g. --voice-langs=cn,jp,en; keeps installed language files referenced during --prune
+  --voice-lang=cn   the dub of audio.voice (the 中文 voice setting): cn (default) | jp | en | kr
+                    (audio.voiceJp, the 日本語 setting, is always the JP dub: both trees are planned)
   --voice-all       plan every official voice slot, including the prep-only lines no battle plays
                     (干员报到 / 编入队伍 / 任命队长; 360 files / 19.3 MB more per run — off by default)
+  --no-optional-voice
+                    only the --voice-lang dub and audio.voiceJp: skip the English, Korean and
+                    own-language trees (audio.voiceEn, audio.voiceKr, audio.voiceNative)
   --prune           delete files under public/assets that the manifest no longer references
                     (public/assets/local/** of tools/local-extract is never deleted); implies --allow-shrink
   --allow-shrink    write data/assets.json even when it loses entries the current one has
@@ -145,15 +150,15 @@ function envFlag(value) {
 /**
  * Parse CLI flags.
  * @param {string[]} argv
- * @returns {{concurrency:number, force:boolean, offline:boolean, dryRun:boolean, refreshIndex:boolean, prune:boolean, allowShrink:boolean, strict:boolean, addOnly:boolean, localSpines:boolean, voiceLang:string, voiceAll:boolean, help:boolean, source:string}}
+ * @returns {{concurrency:number, force:boolean, offline:boolean, dryRun:boolean, refreshIndex:boolean, prune:boolean, allowShrink:boolean, strict:boolean, addOnly:boolean, localSpines:boolean, voiceLang:string, voiceAll:boolean, optionalVoice:boolean, help:boolean, source:string, sourceSnapshot:string}}
  */
 export function parseArgs(argv) {
-  const o = { concurrency: 16, force: false, offline: false, dryRun: false, refreshIndex: false, prune: false, allowShrink: false, strict: envFlag(process.env.SP_ASSETS_STRICT), addOnly: false, localSpines: false, voiceLang: 'cn', voiceAll: false, help: false, source: process.env.SP_ASSET_SOURCE || 'direct' };
-  let explicitVoiceLang = false;
+  const o = { concurrency: 16, force: false, offline: false, dryRun: false, refreshIndex: false, prune: false, allowShrink: false, strict: envFlag(process.env.SP_ASSETS_STRICT), addOnly: false, localSpines: false, voiceLang: 'cn', voiceAll: false, optionalVoice: true, help: false, source: process.env.SP_ASSET_SOURCE || 'direct', sourceSnapshot: '' };
   for (const a of argv) {
     const [k, v] = a.split('=');
     if (k === '--concurrency') o.concurrency = Math.max(1, Math.min(64, parseInt(v, 10) || 16));
     else if (k === '--asset-source') o.source = v;
+    else if (k === '--source-snapshot') { if (!v) throw new Error('--source-snapshot requires a path'); o.sourceSnapshot = a.slice(k.length + 1); }
     else if (k === '--force') o.force = true;
     else if (k === '--offline') o.offline = true;
     else if (k === '--dry-run') o.dryRun = true;
@@ -163,14 +168,14 @@ export function parseArgs(argv) {
     else if (k === '--strict') o.strict = true;
     else if (k === '--add-only') o.addOnly = true;
     else if (k === '--local-spines') o.localSpines = true;
-    else if (k === '--voice-lang') { if (!Object.hasOwn(VOICE_DIRS, v)) throw new Error(`unknown --voice-lang ${v} (cn | jp | en | kr)`); o.voiceLang = v; explicitVoiceLang = true; }
-    else if (k === '--voice-langs') o.voiceLangs = normalizeVoiceLangs([...(o.voiceLangs || []), ...normalizeVoiceLangs([v])]);
+    else if (k === '--voice-lang') { if (!VOICE_DIRS[v]) throw new Error(`unknown --voice-lang ${v} (cn | jp | en | kr)`); o.voiceLang = v; }
     else if (k === '--voice-all') o.voiceAll = true;
+    else if (k === '--no-optional-voice') o.optionalVoice = false;
     else if (k === '--help' || k === '-h') o.help = true;
     else throw new Error(`unknown option ${a}\n${HELP}`);
   }
-  if (o.voiceLangs) o.voiceLangs = normalizeVoiceLangs(['cn', ...(explicitVoiceLang ? [o.voiceLang] : []), ...o.voiceLangs]);
   if (o.addOnly && (o.prune || o.force)) throw new Error(`--add-only never deletes or rewrites files: not with --prune / --force\n${HELP}`);
+  if (o.sourceSnapshot && (o.offline || o.addOnly || o.localSpines)) throw new Error('--source-snapshot is incompatible with --offline / --add-only / --local-spines');
   if (!o.help) validateSource(o.source);
   return o;
 }
@@ -309,20 +314,22 @@ function tidyManifest(m) {
   for (const c of Object.values(m.chars || {})) if (c.spine && !Object.keys(c.spine).length) delete c.spine;
 }
 
-/** Preserve multilingual installations and keep the 0.2.2 JP alias in sync with their canonical JP tree. */
-export function retainManifestVoices(current, next, assetRoot) {
-  const multilingual = current?.voiceByLang || next?.voiceByLang;
-  // A legacy plan still resolves voiceJp. Feed its newly installed JP lines into retention rather than letting an
-  // older voiceByLang.jp hide them; an official-only previous manifest can also seed a multilingual rebuild.
-  const withJp = (audio) => !audio?.voiceJp ? audio : {
-    ...audio, voiceByLang: { jp: audio.voiceJp, ...audio.voiceByLang },
-  };
-  const retained = retainInstalledVoices(multilingual ? withJp(current) : current, multilingual ? withJp(next) : next, assetRoot);
-  if (retained.audio.voiceByLang?.jp) retained.audio.voiceJp = retained.audio.voiceByLang.jp;
-  return retained;
+/**
+ * The extra dub trees (plan.mjs VOICE_OPTIONAL_TREES), resolved against the disk: a tree with no line on disk is
+ * dropped, and `audio.voiceNativeLangType` keeps only the operators whose own-language dub landed.
+ * @param {any} m resolved manifest body (mutated)
+ */
+export function tidyVoiceTrees(m) {
+  const a = m?.audio;
+  if (!a || typeof a !== 'object') return;
+  for (const key of Object.keys(VOICE_OPTIONAL_TREES)) if (a[key] && !Object.keys(a[key]).length) delete a[key];
+  if (a.voiceNativeLangType) {
+    for (const id of Object.keys(a.voiceNativeLangType)) if (!a.voiceNative?.[id]) delete a.voiceNativeLangType[id];
+    if (!Object.keys(a.voiceNativeLangType).length) delete a.voiceNativeLangType;
+  }
 }
 
-export function countStats(m, bytes, files) {
+function countStats(m, bytes, files) {
   const vals = (o) => Object.values(o || {});
   const spines = new Set();
   for (const c of vals(m.chars)) for (const s of vals(c.spine)) spines.add(s.skel);
@@ -347,6 +354,9 @@ export function countStats(m, bytes, files) {
     sfxUnits: Object.keys(m.audio?.sfx?.units || {}).length,
     voiceChars: Object.keys(m.audio?.voice || {}).length,
     voiceJpChars: Object.keys(m.audio?.voiceJp || {}).length,
+    voiceEnChars: Object.keys(m.audio?.voiceEn || {}).length,
+    voiceKrChars: Object.keys(m.audio?.voiceKr || {}).length,
+    voiceNativeChars: Object.keys(m.audio?.voiceNative || {}).length,
   };
 }
 
@@ -407,31 +417,52 @@ async function main() {
     readJson('docs/research/05-maps.json'),
   ]);
   const proxyPrefix = resolveProxyPrefix(opts.source, opts.offline);
-  const source = await selectDownloadSource({ mode: opts.source, offline: opts.offline, proxyPrefix, log });
+  const verifier = opts.sourceSnapshot ? new SourceVerifier(JSON.parse(await readFile(opts.sourceSnapshot, 'utf8'))) : undefined;
+  const source = await selectDownloadSource({ mode: opts.source, offline: opts.offline, proxyPrefix, log, verified: !!verifier });
   const mirrorPolicy = new MirrorPolicy({ source, proxyPrefix, log });
-  const network = { source, proxyPrefix, mirrorPolicy };
+  const network = { source, proxyPrefix, mirrorPolicy, verifier };
   const { audioData, modelsData, charword } = await loadIndexes(ROOT, { refresh: opts.refreshIndex && !opts.offline, offline: opts.offline, log, ...network });
   const audio = indexAudio(audioData);
+  // Skill attack slots follow each operator's mode list when the local fx index is on disk (#679). It is a client
+  // extract (public/assets is not in git); without it the plan keeps the filename-letter fallback.
+  const fxIndexPath = join(ROOT, 'public', 'assets', 'local', 'fx', 'index.json');
+  let charModes = null;
+  if (existsSync(fxIndexPath)) {
+    const fxIndex = JSON.parse(await readFile(fxIndexPath, 'utf8'));
+    charModes = charModesFromIndex(fxIndex);
+    log(`[fx] skill modes for ${charModes.size} operators`);
+  } else {
+    log('[fx] no local fx index — skill attack slots stay on the filename letter');
+  }
   // The game data built by tools/build-data.mjs (when present) may reference more
   // spawnable enemies/tokens than research lists (e.g. 机变 enemy swaps): cover them too.
-  const [dataEnemies, dataTokens, dataBosses, dataBackups, dataChess] = await Promise.all(
-    ['data/enemies.json', 'data/tokens.json', 'data/bosses.json', 'data/backups.json', 'data/chess.json'].map((f) => readJson(f).catch(() => null)));
-  const extras = dataExtras(dataBackups, dataChess);
+  const versionSets = versionAssetData(ROOT);
+  const all = presentationUnion(versionSets);
+  log(`[versions] planning presentation for ${versionSets.length} official versions`);
   const extraHandbook = {};
-  for (const b of Object.values(dataBosses || {})) if (b?.enemyKey && typeof b.handbookId === 'string') extraHandbook[b.enemyKey] = b.handbookId;
+  for (const d of versionSets) for (const b of Object.values(d.bosses || {})) {
+    if (b?.enemyKey && typeof b.handbookId === 'string') extraHandbook[b.enemyKey] ??= b.handbookId;
+  }
   const localEnemySpines = await syncLocalSpines(opts, 'enemy');
   const localTokenSpines = await syncLocalSpines(opts, 'token');
+  const statsTemplate = await statsTemplateJobs(ROOT, { offline: opts.offline || opts.dryRun, log });
   const plan = buildPlan({
-    assets07, ops03, enemies05, maps05, audio, modelsData, charword, voiceLang: opts.voiceLang, voiceLangs: opts.voiceLangs,
+    assets07, ops03, enemies05, maps05, audio, modelsData, charword, voiceLang: opts.voiceLang,
     // default: only the slots a battle can play (plan.mjs VOICE_BATTLE_SLOTS); --voice-all takes the whole official set
     voiceSlots: opts.voiceAll ? null : undefined,
-    extraEnemyIds: Object.keys(dataEnemies || {}),
-    extraTokenIds: [...Object.keys(dataTokens || {}), ...extras.tokenIds],
+    optionalVoice: opts.optionalVoice,
+    extraEnemyIds: Object.keys(all.enemies),
+    extraTokenIds: Object.keys(all.tokens),
     extraHandbook,
     localEnemySpines,
     localTokenSpines,
-    extraOperators: extras.extraOperators,
-    moduleTypes: extras.moduleTypes,
+    extraOperators: all.operators,
+    extraBands: all.bands,
+    extraItems: all.items,
+    extraBonds: all.bonds,
+    moduleTypes: all.moduleTypes,
+    statsTemplate,
+    charModes,
   });
   const leaves = collectLeaves(plan.template);
   log(`[plan] ${leaves.length} files + ${plan.models.size} Spine models ` +
@@ -439,7 +470,10 @@ async function main() {
     `${Object.keys(plan.template.tokens).length} tokens, ${Object.keys(plan.template.ui).length} UI sprites, ` +
     `${Object.keys(plan.template.audio.sfx.units).length} units with SFX, ` +
     `${Object.keys(plan.template.audio.voice).length} operators with ${opts.voiceLang.toUpperCase()} voice, ` +
-    `${Object.keys(plan.template.audio.voiceJp || {}).length} with JP voice)`);
+    `${Object.keys(plan.template.audio.voiceJp || {}).length} with JP voice, ` +
+    `${Object.keys(plan.template.audio.voiceEn || {}).length} with EN, ` +
+    `${Object.keys(plan.template.audio.voiceKr || {}).length} with KR, ` +
+    `${Object.keys(plan.template.audio.voiceNative || {}).length} with an own-language dub)`);
   if (opts.dryRun) {
     for (const n of plan.notes) log(`  note: ${n}`);
     return 0;
@@ -459,14 +493,19 @@ async function main() {
 
   // Fonts (--add-only: not rebuilt — public/fonts may be another checkout's; the manifest keeps its current entry)
   let fontErrors = [];
+  let acceptedFonts;
   if (!opts.offline && !opts.addOnly) {
     const fdl = new Downloader({ root: FONTS, ledgerPath: join(CACHE, 'fonts-ledger.json'), concurrency: 4, force: opts.force, log, ...network });
     await fdl.loadLedger();
     await fdl.run(fontJobs(), 'fonts');
+    acceptedFonts = fdl.accepted;
     dl.totals.bytesDownloaded += fdl.totals.bytesDownloaded;
     for (const k of ['ok', 'skip', 'miss', 'error']) dl.totals[k] += fdl.totals[k];
   }
-  const fonts = opts.addOnly ? { files: {}, errors: [] } : await buildFonts(FONTS, log);
+  const fonts = opts.addOnly ? { files: {}, errors: [] } : await buildFonts(FONTS, log, {
+    verified: !!verifier,
+    ...(verifier ? { available: (rel) => acceptedFonts.has(rel) } : null),
+  });
   fontErrors = fonts.errors;
 
   // Spine
@@ -476,35 +515,43 @@ async function main() {
   });
 
   // Manifest
-  const resolved = resolveTemplate(plan.template, { root: ASSETS, spine: spine.entries, sourceOf: (rel) => dl.ledger.files[rel]?.url });
-  const body = resolved.value;
-  const importedSkins = retainInstalledSkins(current, ASSETS);
-  if (Object.keys(importedSkins.skins).length) body.skins = importedSkins.skins;
-  for (const rel of importedSkins.files) resolved.files.add(rel);
-  const importedVoices = retainManifestVoices(current?.audio, body.audio, ASSETS);
-  body.audio = importedVoices.audio;
-  for (const rel of importedVoices.files) resolved.files.add(rel);
+  const resolved = resolveTemplate(plan.template, {
+    root: ASSETS, spine: spine.entries, sourceOf: (rel) => dl.ledger.files[rel]?.url,
+    ...(verifier ? { available: (rel) => dl.accepted.has(rel) } : null),
+  });
+  let body = resolved.value;
   tidyManifest(body);
+  tidyVoiceTrees(body);
   const fontFaces = {};
   for (const [name, f] of Object.entries(fonts.files)) fontFaces[name] = f;
   body.fonts = opts.addOnly && current?.fonts ? current.fonts
-    : existsSync(join(FONTS, 'fonts.css')) ? { css: '/fonts/fonts.css', faces: fontFaces } : { faces: fontFaces };
+    : (verifier ? fonts.css : existsSync(join(FONTS, 'fonts.css'))) ? { css: '/fonts/fonts.css', faces: fontFaces } : { faces: fontFaces };
+  if (opts.addOnly && current) {
+    const { version, hash, generator, stats, ...previous } = current;
+    body = addManifestEntries(previous, body);
+    // Retained entries still participate in size accounting and orphan detection.
+    const files = (v) => {
+      if (typeof v === 'string' && v.startsWith('/assets/')) resolved.files.add(v.slice('/assets/'.length));
+      else if (v && typeof v === 'object') for (const x of Object.values(v)) files(x);
+    };
+    files(body);
+  }
   const bytes = totalBytes(ASSETS, resolved.files);
   const manifest = {
     version: MANIFEST_VERSION,
     hash: contentHash(body),
     generator: 'tools/fetch-assets.mjs',
-    stats: { ...countStats(body, bytes, resolved.files.size), ...(Object.keys(importedSkins.skins).length ? { skins: Object.keys(importedSkins.skins).length } : {}) },
+    stats: countStats(body, bytes, resolved.files.size),
     ...body,
   };
   const guard = shrinkGuard(current, manifest, opts);
   if (guard.write) await writeJsonAtomic(MANIFEST, manifest);
 
   // Orphans: files on disk that the manifest does not reference (e.g. after a mapping change).
-  const orphans = orphanFiles(await listFiles(ASSETS), resolved.files);
+  const orphans = orphanFiles(await listFiles(ASSETS), new Set([...resolved.files, ...dl.preserved]));
   if (opts.prune) for (const r of orphans) { try { await unlink(join(ASSETS, r)); } catch { /* ignore */ } }
 
-  const charIds = Object.keys(assets07.operators || {});
+  const charIds = Object.keys(plan.template.chars);
   const required = requiredMisses(manifest, charIds);
   // Leaves the plan had resolved and the manifest loses here (no alternative of theirs on disk): reported on their own
   // line below and kept in the report, whether or not they shrink the committed manifest.
@@ -539,7 +586,7 @@ async function main() {
   log(`bonds ${s.bonds} · items ${s.items} · bands ${s.bands} · skill icons ${s.skills} · UI ${s.ui} · units with SFX ${s.sfxUnits}`);
   const overlays = (o) => Object.values(o || {}).filter((e) => e?.spineLocal).length;
   log(`local-client models (spineLocal, drawn when extracted): enemies ${overlays(manifest.enemies)} · tokens ${overlays(manifest.tokens)}`);
-  log(`operator battle voice: ${s.voiceChars} charIds (--voice-lang=${opts.voiceLang}) · JP dub (audio.voiceJp): ${s.voiceJpChars} charIds`);
+  log(`operator battle voice: ${s.voiceChars} charIds (--voice-lang=${opts.voiceLang}) · JP dub (audio.voiceJp): ${s.voiceJpChars} charIds · EN ${s.voiceEnChars} · KR ${s.voiceKrChars} · own-language dub ${s.voiceNativeChars}`);
   log(`fonts: ${Object.values(fonts.files).map((f) => f.woff2 || f.original).join(', ') || 'none'}`);
   if (resolved.fallbacks.length) { log(`fallbacks used (${resolved.fallbacks.length}):`); for (const f of resolved.fallbacks.slice(0, 20)) log(`  ${f}`); }
   if (downloadErrors.length) log(`download errors (${downloadErrors.length}, re-run to retry): ${downloadErrors.slice(0, 10).join(', ')}`);
@@ -565,6 +612,7 @@ async function main() {
     log(strictLeafDropError(droppedLeaves));
     log('  a plain run downloads them again (--refresh-index if the upstream index lost them); without --strict / SP_ASSETS_STRICT this is only a warning');
   }
+  if (verifier && (dl.totals.error || fontErrors.length || downloadErrors.length)) return 1;
   return runExitCode({ requiredMisses: required.length, droppedLeaves: droppedLeaves.length, strict: opts.strict, manifestWritten: guard.write });
 }
 

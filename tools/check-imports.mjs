@@ -213,9 +213,6 @@ export function classify(spec, fromFile, area) {
     if (resolved === 'server/index.js') return { code: 'sim-entry', resolved };
     if (isHttp(spec, resolved)) return { code: 'sim-http', resolved };
     if (resolved === 'public' || resolved.startsWith('public/')) return { code: 'sim-client', resolved };
-    // Only the private, Node-guarded loader may use its three audited file-loading builtins.
-    if (fromFile === 'server/sim/nodeData.js' && ['node:fs', 'node:path', 'node:url'].includes(spec)) return { note: true, resolved };
-    if (resolved === 'server/sim/nodeData.js' && fromFile !== 'server/sim/simdata.js') return { code: 'sim-private', resolved };
     if (escaped || isBuiltin(spec)) return { code: 'sim-node', resolved };
     if (resolved === 'server/data.js') return { note: true, resolved };
     return null;

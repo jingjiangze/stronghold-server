@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { computeBuildTag, buildTag, resetBuildTag, BUILD_INPUTS, ROOT, startServer } from '../server/index.js';
+import { computeBuildTag, buildTag, resetBuildTag } from '../server/index.js';
 import { checkBuildOnce } from '../public/js/ui/buildGuard.js';
 
 /** A throwaway browser runtime, independent of the build tag's input list. */
@@ -47,12 +47,35 @@ test('computeBuildTag: server-only code and downloaded media do not change the b
   const root = fixture();
   try {
     const known = computeBuildTag(root);
-    for (const rel of ['server/index.js', 'server/http/routes.js', 'server/data.js', 'public/assets/sprite.png']) {
+    // data/versions/: another official version's data, served only when the server enables it (DESIGN §35.22, §35.23)
+    for (const rel of ['server/index.js', 'server/http/routes.js', 'server/data.js', 'public/assets/sprite.png',
+      'data/versions/act1autochess/chess.json']) {
       const abs = path.join(root, rel);
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, 'changed');
     }
     assert.equal(computeBuildTag(root), known);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('computeBuildTag: a served official version\'s data is part of the build; an unserved one\'s is not (DESIGN §35.23)', () => {
+  const root = fixture();
+  try {
+    const bare = computeBuildTag(root);
+    const served = path.join(root, 'data', 'versions', 'act1autochess');
+    const unserved = path.join(root, 'data', 'versions', 'act1autochess-v1_1');
+    for (const dir of [served, unserved]) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'chess.json'), 'x'); }
+    const opts = { servedVersionDirs: [served] };
+    assert.equal(computeBuildTag(root), bare, 'no served version: data/versions/ never counts');
+    const known = computeBuildTag(root, opts);
+    assert.notEqual(known, computeBuildTag(root), 'a served version directory is part of the tag');
+    fs.writeFileSync(path.join(unserved, 'chess.json'), 'rebuilt, longer');
+    assert.equal(computeBuildTag(root, opts), known, 'an unserved version\'s rebuild is no new build');
+    fs.writeFileSync(path.join(served, 'chess.json'), 'rebuilt, longer');
+    assert.notEqual(computeBuildTag(root, opts), known, 'a served version\'s rebuild is a new build');
+    assert.equal(computeBuildTag(root, { servedVersionDirs: [path.join(root, 'elsewhere')] }), computeBuildTag(root), 'a directory outside data/versions/ is ignored');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -94,61 +117,8 @@ test('computeBuildTag: dot files and editor backups are ignored (the static serv
   }
 });
 
-test('computeBuildTag: a custom public directory keeps sim/shared/data rooted in the served project', () => {
-  const root = fixture(), publicDir = path.join(root, 'preview');
-  try {
-    fs.mkdirSync(path.join(publicDir, 'js'), { recursive: true });
-    fs.writeFileSync(path.join(publicDir, 'js/file.js'), 'custom browser');
-    const known = computeBuildTag(root, publicDir);
-    fs.writeFileSync(path.join(root, 'public/js/file.js'), 'not served by this instance');
-    assert.equal(computeBuildTag(root, publicDir), known);
-    for (const rel of ['server/sim/content/kits/skill.js', 'shared/protocol.js', 'data/chess.json']) {
-      const before = computeBuildTag(root, publicDir);
-      fs.writeFileSync(path.join(root, rel), 'new served runtime');
-      assert.notEqual(computeBuildTag(root, publicDir), before, rel);
-    }
-    const before = computeBuildTag(root, publicDir);
-    fs.writeFileSync(path.join(publicDir, 'js/file.js'), 'new custom browser');
-    assert.notEqual(computeBuildTag(root, publicDir), before);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
 test('computeBuildTag: nothing readable → null (an unknown build never reloads a page)', () => {
   assert.equal(computeBuildTag(path.join(os.tmpdir(), 'sp-does-not-exist-xyz')), null);
-});
-
-test('client-build exposes only a stable instance marker for its actual public directory', async (t) => {
-  const a = fixture(), b = fixture();
-  t.after(() => { fs.rmSync(a, { recursive: true, force: true }); fs.rmSync(b, { recursive: true, force: true }); });
-  fs.writeFileSync(path.join(b, 'public/index.html'), 'different browser runtime');
-  const first = await startServer({ host: '127.0.0.1', port: 0, quiet: true, publicDir: path.join(a, 'public') });
-  t.after(() => first.close());
-  const get = async (server, route = '/client-build') => {
-    const res = await fetch(`http://127.0.0.1:${server.port}${route}`);
-    assert.equal(res.status, 200);
-    assert.match(res.headers.get('cache-control'), /no-store/);
-    return res.json();
-  };
-  const before = await get(first);
-  assert.deepEqual(Object.keys(before), ['build']);
-  assert.equal(before.build, computeBuildTag(ROOT, path.join(a, 'public')), 'custom public files plus the actual served sim/shared/data trees');
-  fs.writeFileSync(path.join(a, 'public/js/file.js'), 'changed after the first server started');
-  const second = await startServer({ host: '127.0.0.1', port: 0, quiet: true, publicDir: path.join(b, 'public') });
-  t.after(() => second.close());
-  assert.equal((await get(second)).build, computeBuildTag(ROOT, path.join(b, 'public')));
-  assert.notEqual((await get(second)).build, before.build);
-  resetBuildTag();
-  assert.deepEqual(await get(first), before, 'other starts and helper resets cannot move a running instance marker');
-  const health = await get(first, '/healthz');
-  assert.equal(health.build, before.build);
-  assert.ok(health.performance, 'diagnostics belong only to the internal health response');
-  assert.deepEqual(await get(first), { build: before.build }, 'performance must never leak through client-build');
-  const head = await fetch(`${first.url}/client-build`, { method: 'HEAD' });
-  assert.equal(head.status, 200);
-  assert.equal(await head.text(), '');
-  assert.equal(Number(head.headers.get('content-length')), Buffer.byteLength(JSON.stringify(before)));
 });
 
 test('buildTag: computed once per process — a file that changes afterwards does not move it until the next process', () => {

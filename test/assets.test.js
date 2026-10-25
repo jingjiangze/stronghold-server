@@ -16,7 +16,8 @@ import { resolveRoles, roleAnimationNames } from '../tools/assets/anim-roles.mjs
 import { normalizeAtlas, atlasInfo, parseAtlas } from '../tools/assets/atlas.mjs';
 import { pngSize, isCompletePng, isMp3, validate } from '../tools/assets/formats.mjs';
 import { encodeWoff2, decodeWoff2Tables, readSfnt, uintBase128 } from '../tools/assets/woff2.mjs';
-import { assetToPath, pickUnitSfx, indexAudio } from '../tools/assets/audio.mjs';
+import { assetToPath, pickUnitSfx, indexAudio, nativeVoiceDirs } from '../tools/assets/audio.mjs';
+import { tidyVoiceTrees } from '../tools/fetch-assets.mjs';
 import { mirrorUrl, safeName, encodePath } from '../tools/assets/sources.mjs';
 import { collectEnemyIds, skillIndicesByChar, buildPlan, GUIDE_PAGES, UI_EXTRAS } from '../tools/assets/plan.mjs';
 import { resolveTemplate, collectLeaves } from '../tools/assets/manifest.mjs';
@@ -152,9 +153,14 @@ describe('animation-role resolver (research 07 §5.4)', () => {
       const { bad, seen } = walk(/^Skill_?0*[1-9](?:$|_)/i, (a, id) => !id.startsWith('enemies.') || !!a.skills);
       assert.ok(seen >= 10, `models with numbered skill clips (${seen})`);
       assert.deepEqual(bad, []);
+      // 盐风主教昆图斯: each slot (data/enemies.json skills[]) plays its official ability's clip (PREFAB_SPINE_ROLES, from
+      // the prefab enm_pfb_18.ab — not "Skill_n = slot n−1"): Tidewater* Skill_02, Rockfall* Skill_01, SummonTentac* Skill_03, Doom Skill_04
       const q = manifest.enemies.enemy_1521_dslily.spine.anims;
-      assert.deepEqual(Object.values(q.skills).map((c) => c.loop), ['Skill_01', 'Skill_02', 'Skill_03', 'Skill_04']);
-      assert.equal(q.skill.loop, 'Skill_01', 'the primary clip is unchanged');
+      assert.deepEqual(Object.values(q.skills).map((c) => c.loop), ['Skill_02', 'Skill_01', 'Skill_03', 'Skill_02', 'Skill_01', 'Skill_03', 'Skill_02', 'Skill_01', 'Skill_03', 'Skill_04']);
+      assert.equal(q.skill.loop, 'Skill_02', 'the primary clip: slot 0 (大潮)');
+      // 假想敌：胄 (both records share the model): 死亡集群 (slot 1, prefabKey "2") plays Skill_3, not Skill_2
+      for (const id of ['enemy_9013_acstmk', 'enemy_9013_acstmk_2']) assert.deepEqual(Object.values(manifest.enemies[id].spine.anims.skills).map((c) => c.loop), ['Skill_1', 'Skill_3', 'Revive'], id);
+      assert.deepEqual(Object.values(manifest.enemies.enemy_9032_aclionk.spine.anims.skills).map((c) => c.loop), ['Skill_1', 'Skill_2', 'Skill_2', 'Skill_1', 'Skill_3']);
       // operators keep their pool's indices (宴's fix, PREFAB_SPINE_ROLES / DESIGN §25.22.9, stays as it was)
       const utage = manifest.chars.char_337_utage.spine.front.anims;
       assert.deepEqual(Object.keys(utage.skills).sort(), ['0', '1']);
@@ -467,6 +473,67 @@ describe('audio banks and plan id sets', () => {
     assert.deepEqual(r.droppedLeaves.sort(), r.misses.slice().sort(), 'every dropped line is a dropped leaf too');
   });
 
+  test('own-language dubs are the CUSTOM voiceLangDict entries (collab LINKAGE is not)', () => {
+    const charword = {
+      voiceLangTypeDict: { CN_MANDARIN: { groupType: 'CN_MANDARIN' }, ITA: { groupType: 'CUSTOM' }, RUS: { groupType: 'CUSTOM' }, LINKAGE: { groupType: 'LINKAGE' } },
+      voiceLangDict: {
+        char_102_texas: { dict: { CN_MANDARIN: { wordkey: 'char_102_texas' }, ITA: { wordkey: 'char_102_texas_ITA' }, RUS: { wordkey: 'char_102_texas_rus' } } },
+        char_196_sunbr: { dict: { RUS: { wordkey: 'char_196_sunbr' } } },
+        char_1_collab: { dict: { LINKAGE: { wordkey: 'char_1_collab_link' } } },
+      },
+    };
+    assert.deepEqual([...nativeVoiceDirs(charword)], [
+      ['char_102_texas', { dir: 'char_102_texas_ita', type: 'ITA' }],
+      ['char_196_sunbr', { dir: 'char_196_sunbr', type: 'RUS' }],
+    ], 'the first CUSTOM wins; LINKAGE is not a dub');
+    assert.equal(nativeVoiceDirs(null).size, 0);
+    assert.equal(nativeVoiceDirs({}).size, 0);
+  });
+
+  test('tidyVoiceTrees drops empty dub trees and the type of a dub that did not land', () => {
+    const m = { audio: {
+      voice: { a: { place: '/x' } },
+      voiceEn: { a: { place: '/e' } }, voiceKr: {},
+      voiceNative: { a: { place: '/n' } }, voiceNativeLangType: { a: 'ITA', c: 'RUS' },
+    } };
+    tidyVoiceTrees(m);
+    assert.deepEqual(Object.keys(m.audio), ['voice', 'voiceEn', 'voiceNative', 'voiceNativeLangType'], 'an empty voiceKr goes');
+    assert.deepEqual(m.audio.voiceNativeLangType, { a: 'ITA' }, "c's dub has no line on disk: no type");
+    const plain = { audio: { voice: {} } };
+    tidyVoiceTrees(plain);
+    assert.deepEqual(plain, { audio: { voice: {} } }, 'a --no-optional-voice build gains no keys');
+    tidyVoiceTrees(null);
+    tidyVoiceTrees({});
+  });
+
+  test('plan.mjs plans EN / KR / own-language trees like voiceJp when optionalVoice is on', () => {
+    const charword = {
+      charWords: {
+        a: { charId: 'char_102_texas', wordKey: 'char_102_texas', placeType: 'BATTLE_SELECT', voiceId: 'CN_021', voiceIndex: 21, voiceAsset: 'char_102_texas/CN_021' },
+        b: { charId: 'char_263_skadi', wordKey: 'char_263_skadi', placeType: 'BATTLE_SELECT', voiceId: 'CN_021', voiceIndex: 21, voiceAsset: 'char_263_skadi/CN_021' },
+        c: { charId: 'char_999_out', wordKey: 'char_999_out', placeType: 'BATTLE_SELECT', voiceId: 'CN_021', voiceIndex: 21, voiceAsset: 'char_999_out/CN_021' },
+      },
+      voiceLangTypeDict: { ITA: { groupType: 'CUSTOM' }, RUS: { groupType: 'CUSTOM' } },
+      voiceLangDict: {
+        char_102_texas: { dict: { ITA: { wordkey: 'char_102_texas_ITA' } } },
+        char_999_out: { dict: { RUS: { wordkey: 'char_999_out' } } },
+      },
+    };
+    const extraOperators = { char_102_texas: { name: '德克萨斯', skills: [] }, char_263_skadi: { name: '斯卡蒂', skills: [] } };
+    const plan = (o) => buildPlan({ assets07: {}, ops03: {}, enemies05: {}, maps05: {}, audio: indexAudio({}), modelsData: {},
+      charword, extraOperators, ...o }).template.audio;
+    const a = plan({ optionalVoice: true });
+    assert.deepEqual(Object.keys(a), ['bgm', 'bossBgm', 'voice', 'voiceJp', 'voiceEn', 'voiceKr', 'voiceNative', 'voiceNativeLangType', 'sfx']);
+    assert.equal(a.voiceEn.char_102_texas.select.alts[0].rel, 'audio/voice/en/char_102_texas/cn_021.mp3');
+    assert.equal(a.voiceKr.char_263_skadi.select.alts[0].rel, 'audio/voice/kr/char_263_skadi/cn_021.mp3');
+    assert.equal(a.voiceNative.char_102_texas.select.alts[0].rel, 'audio/voice/native/char_102_texas_ita/cn_021.mp3');
+    assert.match(a.voiceNative.char_102_texas.select.alts[0].urls[0], /voice_custom\/char_102_texas_ita\/cn_021\.mp3$/);
+    assert.equal(a.voiceNative.char_263_skadi, undefined, 'no own-language dub: no entry');
+    assert.equal(a.voiceNative.char_999_out, undefined, 'not fielded: no tree');
+    assert.deepEqual(Object.getOwnPropertySymbols(a.voiceNativeLangType).map((s) => a.voiceNativeLangType[s]), [{ char_102_texas: 'ITA' }], 'a literal, and only a fielded operator who is in the voice tree');
+    assert.deepEqual(Object.keys(plan({})), ['bgm', 'bossBgm', 'voice', 'voiceJp', 'sfx'], 'optionalVoice defaults off');
+  });
+
   // A unit's attack sound is a leaf like any other: when its file was never downloaded (or a checkout lost it) the whole
   // key vanishes from data/assets.json and the client plays nothing — there is no fallback and no URL to retry. The
   // resolution therefore reports it as a dropped leaf, which the run prints and --strict fails on
@@ -663,10 +730,8 @@ describe('emotes and 玩法说明 pages from the public mirror (GitHub issue #42
   test('the committed data/assets.json lists all 55, so setup on an install made before them downloads them', () => {
     // tools/setup.mjs runs fetch-assets when data/assets.json lists a file that is not on disk (checkAssets)
     const m = readJson('data/assets.json');
-    // the weishucdn manifest bakes a cache-busting `?v=…` into every URL: compare the path, keep the query tolerated
-    const bare = (u) => String(u).replace(/\?[^?]*$/, '');
-    for (const e of EMOTE_CATALOG) assert.equal(bare(m.ui[`emoticon/${e.dir}/${e.picId}`]), `/assets/ui/emoticon/${e.dir}/${e.picId}.png`, e.id);
-    for (const k of GUIDE_PAGES) assert.equal(bare(m.ui[`guide/${k}`]), `/assets/ui/guide/${k}.png`, k);
+    for (const e of EMOTE_CATALOG) assert.equal(m.ui[`emoticon/${e.dir}/${e.picId}`], `/assets/ui/emoticon/${e.dir}/${e.picId}.png`, e.id);
+    for (const k of GUIDE_PAGES) assert.equal(m.ui[`guide/${k}`], `/assets/ui/guide/${k}.png`, k);
     assert.equal(m.stats.ui, Object.keys(m.ui).length);
     assert.ok(!JSON.stringify(m).includes('/assets/local/'), 'never a local-client path');
   });

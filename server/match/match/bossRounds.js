@@ -6,10 +6,10 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
-import { WorkerFieldRunner } from '../combat/runner.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
+import { creditedKillsOf } from '../../sim/spec.js';
 import { buildBossWave, bountySpawns } from '../waves.js';
-import { pairPlayers, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BOSS_HIT_STEPS } from '../finalAssault.js';
+import { pairPlayers, bossPairSalt, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BOSS_HIT_STEPS } from '../finalAssault.js';
 import { FieldRunner, HeadlessPacer, syntheticResult, BOSS_SILENCE_MS, CATCHUP_TICKS_PER_INTERVAL } from '../fields.js';
 import { FLOW_TICKER_PRIORITY, BOSS_CLOCK_MS, DELAYS } from './common.js';
 
@@ -42,17 +42,13 @@ export class MatchBoss {
     if (!alive.length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
     this.phase = hidden ? PHASE.HIDDEN_CORE : PHASE.FINAL_ASSAULT;
     this.lastResults = new Map();
-    if (!hidden) {
-      this.teamLp = alive.reduce((s, p) => s + Math.max(0, p.lp), 0);
-      for (const ps of alive) ps.lpAtFinal = Math.max(0, ps.lp);
-    }
+    if (!hidden) this._openTeamLp();
     const bossId = hidden ? this.hiddenBossId : this.bossId;
     // BOSS_HIT tickers ("对敌方领袖造成的伤害超过20% / 50% / 80%"): the player's damage to THIS leader over its pool —
     // the pool's own per-player tally, one pool per boss round. stats.bossDamage (the result's 领袖伤害) adds up both
     // rounds, so it would credit the Final Assault's damage to the hidden leader ("隐藏boss还没打就出了50%播报").
     const hitSteps = new Map();
-    if (!hidden) this.finalAliveCount = alive.length;
-    const pool = new SharedBossPool(bossPoolHp(this.gd, bossId, alive.length, { experimental: this.capacityExperiment }), {
+    const pool = new SharedBossPool(bossPoolHp(this.gd, bossId, alive.length), {
       onHit: (pid, dmg) => {
         const ps = this.players.get(pid);
         if (!ps) return;
@@ -68,7 +64,8 @@ export class MatchBoss {
       },
     });
     this.bossPool = pool;
-    const groups = pairPlayers(alive, createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
+    // the round's plan (_planBossWaves: the Hidden Core's own draw, GitHub #845); a departure since keeps intact pairs
+    const groups = pairPlayers(alive, createRng(deriveSeed(this.seed, bossPairSalt(this.gd, this.round))), this.bossPairs);
     this.bossPairs = groups.map(g => g.map(p => p.playerId));
     const reuse = this.bossWaves && this.bossWaves.length === groups.length && this.bossWaves.every((w, i) => w.players.join() === groups[i].map((p) => p.playerId).join());
     this.fields = groups.map((g, i) => {
@@ -85,7 +82,9 @@ export class MatchBoss {
         const input = ps.battleInput({ side: j === 0 ? 'L' : 'R', colOffset: j === 0 ? 0 : 8 });
         input.lpForBoss = this.teamLp;
         // `side` + `routes`: the player's half of a pair field (spawn-list edits for one player, e.g. 鸭爵's swap)
-        const ev = { input, kind: hidden ? 'hidden' : 'boss', round: this.round, spawns, routes: wave.routes, side: g.length > 1 ? (j === 0 ? 'L' : 'R') : null };
+        // `waveSpawns`: the field's wave before the bounties (a copy; 鸭爵's shared draw, GitHub #839)
+        const waveSpawns = wave.spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
+        const ev = { input, kind: hidden ? 'hidden' : 'boss', round: this.round, spawns, waveSpawns, routes: wave.routes, side: g.length > 1 ? (j === 0 ? 'L' : 'R') : null };
         this.dispatch(ps, 'onBattleStart', ev);
         return ev.input && typeof ev.input === 'object' ? ev.input : input;
       });
@@ -110,7 +109,6 @@ export class MatchBoss {
         bossId,
       };
       if (this.clientCombat) return { fieldId, kind: hidden ? 'hidden' : 'boss', players: g.map((p) => p.playerId), opts: bopts, battle: null, live: true };
-      if (this.combatPool) return this._remoteField(bopts, g.map((p) => p.playerId));
       const battle = this.newBattle(bopts);
       try {
         battle.on('enemyLeak', (ctx) => this._bossLeak(ctx && ctx.enemy), { priority: -1000, owner: 'match' });
@@ -119,26 +117,38 @@ export class MatchBoss {
       } catch (e) { this.reportError('boss leak hook', e); }
       return { fieldId, kind: hidden ? 'hidden' : 'boss', players: g.map((p) => p.playerId), battle, live: true };
     });
-    this._beginDamage(hidden ? 'hidden' : 'boss');
     this.overtimeApplied = 0;
     // HUD: the boss level's countdown (maxPlayTime, 120 real s — the battle goes on past it) and the moment the
     // overtime drain starts (150 real s), both on the field clock
     const onClock = (realS) => this.sched.now() + Math.round(((realS * this.gd.combatTimeScale) / this.gameSpeed) * 1000);
     const levelTime = this.gd.bossLevelTime(this.round);
+    // Maintainer 2026-10-10: only teams with an AI teammate keep the extra grace after the visible countdown.
+    // Freeze this choice for the fight; a disconnect / host transfer cannot change its LP clock midway.
+    const team = this.order.filter((p) => !p.left);
+    this.bossOvertimeStartReal = team.length > 1 && team.some((p) => p.isBot)
+      ? this.gd.bossOvertimeAfterReal : (levelTime || this.gd.bossOvertimeAfterReal);
     this.deadline = this.sched.instant || !levelTime ? 0 : onClock(levelTime);
-    this.overtimeAt = this.sched.instant ? 0 : onClock(this.gd.bossOvertimeAfterReal);
-    if (this.clientCombat) { this._flushDamage(true); this._startFinalClient(hidden); return; }
-    const Runner = this.combatPool ? WorkerFieldRunner : FieldRunner;
-    this.runner = new Runner(this, this.fields, {
-      onTick: (runner) => this._bossTick(runner),
-      onDone: (runner) => this._finalDone(runner, hidden),
-      boss: { maxHp: pool.maxHp, hp: pool.hp, teamLp: this.teamLp, overtimeApplied: 0,
-        combatTimeScale: this.gd.combatTimeScale, bossOvertimeAfterReal: this.gd.bossOvertimeAfterReal,
-        bossOvertimeDrainReal: this.gd.bossOvertimeDrainReal },
-    });
+    this.overtimeAt = this.sched.instant ? 0 : onClock(this.bossOvertimeStartReal);
+    if (this.clientCombat) { this._startFinalClient(hidden); return; }
     this._defaultWatch();
     this.markPublic();
+    this.runner = new FieldRunner(this, this.fields, {
+      onTick: (runner) => this._bossTick(runner),
+      onDone: (runner) => this._finalDone(runner, hidden),
+    });
     this.runner.start();
+  }
+
+  /**
+   * Merged team LP at the moment a Final Assault first opens. The Hidden Core keeps whatever is left;
+   * it does not call this again. A test jump straight into the hidden round calls it once when the
+   * assault that would have opened the pool was skipped. [ASSUMED] that sum is the alive players'
+   * current LP, not a leftover after a fight that did not happen.
+   */
+  _openTeamLp() {
+    const alive = this.alivePlayers();
+    this.teamLp = alive.reduce((s, p) => s + Math.max(0, p.lp), 0);
+    for (const ps of alive) ps.lpAtFinal = Math.max(0, ps.lp);
   }
 
   _startFinalClient(hidden) {
@@ -489,7 +499,7 @@ export class MatchBoss {
    * (bossTurnHpReduceTime, gamedata.js bossOvertimeDue).
    */
   _applyOvertime(gt) {
-    const due = this.gd.bossOvertimeDue(gt);
+    const due = this.gd.bossOvertimeDue(gt, this.bossOvertimeStartReal);
     if (due > this.overtimeApplied) {
       const loss = due - this.overtimeApplied;
       this.overtimeApplied = due;
@@ -498,13 +508,6 @@ export class MatchBoss {
   }
 
   _bossTick(runner) {
-    if (runner.remote) {
-      // The worker already applied overtime and terminal ordering; only publish the accepted mirror here.
-      if (runner.publicTick) this.markPublic();
-      if (runner.secondTick) this.flush();
-      return;
-    }
-    this._sampleDamage();
     this._applyOvertime(runner.time);
     if (this.teamLp <= 0 && this.bossPool.hp > 0) runner.forceAll('forced');
     // client-side combat with every boss field on the server: humans that reconnect / watch run display replicas
@@ -519,7 +522,6 @@ export class MatchBoss {
   /** Every boss field is over: stats, bounties, then the Hidden Core or RESULT. */
   _finishFinal(hidden, resultOf) {
     if (this.phase !== (hidden ? PHASE.HIDDEN_CORE : PHASE.FINAL_ASSAULT)) return;
-    this._freezeDamage();
     this._stopClientCombat();
     // the end condition the server registered first decides (client-side combat: _endFinal — pool 0 → victory, team LP 0
     // → defeat); a boss field's final result may never turn a defeat into a victory (user playtest #6 item 5)
@@ -535,6 +537,7 @@ export class MatchBoss {
         if (pp && ps) {
           ps.stats.dmgDealt += Number(pp.damageDealt) || 0;
           ps.stats.kills += Number(pp.killed) || 0;
+          ps.creditedKills += creditedKillsOf(pp);
           ps.dirty(); // m.private.stats
           this._charDamageTickers(ps, pp);
         }
@@ -555,8 +558,7 @@ export class MatchBoss {
     this.markPublic();
     this.runner = null;
     if (!hidden) {
-      const eligible = victory && !!this.hiddenBossId && hiddenEligible(this.gd, { layerSum: this.hiddenLayerSum,
-        teamLp: this.teamLp, aliveCount: this.finalAliveCount, experimental: this.capacityExperiment });
+      const eligible = victory && !!this.hiddenBossId && hiddenEligible(this.gd, { layerSum: this.hiddenLayerSum, teamLp: this.teamLp });
       this.later(this.scaled(DELAYS.SETTLE), () => {
         if (eligible) {
           this.hiddenReached = true;

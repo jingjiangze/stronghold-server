@@ -17,7 +17,7 @@ through.
 | `roster` | 49 battles: every visible chess record (normal and elite) with every selectable skill and module (DESIGN §16), 12 operators per battle on a real stage (all 11 in turn) against the round's real wave three times over, every non-leader enemy kind of `data/enemies.json` as extra spawns (half of them bounties), placeable summons on the board, every equipment item, band, battle-side 机变 card and stage map card in turn, bonds from the board |
 | `bonds` | 46 battles: every bond at its activation threshold (1 layer) and at its top tier (999 layers) |
 | `fields` | 22 battles: every Final Assault / Hidden Core leader on a pair and a solo template (shared pool, 200 s cap) and the 联防 field with 1 and 2 helpers on the round's stage, both halves (carried HP / SP, a knocked-out operator, two leakers' enemies) |
-| `matches` | 18 matches to the end in virtual time: 16 bot-only (solo 标准 / 险境 / 绝境 / 终极 × 2 seeds, co-op 2 / 3 / 4, one server-run combat match, two runs boosted to the Hidden Core), one co-op match whose human seat (AI 托管, offline) does not own 9 NORMAL chess — they fight as their 补位 stand-ins (its digest lists them per round, `standIns`) — and one whose human seat slots 自选 picks (推进之王 and prototypes) with its 调度中心 at level 5 from the first prep: its own shop draws them and its AI fields 推进之王 (its digest lists per round the 自选 shop draws and the fielded pieces, `diy`) |
+| `matches` | Full matches in virtual time: bot-only solo and co-op, server-run combat, boosted Hidden Core runs, partially owned human rosters and a human with no NORMAL operators (AI 托管, offline; `standIns` records the fielded stand-ins per round), and human 自选 picks with 调度中心 level 5 from the first prep (`diy` records shop draws and deployed pieces). `matchScenarios()` lists every configuration. |
 | `standins` | 10 battles: every NORMAL chess record (normal and elite, 110) fielded as its 补位 stand-in (`standIn: true`: the stand-in's body, backup skill / module and kit — all 17 stand-ins, every skill a chess names for them), 12 per battle by strength band, laid out by the stand-in's position on a real stage, against the round's real wave three times over plus 8 ground enemy kinds (melee stand-ins always meet an enemy), an item each, bonds from the board |
 | `diy` | battles of 自选 pieces (a DIY slot with its `diy` pick, `shared/diy.js`): every owned 6★ with an operator kit (`kits/index.js OPERATOR_KITS`) in each form of tiers 5 and 6 (normal; elite with no module and with each module) under each skill, then every prototype pick with a kit at its locked selection, normal and elite, 12 per battle against the round's real wave; a new operator kit adds its scenarios (the battle count grows with the kits) |
 
@@ -30,21 +30,15 @@ renumbered by first appearance, units are named by board uid or def id), board p
 within a tick (they are counted, not hashed) and wall-clock time. Damage / healing sums are rounded to integers and HP
 to 2 decimals.
 
-`npm test` runs the fast subset (the scenarios marked `"fast": true`: every chess record with its default loadout,
-every stage and every non-leader enemy kind, every bond at its top tier, six fields, seven matches, the five stand-in
-battles of the normal records, the first 自选 battle of the operator kits and of the prototypes — 62 of the 283). `GOLDEN_FULL=1` checks everything.
-
-## Stardust fork baseline
-
-The active Stardust runtime intentionally keeps its existing Boss pool rule: co-op scales by living participant seats / 4, solo by 0.25. This differs from upstream 0.2.0's living-seat / solo-1 default and is tested separately in the match and native Worker suites.
-
-The current six-family corpus is the unchanged upstream 0.2.2 reference: all 283 stored scenarios retain the official digests. `tools/golden.mjs` explicitly supplies the official Boss configuration for this comparison; it does not silently change the live fork configuration. Never regenerate these JSON files to hide a fork/default mismatch. The earlier 0.1.4 fork-adapted corpus is historical, not the baseline or regeneration policy for 0.2.2.
-
-The virtual-time goldens do not replace native Worker/trial, ordered-event/10Hz transport or human-revival tests.
+`npm test` runs the fast subset: the scenarios marked `"fast": true` in the golden files, selected by `isFast` in
+`tools/golden.mjs`. `GOLDEN_FULL=1` checks everything. Use the listing commands below to inspect the current corpus
+and fast subset.
 
 ## Workflow
 
 ```sh
+node tools/golden.mjs --list                     # list the current corpus without running it
+node tools/golden.mjs --fast --list              # list only the fast subset
 GOLDEN_FULL=1 node --test test/golden.test.js   # the whole corpus (≈ 20 s with 4 worker threads)
 node --test test/golden.test.js                 # the fast subset
 npm run golden                                  # the same comparison from the tool (all families, a short report)
@@ -56,7 +50,10 @@ node tools/golden.mjs --twice                   # determinism: the corpus twice 
   committing it. If a digest moves, the refactor changed behaviour: find out why (the first differing value of `snaps`
   says when two runs parted, in 10-game-second steps) instead of updating the files.
 - **An intended gameplay change** (a fix, new content, a data rebuild): run `npm run golden:update` and commit the
-  changed files together with the change, saying in the commit message which scenarios moved and why.
+  changed files together with the change, saying in the commit message which scenarios moved and why. Until the
+  official versions' M1 started, `test/versions-default-guard.test.js` (G1) also pinned the sha256 of these files and
+  of the default `data/*.json` as the M0 merge check (DESIGN §35.22.2); M1 deleted it (§35.23), so these files and
+  `test/golden.test.js` are the only pin again.
 - **Reviewing the diff:** every scenario is a block of its own and every unit / enemy / round is one line, so a diff
   shows which scenarios moved and which values changed. A change confined to the scenarios that contain the touched
   operator, enemy or rule is expected; a change everywhere (every `rngDraws`, every `snaps`) means something global
@@ -66,3 +63,12 @@ node tools/golden.mjs --twice                   # determinism: the corpus twice 
 - A new engine hook, event or chess record does not change the digests of the existing scenarios by itself — the
   hook list is frozen in the tool and the corpus is regenerated only on `golden:update` — but new data records do join
   the corpus there (the roster family enumerates `data/chess.json`).
+
+The original stand-in / DIY seeds remain as outcome regressions even when they field no such operator. The
+`coop2-NORMAL-1-unowned-roster` scenario supplies no owned NORMAL operators, so stand-in coverage does not depend on
+the bot choosing one of a small set of missing operators. `coop2-NORMAL-5-coverage-diy` covers the DIY path.
+
+Historical versions (0.3.2 M2): pass `--version <official-id>` to use the snapshot in an isolated process/worker.
+The six corpora live under `<versionSlug>/`; root JSON files remain the default. Generate a historical corpus with
+`node tools/golden.mjs --version act1autochess --update --twice`; the second pass reverses scenario order.
+`test/versions-golden.test.js` checks corpus identity, engine errors and representative worker execution.

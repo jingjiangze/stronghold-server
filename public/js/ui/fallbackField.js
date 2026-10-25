@@ -25,26 +25,22 @@ import { GEO } from '../../../shared/constants.js';
 import { chessAvatarUrl, itemIconUrl, tokenAvatarUrl, enemyIconUrl } from './assetUrls.js';
 import { tileKey, hasFlag, UF, penPlacement, PEN, fieldTile, ownStandIn, ownDiyRecord } from './gameLogic.js';
 import { t } from '../../../shared/i18n.js';
-import { ownAppearance, appearanceEntry } from './skinAssets.js';
-import { Img } from './gameComponents.js';
-import { MaterialImage } from './materialImage.js';
+import { ownerSkin } from './skins.js';
 
 const DRAG_PX = 6;
 const DMG_TTL = 900;
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 /** Avatar URL for a UnitInfo `avatar` asset id (chars / E2 / tokens / enemies). */
-function unitArt(m, info) {
+export function unitArt(m, info, appearance = {}) {
   const id = info?.avatar || info?.defId;
   if (!m || !id) return null;
   if (info.side === 'enemy' || String(id).startsWith('enemy_')) return enemyIconUrl(m, id);
   if (String(id).startsWith('token_')) return tokenAvatarUrl(m, id);
-  const skin = appearanceEntry(m, info.spine, info.skinId);
-  if (skin?.avatar) return skin.avatar;
-  const chars = m.chars || {};
-  if (chars[id]?.avatar) return chars[id].avatar;
-  if (String(id).endsWith('_2') && chars[id.slice(0, -2)]) return chars[id.slice(0, -2)].avatarE2 || chars[id.slice(0, -2)].avatar;
-  return null;
+  // Same golden rule as chessAvatarUrl: a character-key avatar uses avatarE2 on a golden piece.
+  const charId = info.diy?.charId || info.spine || String(id).replace(/_[12]$/, '');
+  const skin = ownerSkin(charId, { ...appearance, ownerId: info.ownerId ?? null, skin: info.skin });
+  return chessAvatarUrl(m, { charId, isGolden: !!info.golden, assets: { avatar: id } }, { skin });
 }
 
 /** Look of the stage tile (row, col) on the fallback board (stage coordinates). */
@@ -108,7 +104,7 @@ export function createFallbackView(host, opts = {}) {
     mode: 'prep', priv: null, editable: false, canPlace: null,
     field: null, units: new Map(), snapUnits: new Map(), highlight: new Map(), hlGroups: new Map(), held: new Map(), dirs: new Map(),
     drag: null, hoverTarget: null, floats: [], settings: { damageNumbers: true, officialDamageNumbers: false, ...(opts.settings || {}) },
-    size: { w: 0, h: 0 }, destroyed: false, pen: [],
+    size: { w: 0, h: 0 }, destroyed: false, pen: [], myId: null, players: [],
   };
 
   const emit = (type, payload) => {
@@ -156,7 +152,10 @@ export function createFallbackView(host, opts = {}) {
     if (p.kind === 'item') return itemIconUrl(mm, lookup('items', p.id));
     if (p.kind === 'token') return tokenAvatarUrl(mm, p.id);
     const chess = lookup('chess', p.id);
-    return chessAvatarUrl(mm, ownAppearance(ownSi(chess) || ownDiy(chess) || chess, st.priv));
+    const body = ownSi(chess) || ownDiy(chess) || chess;
+    const skin = ownerSkin(body?.charId, { ownerId: st.priv?.playerId ?? st.myId, skin: p.skin,
+      myId: st.myId, players: st.players, otherSkins: st.settings.otherSkins });
+    return chessAvatarUrl(mm, body, { skin });
   }
   /** 0.2.0 补位: the player's own piece of a chess it does not own is its stand-in, bench and board alike (render/app.js pieceInfo) */
   function ownSi(chess) {
@@ -185,8 +184,7 @@ export function createFallbackView(host, opts = {}) {
         onPointerDown=${(e) => onDown(e, p)} onContextMenu=${(e) => { e.preventDefault(); emit('pieceClick', { uid: p.uid, button: 2, clientX: e.clientX, clientY: e.clientY }); }}
         onPointerEnter=${() => emit('pieceHover', { uid: p.uid })} onPointerLeave=${() => emit('pieceHover', { uid: null })}
         title=${pieceName(p)}>
-      <div class="ff-piece__art"><${Img} src=${src} fallbackSrc=${p.kind === 'chess' ? chessAvatarUrl(m(), ownSi(lookup('chess', p.id)) || ownDiy(lookup('chess', p.id)) || lookup('chess', p.id)) : null}
-        fallback=${html`<span>${[...pieceName(p)][0]}</span>`} /></div>
+      <div class="ff-piece__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...pieceName(p)][0]}</span>`}</div>
       ${tier && p.kind !== 'token' ? html`<${TierChip} tier=${tier} golden=${golden} size="sm" class="ff-piece__tier" />` : null}
       ${p.kind === 'chess' && Array.isArray(p.items) && p.items.length ? html`<div class="ff-piece__items">${p.items.slice(0, 2).map((it) => html`<i key=${it.uid}></i>`)}</div>` : null}
       ${p.kind === 'token' && p.count > 1 ? html`<b class="ff-piece__count">×${p.count}</b>` : null}
@@ -280,7 +278,7 @@ export function createFallbackView(host, opts = {}) {
     const py = (st.rect.r1 - y + 0.5) * L.tile;
     const enemy = info.side === 'enemy';
     const size = info.boss ? L.tile * 1.3 : L.tile * 0.86;
-    const src = unitArt(m(), info);
+    const src = unitArt(m(), info, { myId: st.myId, players: st.players, otherSkins: st.settings.otherSkins });
     const dead = anim === 4;
     const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
     const spPct = spMax > 0 ? Math.max(0, Math.min(100, (sp / spMax) * 100)) : 0;
@@ -289,7 +287,7 @@ export function createFallbackView(host, opts = {}) {
         style=${`transform:translate(${px - size / 2}px,${py - size / 2}px);width:${size}px;height:${size}px`}
         onPointerDown=${(e) => { if (e.button === 0) emit('pieceClick', { unitId: id, uid: info.uid ?? null, unit: info, button: 0, clientX: e.clientX, clientY: e.clientY }); }}
         onContextMenu=${(e) => { e.preventDefault(); emit('pieceClick', { unitId: id, uid: info.uid ?? null, unit: info, button: 2, clientX: e.clientX, clientY: e.clientY }); }}>
-      <div class="ff-unit__art"><${Img} src=${src} fallbackSrc=${unitArt(m(), { ...info, skinId: null })} fallback=${html`<span>${[...(info.name || '?')][0]}</span>`} /></div>
+      <div class="ff-unit__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...(info.name || '?')][0]}</span>`}</div>
       <div class="ff-unit__bars"><i class="hp" style=${`width:${hpPct}%`}></i>${!enemy && spMax > 0 ? html`<i class="sp" style=${`width:${spPct}%`}></i>` : null}</div>
     </div>`;
   }
@@ -329,7 +327,7 @@ export function createFallbackView(host, opts = {}) {
       return html`<button key=${mdl.k} type="button" class=${cx('ff-unit', 'is-enemy', 'ff-pen__enemy', (mdl.elite || mdl.boss) && 'is-boss', mdl.fly && 'is-fly')}
           data-enemy=${mdl.enemyKey} title=${name} aria-label=${name}
           style=${`transform:translate(${x}px,${y}px);width:${size}px;height:${size}px;z-index:${10 + mdl.slot}`} onClick=${tap}>
-        <div class="ff-unit__art">${src ? html`<${MaterialImage} src=${src} alt="" draggable=${false} />` : html`<span>${[...name][0]}</span>`}</div>
+        <div class="ff-unit__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...name][0]}</span>`}</div>
       </button>`;
     });
     return html`<div class="ff-board ff-board--pen" style=${`left:${left}px;top:${top}px;width:${bw}px;height:${tile * rows}px;--tile:${tile}px`}>
@@ -411,7 +409,7 @@ export function createFallbackView(host, opts = {}) {
       const hr = root.getBoundingClientRect();
       const src = pieceArt(d.piece);
       return html`<div class=${cx('ff-ghost', d.piece.golden && 'is-golden')} style=${`left:${d.x - hr.left - L.tile / 2}px;top:${d.y - hr.top - L.tile / 2}px;width:${L.tile}px;height:${L.tile}px`}>
-        ${src ? html`<${MaterialImage} src=${src} alt="" />` : null}</div>`;
+        ${src ? html`<img src=${src} alt="" />` : null}</div>`;
     })() : null;
     if (st.camera === 'pen') { render(html`${penView()}<div class="ff-badge">SIMPLIFIED VIEW</div>`, root); return; }
     render(html`<div class=${cx('ff-board', `ff-board--${st.mode}`, `ff-cam--${st.camera}`)} style=${`left:${L.left}px;top:${L.top}px;width:${L.bw}px;height:${L.bh}px;--tile:${L.tile}px`}>
@@ -496,6 +494,7 @@ export function createFallbackView(host, opts = {}) {
       schedule();
     },
     highlightTiles(tiles, style) {
+      if (st.destroyed) return false;
       if (!tiles || !style) { st.highlight.clear(); st.hlGroups.clear(); schedule(); return; }
       if (typeof style === 'object' && style.group) {
         // a named group (direction wheel / selected unit range): replaced as a whole, drawn as a range tile
@@ -517,6 +516,8 @@ export function createFallbackView(host, opts = {}) {
       schedule();
     },
     setSettings(s) { st.settings = { ...st.settings, ...(s || {}) }; schedule(); },
+    setMe(id) { st.myId = id; schedule(); },
+    setSkins(players) { st.players = players || []; schedule(); },
     on(type, fn) {
       if (typeof fn !== 'function') return () => {};
       if (!listeners.has(type)) listeners.set(type, new Set());
@@ -524,6 +525,15 @@ export function createFallbackView(host, opts = {}) {
       return () => listeners.get(type)?.delete(fn);
     },
     off(type, fn) { listeners.get(type)?.delete(fn); },
+    /** Resolve the live DOM target, never a remembered hover or selected piece. */
+    pieceAtClientPoint(clientX, clientY) {
+      if (st.destroyed || st.mode !== 'prep' || st.camera === 'pen' || st.drag
+        || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+      const el = document.elementFromPoint(clientX, clientY)?.closest('.ff-piece[data-uid]');
+      if (!el || !root.contains(el)) return null;
+      const uid = Number(el.dataset.uid);
+      return Number.isInteger(uid) ? uid : null;
+    },
     pieceScreenRect(uid) {
       const el = root.querySelector(`[data-uid="${Number(uid)}"]`);
       return el ? el.getBoundingClientRect() : null;

@@ -18,6 +18,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { aimedDrag, groundAnchor, anchorPoint, cameraSettled } from '../e2e/client.mjs';
+import { textProblems } from '../e2e/text-fit.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'test/e2e/out');
@@ -56,13 +58,44 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     await srv?.close();
   });
 
-  async function open(query, { w = 1920, h = 1080, render = RENDER } = {}) {
+  test('data that settles before the hook subscribes leaves the loading screen', async () => {
+    const { page, problems } = await open('phase=PREP');
+    try {
+      const states = await page.evaluate(async () => {
+        const { h, render } = await import('/vendor/preact.module.js');
+        const { data, useData } = await import('/js/data.js');
+        const host = document.createElement('div');
+        document.body.append(host);
+        const seen = [];
+        function Probe() {
+          const ready = useData('hookrace');
+          seen.push(ready);
+          return h('output', null, ready ? 'ready' : 'loading');
+        }
+        try {
+          render(h(Probe), host);
+          // Same task: the first render sees idle, but the file settles before useEffect can subscribe.
+          data.setContent({ id: 'hook-race', values: { hookrace: {} } });
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          return { first: seen[0], last: host.textContent, status: data.status('hookrace') };
+        } finally {
+          render(null, host);
+          host.remove();
+          data.setContent(null);
+        }
+      });
+      assert.deepEqual(states, { first: false, last: 'ready', status: 'ready' });
+      assert.deepEqual(problems, []);
+    } finally { await page.close(); }
+  });
+
+  async function open(query, { w = 1920, h = 1080, render = RENDER, touch = false } = {}) {
     const page = await browser.newPage();
-    await page.setViewport({ width: w, height: h });
+    await page.setViewport(touch ? { width: w, height: h, hasTouch: true, isMobile: true, deviceScaleFactor: 1 } : { width: w, height: h });
     const problems = [];
     page.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
     page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
-    page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
+    page.on('requestfailed', (r) => { if (!/fonts\.(googleapis|gstatic)/.test(r.url())) problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`); });
     page.on('response', (r) => { if (r.status() >= 400) problems.push(`http ${r.status()}: ${r.url()}`); });
     await page.goto(`${base}/dev/game-mock.html?shot=1&render=${render}&${query}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => !!document.querySelector('.screen:not(.gload)'), { timeout: 15000 });
@@ -294,39 +327,57 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     } finally { await page.close(); }
   });
 
-  test('prep: Q retreats and X sells only the selected operator', async () => {
+  // Q / X prefer the underframe's selection, otherwise use hover (DESIGN §35.31).
+  test('prep: Q/X use selection before hover', async () => {
     const { page, problems } = await open('phase=PREP', { render: 'fallback' });
     const initial = await mockState(page);
+    await page.mouse.move(5, 5);
     await page.keyboard.press('KeyQ');
     await page.keyboard.press('KeyX');
-    assert.deepEqual(await mockState(page), initial, 'no selection means no action');
+    assert.deepEqual(await mockState(page), initial, 'no selection or hover means no action');
     const unit = initial.board.find((piece) => piece.kind === 'chess' && !piece.golden);
-    await page.click(`.ff-piece[data-uid="${unit.uid}"]`);
-    await page.waitForSelector('.uframe__btn--retreat');
+    // as test/ui/hover-hotkeys.e2e.test.js: the piece's current screen rect, then wait for the live hit test to see it
+    const hover = async (uid) => {
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const point = await page.evaluate((u) => {
+        const r = globalThis.__SP_VIEW__.pieceScreenRect(u);
+        return r && { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }, uid);
+      assert.ok(point, `piece ${uid} has a screen position`);
+      await page.mouse.move(point.x, point.y);
+      await page.waitForFunction((u, x, y) => globalThis.__SP_VIEW__.pieceAtClientPoint(x, y) === u, {}, uid, point.x, point.y);
+    };
     await page.evaluate(() => {
       const input = document.createElement('input');
       input.id = 'shortcut-test-input';
       document.body.append(input);
       input.focus();
     });
+    await hover(unit.uid);
     await page.keyboard.press('KeyQ');
     await page.keyboard.press('KeyX');
     assert.deepEqual(await mockState(page), initial, 'typing must not retreat or sell');
     await page.evaluate(() => document.getElementById('shortcut-test-input').remove());
+    await hover(unit.uid);
+    await page.click(`.ff-piece[data-uid="${unit.uid}"]`);
+    await page.waitForSelector('.uframe__btn--retreat');
+    await page.mouse.move(5, 5);
     await page.keyboard.press('KeyQ');
     await page.waitForFunction((uid) => globalThis.__MOCK__.S().priv.hand.some((piece) => piece?.uid === uid), {}, unit.uid);
     const retreated = await mockState(page);
     assert.ok(!retreated.board.some((piece) => piece.uid === unit.uid));
     assert.equal(retreated.funds, initial.funds, 'retreat does not sell');
+    await hover(unit.uid);
     await page.click(`.ff-piece[data-uid="${unit.uid}"]`);
     await page.waitForSelector('.uframe__btn--sell');
-    assert.equal(await page.$('.uframe__btn--retreat'), null, 'bench operator cannot retreat');
+    await page.mouse.move(5, 5);
     await page.keyboard.press('KeyQ');
     assert.deepEqual(await mockState(page), retreated, 'Q on the bench does nothing');
     await page.keyboard.press('KeyX');
     await page.waitForFunction((uid) => !globalThis.__MOCK__.S().priv.hand.some((piece) => piece?.uid === uid), {}, unit.uid);
-    assert.ok((await mockState(page)).funds > retreated.funds, 'X sells the selected operator');
+    assert.ok((await mockState(page)).funds > retreated.funds, 'X sells the selected operator over blank space');
     const item = (await mockState(page)).hand.find((piece) => piece?.kind === 'item');
+    await hover(item.uid);
     await page.click(`.ff-piece[data-uid="${item.uid}"]`);
     await page.waitForSelector('.uframe__btn--destroy');
     await page.keyboard.press('KeyX');
@@ -390,18 +441,14 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     const { page, problems } = await open('phase=PREP');
     await sleep(1500); // spine models
     const rect = (uid) => page.evaluate((u) => { const r = globalThis.__SP_VIEW__?.pieceScreenRect(u); return r && { x: r.left + r.width / 2, y: r.top + r.height * 0.65 }; }, uid);
-    const drag = async (from, to) => {
-      await page.mouse.move(from.x, from.y);
-      await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12); await sleep(16); }
-      await sleep(100);
-      await page.mouse.up();
-      await sleep(600);
-    };
+    // (aimed after the pickup: the deploy fold zooms the board as a piece is picked up — GitHub #602, e2e/client.mjs)
+    const drag = async (from, to, o = {}) => { await aimedDrag(page, from, to, { steps: 12, pause: 16, settle: 100, ...o }); await sleep(600); };
+    const centre = (sel) => page.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }).catch(() => null);
     let s = await mockState(page);
     const unit = s.board.find((x) => x.kind === 'chess' && !x.golden && !(x.items || []).length);
-    const bar = await page.$eval('.shopbar__cards', (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
-    await drag(await rect(unit.uid), bar);
+    const bar = await centre('.shopbar__cards');
+    // the shop bar folds away while a piece is carried (GitHub #602): released over its tab — DOM UI — the piece goes back
+    await drag(await rect(unit.uid), bar, { retarget: () => centre('.shopbar-tab') });
     assert.equal((await mockState(page)).board.length, s.board.length, 'no drag-to-sell');
     const pt = await rect(unit.uid);
     await page.mouse.click(pt.x, pt.y);
@@ -422,10 +469,13 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     assert.equal(s.hand.find((x) => x && x.uid === target.uid).dir, undefined, 'bench pieces carry no direction');
     // re-orient in place: drop the unit on its own tile → wheel → UP (no duplicate piece)
     const here = await rect(hc.uid);
+    const home = await groundAnchor(page, here);
     await page.mouse.move(here.x, here.y);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) { await page.mouse.move(here.x + i * 12, here.y - i * 6); await sleep(16); } // off the tile…
-    for (let i = 7; i >= 0; i--) { await page.mouse.move(here.x + i * 12, here.y - i * 6); await sleep(16); } // …and back onto it
+    await cameraSettled(page); // (the deploy fold's zoom, GitHub #602)
+    const back = (await anchorPoint(page, home)) || here;
+    for (let i = 1; i <= 8; i++) { await page.mouse.move(here.x + 96 + ((back.x - here.x - 96) * i) / 8, here.y - 48 + ((back.y - here.y + 48) * i) / 8); await sleep(16); } // …and back onto it
     await sleep(100);
     await page.mouse.up();
     await sleep(600);
@@ -474,10 +524,16 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
 
     ({ page, problems } = await open('phase=BAND_DRAFT'));
     const bands = await page.$$('.dband');
+    const bandId = await bands[5].evaluate((el) => el.dataset.band);
     await bands[5].click();
     await page.click('.draft-detail__btns .btn--primary');
     await sleep(300);
-    assert.ok(await page.$('.dband.is-mine'), 'band picked');
+    // (PR #828: after the own pick the wall gives way to 已选定策略 with the picked strategy)
+    await page.waitForSelector('.draft-done', { timeout: 3000 });
+    const done = await page.$eval('.draft-done', (el) => ({ title: el.querySelector('.draft-done__title')?.textContent, name: el.querySelector('.draft-done__name')?.textContent }));
+    assert.equal(done.title, '已选定策略', 'band picked');
+    const pickedName = await page.evaluate(async (id) => (await import('/js/data.js')).data.lookup('bands', id)?.name, bandId);
+    assert.equal(done.name, pickedName, 'the picked strategy');
     assert.deepEqual(problems, []);
     await page.close();
 
@@ -754,10 +810,8 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
         const tt = v.tileScreen(row, col);
         return { uid: piece.uid, row, col, from: { x: r.left + r.width / 2, y: r.top + r.height * 0.6 }, to: { x: tt.x, y: tt.y } };
       });
-      const m = page.mouse;
-      await m.move(plan.from.x, plan.from.y); await m.down();
-      for (let i = 1; i <= 14; i++) { await m.move(plan.from.x + ((plan.to.x - plan.from.x) * i) / 14, plan.from.y + ((plan.to.y - plan.from.y) * i) / 14); await sleep(16); }
-      await sleep(120); await m.up();
+      // (aimed after the pickup: the deploy fold zooms the boss-field half as a piece is picked up — GitHub #602)
+      await aimedDrag(page, plan.from, plan.to, { steps: 14, pause: 16, settle: 120 });
       await swipeWheel(page, 'RIGHT');
       await page.waitForFunction((uid) => globalThis.__MOCK__.S().priv.board.some((b) => b.uid === uid), { timeout: 4000 }, plan.uid);
       const sent = await page.evaluate(() => globalThis.__MOCK__.S().requests.filter((r) => r[0] === 'g.move').pop()[1]);
@@ -910,6 +964,107 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     });
   }
 
+  // §35.51: under the 机变 overlay (.gm.has-sp) every button of the corner (交流, ⚙, 📖 玩法说明, ⛶ 全屏) stays on top — the
+  // element at its centre is the button — in wide windows, where the corner's one row reached under the veil, and on a
+  // coarse phone, where the overlay starts past the corner's wrapped width
+  for (const [w, h, touch] of [[1280, 720, false], [1440, 900, false], [1920, 1080, false], [667, 375, true]]) {
+    test(`the 机变 overlay leaves every corner button clickable (${w}×${h}${touch ? ', touch' : ''})`, async () => {
+      const { page, problems } = await open('phase=SP_DRAFT&variant=supply', { w, h, touch, render: 'fallback' });
+      await page.waitForSelector('.gm.has-sp .spov', { visible: true });
+      const hits = await page.$$eval('.gm__corner button', (btns) => btns.filter((b) => b.getClientRects().length && getComputedStyle(b).visibility !== 'hidden')
+        .map((b) => { const r = b.getBoundingClientRect(); const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { btn: b.getAttribute('aria-label') || b.className, top: !!at && b.contains(at), over: at && !b.contains(at) ? String(at.className?.baseVal ?? at.className) : null }; }));
+      assert.ok(hits.length >= 3, `corner buttons ${JSON.stringify(hits)}`);
+      assert.deepEqual(hits.filter((x) => !x.top), [], 'every corner button on top');
+      assert.deepEqual(problems, []);
+      await page.close();
+    });
+  }
+
+  // §35.51 review: on short phones a strategy's name takes two lines — Japanese never starts one with a small kana, ー or a
+  // closing mark (「ワルフ|ァリン」), a Korean name stays whole on one line or ends in an ellipsis (「에르망|가르드」 broke
+  // between syllables) — and the header's status no longer runs over 2/2; the team and the solo draft, 中 – 特大
+  test('选择策略 on 640×360 / 667×375 phones in Japanese and Korean at 中 – 特大: the names break by the rules, the header\'s status clear of 2/2', { timeout: 300000 }, async () => {
+    const bad = [];
+    for (const variant of ['', '&variant=solo']) for (const lang of ['ja', 'ko']) for (const textSize of ['md', 'lg', 'xl']) for (const [w, h] of [[640, 360], [667, 375]]) {
+      const page = await browser.newPage();
+      await page.setViewport({ width: w, height: h, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+      await page.evaluateOnNewDocument((l, ts) => {
+        localStorage.setItem('sp.pref.lang', JSON.stringify(l));
+        localStorage.setItem('sp.pref.settings', JSON.stringify({ textSize: ts }));
+      }, lang, textSize);
+      await page.goto(`${base}/dev/game-mock.html?shot=1&render=fallback&phase=BAND_DRAFT${variant}`, { waitUntil: 'networkidle0' });
+      await page.waitForFunction(() => !!document.querySelector('.screen.draft'), { timeout: 15000 });
+      // the harness renders without the app's language setup: load the pack, then re-render
+      await page.evaluate(async () => { const m = await import('/js/ui/lang.js'); await m.initLang(); globalThis.__MOCK__.mutate(() => {}); });
+      await sleep(900);
+      await page.evaluate(() => document.fonts.ready);
+      assert.deepEqual(await page.evaluate(() => [document.documentElement.lang, document.documentElement.dataset.text]), [lang, textSize]);
+      const found = (await page.evaluate(textProblems, '.draft'))
+        .filter((p) => /dband__name/.test(p) && /line starts with|inside a word/.test(p) || /^over: .*(b\.num|span\.num)/.test(p));
+      for (const p of found) bad.push(`${variant ? 'solo' : 'team'} ${lang} ${textSize} ${w}×${h}: ${p}`);
+      await page.close();
+    }
+    assert.deepEqual(bad, []);
+  });
+
+  // §35.56: the pre-game headers at wide windows and on phones, the 机变 overlay's head on phones. One page per case, the
+  // text-fit checker's overlap findings plus the header's own boxes
+  async function mockScreen(query, root, lang, textSize, [w, h]) {
+    const page = await browser.newPage();
+    const touch = h <= 520;
+    await page.setViewport(touch ? { width: w, height: h, hasTouch: true, isMobile: true, deviceScaleFactor: 1 } : { width: w, height: h, deviceScaleFactor: 1 });
+    await page.evaluateOnNewDocument((l, ts) => {
+      localStorage.setItem('sp.pref.lang', JSON.stringify(l));
+      localStorage.setItem('sp.pref.settings', JSON.stringify({ textSize: ts }));
+    }, lang, textSize);
+    await page.goto(`${base}/dev/game-mock.html?shot=1&render=fallback&${query}`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction((r) => !!document.querySelector(r), { timeout: 15000 }, root);
+    await page.evaluate(async () => { const m = await import('/js/ui/lang.js'); await m.initLang(); globalThis.__MOCK__.mutate(() => {}); });
+    await sleep(1300);
+    await page.evaluate(() => document.fonts.ready);
+    return page;
+  }
+
+  test('选择策略 in wide windows: at 大 / 特大 nothing over 2/2 or the step\'s name and 「How to Play」 inside its button; at 中 the name shown (§35.56)', { timeout: 300000 }, async () => {
+    const bad = [];
+    for (const variant of ['', '&variant=solo']) for (const textSize of ['lg', 'xl']) for (const win of [[1600, 900], [1920, 1080]]) {
+      const page = await mockScreen(`phase=BAND_DRAFT${variant}`, '.screen.draft', 'en', textSize, win);
+      const found = (await page.evaluate(textProblems, '.draft')).filter((p) => /^over: .*(stephead|b\.num|span\.num)|^x past button\.btn: span\.btn__label/.test(p));
+      for (const p of found) bad.push(`${variant ? 'solo' : 'team'} ${textSize} ${win.join('×')}: ${p}`);
+      await page.close();
+    }
+    for (const win of [[1280, 720], [1920, 1080]]) {
+      const page = await mockScreen('phase=BAND_DRAFT', '.screen.draft', 'en', 'md', win);
+      if (!(await page.$eval('.stephead__name', (el) => el.checkVisibility()))) bad.push(`md ${win.join('×')}: the step's name hidden`);
+      await page.close();
+    }
+    assert.deepEqual(bad, []);
+  });
+
+  test('确认本局信息 and the 机变 overlay on phones: the header\'s name, the reroll note and the timing line clear; Korean card texts by words (§35.56)', { timeout: 300000 }, async () => {
+    const bad = [];
+    for (const lang of ['en', 'ko']) for (const textSize of ['lg', 'xl']) for (const win of [[640, 360], [667, 375]]) {
+      const page = await mockScreen('phase=INFO_CHECK', '.brief', lang, textSize, win);
+      const found = (await page.evaluate(textProblems, '.brief')).filter((p) => /^over: /.test(p));
+      const heads = await page.evaluate(() => {
+        const R = (s) => document.querySelector(s)?.getBoundingClientRect();
+        const t = R('.stephead__title'), g = R('.stephead__guide'), c = R('.countdown');
+        const ov = (a, b) => a && b && Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+        return [ov(t, g) && 'title × 玩法说明', ov(t, c) && 'title × COUNTDOWN'].filter(Boolean);
+      });
+      for (const p of [...found, ...heads]) bad.push(`brief ${lang} ${textSize} ${win.join('×')}: ${p}`);
+      await page.close();
+    }
+    for (const variant of ['supply', 'tactic']) for (const [lang, textSize] of [['en', 'md'], ['en', 'xl'], ['ko', 'md'], ['ko', 'xl']]) for (const win of [[640, 360], [844, 390]]) {
+      const page = await mockScreen(`phase=SP_DRAFT&variant=${variant}`, '.spov', lang, textSize, win);
+      const found = (await page.evaluate(textProblems, '.spov')).filter((p) => /^over: .*spov__turntxt/.test(p) || (lang === 'ko' && /inside a word/.test(p)));
+      for (const p of found) bad.push(`${variant} ${lang} ${textSize} ${win.join('×')}: ${p}`);
+      await page.close();
+    }
+    assert.deepEqual(bad, []);
+  });
+
   test('session replacement: recovery action stays clickable above the AI away overlay', async () => {
     const { page, problems } = await open('phase=PREP', { render: 'fallback' });
     await page.click('.gtop__exit');
@@ -1055,8 +1210,54 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
 
   test('result: no Hidden Core medal when R15 was never reached', async () => {
     const { page, problems } = await open('phase=RESULT&variant=defeat');
+    // the settlement flow: intro → my report (lost: no leader medals) → 下一步 → the team page → 数据详情
+    await page.waitForSelector('[data-testid="settle-self"]', { timeout: 10000 });
+    assert.equal(await page.$('.smedal'), null, 'a lost match earns no medal on my report');
+    await page.waitForSelector('.settle__next', { visible: true });
+    await page.click('.settle__next');
+    await page.waitForSelector('[data-testid="settle-team"]', { timeout: 5000 });
+    await page.click('.steam__detail');
+    await page.waitForSelector('[data-testid="settle-detail"] .medal', { timeout: 5000 });
     assert.equal(await page.$('.medal--hidden'), null);
     assert.ok(await page.$('.medal'), 'the leader medal is still shown');
+    assert.equal(await page.$$eval('[data-ui-slot="result.tab"]', (els) => els.length), 1, 'one 结算 tab plugin slot: the team page\'s, not the report\'s');
+    assert.deepEqual(problems, []);
+    await page.close();
+  });
+
+  test('result: the settlement flow — intro, my report with the level strip, the team page, back', async () => {
+    const { page, problems } = await open('phase=RESULT');
+    await page.waitForSelector('[data-testid="settle-self"]', { timeout: 10000 });
+    const self = await page.evaluate(() => ({
+      title: document.querySelector('.sself__title')?.textContent,
+      slots: document.querySelectorAll('.sops .sop').length,
+      empty: document.querySelectorAll('.sops .sop.is-empty').length,
+      medals: document.querySelectorAll('.smedal').length,
+      gain: document.querySelector('.slv__gain')?.textContent || '',
+      daily: document.querySelector('.slv__gain--daily')?.textContent || '',
+    }));
+    assert.equal(self.title, '模拟完成');
+    assert.equal(self.slots, 10, 'ten lineup slots');
+    assert.ok(self.empty >= 1, 'the slots past the lineup are NO INFO cards');
+    assert.equal(self.medals, 1, 'the leader medal (the Hidden Core was never reached)');
+    assert.match(self.gain, /获得卫戍认证 \+\d+/);
+    assert.match(self.daily, /每日防卫目标 \+\d+/);
+    await page.waitForSelector('.settle__next', { visible: true });
+    await page.click('.settle__next');
+    await page.waitForSelector('[data-testid="settle-team"]', { timeout: 5000 });
+    assert.equal(await page.$$eval('.tcard', (els) => els.length), 4, 'one card per seat');
+    assert.ok(await page.$('.tcard.is-self'), 'my own card is marked');
+    assert.equal(await page.$$eval('[data-ui-slot="result.tab"]', (els) => els.length), 1, 'the 结算 tab plugin slot');
+    assert.equal(await page.$('[data-testid="unofficial-mark"]'), null, 'the original game: no 非官方 mark');
+    assert.deepEqual(problems, []);
+    await page.close();
+  });
+
+  test('result: the RESULT phase before m.result — the flow waits for it and still opens on my own report', async () => {
+    const { page, problems } = await open('phase=RESULT&variant=late');
+    await page.waitForSelector('[data-testid="settle-self"]', { timeout: 10000 });
+    assert.equal(await page.$eval('.sself__title', (el) => el.textContent), '模拟完成');
+    assert.equal(await page.$('[data-testid="settle-team"]'), null, 'a seat starts with 个人战报, not the spectators\' 同盟 page');
     assert.deepEqual(problems, []);
     await page.close();
   });
@@ -1067,14 +1268,8 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     await sleep(1500); // spine models
     const at = (uid, fy) => page.evaluate((u, f) => { const r = globalThis.__SP_VIEW__?.pieceScreenRect(u); return r && { x: r.left + r.width / 2, y: r.top + r.height * f }; }, uid, fy);
     const tileAt = (row, col) => page.evaluate((r, c) => { const x = globalThis.__SP_VIEW__?.raw?.tileScreen?.(r, c); return x && { x: x.x, y: x.y }; }, row, col);
-    const drag = async (from, to) => {
-      await page.mouse.move(from.x, from.y);
-      await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12); await sleep(16); }
-      await sleep(120);
-      await page.mouse.up();
-      await sleep(600);
-    };
+    // (aimed after the pickup: the deploy fold zooms the board as a piece is picked up — GitHub #602, e2e/client.mjs)
+    const drag = async (from, to) => { await aimedDrag(page, from, to, { steps: 12, pause: 16, settle: 120 }); await sleep(600); };
     let s = await mockState(page);
     const targets = s.board.filter((x) => x.kind === 'chess' && !(x.items || []).length).sort((a, b) => a.row - b.row);
     const items = s.hand.filter((x) => x && x.kind === 'item');
@@ -1120,11 +1315,8 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
         }
         assert.ok(to, 'found an empty board tile on screen');
       }
-      await page.mouse.move(from.x, from.y);
-      await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12); await sleep(16); }
-      await sleep(120);
-      await page.mouse.up();
+      // (aimed after the pickup on the engine: the deploy fold zooms the board — GitHub #602, e2e/client.mjs)
+      await aimedDrag(page, from, to, { steps: 12, pause: 16, settle: 120 });
       await sleep(500);
       const toastText = await page.$eval('.toast', (el) => el.textContent).catch(() => null);
       assert.match(String(toastText), /已达到部署上限|无法部署在该位置|近战单位只能部署在地面/, `${render}: toast explains the refusal`);
