@@ -28,6 +28,7 @@
 import { ERR } from '../../shared/constants.js';
 import { normalizeSettings } from '../../shared/plugins/patch.js';
 import { resolvePluginOrder } from '../../shared/plugins/order.js';
+import { missingCapabilities } from '../../shared/plugins/compat.js';
 
 /**
  * @param {{ registry: { plugin: (id: string) => any, plugins?: () => any[] }, visual: ReturnType<typeof import('./visualSet.js').createVisualSets> | null,
@@ -84,6 +85,11 @@ export function createRoomSets({ registry, visual, contents, policy }) {
     const contentIds = entries.filter((p) => ['content','script','trusted'].includes(p.class)).map((p) => p.id);
     const warnings = [];
     for (const p of entries) {
+      // 能力面：插件用 needs 声明它依赖哪些核心能力；本安装没有的，装载阶段就拒绝（而不是运行时静默失效）
+      {
+        const missing = missingCapabilities(p.manifest);
+        if (missing.length) return { error: ERR.PLUGIN_INCOMPATIBLE, detail: `${p.id} needs ${missing.join(', ')} — this build does not offer it` };
+      }
       if (!['content','script','trusted'].includes(p.class) || p.manifest.compatible !== false) continue;
       if (!pol?.allowIncompatible) return { error: ERR.PLUGIN_INCOMPATIBLE, detail: `${p.id} is made for ${p.manifest.app || 'other versions'} (api ${p.manifest.api ?? '?'})` };
       warnings.push({ code: 'app', params: { id: p.id, app: p.manifest.app } });

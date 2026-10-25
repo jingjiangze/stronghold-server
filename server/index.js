@@ -207,6 +207,19 @@ export async function startServer(opts = {}) {
   const disposeLobbyPlugins = await mountLobbyPlugins(lobby, packs, { log });
   // 素材 302 门牌：本机没有的 /assets /fonts /media 转给 CDN（部署形态需要；本机有素材时不会走到）。
   const { assetJump, csp: cspExtra } = await createStaticModules(packs, { log });
+
+  // manifest 2 的 csp 字段：插件声明式放行素材/样式源（`csp: { img: [...], media: [...], connect: [...] }`）。
+  // 只接受 https 源与 localhost http，和 siteCsp 的口径一致；重复项自动去重。
+  try {
+    const addTo = (bucket, list) => { for (const o of list || []) if (typeof o === 'string' && /^https:\/\/(\*\.)?[a-z0-9.-]+$/i.test(o) && !bucket.includes(o)) bucket.push(o); };
+    for (const p of (typeof packs.plugins === 'function' ? packs.plugins() : [])) {
+      if (!p || p.status !== 'loaded') continue;
+      const c = p.manifest && p.manifest.csp;
+      if (!c || typeof c !== 'object') continue;
+      const dirs = c.directives && typeof c.directives === 'object' ? c.directives : c;
+      for (const k of ['img', 'media', 'connect', 'style', 'font']) addTo(cspExtra[k] || (cspExtra[k] = []), dirs[k]);
+    }
+  } catch (e) { log.warn?.('[csp] plugin directives failed', e); }
   // 插件客户端 overlay：只允许 **loaded** 的插件按同路径顶替页面资源（被 owner gate 拒掉的插件不得改页面）。
   const clientOverlay = new Map();
   try {

@@ -190,10 +190,6 @@ async function boot() {
   const matchPath = matchRoot
     ? pathToFileURL((await import('node:path')).join(matchRoot.root, ...matchRoot.match.split('/'))).href
     : (typeof options.matchModule === 'string' && options.matchModule ? pathToFileURL(options.matchModule).href : '../Match.js');
-  try {
-    const fsd = await import('node:fs');
-    fsd.appendFileSync('C:/DDDD/Agent Work/_tmp/versus-ui-audit-2026-10-25/match-entry.log', JSON.stringify({ sp: 'sp-entry-debug', codeObj: options.code ? Object.keys(options.code) : null, roots: codeRoots.length, matchRoot: matchRoot ? matchRoot.id : null, matchPath }) + String.fromCharCode(10));
-  } catch {}
   const mod = await import(matchPath);
   const Inner = mod.Match || mod.default;
   if (typeof Inner !== 'function') throw new Error('the match module exports no Match');
