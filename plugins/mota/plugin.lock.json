@@ -28,6 +28,10 @@
       "sha256": "aef6cc3b6aaf027b61ddf509f6c75798e5dfbc15afb1497b6d65f034468ecf51",
       "bytes": 7134
     },
+    "client/css/screens/hex.css": {
+      "sha256": "9598158553716bf6374cc0f396d2d5c2f9e9fb28818228956efd86c0df81387d",
+      "bytes": 61980
+    },
     "client/css/screens/loadout.css": {
       "sha256": "44ce44a0a961ec5e7b5df4888bed99eea156b4b93eaf08ba25859e4ccbcac6d7",
       "bytes": 91710
@@ -141,8 +145,8 @@
       "bytes": 22978
     },
     "client/js/screens/game.js": {
-      "sha256": "1c6dcaf221abed52001ce6707af5fc05f723a8286b238bf318d02762d4dcb201",
-      "bytes": 129986
+      "sha256": "5baf0d52deee89ccb3df7c78e1cf847deec247f876015236e1780655aeecb301",
+      "bytes": 131918
     },
     "client/js/screens/loadout.js": {
       "sha256": "475a2a94b2f2b82bc769875dc6455816997302fb20e841083e4626e6754d7873",
@@ -300,6 +304,14 @@
       "sha256": "07b8ec92fd926a306d1a0347f0c2933d699a4bc1710b07f7100ebb267ebd166a",
       "bytes": 17174
     },
+    "client/js/ui/hexGlyph.js": {
+      "sha256": "c30c1e997cc5cc9164a52b282452fe3bb363a96eabd071e057663a1f41217b17",
+      "bytes": 2440
+    },
+    "client/js/ui/hexOverlay.js": {
+      "sha256": "5aabb3f091d748b5103fd662c3706e8a3b642d294b60bbe86f85f0d343a5dd3e",
+      "bytes": 10260
+    },
     "client/js/ui/hubBackdrop.js": {
       "sha256": "e87d8af2f044521870849903066b02497bc820fba98190c989d80136de35457d",
       "bytes": 21967
@@ -343,6 +355,10 @@
     "client/js/ui/matchmaking.js": {
       "sha256": "263ffb6554b63627eee40eb3f5ac2f52821b30a69779f3537f17e4abe288b7bb",
       "bytes": 786
+    },
+    "client/js/ui/meltdownOverlay.js": {
+      "sha256": "c6a33e2b78549ff4859fbddd11718de7b308e25e65db41d6914bf409a1a41a0a",
+      "bytes": 9117
     },
     "client/js/ui/modComponents.js": {
       "sha256": "f0dfe29c7af5d524715da0a34fa052b51b9e32f665d9e07d71af9232f127d324",
@@ -461,8 +477,8 @@
       "bytes": 244
     },
     "plugin.json": {
-      "sha256": "f4618465fda4fb99c53b4d81404c92d8623d616aa43b6686c16d8ca737de9447",
-      "bytes": 3873
+      "sha256": "f1bbbfe61f6523e185c6e79121f8c6a688cc3f8ec1f3baf87d44208b0035971a",
+      "bytes": 3992
     },
     "server/data.js": {
       "sha256": "a286b7bafb289988e081c1dbc7415488f1f1f82a2d775f4d4640a046d9ff9107",
@@ -585,12 +601,12 @@
       "bytes": 4401
     },
     "server/match/Match.js": {
-      "sha256": "e73cbf77a9b2ec6e0e2fdcc8d4636f4bbca8a693c5ada04722ddb497d92cd64e",
-      "bytes": 51517
+      "sha256": "ac3fb86094699bcd0638b2ad97cf081cb5d42725f5d9f2c0c1cb32cb8d2e6fca",
+      "bytes": 51997
     },
     "server/match/PlayerState.js": {
-      "sha256": "1d1f3d0653a2c20cd4204df10af2d898857ff94aa51e2aeac856d4a06dc6a670",
-      "bytes": 22593
+      "sha256": "7ebf26986637f5d0b0058f503e4e722aa9f77f2da2a487e7af04bf4649ae41f3",
+      "bytes": 23340
     },
     "server/match/StubMatch.js": {
       "sha256": "b0b3821046b37d2591dfb12efe7c55f72a1c5eb75400bf5292022cb21d9fa259",
@@ -672,6 +688,10 @@
       "sha256": "46ae1d9b0cf04d39f5b30bd4d9f309866e90d9cd11101f41adbba153e998f0b3",
       "bytes": 29520
     },
+    "server/match/match/chaosRoll.js": {
+      "sha256": "8d52affb94a1bf7b2d89ef14804fe79c09e735c511843923a6cbb58a84bee2fa",
+      "bytes": 12745
+    },
     "server/match/match/clientCombat.js": {
       "sha256": "1880f03d62a530abc35dc08a26bb729dea7905020e9247a1ff7a30260b75c48d",
       "bytes": 13335
@@ -700,13 +720,21 @@
       "sha256": "6d6a97bdfd27c3a750d98e448cdfdf145bcf209b9473b1d30c5daa456ba2e0c8",
       "bytes": 35408
     },
+    "server/match/match/hexDraft.js": {
+      "sha256": "ebfbacdad3fde3de78c621a5cf9324511707a07734315e3c7b8eb366325860b2",
+      "bytes": 69836
+    },
     "server/match/match/infra.js": {
       "sha256": "7a18c8aa17ddd5707c005b941e79889376ea8e8b1b365c9214501247e97bfb0d",
       "bytes": 11161
     },
     "server/match/match/intents.js": {
-      "sha256": "90d2965c9618f41d22f14b68a38a26cfde4eb49dc0e513d0a8b48ed28721b67e",
-      "bytes": 10965
+      "sha256": "1eab32478e85125e325ad2ffe33f8d56cc3b5bfa64e95c53946fc3e51c1fbfa1",
+      "bytes": 11198
+    },
+    "server/match/match/meltdown.js": {
+      "sha256": "6b7ee7ed4c80cb87da0542ca7c1f4f02ef7ff75fbba860e1df066b786b5082d0",
+      "bytes": 10451
     },
     "server/match/match/messaging.js": {
       "sha256": "d72fe00e998f146d6ad2cfc26fc9cf76a13544f65c5bbcb115847a64d609e10b",
@@ -721,8 +749,8 @@
       "bytes": 3566
     },
     "server/match/match/phases.js": {
-      "sha256": "0a81ba236f6c067813946b7ead59237274eec40c726375361abf365e96778cf7",
-      "bytes": 28460
+      "sha256": "2644c7a71ac4c5284176a61108894f7c006435879596d1c1c5e12e7dd97abbd8",
+      "bytes": 29664
     },
     "server/match/match/platform.js": {
       "sha256": "a13fa4dab17e01415cc9ccaec15f4411ca7b2f60e765411706d05f4684b36619",
@@ -767,6 +795,10 @@
     "server/match/match/views.js": {
       "sha256": "aa6028ad2d395407e6aa19d3503291b1a596c58281861b750d171ddb3dab010b",
       "bytes": 32948
+    },
+    "server/match/match/warLadder.js": {
+      "sha256": "005ff379369c5eaada6ec7ebd91a665fa7c4ff9cb04dba2a1fa81865a9448b7d",
+      "bytes": 5499
     },
     "server/match/match/watch.js": {
       "sha256": "2e05fb7dbebadad118abec0490cf5f2cc3010eae7b891802fa226af0a130a793",
@@ -821,8 +853,8 @@
       "bytes": 3523
     },
     "server/match/player/views.js": {
-      "sha256": "a7ab9467ea451a651d4a76154f3eb98aa6706c853552cae3ae056d02274982a6",
-      "bytes": 9424
+      "sha256": "928967473f3ea4298f666bd1f65df9e71023c0580a0f4ca877a678147c895061",
+      "bytes": 10182
     },
     "server/match/pool.js": {
       "sha256": "5b5df53dab81523125f0a9e1e0a062d69ad33f04aff11a8f8dab433ced053adf",
@@ -2461,8 +2493,8 @@
       "bytes": 29496
     },
     "shared/constants.js": {
-      "sha256": "1e962fbe6a6129f1145440e8f565ec23e7057880406291e505832a3da4b9d532",
-      "bytes": 40274
+      "sha256": "1544590a3052b92f62f80c87e7f64c9e364aaafd3d92120c91303656ff8149e3",
+      "bytes": 41869
     },
     "shared/diy.js": {
       "sha256": "8240720f174b49cda0f5199eda1c9c14f8b7eec411c7e35ff3a5d412d036c346",
@@ -2479,6 +2511,10 @@
     "shared/formProjection.js": {
       "sha256": "26400c539fad3a20e96fc9a0fe2f63472a835d57193735761ac50f5797702ba7",
       "bytes": 8631
+    },
+    "shared/hexes.js": {
+      "sha256": "479ca97457b4a95136d1bc53e30f3e6b59b8309c672730ca9cb258b1fbc3f992",
+      "bytes": 47916
     },
     "shared/highGround.js": {
       "sha256": "b987b4e79399abf7ba776ff45d01b00d868b37c68a5911f204d2dcd1bb166123",
@@ -2531,6 +2567,10 @@
     "shared/packs.js": {
       "sha256": "f056f4bd1de9bad11e2b85b6b241719c51bf59339fe65aa9e794e26570de21d3",
       "bytes": 9196
+    },
+    "shared/pierce.js": {
+      "sha256": "1e7db1e76e687faf5dca0c32c8058ca458bd7948e05d4cd621efafadc3374526",
+      "bytes": 6565
     },
     "shared/plugins/catalog.js": {
       "sha256": "5a74fd9311fe85ab84f45dcda11ad865fc79a5a8386081281a874d8a645d89d4",
@@ -2649,8 +2689,8 @@
       "bytes": 11883
     },
     "shared/protocol.js": {
-      "sha256": "49a71574e2ced1bc36d91416161b6f872c1f0ca2976cd304a54cc3d66287056d",
-      "bytes": 54480
+      "sha256": "647673bed8e2ba608dd12e37160a5b42621b92aba3653eecb14df38ff366a6b4",
+      "bytes": 54736
     },
     "shared/randomMode.js": {
       "sha256": "d928caa6e6302b8477ccfcf2914e30c6eef5376dcf75e02cc38a2dcc83dd6b89",
@@ -2691,6 +2731,10 @@
     "shared/variants.js": {
       "sha256": "3be083a384e0cbf43b8a0191d9879571b6ac8f4b8fa89fc2b16006c6f17b1d0d",
       "bytes": 17084
+    },
+    "shared/warLadder.js": {
+      "sha256": "afec184fc5c42fcffc939b201b01b686099dedc5c269f481d30379e3283f8bf2",
+      "bytes": 2523
     },
     "shared/workshop.js": {
       "sha256": "f9dacc68a6cd6c6a121fed3e9157040686346da3a8cca8d23d599b903e3dca12",
