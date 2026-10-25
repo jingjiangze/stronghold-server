@@ -169,6 +169,21 @@ export async function startServer(opts = {}) {
   log.info(`[versions] enabled: ${versions.ids.map((id) => `${id} (${t(/** @type {any} */ (versionById(id)).label)}${id === versions.defaultId ? ', default' : ''})`).join(', ')}`);
   const simPool = createRoomWorkerPool({ data });
   const { registry, lobby, network } = createSessionStack(opts, { data, log, content, plugins: roomSets, hosts, versions, versionHosts, simPool });
+
+  // warm-up: default content set. 首次 room.create 要现算（672 个插件文件的哈希，实测 7.2 s），客户端会先超时；
+  // 预热后约 0.18 s。放在下一轮事件循环，不阻塞启动；失败只记一行日志。
+  setImmediate(() => {
+    try {
+      const ids = policy.get().default || [];
+      if (!ids.length) return;
+      const t0 = Date.now();
+      const r = roomSets.resolve(ids, { scope: 'room' });
+      const took = Date.now() - t0;
+      if (r && r.ok) log.info(`[plugins] warm-up: default content set ready in ${took} ms`);
+      else log.info(`[plugins] warm-up: default content set not warmable (${(r && (r.error || r.detail)) || '?'})`);
+    } catch (e) { log.warn?.('[plugins] warm-up failed', e); }
+  });
+
   // Main-thread event-loop delay sampling (server/health/eventLoop.js): opt-in with SP_LOOP_SAMPLE=1, no worker pool involved, and a
   // LOCAL log line per window (`[loop] p50=… p95=… p99=… max=… cpu=… mem=… rooms=… humans=… phase=…`) — deliberately not
   // part of /healthz. This is what tells an operator whether a stall is the rehearsal / battle slice or something else.
