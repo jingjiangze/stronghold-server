@@ -170,19 +170,20 @@ export async function startServer(opts = {}) {
   const simPool = createRoomWorkerPool({ data });
   const { registry, lobby, network } = createSessionStack(opts, { data, log, content, plugins: roomSets, hosts, versions, versionHosts, simPool });
 
-  // warm-up: default content set. 首次 room.create 要现算（672 个插件文件的哈希，实测 7.2 s），客户端会先超时；
-  // 预热后约 0.18 s。放在下一轮事件循环，不阻塞启动；失败只记一行日志。
-  setImmediate(() => {
-    try {
-      const ids = policy.get().default || [];
-      if (!ids.length) return;
+  // warm-up: default content set（**同步**，放在 trusted 运行时创建之前）。
+  // 首次 room.create 要现算内容集（672 个插件文件的哈希，实测 ~6.8 s），客户端会先超时；预热后 ~0.19 s。
+  // 注意：不能放进 setImmediate —— 主线程被占满会让 trusted 子进程的 ready 消息错过 5 s 激活窗口，
+  // 表现为 `trusted server activation timed out`、插件 HTTP 路由全部失效。
+  try {
+    const warmIds = policy.get().default || [];
+    if (warmIds.length) {
       const t0 = Date.now();
-      const r = roomSets.resolve(ids, { scope: 'room' });
+      const warmed = roomSets.resolve(warmIds, { scope: 'room' });
       const took = Date.now() - t0;
-      if (r && r.ok) log.info(`[plugins] warm-up: default content set ready in ${took} ms`);
-      else log.info(`[plugins] warm-up: default content set not warmable (${(r && (r.error || r.detail)) || '?'})`);
-    } catch (e) { log.warn?.('[plugins] warm-up failed', e); }
-  });
+      if (warmed && warmed.ok) log.info(`[plugins] warm-up: default content set ready in ${took} ms`);
+      else log.info(`[plugins] warm-up: default content set not warmable (${(warmed && (warmed.error || warmed.detail)) || '?'})`);
+    }
+  } catch (e) { log.warn?.('[plugins] warm-up failed', e); }
 
   // Main-thread event-loop delay sampling (server/health/eventLoop.js): opt-in with SP_LOOP_SAMPLE=1, no worker pool involved, and a
   // LOCAL log line per window (`[loop] p50=… p95=… p99=… max=… cpu=… mem=… rooms=… humans=… phase=…`) — deliberately not

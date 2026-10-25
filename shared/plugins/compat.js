@@ -26,6 +26,35 @@ export const COMPAT_STATUS = Object.freeze({
   UNKNOWN: 'unknown',
 });
 
+/**
+ * 本安装（核心 + 管理器这一侧）**实际提供**的插件能力面。插件用 manifest 2 的 capabilities 声明它需要哪些，
+ * 管理器据此判定「装了能不能用」——插件不需要知道核心版本，只需要声明能力；版本差异由这里吸收。
+ *
+ * 增加一项能力 = 在这个集合里加一行；核心回退到不认识某项能力的版本时，对应行删掉即可，插件不用改。
+ */
+export const CORE_CAPABILITIES = Object.freeze(new Set([
+  'code.match',        // 宿主按插件给的入口加载 Match（contentSet → 宿主 init options）
+  'code.client',       // 插件 client/** 按同路径顶替页面资源
+  'code.data',         // 插件 data/config.json 覆盖内容集配置
+  'code.lobby',        // lobby 级插件面（server/plugins/lobbyModules.js）
+  'code.static',       // 静态层工厂（server/plugins/staticModules.js，素材门牌）
+  'protocol.extend',   // api.protocol() 新增 C2S 键
+  'room.option.variant',   // room.create 的 variant（玩法规则集）
+  'room.option.teamSize',  // room.create 的 teamSize（分边人数）
+  'csp.sources',       // CSP 放行插件声明的素材源
+  'trusted.http',      // trusted 子进程的 /x/<id>/ HTTP 路由（server/plugins/trustedEntry.js）
+]));
+
+/**
+ * 插件声明的能力里，本安装缺哪些。空数组 = 齐了。
+ * @param {any} plugin 解析后的 plugin.json
+ * @returns {string[]}
+ */
+export function missingCapabilities(plugin, offered = CORE_CAPABILITIES) {
+  const list = Array.isArray(plugin?.needs) ? plugin.needs.filter((c) => typeof c === 'string' && c) : [];
+  return list.filter((c) => !offered.has(c));
+}
+
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 const reason = (code, zh, en) => ({ code, zh, en });
 /** @param {{ current: number, min: number }} [api] */
@@ -146,7 +175,21 @@ export function pluginCompatibility(plugin, { app = APP_VERSION, api = PLUGIN_AP
     status = COMPAT_STATUS.SUPPORTED;
   }
 
-  return { kind: 'plugin', status, target: app, declared, ...(reasons.length ? { reasons } : {}) };
+  // 能力面判定：插件只声明「我要什么能力」，核心版本差异由 CORE_CAPABILITIES 吸收，
+  // 缺项就提前报不可用 —— 而不是装完在运行时静默失效（这正是 0.3.3 迁移里踩过的坑）。
+  const missing = missingCapabilities(plugin);
+  if (missing.length) {
+    status = COMPAT_STATUS.INCOMPATIBLE;
+    const zh = `本安装缺少插件需要的能力：${missing.join('、')}（装得上但用不了）。`;
+    const en = `This build lacks: ${missing.join(', ')} (it installs but cannot work).`;
+    reasons.push(reason('CAPABILITY_MISSING', zh, en));
+  }
+
+  return {
+    kind: 'plugin', status, target: app, declared,
+    ...(missing.length ? { missing } : {}),
+    ...(reasons.length ? { reasons } : {}),
+  };
 }
 
 /** The one-line human summary used by reports. */

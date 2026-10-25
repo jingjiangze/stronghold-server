@@ -137,5 +137,12 @@
     "connect": [
       "https://sp.isomer319.xyz"
     ]
-  }
+  },
+  "needs": [
+    "code.match",
+    "code.client",
+    "code.data",
+    "code.lobby",
+    "protocol.extend"
+  ]
 }
