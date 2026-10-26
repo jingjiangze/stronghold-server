@@ -6,18 +6,7 @@ node_modules
 .cache
 .venv*
 **/__pycache__
-test/*
-!test/helpers/
-test/helpers/*
-!test/helpers/battleHarness.js
-plugins/*
-!plugins/README.md
-!plugins/AGENTS.md
-!plugins/_template/
-handoff
-pv
-3，9，11回合情况
-review
+test
 logs
 *.log
 docs/img
@@ -32,3 +21,11 @@ scripts/service.env.cmd
 Thumbs.db
 .env
 .env.*
+# Site-specific runtime secrets and generated deployment bundles never enter the game build context.
+**/auth-secrets
+**/secrets
+**/tls
+**/gate.json
+**/*.pem
+**/*.key
+deploy/stardust/build
