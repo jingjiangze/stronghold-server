@@ -18,6 +18,7 @@ import { createRng, deriveSeed } from '../../sim/rng.js';
 import { PHASE, ERR } from '../../../shared/constants.js';
 import { HEXES, hexById } from '../../../shared/hexes.js';
 import { OK, fail } from './common.js';
+import { freeSlot } from '../board.js';
 
 /** 三种代价 × 三档数值：品阶 → 数值 */
 const COST_VALUE = {
@@ -47,7 +48,7 @@ export class MatchMeltdown {
         open: false,
         cb: null,
         wave: 0,
-        pool: this._meltPool(),
+        pool: this._meltItemPool(),
         debt: { dmg: 0, round: 0, deploy: 0, allStats: 0 },
         growth: 0,        // 「每回合全属性」的累计（每次 startRound 加一次 debt.round）
         offers: new Map(),
@@ -61,19 +62,26 @@ export class MatchMeltdown {
    * 本局的卡池：只留战斗类，剔掉经济 / 增援 / 羁绊专属，并**按对局模式过滤 `requires.mode`** ——
    * 单人局绝不出现联机专属（协防协议 / 我来兜底 系列），联机局也不出现仅单人可用的条目。
    */
-  _meltPool() {
+  /**
+   * 本局的**装备**卡池（业主 2026-10-26：商店不卖海克斯，改卖装备）：按 tier 分三档
+   *   prismatic = tier 6 / gold = tier 4-5 / silver = tier 2-3
+   * 剔除：盟约专属（requiresBondId，需对应盟约才合理）、商店隐藏/排除、金色变体。
+   */
+  _meltItemPool() {
     const pool = { prismatic: [], gold: [], silver: [] };
-    const mode = this.isSolo ? 'solo' : 'coop';
-    for (const h of HEXES) {
-      if (String(h.category || '').toLowerCase() !== 'combat') continue;
-      if (/^(tianxuan_|bx_)/.test(h.id)) continue;
-      if (/增援|凭证|天选/.test(h.name)) continue;
-      if (h.requires && h.requires.mode && h.requires.mode !== mode) continue;
-      if (pool[h.grade]) pool[h.grade].push(h.id);
+    const items = (this.gd && this.gd.raw && this.gd.raw.items) || {};
+    const gradeOf = (tier) => (tier >= 6 ? "prismatic" : tier >= 4 ? "gold" : tier >= 2 ? "silver" : null);
+    for (const [id, rec] of Object.entries(items)) {
+      if (!rec) continue;
+      if (rec.requiresBondId) continue;
+      if (rec.hideInShop || rec.shopExcluded) continue;
+      if (rec.isGolden) continue;
+      const grade = gradeOf(Number(rec.tier) || 0);
+      if (!grade) continue;
+      pool[grade].push(id);
     }
     return pool;
   }
-
   /** 玩家已激活的主盟约里层数最高的一个（只认 isCore）。 */
   _meltMainBond(ps) {
     let best = null;
@@ -139,30 +147,31 @@ export class MatchMeltdown {
       sold: false,
     } : { kind: 'gear', slot: 0, exhausted: true, name: '', desc: '', cost: null });
 
-    // ②③④ 海克斯：每品阶从本局池里抽 1 张，抽空即「达到极限」
+    // ②③④ 装备：每品阶从本局池里抽 1 件，抽空即「达到极限」
     const types = shuffled(COST_KEYS, rng);
     HEX_GRADES.forEach((grade, i) => {
       const pool = st.pool[grade];
       if (!pool || !pool.length) {
-        cards.push({ kind: 'hex', slot: i + 1, grade, exhausted: true, cost: null });
+        cards.push({ kind: 'item', slot: i + 1, grade, exhausted: true, cost: null });
         return;
       }
       const idx = Math.floor(rng() * pool.length);
-      const hexId = pool.splice(idx, 1)[0];
-      const rec = hexById(hexId);
+      const itemId = pool.splice(idx, 1)[0];
+      const rec = this.gd.item(itemId) || {};
       const type = types[i % types.length];
       cards.push({
-        kind: 'hex',
+        kind: 'item',
         slot: i + 1,
         grade,
-        hexId,
-        name: rec ? rec.name : hexId,
-        desc: rec ? String(rec.desc || '').replace(/\n/g, ' ') : '',
+        itemId,
+        name: rec.name || itemId,
+        desc: String(rec.desc || rec.descRaw || '').replace(/\n/g, ' '),
+        iconId: rec.iconId || rec.trapId || '',
+        tier: Number(rec.tier) || 0,
         cost: { type, value: COST_VALUE[grade][type] },
         sold: false,
       });
     });
-
     return { cards, sold: cards.map(() => false) };
   }
 
@@ -181,16 +190,12 @@ export class MatchMeltdown {
     offer.sold[slot] = true;
     card.sold = true;
 
-    if (card.kind === 'gear' && card.itemId) {
-      try { ps.acquireItem(card.itemId, { source: 'hex' }); } catch (e) { this.reportError('melt gear', e); }
-    } else if (card.kind === 'hex' && card.hexId) {
-      if (!Array.isArray(ps.hexes)) ps.hexes = [];
-      ps.hexes.push(card.hexId);
-      ps.hexDraftPicks = (Number.isInteger(ps.hexDraftPicks) ? ps.hexDraftPicks : 0) + 1;
-      ps.hex = ps.hexes[0];
-      try { this._hexApply(ps, card.hexId); } catch (e) { this.reportError(`melt hex ${card.hexId}`, e); }
+    if ((card.kind === 'gear' || card.kind === 'item') && card.itemId) {
+      // 手牌满就不成交（卡片保持未售，避免「付了代价却拿不到东西」）
+      if (typeof freeSlot === 'function' && freeSlot(ps.hand) < 0) { offer.sold[slot] = false; card.sold = false; return fail(ERR.HAND_FULL); }
+      try { ps.acquireItem(card.itemId, { source: 'melt' }); }
+      catch (e) { this.reportError('melt item', e); }
     }
-
     if (card.cost) {
       const key = card.cost.type;
       st.debt[key] = (Number(st.debt[key]) || 0) + card.cost.value;

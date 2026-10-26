@@ -95,8 +95,8 @@ function cardBody(c) {
   if (c.exhausted) {
     return html`<div class="melt__dead">
       <div class="melt__dead-x">✕</div>
-      <div class="melt__dead-t">${t('海克斯等阶达到极限')}</div>
-      <div class="melt__dead-s">${GRADE_LABEL[c.grade] || ''}${t('海克斯已经全部登场')}<br />${t('本栏不再提供选项')}</div>
+      <div class="melt__dead-t">${t('该品阶已售罄')}</div>
+      <div class="melt__dead-s">${GRADE_LABEL[c.grade] || ''}${t('本栏装备已经全部登场')}<br />${t('本栏不再提供选项')}</div>
     </div>`;
   }
   const sign = c.cost && c.cost.type === 'deploy' ? '-' : '+';
@@ -104,14 +104,14 @@ function cardBody(c) {
   return html`
     <div class="melt__gain">
       <div class="melt__row">
-        <span class="melt__tier">${c.kind === 'gear' ? 'EQUIP · VI' : GRADE_TIER[c.grade]}</span>
+        <span class="melt__tier">${c.kind === 'gear' ? 'EQUIP · VI' : c.kind === 'item' ? `EQUIP · ${c.tier || ''}` : GRADE_TIER[c.grade]}</span>
         <span class="melt__owner">${c.kind === 'gear' ? (c.owner || t('主盟约专属')) : GRADE_LABEL[c.grade]}</span>
       </div>
       ${cardIcon(c)}
       <h3 class="melt__name">${c.name}</h3>
       <div class="melt__tags">
-        <span class=${`melt__tag ${tagCls}`}>${c.kind === 'gear' ? t('6 阶装备') : `${GRADE_LABEL[c.grade]}${t('海克斯')}`}</span>
-        <span class="melt__tag">${c.kind === 'gear' ? t('主盟约专属') : t('战斗类')}</span>
+        <span class=${`melt__tag ${tagCls}`}>${c.kind === 'gear' ? t('6 阶装备') : `${GRADE_LABEL[c.grade]}${t('装备')}`}</span>
+        <span class="melt__tag">${c.kind === 'gear' ? t('主盟约专属') : t('装备')}</span>
       </div>
       <p class="melt__desc">${c.desc || ''}</p>
     </div>
@@ -137,11 +137,11 @@ export function MeltdownOverlay({ view, onPick = () => {}, onClose = () => {} })
   if (debt.round > 0) chips.push({ label: COST_SHORT.round, text: `+${debt.round}%` });
   if (debt.deploy > 0) chips.push({ label: COST_SHORT.deploy, text: `-${debt.deploy}%` });
 
-  return html`<div class="melt" role="dialog" aria-modal="true" aria-label=${t('海克斯熔毁协议')}>
+  return html`<div class="melt" role="dialog" aria-modal="true" aria-label=${t('熔毁协议')}>
     <div class="melt__veil" aria-hidden="true"></div>
     <div class="melt__inner">
-      <div class="melt__micro">ENDLESS // MELTDOWN PROTOCOL</div>
-      <h2 class="melt__title" data-text=${t('海克斯熔毁协议')}>${t('海克斯熔毁协议')}</h2>
+      <div class="melt__micro">MELTDOWN // PROTOCOL</div>
+      <h2 class="melt__title" data-text=${t('熔毁协议')}>${t('熔毁协议')}</h2>
       <p class="melt__sub">${`${t('第')} ${view.wave || 1} ${t('次开启')}`}<span class="sep">·</span>${t('四栏各限购 1 件')}<span class="sep">·</span>${t('可以不买直接离开')}</p>
 
       <div class="melt__debts">
@@ -156,7 +156,7 @@ export function MeltdownOverlay({ view, onPick = () => {}, onClose = () => {} })
       <div class="melt__grid">
         ${cards.map((c, i) => (c.exhausted
           ? html`<div key=${`dead${i}`} class="melt__card melt__card--dead">${cardBody(c)}</div>`
-          : html`<div key=${c.kind === 'gear' ? 'gear' : c.hexId || `h${i}`}
+          : html`<div key=${c.kind === 'gear' ? 'gear' : c.itemId || c.hexId || `h${i}`}
               class=${`melt__card melt__card--${c.kind === 'gear' ? 'gear' : c.grade} ${c.sold ? 'is-sold' : ''}`}
               role="button" tabindex=${c.sold ? -1 : 0}
               onClick=${(e) => { if (!c.sold) { meltFx(e.currentTarget); onPick(i); } }}
