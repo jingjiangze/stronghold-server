@@ -108,7 +108,7 @@ ENV NODE_ENV=production \
     SP_PLUGIN_AUTOCONSENT=1 \
     SP_MODS=off \
     SP_STUDIO=off \
-    SP_HTTP_COMPRESS=off
+    SP_HTTP_COMPRESS=gzip
 WORKDIR /app
 COPY --from=deps /app/package.json ./package.json
 COPY --from=deps /app/node_modules ./node_modules

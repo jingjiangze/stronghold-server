@@ -189,8 +189,14 @@ function acceptedEncodings(header) {
  * @returns {'br' | 'gzip' | null}
  */
 export function pickEncoding(header) {
+  // 部署侧开关（2026-10-26 乱码事故）：SP_HTTP_COMPRESS = off | gzip | br（缺省 br）。
+  // 背景：某些边缘/网关会剥掉 `Content-Encoding: br` 却留下 brotli 实体，浏览器按 utf-8 解 → 整页乱码。
+  // SP_NO_BROTLI=1 等价于 gzip。off 完全不压缩。
+  const mode = String(process.env.SP_HTTP_COMPRESS || '').toLowerCase();
+  if (mode === 'off' || mode === 'none' || mode === 'identity') return null;
+  const noBrotli = mode === 'gzip' || String(process.env.SP_NO_BROTLI || '') === '1';
   const acc = acceptedEncodings(header);
-  const brQ = acc.br ?? 0;
+  const brQ = noBrotli ? 0 : (acc.br ?? 0);
   const gzQ = acc.gzip ?? acc['x-gzip'] ?? acc['*'] ?? 0;
   if (brQ > 0 && brQ >= gzQ) return 'br';
   if (gzQ > 0) return 'gzip';
