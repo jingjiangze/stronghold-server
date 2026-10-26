@@ -1,0 +1,25 @@
+# --- dependencies -------------------------------------------------------------------------------------
+node_modules/
+
+# --- game assets never live here: the host downloads a pinned version of the assets repository -----------
+assets/
+*.skel
+*.atlas
+*.ab
+*.bundle
+*.wav
+*.ogg
+*.mp3
+
+# --- caches, coverage, logs, saves, local outputs -------------------------------------------------------
+.cache/
+coverage/
+logs/
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# --- the host's data mods (docs/spec/site.md 站点-7): installed here, never committed ---------------------
+/mods/*
+!/mods/README.md

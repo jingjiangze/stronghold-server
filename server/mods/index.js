@@ -113,7 +113,17 @@ export function createMods({ root, pluginsDir, dataDir, registry = null, vanilla
   const allow = readDownloadAllow(pluginsDir);
 
   const importFile = async (file) => importArchive(fs.readFileSync(file), { root, pluginsDir, dataDir, vanilla });
-  const inbox = autoInbox ? startInbox({ dir: inboxPath, importFile, log }) : null;
+  // 投递目录（mod-inbox）：容器里根目录可能是只读的（实测创空间 /app 报 EACCES），建不出来就禁用，
+  // 绝不能让一条 mkdir 失败把整个服务打挂；/mod 页面与 /mod/upload 不依赖它。
+  let inbox = null;
+  if (autoInbox) {
+    try {
+      inbox = startInbox({ dir: inboxPath, importFile, log });
+    } catch (e) {
+      inbox = null;
+      log?.warn?.(`[mods] inbox disabled: ${e?.code || e?.message || e} (${inboxPath})`);
+    }
+  }
 
   const keyOk = (req, query) => {
     const fromHeader = req.headers['x-sp-mod'] || req.headers['x-sp-studio'];

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>促融共竞 · 组队参赛</title>
+<link rel="icon" href="data:,">
+<meta name="ig-assets" content="assets/skeleton/">
+<link rel="stylesheet" href="static/room.css">
+<link rel="stylesheet" href="static/boot.css">
+</head>
+<body>
+<script src="static/boot.js"></script>
+<main id="room-app">
+  <header>
+    <h1>促融共竞 · 组队参赛</h1>
+    <span class="tools"><button id="boxbtn" type="button" hidden>干员 box</button> <button id="music" type="button">音乐</button> <button id="full" type="button" hidden>全屏</button> <span id="modded" hidden></span> <span id="conn" aria-live="polite">连接中</span></span>
+  </header>
+  <div id="lobby" aria-label="组队参赛" hidden></div>
+  <button id="back" type="button" hidden>返回</button>
+  <section id="screen" aria-live="polite"></section>
+  <section id="box" aria-label="干员 box 与常规队"><button id="boxclose" type="button" hidden>关闭</button><div id="boxbody"></div></section>
+  <p id="toast" role="status" hidden></p>
+</main>
+<script type="module" src="m/@icebreaker/client/src/room.js"></script>
+</body>
+</html>

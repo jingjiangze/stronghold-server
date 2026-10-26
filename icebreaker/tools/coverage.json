@@ -1,0 +1,18 @@
+{
+  "$comment": "The pure rule modules held to the coverage threshold (the engine's ADR 0042). Add each pure module when it lands.",
+  "include": [
+    "packages/mode-regular/src/**",
+    "packages/server/src/allocation.js",
+    "packages/server/src/rooms.js",
+    "packages/client/src/save.js",
+    "packages/client/src/training.js",
+    "packages/client/src/roomtext.js",
+    "packages/client/src/lobbymap.js"
+  ],
+  "branches": 95,
+  "lines": 95,
+  "functions": 95,
+  "tests": [
+    "packages/*/test/**/*.test.js"
+  ]
+}

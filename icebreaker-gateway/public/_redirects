@@ -1,0 +1,10 @@
+# 促融共竞（Icebreaker）外壳的静态重定向/重写。
+# 与 superbig 版的差别：去掉 superbig 专属的 /go、/go/*、/fastest（那是主游戏的备用入口与测速端点）。
+# 顺序即优先级：先具体后通配。
+
+# 静态健康检查指纹端点（第三方探针要 2xx + JSON 指纹；SPA 回落只在没有同名静态资源时生效）。
+/healthz.json  /healthz.json                                                   200
+
+# SPA 式兜底：任意路径（深链，如 /room/CODE）都交给外壳页，
+# 由客户端脚本把路径拼到 GAME_PREFIX 后透传给 iframe。
+/*             /index.html                                                     200

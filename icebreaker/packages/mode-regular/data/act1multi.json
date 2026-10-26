@@ -1,0 +1,1730 @@
+{
+ "source": {
+  "repo": "Kengxxiao/ArknightsGameData",
+  "commit": "17759cc8cdf37388414145d16262a3a06f3ab25e",
+  "file": "zh_CN/gamedata/excel/activity_table.json",
+  "activity": "MULTIPLAY_V3/act1multi"
+ },
+ "lineup": {
+  "min": 6,
+  "max": 10
+ },
+ "steps": {
+  "ENTRANCE": {
+   "title": "正在确认比赛项目",
+   "seconds": 30,
+   "hint": 10
+  },
+  "CHAR_PICK": {
+   "title": "高顺位干员协调",
+   "seconds": 20,
+   "hint": 3
+  },
+  "SQUAD_CHECK": {
+   "title": "确认上场阵容",
+   "seconds": 60,
+   "hint": 5
+  }
+ },
+ "mode": {
+  "type": "NORMAL",
+  "name": "常规项目",
+  "icon": "normal",
+  "color": "#d2284b"
+ },
+ "classes": {
+  "TRAINING": "训练场",
+  "ORDINARY": "初级赛",
+  "DIFFICULTY": "高级赛",
+  "EXTREMELY": "特级赛"
+ },
+ "stages": {
+  "act1multi_01": "ORDINARY",
+  "act1multi_02": "ORDINARY",
+  "act1multi_03": "ORDINARY",
+  "act1multi_04": "ORDINARY",
+  "act1multi_05": "ORDINARY",
+  "act1multi_06": "ORDINARY",
+  "act1multi_07": "ORDINARY",
+  "act1multi_ex01": "DIFFICULTY",
+  "act1multi_ex02": "DIFFICULTY",
+  "act1multi_ex03": "DIFFICULTY",
+  "act1multi_ex04": "DIFFICULTY",
+  "act1multi_ex05": "DIFFICULTY",
+  "act1multi_ex06": "DIFFICULTY",
+  "act1multi_ex07": "DIFFICULTY",
+  "act1multi_hard-01": "EXTREMELY",
+  "act1multi_hard-02": "EXTREMELY",
+  "act1multi_hard-03": "EXTREMELY",
+  "act1multi_rm-ex01": "DIFFICULTY",
+  "act1multi_rm-ex02": "DIFFICULTY",
+  "act1multi_rm-ex03": "DIFFICULTY",
+  "act1multi_rm-ex04": "DIFFICULTY",
+  "act1multi_rm-ex05": "DIFFICULTY",
+  "act1multi_rm-ex06": "DIFFICULTY",
+  "act1multi_rm-ex07": "DIFFICULTY",
+  "act1multi_rm01": "ORDINARY",
+  "act1multi_rm02": "ORDINARY",
+  "act1multi_rm03": "ORDINARY",
+  "act1multi_rm04": "ORDINARY",
+  "act1multi_rm05": "ORDINARY",
+  "act1multi_rm06": "ORDINARY",
+  "act1multi_rm07": "ORDINARY",
+  "act1multi_tr01": "TRAINING"
+ },
+ "names": {
+  "act1multi_01": {
+   "level": "act1multi_01",
+   "code": "IG-1",
+   "name": "逃离火线"
+  },
+  "act1multi_02": {
+   "level": "act1multi_02",
+   "code": "IG-8",
+   "name": "密探有专车接送"
+  },
+  "act1multi_03": {
+   "level": "act1multi_03",
+   "code": "IG-2",
+   "name": "黑吃黑"
+  },
+  "act1multi_04": {
+   "level": "act1multi_04",
+   "code": "IG-9",
+   "name": "移动靶射击练习"
+  },
+  "act1multi_05": {
+   "level": "act1multi_05",
+   "code": "IG-3",
+   "name": "填陆造海"
+  },
+  "act1multi_06": {
+   "level": "act1multi_06",
+   "code": "IG-10",
+   "name": "匪帮集会"
+  },
+  "act1multi_07": {
+   "level": "act1multi_07",
+   "code": "IG-4",
+   "name": "当意外来敲门"
+  },
+  "act1multi_ex01": {
+   "level": "act1multi_01",
+   "code": "IG-EX-1",
+   "name": "逃离火线"
+  },
+  "act1multi_ex02": {
+   "level": "act1multi_02",
+   "code": "IG-EX-8",
+   "name": "密探有专车接送"
+  },
+  "act1multi_ex03": {
+   "level": "act1multi_03",
+   "code": "IG-EX-2",
+   "name": "黑吃黑"
+  },
+  "act1multi_ex04": {
+   "level": "act1multi_04",
+   "code": "IG-EX-9",
+   "name": "移动靶射击练习"
+  },
+  "act1multi_ex05": {
+   "level": "act1multi_05",
+   "code": "IG-EX-3",
+   "name": "填陆造海"
+  },
+  "act1multi_ex06": {
+   "level": "act1multi_06",
+   "code": "IG-EX-10",
+   "name": "匪帮集会"
+  },
+  "act1multi_ex07": {
+   "level": "act1multi_07",
+   "code": "IG-EX-4",
+   "name": "当意外来敲门"
+  },
+  "act1multi_hard-01": {
+   "level": "act1multi_hard-01",
+   "code": "IG-S-1",
+   "name": "别有洞天"
+  },
+  "act1multi_hard-02": {
+   "level": "act1multi_hard-02",
+   "code": "IG-S-2",
+   "name": "爬高上低"
+  },
+  "act1multi_hard-03": {
+   "level": "act1multi_hard-03",
+   "code": "IG-S-3",
+   "name": "鼷流滚滚"
+  },
+  "act1multi_rm-ex01": {
+   "level": "act1multi_rm01",
+   "code": "IG-EX-11",
+   "name": "糖果派送"
+  },
+  "act1multi_rm-ex02": {
+   "level": "act1multi_rm02",
+   "code": "IG-EX-5",
+   "name": "腐坏森林"
+  },
+  "act1multi_rm-ex03": {
+   "level": "act1multi_rm03",
+   "code": "IG-EX-12",
+   "name": "火山泳池"
+  },
+  "act1multi_rm-ex04": {
+   "level": "act1multi_rm04",
+   "code": "IG-EX-13",
+   "name": "拒宾大道"
+  },
+  "act1multi_rm-ex05": {
+   "level": "act1multi_rm05",
+   "code": "IG-EX-6",
+   "name": "战场留声"
+  },
+  "act1multi_rm-ex06": {
+   "level": "act1multi_rm06",
+   "code": "IG-EX-7",
+   "name": "黑夜留形"
+  },
+  "act1multi_rm-ex07": {
+   "level": "act1multi_rm07",
+   "code": "IG-EX-14",
+   "name": "创造与繁殖"
+  },
+  "act1multi_rm01": {
+   "level": "act1multi_rm01",
+   "code": "IG-11",
+   "name": "糖果派送"
+  },
+  "act1multi_rm02": {
+   "level": "act1multi_rm02",
+   "code": "IG-5",
+   "name": "腐坏森林"
+  },
+  "act1multi_rm03": {
+   "level": "act1multi_rm03",
+   "code": "IG-12",
+   "name": "火山泳池"
+  },
+  "act1multi_rm04": {
+   "level": "act1multi_rm04",
+   "code": "IG-13",
+   "name": "拒宾大道"
+  },
+  "act1multi_rm05": {
+   "level": "act1multi_rm05",
+   "code": "IG-6",
+   "name": "战场留声"
+  },
+  "act1multi_rm06": {
+   "level": "act1multi_rm06",
+   "code": "IG-7",
+   "name": "黑夜留形"
+  },
+  "act1multi_rm07": {
+   "level": "act1multi_rm07",
+   "code": "IG-14",
+   "name": "创造与繁殖"
+  },
+  "act1multi_tr01": {
+   "level": "act1multi_tr01",
+   "code": "IG-TR-1",
+   "name": "规则教学-常规项目"
+  }
+ },
+ "pictures": {
+  "act1multi_01": "multi_v3_01-01_preview",
+  "act1multi_02": "multi_v3_01-02_preview",
+  "act1multi_03": "multi_v3_01-03_preview",
+  "act1multi_04": "multi_v3_01-04_preview",
+  "act1multi_05": "multi_v3_01-05_preview",
+  "act1multi_06": "multi_v3_01-06_preview",
+  "act1multi_07": "multi_v3_01-07_preview",
+  "act1multi_ex01": "multi_v3_01-01_preview",
+  "act1multi_ex02": "multi_v3_01-02_preview",
+  "act1multi_ex03": "multi_v3_01-03_preview",
+  "act1multi_ex04": "multi_v3_01-04_preview",
+  "act1multi_ex05": "multi_v3_01-05_preview",
+  "act1multi_ex06": "multi_v3_01-06_preview",
+  "act1multi_ex07": "multi_v3_01-07_preview",
+  "act1multi_hard-01": "multi_v3_01-hard-01_preview",
+  "act1multi_hard-02": "multi_v3_01-hard-02_preview",
+  "act1multi_hard-03": "multi_v3_01-hard-03_preview",
+  "act1multi_rm-ex01": "multi_v3_01-rm01_preview",
+  "act1multi_rm-ex02": "multi_v3_01-rm02_preview",
+  "act1multi_rm-ex03": "multi_v3_01-rm03_preview",
+  "act1multi_rm-ex04": "multi_v3_01-rm04_preview",
+  "act1multi_rm-ex05": "multi_v3_01-rm05_preview",
+  "act1multi_rm-ex06": "multi_v3_01-rm06_preview",
+  "act1multi_rm-ex07": "multi_v3_01-rm07_preview",
+  "act1multi_rm01": "multi_v3_01-rm01_preview",
+  "act1multi_rm02": "multi_v3_01-rm02_preview",
+  "act1multi_rm03": "multi_v3_01-rm03_preview",
+  "act1multi_rm04": "multi_v3_01-rm04_preview",
+  "act1multi_rm05": "multi_v3_01-rm05_preview",
+  "act1multi_rm06": "multi_v3_01-rm06_preview",
+  "act1multi_rm07": "multi_v3_01-rm07_preview",
+  "act1multi_tr01": "multi_v3_01-tr01_preview"
+ },
+ "details": {
+  "act1multi_01": "从来都不是平民闯入战场，而是战场找上平民。要从中安全逃离，除了过人的运气，或许还需要些专业援助",
+  "act1multi_02": "为密探在其卧底的城市安排专用的车辆，是间谍部门的常规操作。但色彩鲜艳的沙滩车，是不是太招摇了些？\n我方费用上限大幅降低",
+  "act1multi_03": "两个黑帮永远不可能共享同一片领地，除非他们遇到了新来的第三股势力。\n<color=#D4133C><血债账簿></color>“血债账款”累计满后，所有敌人获得加强，并召唤出“家族灭迹人”\n<color=#D4133C><弩炮台></color>会定期射出弩箭对我方单位造成物理伤害",
+  "act1multi_04": "人们看见无主的东西，不是想要占有它，就是想要破坏它——这不，眼前就有一群想拿无辜的运载平台练习射击的家伙。\n<color=#D4133C><解雇者清债程序></color>向前方连续射出3颗子弹，每颗子弹对碰到的第一名我方干员造成物理伤害\n<color=#D4133C><可移动战术机库></color>根据需要可随时发射无人机支援敌方佣兵小队作战",
+  "act1multi_05": "人们并不理解性情凶暴的凶豕兽为何会发疯似的奔逃，直到看见了它们身后蔓延的溟痕与成群的海嗣。",
+  "act1multi_06": "有时，来自荒野的匪徒也能展现出惊人的破坏力。装备不够精良、战术不够清晰都没关系，他们人多。\n<color=#D4133C><玉门天灾工事></color>置于其中的单位对地面单位造成的伤害提升，受到来自地面单位的伤害降低",
+  "act1multi_07": "把自己关进小隔间的人不论是图个清静，还是只想上个厕所，他的计划都已经泡汤了。外面怎么堵了这么多人？\n<color=#D4133C><\"留声机\"></color>我方与敌方可夺取控制权，激活后对敌方造成法术伤害，并可治疗友方单位",
+  "act1multi_ex01": "<color=#D4133C>附加条件:</color>\n出现额外敌人",
+  "act1multi_ex02": "<color=#D4133C>附加条件:</color>\n敌人移动速度提升",
+  "act1multi_ex03": "<color=#D4133C>附加条件:</color>\n敌人种类变化\n\n<color=#D4133C><血债账簿></color>“血债账款”累计满后，所有敌人获得加强，并召唤出“家族灭迹人”\n<color=#D4133C><弩炮台></color>会定期射出弩箭对我方单位造成物理伤害",
+  "act1multi_ex04": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n\n<color=#D4133C><解雇者清债程序></color>向前方连续射出3颗子弹，每颗子弹对碰到的第一名我方干员造成物理伤害\n<color=#D4133C><可移动战术机库></color>根据需要可随时发射无人机支援敌方佣兵小队作战",
+  "act1multi_ex05": "<color=#D4133C>附加条件:</color>\n出现额外敌人",
+  "act1multi_ex06": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n我方阻挡数-1\n\n<color=#D4133C><玉门天灾工事></color>置于其中的单位对地面单位造成的伤害提升，受到来自地面单位的伤害降低",
+  "act1multi_ex07": "<color=#D4133C>附加条件:</color>\n出现额外敌人",
+  "act1multi_hard-01": "选手们谁都没想到，这一方小小的竞技场，居然还容纳了一只庞然巨兽。\n\n<color=#D4133C>附加条件:</color>\n领袖敌人的生命值和攻击力极大幅度提升\n我方远程单位可部署于近战部署位",
+  "act1multi_hard-02": "越过层层叠叠的天灾工事抵达城墙的另一侧，似乎是一项比跳高和跳远都更考验跳跃能力的“运动”。\n\n<color=#D4133C><玉门天灾工事></color>置于其中的单位对地面单位造成的伤害提升，受到来自地面单位的伤害降低",
+  "act1multi_hard-03": "选手们忍不住开始怀疑，是不是全泰拉的田鼷都齐聚一堂，才能汇成这样一股鼷兽的河流。\n\n<color=#D4133C><田地></color>根据病害程度使部署其上的干员恢复生命/受到伤害\n<color=#D4133C><阻流阀></color>阻止病害传播\n\n<color=#D4133C><泵站></color>将身后一格的水泵至前方，净化/传播病害",
+  "act1multi_rm-ex01": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n可部署人数上限-1",
+  "act1multi_rm-ex02": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n\n<color=#D4133C><罗德岛临时雇员></color>清理巨蕈，制造可部署的远程位\n我方费用上限大幅降低\n<color=#D4133C><汲营枯枝></color>被摧毁或关卡结束时产生食腐使徒",
+  "act1multi_rm-ex03": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n特制水上平台部署费用增加\n\n<color=#D4133C><特制水上平台></color>可部署在深水区，之后该格可部署任意单位，部署的单位撤退时平台损坏",
+  "act1multi_rm-ex04": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n敌方移动速度提升\n\n<color=#D4133C><解雇者清债程序></color>向前方连续射出3颗子弹，每颗子弹对碰到的第一名我方干员造成物理伤害\n<color=#D4133C><巫术弩炮></color>会定期发射法术飞弹，对我方造成法术伤害，并治疗敌方单位；可以被摧毁",
+  "act1multi_rm-ex05": "<color=#D4133C>附加条件:</color>\n部署费用自然回复速度降低\n\n<color=#D4133C><\"留声机\"></color>我方与敌方可夺取控制权，激活后对敌方造成法术伤害，并可治疗友方单位",
+  "act1multi_rm-ex06": "<color=#D4133C>附加条件:</color>\n多个领袖敌人同时出场\n\n<color=#D4133C><城市霓虹></color>可以提供初始视野，使用后视野范围扩大",
+  "act1multi_rm-ex07": "<color=#D4133C>附加条件:</color>\n出现雷暴天气",
+  "act1multi_rm01": "糖果严重滞销，只好以稍显粗暴的方式免费派送了！或许该问问拉特兰人，如何能健康地撑过这场糖分冲击。",
+  "act1multi_rm02": "拨开层层叠叠的巨蕈，越野选手们看到一片茂密的黑色森林......等等，那些树枝是不是在蠕动？\n<color=#D4133C><罗德岛临时雇员></color>清理巨蕈，制造可部署的远程位\n我方费用上限大幅降低\n<color=#D4133C><汲营枯枝></color>被摧毁或关卡结束时产生食腐使徒",
+  "act1multi_rm03": "多次收到泳池水温太低的投诉后，主办方将游泳比赛的场地选在了火山热泉当中。\n<color=#D4133C><特制水上平台></color>可部署在深水区，之后该格可部署任意单位，部署的单位撤退时平台损坏",
+  "act1multi_rm04": "运动员不仅要身体强健，更要精神强健。而精神强健的重要表现之一，就是懂得狠狠拒绝来路不明的家伙。\n<color=#D4133C><解雇者清债程序></color>向前方连续射出3颗子弹，每颗子弹对碰到的第一名我方干员造成物理伤害\n<color=#D4133C><巫术弩炮></color>会定期发射法术飞弹，对我方造成法术伤害，并治疗敌方单位；可以被摧毁",
+  "act1multi_rm05": "敏锐的听力是运动员必备的素质之一。就从在引擎与炮火的轰鸣中分辨留声机的声音开始练习吧！\n<color=#D4133C><\"留声机\"></color>我方与敌方可夺取控制权，激活后对敌方造成法术伤害，并可治疗友方单位",
+  "act1multi_rm06": "清晰的视力是运动员必备的素质之一。就从在没有灯光的夜色中分辨敌人的身形开始练习吧！\n<color=#D4133C><城市霓虹></color>可以提供初始视野，使用后视野范围扩大",
+  "act1multi_rm07": "学界至今依然争执不休：要在短时间内创造最多的生命体，究竟该依靠造物法术还是繁殖本能？",
+  "act1multi_tr01": "熟悉常规项目的比赛规则。"
+ },
+ "missions": {
+  "act1multi_01": [
+   "保护4位乌萨斯平民进入目标点",
+   "保护3位乌萨斯平民进入目标点",
+   "保护5位乌萨斯平民进入目标点"
+  ],
+  "act1multi_02": [
+   "击倒6个岗哨密探长",
+   "击倒6个岗哨密探长",
+   "击倒12个岗哨密探长"
+  ],
+  "act1multi_03": [
+   "击倒所有领袖敌人",
+   "削减所有领袖敌人50%的生命值",
+   "击倒所有领袖敌人"
+  ],
+  "act1multi_04": [
+   "在一阶段将炸弹推进15格",
+   "在二阶段将炸弹推进15格",
+   "在二阶段将炸弹推进25格"
+  ],
+  "act1multi_05": [
+   "击倒20个凶豕兽",
+   "击倒20个富营养的猎食者",
+   "击倒40个富营养的猎食者"
+  ],
+  "act1multi_06": [
+   "坚持存活150秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_07": [
+   "占领4座留声机",
+   "占领4座留声机",
+   "占领5座留声机"
+  ],
+  "act1multi_ex01": [
+   "保护4位乌萨斯平民进入目标点",
+   "保护3位乌萨斯平民进入目标点",
+   "保护5位乌萨斯平民进入目标点"
+  ],
+  "act1multi_ex02": [
+   "击倒6个岗哨密探长",
+   "击倒6个岗哨密探长",
+   "击倒12个岗哨密探长"
+  ],
+  "act1multi_ex03": [
+   "击倒所有领袖敌人",
+   "削减所有领袖敌人50%的生命值",
+   "击倒所有领袖敌人"
+  ],
+  "act1multi_ex04": [
+   "在一阶段将炸弹推进15格",
+   "在二阶段将炸弹推进15格",
+   "在二阶段将炸弹推进25格"
+  ],
+  "act1multi_ex05": [
+   "击倒20个凶豕兽",
+   "击倒20个富营养的猎食者",
+   "击倒40个富营养的猎食者"
+  ],
+  "act1multi_ex06": [
+   "坚持存活150秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_ex07": [
+   "占领4座留声机",
+   "占领4座留声机",
+   "占领5座留声机"
+  ],
+  "act1multi_hard-01": [
+   "坚持存活100秒",
+   "削减所有领袖敌人75%的生命值",
+   "击倒所有领袖敌人"
+  ],
+  "act1multi_hard-02": [
+   "坚持存活120秒",
+   "坚持存活180秒",
+   "坚持存活210秒"
+  ],
+  "act1multi_hard-03": [
+   "坚持存活120秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_rm-ex01": [
+   "坚持存活120秒",
+   "坚持存活120秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_rm-ex02": [
+   "击倒7个食腐使徒",
+   "击倒7个食腐使徒",
+   "击倒10个食腐使徒"
+  ],
+  "act1multi_rm-ex03": [
+   "在一阶段将炸弹推进22格",
+   "在二阶段将炸弹推进16格",
+   "在二阶段将炸弹推进22格"
+  ],
+  "act1multi_rm-ex04": [
+   "坚持存活150秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_rm-ex05": [
+   "占领1座留声机",
+   "占领3座留声机",
+   "占领5座留声机"
+  ],
+  "act1multi_rm-ex06": [
+   "击倒30名敌人",
+   "削减所有领袖敌人75%的生命值",
+   "击倒所有领袖敌人"
+  ],
+  "act1multi_rm-ex07": [
+   "坚持存活150秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_rm01": [
+   "坚持存活120秒",
+   "坚持存活120秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_rm02": [
+   "击倒7个食腐使徒",
+   "击倒7个食腐使徒",
+   "击倒10个食腐使徒"
+  ],
+  "act1multi_rm03": [
+   "在一阶段将炸弹推进22格",
+   "在二阶段将炸弹推进16格",
+   "在二阶段将炸弹推进22格"
+  ],
+  "act1multi_rm04": [
+   "坚持存活150秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_rm05": [
+   "占领1座留声机",
+   "占领3座留声机",
+   "占领5座留声机"
+  ],
+  "act1multi_rm06": [
+   "击倒30名敌人",
+   "削减所有领袖敌人75%的生命值",
+   "击倒所有领袖敌人"
+  ],
+  "act1multi_rm07": [
+   "坚持存活150秒",
+   "坚持存活150秒",
+   "坚持存活180秒"
+  ],
+  "act1multi_tr01": [
+   "坚持存活30秒",
+   "击倒3个拾荒者",
+   "击倒5个拾荒者"
+  ]
+ },
+ "toasts": {
+  "noRoom": "未找到可加入的赛事",
+  "fullRoom": "房间已满员",
+  "roomIdFormatError": "房间编号格式有误，请检查后再试",
+  "roomIdCopySuccess": "房间编号复制成功，去邀请协作者吧",
+  "roomCollaboratorJoinRoom": "协作者已加入",
+  "roomCollaboratorExitRoom": "协作者已退出",
+  "roomOwnerReviseMap": "已更换项目，等待协作者确认",
+  "roomCollaboratorReviseMap": "项目内容有变更，请确认后重新准备",
+  "matchPrepareRoomClose": "房间已解散",
+  "continuousClicks": "操作过于频繁，请稍后再试",
+  "serverOverload": "当前服务繁忙，请稍后再试",
+  "roomOwnerReviseMode": "已更换模式，等待协作者确认",
+  "roomCollaboratorReviseMode": "模式有变更，请确认后重新准备",
+  "matchNoProject": "请选择至少一个项目",
+  "matchAliveFailed": "匹配失败，请稍后再试",
+  "mentorLockTips": "在【高级赛】中有<@tutor>4</>关达到<@tutor>3</>枚嘉奖印章可解锁"
+ },
+ "title": "平凡的博士",
+ "invite": "房间编号[{0}],Dr.{1}#{2}邀请您加入赛事，【粘贴到输入框可自动识别】",
+ "pings": [
+  {
+   "from": 1,
+   "text": "当前延迟<color=#7fa826>{0}</color>ms"
+  },
+  {
+   "from": 60,
+   "text": "当前延迟<color=#ec7a00>{0}</color>ms"
+  },
+  {
+   "from": 200,
+   "text": "当前延迟<color=#ff3d3d>{0}</color>ms"
+  }
+ ],
+ "recruits": [
+  {
+   "id": "char_508_aguard",
+   "elite": 2,
+   "level": 80,
+   "potential": 1,
+   "trust": 200,
+   "skillLevel": 10
+  },
+  {
+   "id": "char_511_asnipe",
+   "elite": 2,
+   "level": 80,
+   "potential": 1,
+   "trust": 200,
+   "skillLevel": 10
+  },
+  {
+   "id": "char_509_acast",
+   "elite": 2,
+   "level": 80,
+   "potential": 1,
+   "trust": 200,
+   "skillLevel": 10
+  },
+  {
+   "id": "char_510_amedic",
+   "elite": 2,
+   "level": 80,
+   "potential": 1,
+   "trust": 200,
+   "skillLevel": 10
+  },
+  {
+   "id": "char_513_apionr",
+   "elite": 2,
+   "level": 80,
+   "potential": 1,
+   "trust": 200,
+   "skillLevel": 10
+  }
+ ],
+ "emotes": {
+  "themes": [
+   "emoticon_basic",
+   "emoticon_originium_slug"
+  ],
+  "scenes": {
+   "room": [
+    "multiv3_room_hello",
+    "multiv3_room_nice_work",
+    "multiv3_room_thanks",
+    "multiv3_room_bye",
+    "multiv3_room_sorry",
+    "multiv3_room_exchange_project",
+    "multiv3_room_exchange_mode",
+    "multiv3_room_coming",
+    "multiv3_room_hurry",
+    "multiv3_room_very_soon"
+   ],
+   "pick": [
+    "multiv3_pick_hello",
+    "multiv3_pick_nice_work",
+    "multiv3_pick_thanks",
+    "multiv3_pick_sorry",
+    "multiv3_pick_coming",
+    "multiv3_pick_distrust",
+    "multiv3_pick_ufirst",
+    "multiv3_pick_mefirst",
+    "multiv3_pick_hurry",
+    "multiv3_pick_very_soon"
+   ],
+   "battle": [
+    "multiv3_battle_nice_work",
+    "multiv3_battle_thanks",
+    "multiv3_battle_sorry"
+   ]
+  },
+  "text": {
+   "multiv3_room_hello": "你好！",
+   "multiv3_room_nice_work": "合作愉快！",
+   "multiv3_room_thanks": "谢谢！",
+   "multiv3_room_bye": "再见！",
+   "multiv3_room_sorry": "对不起！",
+   "multiv3_room_exchange_project": "换换项目！",
+   "multiv3_room_exchange_mode": "换换模式！",
+   "multiv3_room_coming": "要上啦！",
+   "multiv3_room_hurry": "请快些！",
+   "multiv3_room_very_soon": "很快就好！",
+   "multiv3_pick_hello": "你好！",
+   "multiv3_pick_nice_work": "合作愉快！",
+   "multiv3_pick_thanks": "谢谢！",
+   "multiv3_pick_sorry": "对不起！",
+   "multiv3_pick_coming": "要上啦！",
+   "multiv3_pick_distrust": "？？？",
+   "multiv3_pick_ufirst": "你请先选！",
+   "multiv3_pick_mefirst": "我想先选！",
+   "multiv3_pick_hurry": "请快些！",
+   "multiv3_pick_very_soon": "很快就好！",
+   "multiv3_battle_nice_work": "合作愉快！",
+   "multiv3_battle_thanks": "谢谢！",
+   "multiv3_battle_sorry": "对不起！"
+  },
+  "cd": 1,
+  "time": 3
+ },
+ "inverse": {
+  "on": false,
+  "hint": "*互选模式下，将在游戏开始后与协作者交换编队及比赛风格"
+ },
+ "match": {
+  "seconds": 120,
+  "modes": [
+   {
+    "type": "DEFENCE",
+    "name": "堡垒守御"
+   },
+   {
+    "type": "FOOTBALL",
+    "name": "阵地足球"
+   },
+   {
+    "type": "NORMAL",
+    "name": "常规项目"
+   }
+  ],
+  "classes": [
+   {
+    "class": "ORDINARY",
+    "first": true
+   },
+   {
+    "class": "DIFFICULTY",
+    "first": false
+   },
+   {
+    "class": "EXTREMELY",
+    "first": false
+   }
+  ],
+  "positions": [
+   {
+    "id": "NORMAL",
+    "name": "常规选手",
+    "desc": "",
+    "toast": "已选择常规选手身份",
+    "found": "匹配到协作者",
+    "locked": false,
+    "hint": ""
+   },
+   {
+    "id": "STUDENT",
+    "name": "学员",
+    "desc": "当前为学员身份，只会匹配到提供帮助的教练",
+    "toast": "已选择学员身份，只会匹配到提供帮助的教练",
+    "found": "匹配到需要帮助的学员",
+    "locked": false,
+    "hint": ""
+   },
+   {
+    "id": "COACH",
+    "name": "教练",
+    "desc": "当前为教练身份，只会匹配到需要帮助的学员",
+    "toast": "已选择教练身份，只会匹配到需要帮助的学员",
+    "found": "匹配到提供帮助的教练",
+    "locked": true,
+    "hint": "参加【高级赛】，分别在4关中获得3枚嘉奖印章即可解锁"
+   }
+  ]
+ },
+ "training": {
+  "modes": [
+   {
+    "id": "mode_normal_training",
+    "mode": "NORMAL",
+    "name": "常规项目",
+    "icon": "normal",
+    "levels": [
+     "act1multi_tr01"
+    ],
+    "hint": ""
+   },
+   {
+    "id": "mode_football_training",
+    "mode": "FOOTBALL",
+    "name": "阵地足球",
+    "icon": "football",
+    "levels": [
+     "act1multi_tr02"
+    ],
+    "hint": "【常规项目·训练赛】通关后解锁"
+   },
+   {
+    "id": "mode_defence_training",
+    "mode": "DEFENCE",
+    "name": "堡垒守御",
+    "icon": "defence",
+    "levels": [
+     "act1multi_tr03"
+    ],
+    "hint": "【常规项目·训练赛】通关后解锁"
+   }
+  ],
+  "stories": {
+   "training_multi_v3_01-01_a": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "博士，许久不见！欢迎再次来到促融共竞的比赛现场！"
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "与之前一样，促融共竞的所有项目都需要您与<color=#0098DC>一位协作者</color>共同参与，这次就还是让我来当博士的协作者吧！"
+    }
+   ],
+   "training_multi_v3_01-01_b": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "与之前一样，每场比赛分为两个阶段，每个阶段都有需要完成的目标。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "target": "panel_cooperate_normal_and_fortress_status",
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightRect",
+      "black": "$f_tut_black",
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "本场比赛第一阶段的目标是<color=#0098DC>生存</color>，我们需要在限定时间内抵挡敌方的进攻。"
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "虽然在同一片赛场上竞技，但我们各自需要防守不同的目标点。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": -50,
+      "focusY": -70,
+      "focusWidth": 130,
+      "focusHeight": 130,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "博士，您需要防守的是蓝色的目标点。敌方进入蓝色目标点，将会扣减您的目标生命值。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 60,
+      "focusY": -70,
+      "focusWidth": 130,
+      "focusHeight": 130,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "墨绿色的目标点由协作者——也就是我来防守。敌方进入墨绿色目标点，则会扣减我的目标生命值。"
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": false
+     }
+    },
+    {
+     "cmd": "Delay",
+     "args": {
+      "time": 1
+     }
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": true
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 55,
+      "focusY": 85,
+      "focusWidth": 100,
+      "focusHeight": 100,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "对了！协作者部署的干员会用特殊的颜色标记出来，这样您就不会混淆双方的干员了。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": -50,
+      "focusY": 170,
+      "focusWidth": 120,
+      "focusHeight": 120,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "与上一届赛事不同的是，本届赛事会存在<color=#0098DC>共同敌手</color>。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": -15,
+      "focusY": 200,
+      "focusWidth": 120,
+      "focusHeight": 120,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "当带有这个标记的<color=#0098DC>共同敌手</color>进入任意一方的目标点时，我们双方都会扣减关卡生命。"
+    }
+   ],
+   "training_multi_v3_01-01_c": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "即使我们之中有一方的目标生命值归零，我们的队伍也不会立刻输掉比赛。"
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": false
+     }
+    },
+    {
+     "cmd": "Delay",
+     "args": {
+      "time": 2
+     }
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": true
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 40,
+      "focusY": -30,
+      "focusWidth": 150,
+      "focusHeight": 150,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "啊，敌方选手很快就要进入我负责防守的目标点了——我的目标生命值就要归零了……"
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": false
+     }
+    },
+    {
+     "cmd": "Delay",
+     "args": {
+      "time": 3
+     }
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": true
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 55,
+      "focusY": 85,
+      "focusWidth": 100,
+      "focusHeight": 100,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "之后，我部署的干员会停止行动。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 40,
+      "focusY": -70,
+      "focusWidth": 150,
+      "focusHeight": 150,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "但此时，只要您坚守一段时间，阻止敌人继续进入我的目标点——"
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": false
+     }
+    },
+    {
+     "cmd": "Delay",
+     "args": {
+      "time": 9.2
+     }
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": true
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 55,
+      "focusY": 85,
+      "focusWidth": 100,
+      "focusHeight": 100,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "——我就会再度回到赛场，与博士您并肩作战！"
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": false
+     }
+    }
+   ],
+   "training_multi_v3_01-01_d": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "为了方便协作者之间的交流互动，主办方还设置了两项辅助功能。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": -73,
+      "focusY": 293,
+      "focusWidth": 144,
+      "focusHeight": 75,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightRect",
+      "black": 0.5,
+      "anchor": "BottomRight",
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "点击右下方的<color=#0098DC>请求费用</color>，就可以请求协作者向您支援至多15点部署费用。"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "target": "btn_display_mark",
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightRect",
+      "black": "$f_tut_black",
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "<color=#0098DC>按住</color>左下方的<color=#0098DC>拖动标记</color>，并将其<color=#0098DC>拖动</color>到赛场上，就可以向协作者发送标记信号。"
+    }
+   ],
+   "training_multi_v3_01-01_e": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": true
+     }
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "随后，就来到了中场休整的时间。在场的所有干员都将<color=#0098DC>下场</color>休息，做好在第二阶段重新登场的准备。"
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "博士休息好了的话，我们就去挑战比赛的第二阶段吧！"
+    },
+    {
+     "cmd": "Battle.Pause",
+     "args": {
+      "pause": false
+     }
+    }
+   ],
+   "training_multi_v3_01-01_f": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "target": "bg_timer_slider",
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightRect",
+      "black": "$f_tut_black",
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "本场比赛第二阶段的目标是<color=#0098DC>渗透</color>，我们需要深入敌阵，击倒特定的敌方选手。击倒三名拾荒者就可以达成目标！"
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "target": "bg_timer_slider",
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightRect",
+      "black": "$f_tut_black",
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "如果博士还有余力，也可以向着<color=#0098DC>进阶目标</color>努力！击倒五名拾荒者，就可以在赛后获得额外的<color=#0098DC>嘉奖印章</color>！"
+    }
+   ],
+   "training_multi_v3_01-01_g": [
+    {
+     "cmd": "Battle.Pause",
+     "args": {}
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "focusX": 600,
+      "focusY": -300,
+      "focusWidth": 250,
+      "focusHeight": 250,
+      "animStyle": "Highlight",
+      "focusStyle": "HighlightCircle",
+      "black": 0.5,
+      "protectTime": 0.5,
+      "dialogHead": "$avatar_amiya",
+      "dialogX": "$f_lower_dialog_pos_x",
+      "dialogY": "$f_lower_dialog_pos_y"
+     },
+     "text": "实战中，您需要从多种专项中选择一个进入比赛。每个专项都会提供一种支援装置，让您在战斗中部署！"
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true,
+      "cardIndex": 0,
+      "validWidth": 112,
+      "validHeight": 116
+     }
+    },
+    {
+     "cmd": "Battle.LockFunction",
+     "args": {
+      "mask": "PAUSE_BUTTON_INTERACT"
+     }
+    },
+    {
+     "cmd": "Tutorial",
+     "args": {
+      "waitForSignal": "put_down",
+      "dialogHead": "$avatar_amiya",
+      "animStyle": "Drag",
+      "startX": -130,
+      "startY": 60,
+      "startAnchor": "BottomRight",
+      "endAnchor": "Center",
+      "endX": 0,
+      "endY": 100
+     },
+     "text": "这是基础专项的支援装置<color=#0098DC>赛场啦啦队</color>，部署后可以使协作双方干员的<color=#0098DC>攻击力提升</color>！"
+    },
+    {
+     "cmd": "Battle.UnlockFunction",
+     "args": {
+      "mask": "PAUSE_BUTTON_INTERACT"
+     }
+    },
+    {
+     "cmd": "InputBlocker",
+     "args": {
+      "blockInput": true
+     }
+    },
+    {
+     "cmd": "PopupDialog",
+     "args": {
+      "dialogHead": "$avatar_amiya"
+     },
+     "text": "现在，我们一起击倒五名拾荒者，完成进阶目标吧！"
+    }
+   ]
+  },
+  "vars": {
+   "avatar_amiya": "char_002_amiya",
+   "f_lower_dialog_pos_x": -568,
+   "f_lower_dialog_pos_y": -217,
+   "f_tut_black": 0.6
+  }
+ },
+ "defence": {
+  "mode": {
+   "type": "DEFENCE",
+   "name": "堡垒守御",
+   "icon": "defence",
+   "color": "#3cbfd0"
+  },
+  "stages": {
+   "act1multi_fortress-01": {
+    "level": "act1multi_fortress_01",
+    "class": "ORDINARY",
+    "code": "IG-DF-2",
+    "name": "湿地跨栏",
+    "picture": "multi_v3_01-fortress-01_preview",
+    "detail": "湿地跨栏是近年兴起的团体径赛项目。许多观众认为选手在湿地沼泽中跨过泥水奋力奔腾的英姿极具观赏性。\n<color=#D4133C><沼泽地段></color>置于其中的干员攻击速度逐渐降低，经过的敌人攻击速度和移动速度逐渐降低\n<color=#D4133C><芦苇丛></color>置于其中的干员获得\"迷彩\"",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   },
+   "act1multi_fortress-02": {
+    "level": "act1multi_fortress_02",
+    "class": "ORDINARY",
+    "code": "IG-DF-3",
+    "name": "机械质检通道",
+    "picture": "multi_v3_01-fortress-02_preview",
+    "detail": "宽阔的质检通道上，一排排军用机械迈着整齐的步伐向我们走来。用你能想到最粗暴的方式检验它们的质量吧！\n<color=#D4133C><重力感应></color>存在重力感应机关与“行星碎屑”：在轨道上随重力滑动，阻挡路线，对经过的单位造成物理伤害，可被周围4格我方推动。",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   },
+   "act1multi_fortress-ex-01": {
+    "level": "act1multi_fortress_01",
+    "class": "DIFFICULTY",
+    "code": "IG-DF-5",
+    "name": "湿地跨栏",
+    "picture": "multi_v3_01-fortress-01_preview",
+    "detail": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n部署费用的自然回复速度下降\n\n<color=#D4133C><沼泽地段></color>置于其中的干员攻击速度逐渐降低，经过的敌人攻击速度和移动速度逐渐降低\n<color=#D4133C><芦苇丛></color>置于其中的干员获得\"迷彩\"",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   },
+   "act1multi_fortress-ex-02": {
+    "level": "act1multi_fortress_02",
+    "class": "DIFFICULTY",
+    "code": "IG-DF-6",
+    "name": "机械质检通道",
+    "picture": "multi_v3_01-fortress-02_preview",
+    "detail": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n部署费用的自然回复速度下降\n\n<color=#D4133C><重力感应></color>存在重力感应机关与“行星碎屑”：在轨道上随重力滑动，阻挡路线，对经过的单位造成物理伤害，可被周围4格我方推动。",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   },
+   "act1multi_fortress-ex-rm01": {
+    "level": "act1multi_fortress_rm01",
+    "class": "DIFFICULTY",
+    "code": "IG-DF-4",
+    "name": "团体战竞技场",
+    "picture": "multi_v3_01-fortress-rm01_preview",
+    "detail": "<color=#D4133C>附加条件:</color>\n出现额外敌人\n部署费用的自然回复速度下降",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   },
+   "act1multi_fortress-hard-01": {
+    "level": "act1multi_fortress_hard-01",
+    "class": "EXTREMELY",
+    "code": "IG-S-5",
+    "name": "请买纪念品",
+    "picture": "multi_v3_01-fortress-hard-01_preview",
+    "detail": "进入赛场的路线总是需要精心设计。只要愿意，你可以让每个选手入场时绕上五圈，经过至少几十个纪念品摊位。",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   },
+   "act1multi_fortress-rm01": {
+    "level": "act1multi_fortress_rm01",
+    "class": "ORDINARY",
+    "code": "IG-DF-1",
+    "name": "团体战竞技场",
+    "picture": "multi_v3_01-fortress-rm01_preview",
+    "detail": "在卡西米尔的大型团体战竞技场，只要有足够的赞助支持，改变赛场地形也不是什么难事。",
+    "missions": [
+     "坚守3个波次",
+     "坚守5个波次",
+     "坚守7个波次"
+    ]
+   }
+  }
+ },
+ "marks": {
+  "markCd": 3,
+  "markCond1": 5,
+  "markCond2": 2
+ },
+ "styles": [
+  {
+   "id": "buff_1",
+   "name": "基础",
+   "icon": "buff_icon_basic",
+   "color": "#9A72FF",
+   "buff": "我方干员的攻击力<@multiv3.teamBuff>+10%</>",
+   "debuff": "无",
+   "device": {
+    "name": "赛场啦啦队",
+    "desc": "部署后一段时间内，双方干员的攻击力<@multiv3.teamBuff>+20%</>"
+   },
+   "runes": [
+    {
+     "key": "char_attribute_mul",
+     "professions": 639,
+     "board": [
+      [
+       "atk",
+       1.1
+      ]
+     ]
+    },
+    {
+     "key": "insert_token_card",
+     "professions": 384,
+     "board": [
+      [
+       "token_key",
+       "trap_201_muulco"
+      ],
+      [
+       "level",
+       1
+      ],
+      [
+       "skill",
+       0
+      ],
+      [
+       "count",
+       1
+      ],
+      [
+       "skill_level",
+       1
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "buff_2",
+   "name": "驻场",
+   "icon": "buff_icon_anchoring",
+   "color": "#3E64F6",
+   "buff": "我方干员在场时攻击力与最大生命值逐渐提升，最多<@multiv3.teamBuff>+60%</>",
+   "debuff": "我方干员再部署时间增加<@multiv3.teamBuff>15%</>",
+   "device": {
+    "name": "护具分发员",
+    "desc": "部署后一段时间内，为在场的双方干员提供<@multiv3.teamBuff>6000</>屏障"
+   },
+   "runes": [
+    {
+     "key": "char_respawntime_mul",
+     "professions": 639,
+     "board": [
+      [
+       "scale",
+       1.15
+      ]
+     ]
+    },
+    {
+     "key": "insert_token_card",
+     "professions": 384,
+     "board": [
+      [
+       "token_key",
+       "trap_197_muulwr"
+      ],
+      [
+       "level",
+       1
+      ],
+      [
+       "skill",
+       0
+      ],
+      [
+       "count",
+       1
+      ],
+      [
+       "skill_level",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "attr_up_on_trigger[atk][max_hp]"
+      ],
+      [
+       "atk",
+       0.03
+      ],
+      [
+       "max_hp",
+       0.03
+      ],
+      [
+       "max_stack_cnt",
+       20
+      ],
+      [
+       "interval",
+       5
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "buff_3",
+   "name": "游走",
+   "icon": "buff_icon_roaming",
+   "color": "#37CDB2",
+   "buff": "我方干员再部署时间减少<@multiv3.teamBuff>20%</>，初始技力提升<@multiv3.teamBuff>10</>",
+   "debuff": "我方干员可部署人数减少<@multiv3.teamBuff>1</>",
+   "device": {
+    "name": "混乱烟花箱",
+    "desc": "部署后对所有敌人造成伤害，并减少再部署中双方干员的再部署时间至<@multiv3.teamBuff>0</>"
+   },
+   "runes": [
+    {
+     "key": "char_respawntime_mul",
+     "professions": 639,
+     "board": [
+      [
+       "scale",
+       0.8
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "modify_sp[born]"
+      ],
+      [
+       "sp",
+       10
+      ]
+     ]
+    },
+    {
+     "key": "insert_token_card",
+     "professions": 384,
+     "board": [
+      [
+       "token_key",
+       "trap_198_muulas"
+      ],
+      [
+       "level",
+       1
+      ],
+      [
+       "skill",
+       0
+      ],
+      [
+       "count",
+       1
+      ],
+      [
+       "skill_level",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "sp_recovery_reduction"
+      ],
+      [
+       "sp_recovery_per_sec",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "global_deck_placeable_char_num_add",
+     "professions": 639,
+     "board": [
+      [
+       "value",
+       -1
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "buff_4",
+   "name": "攻坚",
+   "icon": "buff_icon_offensive",
+   "color": "#DE4A27",
+   "buff": "我方干员攻击速度<@multiv3.teamBuff>+20</>，且造成伤害有<@multiv3.teamBuff>10%</>概率回复<@multiv3.teamBuff>1</>技力",
+   "debuff": "我方干员受到伤害增加<@multiv3.teamBuff>20%</>",
+   "device": {
+    "name": "猛兽能量饮料",
+    "desc": "部署后一段时间内，大幅增加双方干员的攻速，但使防御力和法术抗性减少至<@multiv3.teamBuff>0</>"
+   },
+   "runes": [
+    {
+     "key": "insert_token_card",
+     "professions": 639,
+     "board": [
+      [
+       "token_key",
+       "trap_199_muulrg"
+      ],
+      [
+       "level",
+       1
+      ],
+      [
+       "skill",
+       0
+      ],
+      [
+       "count",
+       1
+      ],
+      [
+       "skill_level",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "char_attribute_mul",
+     "professions": 639,
+     "board": [
+      [
+       "attack_speed",
+       1.2
+      ]
+     ]
+    },
+    {
+     "key": "char_blockcnt_add",
+     "professions": 639,
+     "board": [
+      [
+       "value",
+       0
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "attack_prob_get[sp][char]"
+      ],
+      [
+       "prob",
+       0.1
+      ],
+      [
+       "sp",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "damage_scale[input][char]"
+      ],
+      [
+       "damage_scale",
+       1.2
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "buff_5",
+   "name": "支援",
+   "icon": "buff_icon_supportive",
+   "color": "#ACCE44",
+   "buff": "我方干员治疗效果提升<@multiv3.teamBuff>40%</>，且攻击范围内的所有干员每秒技力额外回复<@multiv3.teamBuff>1</>（不叠加）",
+   "debuff": "我方干员造成伤害降低<@multiv3.teamBuff>10%</>",
+   "device": {
+    "name": "喷射汽水机",
+    "desc": "部署后一段时间内，不断喷出汽水瓶砸到随机双方干员，使其获得<@multiv3.teamBuff>+3</>技力"
+   },
+   "runes": [
+    {
+     "key": "insert_token_card",
+     "professions": 639,
+     "board": [
+      [
+       "token_key",
+       "trap_200_muulcl"
+      ],
+      [
+       "level",
+       1
+      ],
+      [
+       "skill",
+       0
+      ],
+      [
+       "count",
+       1
+      ],
+      [
+       "skill_level",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "char_dynamic_ability_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "dyn_attr_get_in_attack_range[modify_sp]"
+      ],
+      [
+       "sp",
+       1
+      ],
+      [
+       "interval",
+       1
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "damage_scale[out]"
+      ],
+      [
+       "damage_scale",
+       0.9
+      ]
+     ]
+    },
+    {
+     "key": "env_gbuff_new",
+     "professions": 639,
+     "board": [
+      [
+       "key",
+       "heal_scale[advanced][out]"
+      ],
+      [
+       "heal_scale",
+       1.4
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

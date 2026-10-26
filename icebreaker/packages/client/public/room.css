@@ -1,0 +1,81 @@
+/* The room page: one column of cards — the room and its step, then the box and the 常规队. */
+:root { color-scheme: dark; --bg: #1b1d21; --card: #24272d; --fg: #e8eaee; --muted: #9aa1ab; --accent: #2f86e8; --ok: #3f9b5c; --bad: #e06c5a; }
+@font-face { font-family: "Noto Sans SC"; src: url(../assets/skeleton/fonts/noto-sans-sc.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif; }
+#room-app { max-width: 960px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 8px; }
+h3 { font-size: 15px; margin: 8px 0 4px; }
+#conn, .muted, small { color: var(--muted); }
+#modded { color: #ffd36e; }
+.card, #box { background: var(--card); padding: 12px 16px; }
+#screen { display: flex; flex-direction: column; gap: 12px; }
+#box[hidden], #toast[hidden] { display: none; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+button, .button { background: #30343b; color: var(--fg); border: 2px solid transparent; padding: 4px 12px; cursor: pointer; font: inherit; text-decoration: none; display: inline-block; }
+button.primary, .button.primary { border-color: var(--accent); }
+button[aria-pressed="true"] { border-color: var(--ok); }
+button:disabled { color: var(--muted); cursor: default; border-color: transparent; }
+button:focus-visible, input:focus-visible, select:focus-visible, .button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+input, select, textarea { background: #15171a; color: var(--fg); border: 1px solid #444a53; padding: 4px 6px; font: inherit; }
+textarea { width: 100%; box-sizing: border-box; }
+.code { font-size: 20px; letter-spacing: 2px; }
+.invite { width: 100%; box-sizing: border-box; }
+.members { list-style: none; padding: 0; margin: 8px 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.members .offline { color: var(--muted); }
+.projects { display: flex; gap: 8px; flex-wrap: wrap; }
+.project ol { margin: 4px 0; padding-left: 20px; }
+.ops { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.turn { color: var(--ok); font-weight: bold; }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+.squad.ok { color: var(--ok); }
+.squad.bad { color: var(--bad); }
+table { border-collapse: collapse; width: 100%; }
+td { padding: 4px 6px; border-top: 1px solid #333840; vertical-align: middle; }
+td.place button { padding: 2px 8px; }
+tr.in td:first-child { color: var(--ok); }
+.editor { border: 1px solid var(--accent); padding: 8px 12px; margin: 8px 0; }
+.fields { display: flex; gap: 12px; flex-wrap: wrap; }
+.field { display: inline-flex; flex-direction: column; gap: 2px; }
+.field > span { color: var(--muted); font-size: 12px; }
+.field input[type="number"] { width: 5em; }
+details.save { margin-top: 12px; }
+.style-tiny { width: 24px; height: 28px; vertical-align: middle; margin-right: 6px; }
+.style-chosen { display: flex; gap: 12px; align-items: center; }
+.style-card { width: 96px; height: 100px; flex: none; }
+.style-line { display: inline-flex; align-items: center; }
+.mode { font-weight: bold; display: inline-flex; align-items: center; }
+.mode-icon { width: 24px; height: 23px; margin-right: 4px; }
+.tools { display: inline-flex; gap: 8px; align-items: baseline; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: rgb(0 0 0 / 0.85); padding: 10px 16px; max-width: 90%; }
+@media (max-width: 640px) { td { display: block; border: 0; } tr { display: block; border-top: 1px solid #333840; padding: 4px 0; } }
+/* The original lobby screens over the whole page (页面-6): the page's own tools in a corner, the box editor over them. */
+@font-face { font-family: "Montserrat"; src: url(../assets/skeleton/fonts/montserrat.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Chakra Petch"; src: url(../assets/skeleton/fonts/chakra-petch-regular.woff2) format("woff2"); font-display: swap; }
+:root { --aue-ui-latin: "Montserrat", "Bahnschrift", sans-serif; --aue-ui-cjk: "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; --aue-ui-bender: "Chakra Petch", sans-serif; --aue-ui-arvo: "Arvo", serif; }
+#lobby { position: fixed; inset: 0; background: #1b1d21; }
+#lobby[hidden], #back[hidden], #boxbtn[hidden], #boxclose[hidden], #full[hidden] { display: none; }
+body.lobby-on { overflow: hidden; }
+body.lobby-on #room-app { max-width: none; padding: 0; }
+body.lobby-on h1, body.lobby-on #screen { display: none; }
+body.lobby-on header { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 20; background: rgb(0 0 0 / 0.45); padding: 2px 8px; font-size: 12px; }
+body.lobby-on header button { padding: 1px 8px; font-size: 12px; }
+body.lobby-on #back { position: fixed; left: 8px; top: 8px; z-index: 20; }
+body.lobby-on #box { position: fixed; inset: 48px 5% 5%; z-index: 30; overflow: auto; box-shadow: 0 8px 32px rgb(0 0 0 / 0.6); }
+#boxclose { float: right; }
+
+/* 表情交流 (房间-7) */
+.emotes { flex-wrap: wrap; gap: 4px; }
+.emote-btn { font-size: 0.85em; padding: 2px 8px; }
+.members .emote { color: #d2284b; font-weight: 600; }
+
+/* 互选模式 (房间-8) */
+.inverse.on { color: #1b9fb0; font-weight: 600; }
+/* phones (页面-7): the lobby screens take no page gestures (zoom, scroll, the long-press menu); the page's own bar small
+   and faint over the original bottom bar; a phone held upright turns the body (turn.js), the page around it black */
+html.touch body.lobby-on { touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+html.turned { overflow: hidden; background: #000; }
+@media (pointer: coarse) { body.lobby-on header { opacity: 0.75; padding: 0 4px; font-size: 10px; } body.lobby-on header button { padding: 0 6px; font-size: 10px; } }
+body.lobby-on #box { -webkit-overflow-scrolling: touch; touch-action: pan-y; }

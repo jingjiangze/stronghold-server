@@ -1,0 +1,14 @@
+{
+  "name": "@icebreaker/mode-regular",
+  "version": "0.0.0",
+  "private": true,
+  "description": "常规项目: objectives, the two-stage flow, merit medals, playing styles",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "@aue/schema": "workspace:*"
+  }
+}

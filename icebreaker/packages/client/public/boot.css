@@ -1,0 +1,93 @@
+/* The loading screen (docs/spec/page.md 页面-8): the activity's loading picture with the original's waiting strip from
+   its reconnect panel — the LATEST NEWS tag, the turning arrows, the status in its orange — across the bottom; the strip
+   filling with the progress. Sizes are the original's in its 1280 × 720 reference pixels (--u is one of them on this
+   screen). Until a moment has passed it is only a dark cover in the pages' own colour: a page that loads at once never
+   shows the picture or the strip, so nothing bright flashes between pages. */
+.boot {
+  --u: min(100vw / 1280, 100vh / 720);
+  /* the picture's 16:9 frame covering the screen: its height */
+  --frame: max(100vh, 100vw * 9 / 16);
+  --orange: #d48f0b;
+  --plate: #101010;
+  position: fixed; inset: 0; z-index: 2147483000; overflow: hidden;
+  background: #1b1d21;
+  color: var(--orange);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  transition: opacity 0.3s ease-out;
+}
+.boot.gone { opacity: 0; pointer-events: none; }
+/* the picture: a 16:9 frame covering the screen, the square texture stretched into it as the original shows it */
+.boot-art {
+  position: absolute; left: 50%; top: 50%;
+  width: max(100vw, 100vh * 16 / 9); height: var(--frame);
+  transform: translate(-50%, -50%);
+  background: var(--boot-art, none) center / 100% 100% no-repeat;
+  opacity: 0; transition: opacity 0.4s ease-out;
+}
+.boot.in .boot-art.shown { opacity: 1; }
+.boot-band {
+  position: absolute; left: 0; right: 0; bottom: 0; height: calc(242.4 * var(--u));
+  background: var(--boot-doc, linear-gradient(to bottom, rgba(8, 8, 8, 0), rgba(8, 8, 8, 0.69))) center / 100% 100% no-repeat;
+  opacity: 0;
+}
+/* the strip: 63 tall, over the news ticker blurred into the picture's lower part (its middle at 86.5% of the
+   picture's height), so the picture's ticker turns into the live one */
+.boot-strip {
+  position: fixed; left: 0; right: 0; bottom: calc((100vh - var(--frame)) / 2 + 0.135 * var(--frame) - 31.5 * var(--u)); height: calc(63 * var(--u));
+  overflow: hidden;
+}
+.boot-strip > *, .boot-body > * { position: absolute; top: 0; bottom: 0; }
+.boot-body { left: 0; right: 0; opacity: 0; }
+.boot-tile {
+  background-color: rgba(212, 143, 11, 0.35);
+  background-image: var(--boot-tile, repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.16) 0 calc(1.2 * var(--u)), transparent calc(1.2 * var(--u)) calc(3.54 * var(--u))));
+  background-size: calc(5 * var(--u)) calc(5 * var(--u));
+}
+.boot-tile.left { left: 0; right: calc(50% + 329.63 * var(--u)); }
+.boot-tile.right { left: calc(50% + 329.63 * var(--u)); right: 0; }
+/* the progress: the hatched sides fill from the left with more orange, under the hatch */
+.boot-fill {
+  left: 0; width: 100%; background: rgba(212, 143, 11, 0.6);
+  transform-origin: left center; transform: scaleX(var(--boot-progress, 0)); transition: transform 0.25s ease-out;
+}
+.boot-plate {
+  left: calc(50% - 329.63 * var(--u)); width: calc(659.27 * var(--u)); background: var(--plate);
+  display: flex; align-items: center; justify-content: center;
+}
+.boot-tag { position: absolute; left: 0; width: calc(118.68 * var(--u)); height: calc(19.53 * var(--u)); top: 50%; transform: translateY(-50%); }
+.boot-tag img, .boot-mark img, .boot-warn img { display: block; width: 100%; height: 100%; }
+/* drawn until the original's tag has loaded */
+.boot-tag > span {
+  display: flex; height: 100%; align-items: center; justify-content: center; background: var(--orange); color: var(--plate);
+  font: 800 calc(11 * var(--u)) / 1 "Montserrat", sans-serif; letter-spacing: 0.02em;
+}
+.boot-mark { position: absolute; right: calc(18.68 * var(--u)); width: calc(74 * var(--u)); height: calc(11 * var(--u)); top: 50%; transform: translateY(-50%); }
+.boot-status { display: flex; align-items: center; gap: calc(8 * var(--u)); max-width: calc(400 * var(--u)); }
+.boot-loop { flex: none; width: calc(45 * var(--u)); height: calc(45 * var(--u)); animation: boot-turn 1.6s linear infinite; }
+.boot-loop img, .boot-loop svg { display: block; width: 100%; height: 100%; }
+.boot-warn { display: none; flex: none; width: calc(46 * var(--u)); height: calc(41 * var(--u)); font: 800 calc(30 * var(--u)) / calc(41 * var(--u)) "Montserrat", sans-serif; text-align: center; }
+.boot-text { font-size: calc(24 * var(--u)); font-weight: 500; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.boot-pct { font: 600 calc(20 * var(--u)) / 1 "Montserrat", sans-serif; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.boot.failed .boot-loop, .boot.failed .boot-pct { display: none; }
+.boot.failed .boot-warn { display: block; }
+.boot.failed .boot-text { white-space: normal; font-size: calc(18 * var(--u)); }
+/* the wipe of the original's clip: an orange bar grows in from both ends (0.25 s), then closes on the middle (0.5 s),
+   uncovering the strip */
+.boot-wipe { left: 0; width: 100%; top: -24.6%; bottom: -24.6%; background: var(--orange); opacity: 0; }
+.boot-wipe.l { transform-origin: left center; }
+.boot-wipe.r { transform-origin: right center; }
+.boot.in .boot-band { animation: boot-fade 0.33s linear forwards; }
+.boot.in .boot-body { animation: boot-show 0.75s step-end forwards; }
+.boot.in .boot-wipe.l, .boot.in .boot-wipe.r { animation: boot-ends 0.25s linear forwards; }
+.boot.in .boot-wipe.c { animation: boot-close 0.75s linear forwards; }
+@keyframes boot-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes boot-show { 0% { opacity: 0; } 36% { opacity: 1; } 100% { opacity: 1; } }
+@keyframes boot-ends { 0% { opacity: 1; transform: scaleX(0); } 66.7% { opacity: 1; transform: scaleX(0.13); } 99.9% { opacity: 1; transform: scaleX(0.5); } 100% { opacity: 0; transform: scaleX(0.5); } }
+@keyframes boot-close { 0%, 33.3% { opacity: 0; transform: scaleX(1.09); } 33.4% { opacity: 1; transform: scaleX(1.09); } 62.2% { transform: scaleX(0.08); } 100% { opacity: 1; transform: scaleX(0); } }
+@keyframes boot-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .boot, .boot-art, .boot-fill { transition: none; }
+  .boot-loop { animation: none; }
+  .boot.in .boot-band, .boot.in .boot-body { animation: none; opacity: 1; }
+  .boot.in .boot-wipe { animation: none; opacity: 0; }
+}

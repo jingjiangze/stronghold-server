@@ -1,0 +1,34 @@
+{
+  "name": "arknights-universal-engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "明日方舟通用引擎（AUE）：确定性、帧同步的《明日方舟》战斗引擎，浏览器 + Node。非官方同人项目。",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@11.28.0",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "types": "tsc -p tsconfig.types.json",
+    "test": "node --test \"packages/*/test/**/*.test.js\"",
+    "coverage": "aue-check coverage",
+    "check": "aue-check",
+    "ci": "pnpm run oracle && pnpm run lint && pnpm run typecheck && pnpm run types && pnpm run coverage && pnpm run check",
+    "oracle": "aue-check oracle",
+    "simcheck": "node packages/simcheck/src/cli.js",
+    "aue": "node packages/sdk/src/cli.js"
+  },
+  "devDependencies": {
+    "@aue/lint": "workspace:*",
+    "@aue/testkit": "workspace:*",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.18.0",
+    "eslint": "^10.13.0",
+    "fast-check": "^4.10.2",
+    "globals": "^17.12.0",
+    "typescript": "6.0.3"
+  }
+}

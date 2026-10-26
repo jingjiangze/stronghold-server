@@ -1,0 +1,5 @@
+# The engine is a git submodule (engine/, ADR 0052 in the engine repository); its packages join this workspace so
+# @aue/* resolve as workspace:* without fetching anything from git or a registry.
+packages:
+  - engine/packages/*
+  - packages/*

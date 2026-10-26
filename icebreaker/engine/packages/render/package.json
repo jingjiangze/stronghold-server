@@ -1,0 +1,21 @@
+{
+  "name": "@aue/render",
+  "version": "0.0.0",
+  "private": true,
+  "description": "the three.js battle renderer",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./fx-subset": "./src/fx/subset.js"
+  },
+  "dependencies": {
+    "@aue/schema": "workspace:*",
+    "@aue/spine": "workspace:*",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@aue/testkit": "workspace:*",
+    "@types/three": "0.186.0"
+  }
+}

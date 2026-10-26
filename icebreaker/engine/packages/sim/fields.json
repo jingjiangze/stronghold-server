@@ -1,0 +1,157 @@
+{
+  "$comment": "ADR 0045: the modules that may write each unit field (and each buff and skill field) after the unit is created. A field with an empty list is fixed at creation. Enforced by @aue/lint's field-ownership rule on packages/sim/src and packages/content/src (content writes none: it acts through the skill context, ADR 0055).",
+  "id": [],
+  "kind": [],
+  "key": [],
+  "owner": [],
+  "z": [
+    "packages/sim/src/move.js"
+  ],
+  "dir": [],
+  "route": [],
+  "base": [],
+  "born": [
+    "packages/sim/src/move.js"
+  ],
+  "bornN": [],
+  "summoner": [],
+  "expires": [],
+  "blockedBy": [
+    "packages/sim/src/blocking.js"
+  ],
+  "x": [
+    "packages/sim/src/routes.js",
+    "packages/sim/src/blocking.js"
+  ],
+  "y": [
+    "packages/sim/src/routes.js",
+    "packages/sim/src/blocking.js"
+  ],
+  "leg": [
+    "packages/sim/src/routes.js"
+  ],
+  "hp": [
+    "packages/sim/src/damage.js",
+    "packages/sim/src/buffs.js",
+    "packages/sim/src/enemies.js"
+  ],
+  "maxHp": [
+    "packages/sim/src/buffs.js"
+  ],
+  "buffs": [
+    "packages/sim/src/buffs.js"
+  ],
+  "atkCd": [
+    "packages/sim/src/combat.js"
+  ],
+  "anim": [
+    "packages/sim/src/combat.js",
+    "packages/sim/src/world.js",
+    "packages/sim/src/enemies.js"
+  ],
+  "left": [
+    "packages/sim/src/buffs.js"
+  ],
+  "acc": [
+    "packages/sim/src/buffs.js"
+  ],
+  "stacks": [
+    "packages/sim/src/buffs.js"
+  ],
+  "maxStacks": [
+    "packages/sim/src/buffs.js"
+  ],
+  "mods": [
+    "packages/sim/src/buffs.js"
+  ],
+  "flags": [
+    "packages/sim/src/buffs.js"
+  ],
+  "shield": [
+    "packages/sim/src/damage.js"
+  ],
+  "shieldHits": [
+    "packages/sim/src/damage.js"
+  ],
+  "blockedAt": [
+    "packages/sim/src/blocking.js"
+  ],
+  "path": [
+    "packages/sim/src/routes.js"
+  ],
+  "pt": [
+    "packages/sim/src/routes.js"
+  ],
+  "wait": [
+    "packages/sim/src/routes.js"
+  ],
+  "hidden": [
+    "packages/sim/src/routes.js"
+  ],
+  "frag": [],
+  "wave": [],
+  "unharmful": [],
+  "ab": [
+    "packages/sim/src/foes.js"
+  ],
+  "skill": [],
+  "sp": [
+    "packages/sim/src/sp.js"
+  ],
+  "slot": [
+    "packages/sim/src/sp.js"
+  ],
+  "active": [
+    "packages/sim/src/skills.js"
+  ],
+  "armed": [
+    "packages/sim/src/skills.js"
+  ],
+  "dur": [
+    "packages/sim/src/skills.js"
+  ],
+  "ammo": [
+    "packages/sim/src/skills.js"
+  ],
+  "at": [
+    "packages/sim/src/skills.js"
+  ],
+  "ep": [
+    "packages/sim/src/elements.js"
+  ],
+  "n": [
+    "packages/sim/src/buffs.js"
+  ],
+  "value": [
+    "packages/sim/src/buffs.js"
+  ],
+  "tag": [],
+  "act": [],
+  "paid": [],
+  "swing": [
+    "packages/sim/src/combat.js",
+    "packages/sim/src/displacement.js",
+    "packages/sim/src/move.js"
+  ],
+  "slide": [
+    "packages/sim/src/displacement.js"
+  ],
+  "wind": [
+    "packages/sim/src/combat.js"
+  ],
+  "since": [
+    "packages/sim/src/combat.js"
+  ],
+  "sx": [
+    "packages/sim/src/swing.js"
+  ],
+  "sy": [
+    "packages/sim/src/swing.js"
+  ],
+  "range": [
+    "packages/sim/src/reach.js"
+  ],
+  "reachExtra": [
+    "packages/sim/src/reach.js"
+  ]
+}

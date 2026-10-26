@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22, 24]
+    env:
+      NO_COLOR: '1'
+    steps:
+      # the engine is a git submodule (engine/)
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      # the pnpm version comes from package.json "packageManager"
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # lint (limits, boundaries, determinism of the mode plugins), types, tests with coverage, and the dependency /
+      # spec-tracing / registry checks (aue-check from the engine's @aue/testkit)
+      - name: CI
+        run: pnpm run ci
+
+  # end-to-end: real Chromium against the in-process server; not part of pnpm run ci
+  e2e:
+    name: e2e (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NO_COLOR: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: pnpm run e2e

@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+    ignore:
+      # TypeScript is pinned (engine ADR 0005); a new major changes the JSDoc checking and needs an ADR
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # the Node types follow the oldest supported Node line (engines: >=22.12), not the newest release
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # ESLint majors change the flat-config rules @aue/lint builds on
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+# the engine submodule (engine/) is upgraded by hand to a release tag, never to a branch head

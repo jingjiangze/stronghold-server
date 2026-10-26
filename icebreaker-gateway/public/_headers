@@ -1,0 +1,60 @@
+# 安全头（与 Worker 版逐条对齐）
+#
+# img-src / style-src / font-src 里的三个素材域不是"外壳自己的资源"，而是**游戏容器 302 出去的
+# 目标**：容器的 /assets|/fonts 本机没有字节，按 deploy/stardust/ms-edge/sources.json 的顺序跳到
+# 这些源上。浏览器跟随 302 之后，请求发起域就变成了它们 —— 只放行 ms.show 的话，图片虽然 200
+# 返回了，仍会被这里以 img-src 拒绝（2026-10-16 实测：Refused to load the image
+# 'https://modelscope.cn/.../bkg_01.png'，同一 URL curl 拿 200）。这是玩家报的"素材加载不出来"。
+# 三处必须与容器那张 sources.json 的 bases 对齐（origin 形态）；改源时两处一起改。
+#
+# ⚠️ 二次修正（2026-10-16 真浏览器实测）：光对齐 sources.json 的 bases **不够**。魔搭的
+#    /datasets/.../resolve/... 不是终点，它自己再 302 一次到 LFS 分发域
+#    `cdn-lfs-cn-1.modelscope.cn`（带 auth_key 查询串）。浏览器跟随两层 302 后，发起域已经是
+#    LFS 域 —— 只放行 modelscope.cn 时控制台照样刷
+#    `Refused to load the image 'https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/...'`。
+#    所以白名单必须同时含 **原始 base 域** 与 **它的 302 落点域**（R2/openi 实测直出 200，不落点）。
+#    改源或魔搭换 CDN 域名时，这里两处一起改。
+# ⚠️ Cache-Control 不再放在 /* —— _headers 命中多条规则时同名 header 会**逗号拼接**
+#    （实测官方文档口径），若 /* 留 no-store、再给 HTML 加 public，结果 `no-store, public`
+#    会让 no-store 赢，边缘永远不缓存。故改为：/* 只发安全头，Cache-Control 按路径显式给。
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://modelscope.cn https://cdn-lfs-cn-1.modelscope.cn https://weishucdn.jiangjiangze.icu https://openi.pcl.ac.cn; img-src 'self' https://jingjiangze-stronghold-protocol.ms.show https://modelscope.cn https://cdn-lfs-cn-1.modelscope.cn https://weishucdn.jiangjiangze.icu https://openi.pcl.ac.cn data:; font-src 'self' https://modelscope.cn https://cdn-lfs-cn-1.modelscope.cn https://weishucdn.jiangjiangze.icu https://openi.pcl.ac.cn data:; frame-src https://jingjiangze-stronghold-protocol.ms.show; connect-src 'self' https://jingjiangze-stronghold-protocol.ms.show https://modelscope.cn https://cdn-lfs-cn-1.modelscope.cn https://weishucdn.jiangjiangze.icu https://openi.pcl.ac.cn; media-src 'self' https://jingjiangze-stronghold-protocol.ms.show https://modelscope.cn https://cdn-lfs-cn-1.modelscope.cn https://weishucdn.jiangjiangze.icu https://openi.pcl.ac.cn blob:; base-uri 'none'; object-src 'none'; frame-ancestors 'self'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+
+# 3.5KB 静态外壳进边缘缓存（用户 2026-10-18「能不能设置缓存」）。命中后由就近 PoP 直接吐，
+# 省掉每次回源 LAX 的一跳；重部署自动失效，max-age 只决定「多久必须去新源」——外壳内容几乎
+# 不变，取 5 分钟新鲜 + 10 分钟 SWR（过期先给旧的、后台拉新，访客永远不空等）。
+# ⚠ 必须含 '/' 本身：实测 _headers 按**请求路径**匹配，/* → /index.html 的重写不影响匹配，
+#   只写 /index.html 与 /*.html 时 '/' 拿到的仍是 Pages 默认的 max-age=0, must-revalidate。
+# ⚠ 2026-10-19：**只给 '/'**。`/index.html` 会被 Pages 308 到 `/`，若给 3xx 也下发
+#   max-age=300，浏览器会把「永久重定向」缓存下来，一旦同域出现反向旧条目即 ERR_TOO_MANY_REDIRECTS。
+#   → 3xx 一律不下发缓存头，只缓存 200 的 `/`。
+/
+  Cache-Control: public, max-age=300, stale-while-revalidate=600
+
+# /index.html 恒为 Pages 的 308（→ /）。308 是**永久重定向**，一旦被浏览器/边缘缓存就会长期粘住；
+# 显式 no-store 让这条 308 永不被缓存（2026-10-19 事故：它曾被 max-age=300 缓存）。
+# 用 /*.html 覆盖所有 .html 美化重定向（Pages 对任意 /x.html 都会 308 到 /x）。
+/*.html
+  Cache-Control: no-store
+
+# 动态/跳转端点保持不缓存。注意 /healthz 是 Pages Function 响应，_headers 本就套不上它
+# （函数自己发 no-store），这两条只是把原先 /* no-store 的语义在此显式续上。
+/go
+  Cache-Control: no-store
+/fastest
+  Cache-Control: no-store
+/healthz
+  Cache-Control: no-store
+
+# ⚠️ 这里**不再**设 Access-Control-Allow-Origin：静态规则会盖过 Function 的判定，等于白名单形同虚设。
+#    CORS 白名单由 Function 自己按 Origin 决定（见 functions/healthz.js 的 headersFor / functions/probe.js）。
+#    /fastest 是静态 302，跨域浏览器消费者按 R3 一律不给 ACAO（服务器侧/脚本不受影响）。
+
+# /healthz 是没有扩展名的静态 JSON：Pages 按扩展名猜 Content-Type，这里显式给；
+# 探测端要 2xx + JSON 指纹（version 整数），SPA 回落只在「没有同名静态资源」时生效。
+/healthz
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-store
+  Access-Control-Allow-Origin: *

@@ -144,6 +144,33 @@ export async function runMain(start) {
   } catch (e) {
     if (e && e.code === 'EADDRINUSE') console.error(`端口已被占用 / port in use: ${e.port ?? process.env.PORT ?? 3000}. Try PORT=3001 npm start`);
     else console.error('[boot] failed to start', e);
+    // boot-diag：把端口打开并回报失败原因（容器平台按端口判活；没有这一步，失败只存在于拿不到的容器日志里）。
+    try {
+      const http = await import('node:http');
+      const info = {
+        ok: false, boot: 'failed',
+        error: String((e && (e.stack || e.message)) || e).slice(0, 4000),
+        root: String(ROOT || ''),
+        node: process.version,
+        env: { PORT: process.env.PORT || null, HOST: process.env.HOST || null, SP_PLUGIN_SCRIPTS: process.env.SP_PLUGIN_SCRIPTS || null },
+        at: new Date().toISOString(),
+      };
+      const port = Number(process.env.PORT || 3000);
+      const host = process.env.HOST || '0.0.0.0';
+      const srv = http.createServer((req, res) => {
+        const body = JSON.stringify(info, null, 2);
+        res.writeHead(req.url && req.url.startsWith('/healthz') ? 200 : 503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(body);
+      });
+      await new Promise((resolve) => {
+        srv.once('error', () => resolve(false));
+        srv.listen(port, host, () => resolve(true));
+      });
+      console.error(`[boot-diag] diagnostic server listening on ${host}:${port}`);
+      return;   // 不退出：让平台保持 Running，便于远程读取失败原因
+    } catch (e2) {
+      console.error('[boot-diag] cannot open a diagnostic port', e2);
+    }
     process.exit(1);
   }
   printBanner(srv);

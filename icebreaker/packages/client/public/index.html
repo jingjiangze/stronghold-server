@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>促融共竞 · 对局</title>
+<link rel="icon" href="data:,">
+<meta name="ig-assets" content="assets/skeleton/">
+<link rel="stylesheet" href="static/style.css">
+<link rel="stylesheet" href="static/boot.css">
+</head>
+<body>
+<script src="static/boot.js"></script>
+<main id="app">
+  <canvas id="field" aria-label="战场"></canvas>
+  <div id="ui"></div>
+  <section id="hud" aria-live="polite"></section>
+  <section id="controls" aria-label="控制"></section>
+  <section id="skills" aria-label="技能"></section>
+  <section id="deck" aria-label="部署"></section>
+  <section id="settings" aria-label="画面设置"></section>
+  <button id="full" type="button" hidden>全屏</button>
+  <p id="fps" hidden></p>
+  <p id="testing" hidden>测试中：部分敌人能力未实现</p>
+  <p id="modded" hidden></p>
+  <p id="notice" hidden></p>
+</main>
+<script type="module" src="m/@icebreaker/client/src/main.js"></script>
+</body>
+</html>

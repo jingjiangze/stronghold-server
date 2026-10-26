@@ -1,0 +1,37 @@
+name: 规则与官方不一致
+description: 某个模式里的规则、数值、技能或敌人行为和官方实际表现不同。
+title: "[规则]: "
+labels: ["mechanics"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本项目的玩法规则尽量对照官方数据，来源和按推断实现的部分请见仓库文档。如果问题出在引擎层的通用规则（阻挡、攻击、技能结算等），请到 [Arknights-Universal-Engine](https://github.com/ArknightsDevs/Arknights-Universal-Engine/issues/new?template=mechanics.yml) 提。
+
+        > [!important]
+        > 请给出**可以核对的官方依据**：PRTS 页面（带 oldid 的永久链接）、游戏数据表的文件与字段、实机录像链接与时间点。没有官方依据的反馈无法处理。不要上传游戏素材文件。
+  - type: input
+    id: rule
+    attributes:
+      label: 哪条规则
+      placeholder: 例如：常规模式里某个敌人的出怪间隔 / 双人共用费用的回复速度
+    validations:
+      required: true
+  - type: textarea
+    id: official
+    attributes:
+      label: 官方表现与依据
+      description: 官方是怎样的，依据是什么（PRTS 链接和 oldid、数据表路径与字段、录像时间点）。
+    validations:
+      required: true
+  - type: textarea
+    id: ours
+    attributes:
+      label: 本项目的表现
+      description: 本项目里是怎样的。请写明模式、关卡与操作，最好附截图或录屏。
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充（可选）

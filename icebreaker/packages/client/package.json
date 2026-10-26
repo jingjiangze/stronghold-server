@@ -1,0 +1,20 @@
+{
+  "name": "@icebreaker/client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "the page: shell, loader, flows, local saves, box entry",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/main.js"
+  },
+  "dependencies": {
+    "@aue/content": "workspace:*",
+    "@aue/math": "workspace:*",
+    "@aue/render": "workspace:*",
+    "@aue/schema": "workspace:*",
+    "@aue/ui": "workspace:*",
+    "@aue/worker": "workspace:*",
+    "@icebreaker/mode-regular": "workspace:*"
+  }
+}

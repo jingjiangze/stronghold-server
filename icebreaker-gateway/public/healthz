@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "version": 1,
+  "app": "icebreaker",
+  "mode": "pages-static",
+  "latencyMs": 50,
+  "latencySource": "static",
+  "note": "静态外壳的健康端点：本文件只说明 icebreaker 边缘可答；游戏本体在 ms.show 的 iframe 里，实时人数/房间以游戏服 /healthz 为准（这个 Pages 项目启用了 SPA 回落，Functions 不参与路由）。"
+}

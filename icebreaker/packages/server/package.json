@@ -1,0 +1,29 @@
+{
+  "name": "@icebreaker/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "gateway, battle instances, the arbiter re-simulation, lobby and rooms, reports, asset hosting",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "aue": {
+    "node": true
+  },
+  "dependencies": {
+    "@aue/content": "workspace:*",
+    "@aue/math": "workspace:*",
+    "@aue/net": "workspace:*",
+    "@aue/render": "workspace:*",
+    "@aue/schema": "workspace:*",
+    "@aue/sdk": "workspace:*",
+    "@icebreaker/mode-regular": "workspace:*",
+    "es-module-lexer": "3.0.3",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@aue/sim": "workspace:*",
+    "@types/ws": "8.18.2"
+  }
+}
