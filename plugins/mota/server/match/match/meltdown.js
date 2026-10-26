@@ -106,8 +106,16 @@ export class MatchMeltdown {
   }
 
   /** 开商店：给每个存活玩家发 4 张卡，等他们买完 / 关闭。 */
-  meltdownOpen(cb) {
+  /**
+   * 开商店：给每个存活玩家发 4 张卡，等他们买完 / 关闭。
+   * `opts.resume = true`：由玩家按钮主动打开 —— 关店时**恢复进入前的阶段/截止时间**，而不是推进回合。
+   */
+  meltdownOpen(cb, opts = {}) {
     const st = this._melt();
+    if (!st.open && opts && opts.resume) {
+      st.resumePhase = this.phase;
+      st.resumeDeadline = this.deadline;
+    }
     st.open = true;
     st.cb = typeof cb === 'function' ? cb : null;
     st.wave += 1;
@@ -175,6 +183,17 @@ export class MatchMeltdown {
     return { cards, sold: cards.map(() => false) };
   }
 
+  /** g.meltOpen：玩家主动开商店（协同共竞；同一时间只开一次，幂等）。 */
+  meltdownRequest(ps) {
+    if (!ps || !ps.alive) return fail(ERR.ELIMINATED);
+    if (!String(this.modeId || '').startsWith('mode_xie_')) return fail(ERR.WRONG_PHASE, 'only 协同共竞 has the shop'); // i18n-ignore
+    if (![PHASE.PREP, PHASE.ROUND_START, PHASE.SETTLE].includes(this.phase)) return fail(ERR.WRONG_PHASE, 'the shop opens in prep / settle'); // i18n-ignore
+    const st = this._melt();
+    if (st.open) return OK;
+    this.meltdownOpen(null, { resume: true });
+    return OK;
+  }
+
   /** g.meltPick { slot }：买下某一栏（每栏 1 件，买过即售罄）。 */
   meltPick(ps, slot) {
     const st = this.melt;
@@ -227,6 +246,13 @@ export class MatchMeltdown {
     st.open = false;
     const cb = st.cb;
     st.cb = null;
+    // 玩家按钮打开的商店：关店后回到进入前的阶段（不推进回合）
+    if (!cb && st.resumePhase) {
+      this.phase = st.resumePhase;
+      this.deadline = st.resumeDeadline || 0;
+      st.resumePhase = null;
+      st.resumeDeadline = null;
+    }
     for (const ps of this.players.values()) {
       ps.dirty();
       this.markPrivate(ps);

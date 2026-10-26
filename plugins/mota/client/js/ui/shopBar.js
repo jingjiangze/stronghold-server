@@ -315,7 +315,7 @@ export function RewardCards({ offer, priv, editable, onPick, onDetail, onLater, 
  * as `.gm__borrow`). A plain component (no hooks) so test/ui runs it directly.
  * @param {{ econ:any, editable:boolean, onRefuse?:(why:string)=>void }} props
  */
-export function EconStrip({ econ, editable, onRefuse = null }) {
+export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }) {
   const projects = !econ.borrowOnly && econ.projects.length ? econ.projects : null;
   if (econ.borrowOnly || (!projects && econ.reserve == null)) return null;
   // 点不动也要有句人话 (user report 2026-10-17: 「应急存储后勤调度这些按钮依旧点不了（无反应）」): a disabled button
@@ -337,9 +337,15 @@ export function EconStrip({ econ, editable, onRefuse = null }) {
   }) : '');
   const reliefHold = longPress(reliefNote);
   return html`<div class="econbar" role="group" aria-label=${t('协同经济')}>
-    <span class="econbar__res" title=${t('协同资金：队友结余与完美作战的积累，用于后勤项目与告急救济')}>
-      <${CoinGlyph} class="econbar__coin" /><b class="num">${econ.reserve}</b><span class="econbar__micro">${t('协同资金')}</span>
-    </span>
+    ${onOpenShop
+      ? html`<button type="button" class="econbar__res econbar__shop" data-testid="open-melt-shop"
+          title=${t('熔毁商店：点击打开，四栏各限购一件，代价本局永久叠加')}
+          onClick=${() => { onOpenShop(); }}>
+          <${CoinGlyph} class="econbar__coin" /><b class="num">${econ.reserve}</b><span class="econbar__micro">${t('商店')}</span>
+        </button>`
+      : html`<span class="econbar__res" title=${t('协同资金：队友结余与完美作战的积累，用于后勤项目与告急救济')}>
+          <${CoinGlyph} class="econbar__coin" /><b class="num">${econ.reserve}</b><span class="econbar__micro">${t('协同资金')}</span>
+        </span>`}
     ${projects ? html`<span class="econbar__projects">
       ${projects.map((p) => {
         const hold = longPress(() => projectNote(p));
@@ -386,7 +392,7 @@ export function EconStrip({ econ, editable, onRefuse = null }) {
  *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
-  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null }) {
+  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -443,7 +449,7 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   return html`<section class=${cx('shopbar', frozen && 'is-frozen', !editable && 'is-locked', showReward && 'has-reward', armed && 'has-armed')} ref=${barRef} aria-label=${t('调度中心')}>
     ${/* 协同经济 sits ABOVE the tools row, not inside it: as a grid item spanning both columns it sized the columns
          and blew 冻结/刷新 up to fill them (user report 2026-10-09). Its own row keeps the buttons packed right. */ null}
-    ${econ ? html`<div class="shopbar__econ"><${EconStrip} econ=${econ} editable=${editable} onRefuse=${onRefuse} /></div>` : null}
+    ${econ ? html`<div class="shopbar__econ"><${EconStrip} econ=${econ} editable=${editable} onRefuse=${onRefuse} onOpenShop=${onOpenShop} /></div>` : null}
     <div class="shopbar__tools">
       <span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>
       <button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}

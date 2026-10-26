@@ -575,6 +575,7 @@ export const C2S = {
   'g.confrontTarget': { targetPlayerId: isId },
   'g.hex': { hexId: (v) => typeof v === 'string' && v.length > 0 && v.length <= 64 },
   'g.hexReroll': { slot: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
+  'g.meltOpen': {},
   'g.meltPick': { slot: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
   'g.meltClose': {},
   'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 64, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), $optional: ['bosses'] },
