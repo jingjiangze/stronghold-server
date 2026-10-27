@@ -1,0 +1,93 @@
+name: sync-from-ms
+
+# 定时把 GitHub 的 ms 分支追平到魔搭（ModelScope）线上内容。
+#
+# 为什么在 Actions 而不在本机：本机 git 到 GitHub 的协议不通（直连不可达、代理被 reset），
+# 且用户要求本机不留任何计划任务。Actions 的 schedule 跑在 GitHub 侧，不占本机。
+#
+# 需要的凭据：无。魔搭仓库（jingjiangze/Stronghold-Protocol）匿名可读，实测 ls-remote 与浅克隆均通过。
+#
+# 链路：
+#   ModelScope master ──(本 workflow)──> GitHub ms ──(branch-sync: sync-baidu)──> GitHub baidu
+#   └──> 百度服务器 `bash /opt/stronghold/deploy/baidu/sync.sh`
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-from-ms
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 设置提交身份
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: 拉取魔搭线上（深度 1，带 blob，保证能往 GitHub 推）
+        run: |
+          set -euo pipefail
+          git remote add msrc https://www.modelscope.cn/studios/jingjiangze/Stronghold-Protocol.git
+          git fetch --depth 1 msrc master
+          SRC=$(git rev-parse FETCH_HEAD)
+          echo "SRC=$SRC" >> "$GITHUB_ENV"
+          echo "魔搭线上: $(git rev-parse --short "$SRC")  tree=$(git rev-parse --short "$SRC^{tree}")"
+          # 基本健全性：文件数太少说明抓错了东西
+          N=$(git ls-tree -r "$SRC" | wc -l)
+          echo "文件数: $N"
+          if [ "$N" -lt 1000 ]; then
+            echo "::error::魔搭内容异常（文件数 $N < 1000），中止"; exit 1
+          fi
+
+      - name: 比对内容并追平
+        run: |
+          set -euo pipefail
+          git fetch origin ms --force
+          MS=$(git rev-parse origin/ms)
+
+          # 比内容。排除 .github/：那是 GitHub 侧独有的（本仓库的 CI 定义不在魔搭里）
+          git ls-tree -r "$SRC" | awk -F'\t' '$2 !~ /^\.github\//' | sort > /tmp/src.txt
+          git ls-tree -r "$MS"  | awk -F'\t' '$2 !~ /^\.github\//' | sort > /tmp/dst.txt
+
+          if diff -q /tmp/src.txt /tmp/dst.txt > /dev/null; then
+            echo "内容已一致（魔搭 $(git rev-parse --short "$SRC")），无需追平"
+            exit 0
+          fi
+
+          echo "--- 差异（< 魔搭 / > GitHub ms）---"
+          diff /tmp/src.txt /tmp/dst.txt | head -40 || true
+
+          # 以魔搭内容为底树，再把 .github/ 从当前 ms 保留回来
+          git read-tree "$SRC"
+          git ls-tree -r "$MS" -- .github | while read -r mode type sha path; do
+            git update-index --add --cacheinfo "$mode,$sha,$path"
+          done
+
+          NEWTREE=$(git write-tree)
+          if [ "$NEWTREE" = "$(git rev-parse "$MS^{tree}")" ]; then
+            echo "合成树与现 ms 相同，无需推送"; exit 0
+          fi
+          NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$MS" \
+            -m "sync(ms): 自动追平魔搭 $(git rev-parse --short "$SRC")（tree $(git rev-parse --short "$SRC^{tree}")）")
+          echo "新 ms commit: $NEWCOMMIT"
+          git push origin "$NEWCOMMIT:refs/heads/ms"
+          echo "已推送，branch-sync 的 sync-baidu 会自动重建 baidu"
+
+      - name: 结果摘要
+        if: always()
+        run: |
+          echo "### sync-from-ms" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 魔搭: \`${SRC:0:8}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- GitHub ms: \`$(git rev-parse origin/ms 2>/dev/null | cut -c1-8 || echo n/a)\`" >> "$GITHUB_STEP_SUMMARY"
