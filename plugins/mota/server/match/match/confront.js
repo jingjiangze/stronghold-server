@@ -1112,16 +1112,19 @@ export class MatchConfront {
     const timeLimit = Math.max(1, Number(this.wave && this.wave.timeLimit) || 60);
     for (const p of arr) {
       if (!p || typeof p.enemyKey !== 'string' || !allowed.has(p.enemyKey)) return null;
-      // 预设路线 + 投放时刻（可选）：服务端按公式校验（格数 / 速度 / 行程 / 本回合时限）
-      const routeIndex = Number.isInteger(p.routeIndex) ? p.routeIndex : null;
-      const time = Number.isFinite(p.time) ? Math.max(0, p.time) : null;
-      if (time != null && time > timeLimit) return { error: ERR.CONFRONT_ROUTE };
-      let metrics = null;
-      if (routeIndex != null) {
-        metrics = this.confrontRouteMetrics(routeIndex, p.enemyKey);
-        if (!metrics) return { error: ERR.CONFRONT_ROUTE };
-        if (metrics.len > 40) return { error: ERR.CONFRONT_ROUTE };
-        if (time != null && time + metrics.travel + 2 > timeLimit) return { error: ERR.CONFRONT_ROUTE };
+      // 预设路线 + 投放时刻（可选）：**与 bot 走同一套清洗**（业主 2026-10-27：玩家手动提交不该因为路线/时刻被硬拒，
+      // 线上表现是「服务器内部错误」——拒绝码在响应层的表里不存在，被兜底成 INTERNAL 了）。
+      // 非法就就地退化：路线不可用 / 超长 → 回落默认路线；时刻夹进 [0, 时限-行程-2]，否则这只怪会晚于时限出场、
+      // 整波看起来「少了一只」。真正该拒的只剩：未知怪、数量上限、预算超支。
+      let routeIndex = Number.isInteger(p.routeIndex) ? p.routeIndex : null;
+      let metrics = routeIndex != null ? this.confrontRouteMetrics(routeIndex, p.enemyKey) : null;
+      if (routeIndex != null && (!metrics || Number(metrics.len) > 40)) { routeIndex = null; metrics = null; }
+      let time = Number.isFinite(p.time) ? Math.max(0, p.time) : null;
+      if (time != null) {
+        let room = timeLimit - (metrics ? Number(metrics.travel) || 0 : 0) - 2;
+        // 行程本身就塞不进时限 ⇒ 这条路线也一起丢掉，改走默认路线
+        if (room < 0) { routeIndex = null; metrics = null; room = timeLimit - 2; }
+        time = Math.max(0, Math.min(time, Math.max(0, room)));
       }
       out.push({
         enemyKey: p.enemyKey,

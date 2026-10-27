@@ -19,7 +19,6 @@ import { t } from '../../../shared/i18n.js';
 import { serverNow } from '../store.js';
 import { data, useData, localAsset } from '../data.js';
 import { uiUrl } from './assetUrls.js';
-import { PixBot } from './pixbots.js';
 
 /**
  * h() for htm with its static-subtree cache switched off. htm keeps the vnode it built for a fully static subtree in
@@ -805,29 +804,15 @@ export function ResultDialog({ title, sub, micro, tone = 'mint', duration = 2800
   if (gone) return null;
   return html`<div class=${cx('rdialog', `rdialog--${tone}`, leaving && 'is-leaving')} role="status" aria-live="polite">
     <div class="rdialog__box">
-      <div class="rdialog__art" aria-hidden="true">
-        <span class="rdialog__tick rdialog__tick--tl"></span><span class="rdialog__tick rdialog__tick--tr"></span>
-        <span class="rdialog__tick rdialog__tick--bl"></span><span class="rdialog__tick rdialog__tick--br"></span>
-        <i class="rdialog__brk rdialog__brk--l"></i><i class="rdialog__brk rdialog__brk--r"></i>
-        <${PixBot} kind=${tone === 'mint' ? 'cheer' : 'blade'} class="rdialog__bot" />
+      <span class="rdialog__tick rdialog__tick--tl"></span><span class="rdialog__tick rdialog__tick--tr"></span>
+      <span class="rdialog__tick rdialog__tick--bl"></span><span class="rdialog__tick rdialog__tick--br"></span>
+      ${micro ? html`<span class="rdialog__micro">${micro}</span>` : null}
+      <div class="rdialog__row">
+        <${Chevrons} count=${3} tone=${tone} class="rdialog__chev" />
+        <span class="rdialog__title">${title}</span>
+        <${Chevrons} count=${3} tone=${tone} dir="left" class="rdialog__chev" />
       </div>
-      <div class="rdialog__text">
-        ${micro ? html`<span class="rdialog__micro">${micro}</span>` : null}
-        <div class="rdialog__row">
-          <span class="rdialog__title">${title}</span>
-          <${Chevrons} count=${3} tone=${tone} class="rdialog__chev" />
-        </div>
-        <div class="rdialog__text">
-        ${micro ? html`<span class="rdialog__micro">${micro}</span>` : null}
-        <div class="rdialog__row">
-          <span class="rdialog__title">${title}</span>
-          <${Chevrons} count=${3} tone=${tone} class="rdialog__chev" />
-        </div>
-        ${sub ? html`<span class="rdialog__sub">${sub}</span>` : null}
-      </div>
-      <${Chevrons} count=${3} tone=${tone} dir="left" class="rdialog__chev rdialog__chev--trim" />
-      </div>
-      <${Chevrons} count=${3} tone=${tone} dir="left" class="rdialog__chev rdialog__chev--trim" />
+      ${sub ? html`<span class="rdialog__sub">${sub}</span>` : null}
     </div>
   </div>`;
 }

@@ -161,6 +161,14 @@ export const ERR = Object.freeze({
   SOLD_OUT: 'SOLD_OUT',
   MAX_LEVEL: 'MAX_LEVEL',
   NOT_YOUR_TURN: 'NOT_YOUR_TURN',
+  // 对抗（2V2 攻防）投放阶段的拒绝码：参考实现在插件里（plugins/mota），但**响应层**（server/net.js 的
+  // isErrCode/errorMsg）只认这张表——缺了就会被兜底成 INTERNAL，玩家看到「服务器内部错误」而实际是路线/预算被拒。
+  // 2026-10-27 线上实测：手动提交带 routeIndex/time 恒报 INTERNAL，根因就是这三个键只存在于插件那张表。
+  CONFRONT_COUNT: 'CONFRONT_COUNT',
+  CONFRONT_BUDGET: 'CONFRONT_BUDGET',
+  CONFRONT_ROUTE: 'CONFRONT_ROUTE',
+  // 维护中：插件那张表早就有这个键（客户端拿它做过维护态判断），核心表此前没有 ⇒ 一并补齐，保证两张表键集一致
+  MAINTENANCE: 'MAINTENANCE',
   ALREADY: 'ALREADY',
   TEMP_NOT_EMPTY: 'TEMP_NOT_EMPTY',
   ELIMINATED: 'ELIMINATED',
@@ -210,6 +218,9 @@ export const ERR_TEXT = {
   WRONG_PHASE: N_('当前阶段无法进行该操作'), NO_FUNDS: N_('资金不足'), HAND_FULL: N_('整备区已满'), BOARD_FULL: N_('已达到部署上限'),
   BAD_TILE: N_('无法部署在该位置'), BAD_TARGET: N_('无效的目标'), SOLD_OUT: N_('已售出'), MAX_LEVEL: N_('调度中心已达最高等级'),
   NOT_YOUR_TURN: N_('尚未轮到你'), ALREADY: N_('已完成该操作'), TEMP_NOT_EMPTY: N_('临时整备区不为空'), ELIMINATED: N_('你已被淘汰'),
+  CONFRONT_COUNT: N_('派出的怪物数量超出上限'), CONFRONT_BUDGET: N_('派出的怪物超出本回合预算'),
+  CONFRONT_ROUTE: N_('路线或投放时刻不可用（超出地图 / 时间或不可达）'),
+  MAINTENANCE: N_('服务器维护中，请稍后再来'),
   SPECTATOR: N_('观战中无法进行该操作'), INTERNAL: N_('服务器内部错误'),
   PLUGIN_UNKNOWN: N_('本服务器没有安装该插件'), PLUGIN_BLOCKED: N_('该插件不能在房间中启用'), PLUGIN_DEPENDENCY: N_('缺少该插件需要的其他插件'),
   PLUGIN_CONFLICT: N_('所选插件互相冲突'), PLUGIN_LIMIT: N_('所选插件的素材总量超出本服务器的上限'),

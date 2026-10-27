@@ -186,6 +186,13 @@ export const ERR = Object.freeze({
   CONFRONT_COUNT: 'CONFRONT_COUNT',   // 狩猎期布阵超过上限
   CONFRONT_BUDGET: 'CONFRONT_BUDGET', // 狩猎期布阵超出本回合预算（缺这个常量会让超预算提交静默丢弃：{error: undefined} 被当成成功）
   CONFRONT_ROUTE: 'CONFRONT_ROUTE',   // 狩猎期路线/投放时刻不合法（越界/不可达/超时/超长）
+  // 这份表是核心 shared/constants.js 的**整份覆盖**：核心新增的错误码必须同步过来，否则客户端拿到码却没有文案。
+  // 2026-10-27 的反向事故（插件有 CONFRONT_*、核心没有 ⇒ 被兜底成 INTERNAL）已把三条补进核心；这里补齐核心独有的键。
+  SERVER_FULL: 'SERVER_FULL',
+  ROOM_CODE_TAKEN: 'ROOM_CODE_TAKEN',
+  VERSION_UNKNOWN: 'VERSION_UNKNOWN',
+  VERSION_UNSUPPORTED: 'VERSION_UNSUPPORTED',
+  VERSION_VOTE: 'VERSION_VOTE',
   // room.setPlugins (DESIGN §32): a plugin this server has not installed; one a room cannot switch on in this version
   // (not a cosmetic or content plugin it loads, not of the room's scope, or not allowed by the server owner's
   // plugins/config.json); a requirement missing or out of range, or a load-order cycle; two plugins in conflict; a set
@@ -227,6 +234,11 @@ export const ERR_TEXT = {
   SPECTATOR: N_('观战中无法进行该操作'), INTERNAL: N_('服务器内部错误'),
   CONFRONT_COUNT: N_('派出的怪物数量超出上限'), CONFRONT_BUDGET: N_('派出的怪物超出本回合预算'),
   CONFRONT_ROUTE: N_('路线或投放时刻不可用（超出地图 / 时间或不可达）'),
+  SERVER_FULL: N_('服务器已满'),
+  ROOM_CODE_TAKEN: N_('固定同盟密钥已被另一个房间占用，请先关闭那个房间'),
+  VERSION_UNKNOWN: N_('本服务器没有启用这个版本'),
+  VERSION_UNSUPPORTED: N_('这个版本无法服务本房间'),
+  VERSION_VOTE: N_('房间的版本表决正在进行中'),
   PLUGIN_UNKNOWN: N_('本服务器没有安装该插件'), PLUGIN_BLOCKED: N_('该插件不能在房间中启用'), PLUGIN_DEPENDENCY: N_('缺少该插件需要的其他插件'),
   PLUGIN_CONFLICT: N_('所选插件互相冲突'), PLUGIN_LIMIT: N_('所选插件的素材总量超出本服务器的上限'),
   PLUGIN_RULE_CONFLICT: N_('两个插件把同一个规则开关设成了不同的选项'),
