@@ -131,11 +131,8 @@ jobs:
           git diff origin/ms...origin/baidu -- . ':(exclude)deploy/baidu' | git apply --index || {
             echo "::error::直接 apply 失败（可能有冲突），请人工处理"; exit 1; }
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "backport: 百度侧运行时改动回填 ms
-
-来源分支: baidu ($(git rev-parse --short origin/baidu))
-涉及文件:
-$(cat /tmp/rt.txt)"
+            commit -m "backport: 百度侧运行时改动回填 ms（来源 baidu@$(git rev-parse --short origin/baidu)）" \
+                   -m "涉及文件见 PR 描述；这是自动 backport，合并前请人工 review。"
           git push origin "$BR"
           gh pr create --base ms --head "$BR" \
             --title "backport: 百度侧改动回填魔搭线" \
