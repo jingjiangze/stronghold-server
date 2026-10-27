@@ -201,12 +201,14 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   // the share of the opponent's wave this round's intervention replaces (and spends) — 5→15 %, 50 % on the 最终狩猎 round
   const pct = Math.round((Number(conf.ratio) || 0) * 100);
   const valOf = (key) => (rowByKey.get(key) || {}).value || 0;
-  /** The greedy fill (most expensive that fits) of `rows` up to the budget — the same walk the AI uses. */
+  /** The greedy fill (cheapest that fits) of `rows` up to the budget — the same walk the AI uses.
+   *  2026-10-27：改成**便宜优先**。旧实现按最贵优先，预算一大就只能放一两只，出怪量离官方波次很远
+   *  （线上实测：budget 3061 / 官方 7 只，AI 只放 1 只）。便宜优先才能在预算内把数量堆到上限。 */
   const plan = (rows) => {
     const out = [];
     let left = budget;
     const cap = Math.max(1, Number(conf.maxPicks) || VERSUS_CONFRONT.maxPicks);
-    for (const r of rows.slice().sort((a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key)))) {
+    for (const r of rows.slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key)))) {
       if (out.length >= cap) break;
       if (r.value > left) continue;
       left -= r.value;

@@ -1155,34 +1155,34 @@ export class MatchConfront {
   }
 
   /** An AI player's submission, and the one a player who never submits gets at the window's end: fill the budget from
-   *  its group, most expensive fitting monster first (the client's 自动选择 button walks the group the player chose — the
-   *  AI prefers 特异 (the biggest, most "generic" type), then walks the types in order until one can actually afford
-   *  something, since a tight budget can leave a small type with nothing at all). The 事件期 boss 格 stays EMPTY here
+   *  its group, **cheapest fitting monster first** (2026-10-27: the owner's rule is 「出怪量接近官方、只要 90%」, and the
+   *  old most-expensive-first walk bought one or two monsters out of a big budget), then walk the other types in price
+   *  order to reach the count cap (`confrontPlaceCap`). The 事件期 boss 格 stays EMPTY here
    *  ([ASSUMED], user 2026-10-21: bots / 托管 never pick bosses — the auto-fill keeps its deterministic picks). */
   botConfront(ps) {
     if (this.attackingTeam != null && this.teamIdOf(ps) !== this.attackingTeam) return;
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster' || this.confrontSubs.has(ps.playerId)) return;
     const groups = this.confrontGroups();
     const budget = this.confrontBudget();
-    const plan = (recs) => {
-      const picks = [];
-      let left = budget;
-      for (const r of recs.slice().sort((a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key)))) {
-        if (picks.length >= this.confrontPlaceCap()) break;
+    // 2026-10-27：业主口径是「控怪的出怪量接近官方、只要官方的 90%」，旧实现按**最贵优先**填预算，
+    // 预算一大就只买一两只 —— 线上实测 budget=3061、官方波次 7 只，bot 只放了 1 只。
+    // 改为「便宜优先 + 跨类型补齐」：先吃第一组（AI 偏好特异），数量不够 cap 再从其余类型按价格升序补。
+    const cap = this.confrontPlaceCap();
+    const ordered = groups.map((g, i) => ({ i, rows: (g.rows || []).slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key))) }));
+    const picks = [];
+    let left = budget;
+    let gi = 0;
+    const take = (rows, i) => {
+      for (const r of rows) {
+        if (picks.length >= cap) return;
         if (r.value > left) continue;
+        if (!picks.length) gi = i;
         left -= r.value;
         picks.push({ enemyKey: r.key, gate: picks.length % 2 ? 'upper' : 'lower' });
       }
-      return picks;
     };
-    let gi = 0;
-    let picks = plan((groups[0] && groups[0].rows) || []);
-    if (!picks.length) {
-      for (let i = 1; i < groups.length; i++) {
-        const p = plan(groups[i].rows || []);
-        if (p.length) { gi = i; picks = p; break; }
-      }
-    }
+    if (ordered.length) take(ordered[0].rows, 0);
+    if (picks.length < cap) for (let i = 1; i < ordered.length; i++) take(ordered[i].rows, i);
     // 业主 2026-10-26：AI 也要「操作怪物」—— 不再只丢默认路线，按怪物移动方式挑可用路线并错开投放时刻。
     // 插件可用 `server.modules.matchClass()` 包装 Match 覆写 `_botConfrontPlan` 做更强的决策（不碰引擎）。
     // 复审计 2026-10-27：bot 路径原先直接写库、绕过 _confrontMember 的全部校验
