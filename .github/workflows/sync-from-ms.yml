@@ -36,9 +36,16 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: 拉取魔搭线上（深度 1，带 blob，保证能往 GitHub 推）
+        env:
+          # 魔搭并非匿名可读：runner 上实测 must authenticate。
+          # 该值来自本机 git 凭据助手里的 oauth2 password，存为仓库 secret。
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
         run: |
           set -euo pipefail
-          git remote add msrc https://www.modelscope.cn/studios/jingjiangze/Stronghold-Protocol.git
+          if [ -z "${MODELSCOPE_TOKEN:-}" ]; then
+            echo "::error::缺少 secret MODELSCOPE_TOKEN"; exit 1
+          fi
+          git remote add msrc "https://oauth2:${MODELSCOPE_TOKEN}@www.modelscope.cn/studios/jingjiangze/Stronghold-Protocol.git"
           git fetch --depth 1 msrc master
           SRC=$(git rev-parse FETCH_HEAD)
           echo "SRC=$SRC" >> "$GITHUB_ENV"
