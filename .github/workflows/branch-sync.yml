@@ -139,6 +139,4 @@ $(cat /tmp/rt.txt)"
           git push origin "$BR"
           gh pr create --base ms --head "$BR" \
             --title "backport: 百度侧改动回填魔搭线" \
-            --body "自动从 \`baidu\` 分支提取 \`deploy/baidu/\` 之外的改动。
-
-**合并前请确认**：这些改动是否也应该出现在魔搭线上；合并后 \`sync-baidu\` 会自动把 baidu 重建到新 ms。"
+            --body "自动从 baidu 分支提取 deploy/baidu/ 之外的改动（来源 baidu@$(git rev-parse --short origin/baidu)）。合并前请确认这些改动是否也应出现在魔搭线上；合并后 sync-baidu 会自动把 baidu 重建到新 ms。"
