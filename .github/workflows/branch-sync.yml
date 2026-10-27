@@ -39,6 +39,14 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
+      - name: 守卫 —— 插件跟踪（b4754eae 类事故的门禁）
+        # 磁盘上有文件但没进 git → 发布树缺文件 → mota 整条插件被判无效。
+        # 工具是纯 node 标准库 + git CLI，可直接跑。
+        run: |
+          git fetch origin ms --force
+          git checkout -q --detach origin/ms
+          node tools/check-plugin-tracked.mjs
+
       - name: 守卫 —— baidu 不得有未回填 ms 的运行时提交
         run: |
           set -euo pipefail
