@@ -7,6 +7,17 @@ import { STYLES, PINGS, INVITE, TOASTS } from '@icebreaker/mode-regular';
 /** @typedef {{ kept: string[], drawn: string[], extra: string[] }} Options */
 /** @typedef {{ id: string, skill: number, module: number }} Pick */
 
+/**
+ * 我的搭档：两座局就是另一位；四座局是同奇偶的另一席（与引擎 sim 的 coop.partnerOf、战斗顶栏同一条规则）。
+ * 四座局按奇偶分两队，所以「我 + 搭档」就是我这一队，另外两席是对面那队。
+ * @param {number} seat @param {number} players
+ */
+export const partnerOf = (seat, players) => {
+  if (players === 2) return 1 - seat;
+  for (let s = 0; s < players; s++) if (s !== seat && s % 2 === seat % 2) return s;
+  return -1;
+};
+
 /** A text of the activity table without its markup (<@…>…</>). @param {string} s */
 export const plain = (s) => s.replace(/<[^>]*>/g, '');
 

@@ -155,6 +155,8 @@ export class PlayerState {
     this.lp = 0;
     this.bandId = null;
     this.funds = 0;
+    /** 个人储备（业主 2026-10-26 三层资金）：回合末结余进这里，用于买装备（熔毁商店），跨回合保留。 */
+    this.reserve = 0;
     this.pendingFunds = 0;
     // ---- 海克斯（TFT 式 augment，从 hexmod 移植）----
     /** 本局已选下的全部海克斯 id（按选择顺序）；hex = 第一张（兼容字段） */

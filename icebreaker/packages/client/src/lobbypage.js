@@ -9,6 +9,7 @@ import { ROSTER, loadTraining, lookOf } from './mods.js';
 import { STYLES, TOASTS, TRAINING_LEVELS } from '@icebreaker/mode-regular';
 import { openPart, closePart, setSwitch, SEASON, PAGE_SCREENS } from './lobbykit.js';
 import { PAGES, pageOf, newLocal } from './lobbymap.js';
+import { partnerOf } from './roomtext.js';
 import { createEntry } from './lobbyentry.js';
 import { createSquad } from './lobbysquad.js';
 import { createPrepare } from './lobbyprepare.js';
@@ -259,7 +260,8 @@ function pageMakers(ui, H, G, L, K) {
  */
 function playersOf(H) {
   const v = H.S.view;
-  return v ? [v.members[v.you] ?? null, v.members[1 - v.you] ?? null] : [H.card(), null];
+  const mate = v ? partnerOf(v.you, v.members.length) : -1;
+  return v ? [v.members[v.you] ?? null, v.members[mate] ?? null] : [H.card(), null];
 }
 
 /**
@@ -268,13 +270,13 @@ function playersOf(H) {
  */
 function togetherOf(H) {
   const v = H.S.view;
-  return { matched: !!v?.matched, mine: !!v?.together?.[v.you], mate: !!v?.together?.[1 - v.you], room: !!v };
+  return { matched: !!v?.matched, mine: !!v?.together?.[v.you], mate: !!v?.together?.[partnerOf(v?.you ?? 0, v?.members.length ?? 2)], room: !!v };
 }
 
 /** The likes on the last match's result (房间-6): whether this player gave one, and got one. @param {LobbyHost} H @returns {[boolean, boolean]} */
 function likesOf(H) {
   const v = H.S.view;
-  return v?.likes ? [!!v.likes[v.you], !!v.likes[1 - v.you]] : [false, false];
+  return v?.likes ? [!!v.likes[v.you], !!v.likes[partnerOf(v.you, v.members.length)]] : [false, false];
 }
 
 /** The owner's toast when the mate joins or leaves (页面-6); the count now. @param {any} v @param {number} was @param {(t: string) => void} toast */

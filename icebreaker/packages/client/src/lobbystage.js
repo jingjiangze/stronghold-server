@@ -5,7 +5,7 @@
 import { openPart, closePart, place, unplace, fillList, setSwitch, placeTopMenu, placeBottomBar, seasonLogo, placePicture, placeAvatar, showInvert } from './lobbykit.js';
 import { stagePanel, ownerStatus, pictureOf } from './lobbymap.js';
 import { STYLES, TOASTS, PLAYER_TITLE, INVERSE, modeOf } from '@icebreaker/mode-regular';
-import { cardName } from './roomtext.js';
+import { cardName, partnerOf } from './roomtext.js';
 
 /** @typedef {import('./lobbykit.js').Part} Part @typedef {import('./roomview.js').ProjectView} ProjectView */
 /** @typedef {import('@icebreaker/mode-regular').BoxEntry} BoxEntry @typedef {import('./roomtext.js').Pick} Pick */
@@ -304,7 +304,7 @@ export function createConfirm(p, X) {
         const d = f.stageDetailContainer && f.stageDetailPrefab ? place(p, f.stageDetailContainer, f.stageDetailPrefab) : null;
         if (d) { fillDetail(d, pr, X); void d.anim(d.view().inAnim); }
       }
-      setSwitch(p, f.partnerReadyToggle, !!v.confirmed[1 - v.you]);
+      setSwitch(p, f.partnerReadyToggle, !!v.confirmed[partnerOf(v.you, v.members.length)]);
       setSwitch(p, f.confirmBtnToggle, !!v.confirmed[v.you]);
     },
   };
@@ -327,7 +327,7 @@ export async function playEntrance(p, X, v) {
   seasonLogo(p, f.seasonIconImg2, 'start');
   if (f.bottomBarContainer) placeBottomBar(p, f.bottomBarContainer);
   showPlayer(p, f, X, v, [v.you, f.selfAssitIllustContainer, f.selfEffectIcon, f.selfEffectNameTxt, f.selfNameCardContainer]);
-  showPlayer(p, f, X, v, [1 - v.you, f.partnerAssitIllustContainer, f.partnerEffectIcon, f.partnerEffectNameTxt, f.partnerNameCardContainer]);
+  showPlayer(p, f, X, v, [partnerOf(v.you, v.members.length), f.partnerAssitIllustContainer, f.partnerEffectIcon, f.partnerEffectNameTxt, f.partnerNameCardContainer]);
   await p.anim(v.inverse ? f.flipEnterAnim ?? f.normEnterAnim : f.normEnterAnim);
   await new Promise((done) => { setTimeout(done, SHOW_HOLD_MS); });
   await p.anim(f.showExitAnim);

@@ -176,18 +176,17 @@ export function shopBlockReason(kind, { priv, editable, slot } = {}) {
  * @param {{ ready?: boolean, keptBands?: string[]|null, autoplay?: boolean }} [opts] `ready`: the state asked for
  * @returns {{ title: string, text: string, okText: string, cancelText: string, micro: string } | null}
  */
-export function readyFundsPrompt(priv, { ready = true, keptBands = null, autoplay = false, econ = null, convertMax = 0 } = {}) {
+export function readyFundsPrompt(priv, { ready = true, keptBands = null, autoplay = false, econ = null } = {}) {
   if (!ready || autoplay || !isObj(priv) || priv.alive === false || priv.ready) return null;
   const funds = Math.trunc(Number(priv.funds) || 0);
   if (!(funds > 0)) return null;
   const kept = Array.isArray(keptBands) ? keptBands : ['band_cannot'];
   if (typeof priv.bandId === 'string' && kept.includes(priv.bandId)) return null;
   // 协同共竞 (2026-10-17 业主：没花钱点准备要提示「这笔钱会进协同资金」): the prep end converts what is left, but only up to
-  // `convertPerPlayerMax` per player (server econConvertLeftover) — say the real number instead of promising a ratio.
-  const keep = Number(econ?.projects?.find?.((x) => x?.id === 'storehouse')?.level) || 0;
-  const conv = Math.max(0, Math.min(funds - keep, Math.trunc(Number(convertMax) || 0)));
-  const text = econ && conv > 0
-    ? t('还有 {funds} 资金未使用。休整结束时其中 {conv} 会转入协同资金，其余清零。确定准备就绪吗？', { funds, conv })
+  // 三层资金（业主 2026-10-26 / 2026-10-27 定稿）：协同房的结余不再「清零」，也不再有「归个人 / 归团队」两档——
+  // 恒按比例转入个人储备（买装备）与团队储备（后勤/救济/救援）。具体比例由设施等级决定，这里不承诺数字。
+  const text = econ
+    ? t('还有 {funds} 资金未使用。休整结束时这笔钱会按比例转入你的个人储备与团队储备，不会清零。确定准备就绪吗？', { funds })
     : t('还有 {funds} 资金未使用。休整期结束时，本回合的剩余资金将清零。确定准备就绪吗？', { funds });
   return { title: t('剩余资金'), micro: 'FUNDS LEFT', okText: t('准备就绪'), cancelText: t('继续整备'), text };
 }

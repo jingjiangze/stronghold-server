@@ -69,6 +69,10 @@ RUN set -e; \
        && ( unzip -q /tmp/ice-assets.zip -d /tmp/ice-assets 2>/dev/null || busybox unzip -q /tmp/ice-assets.zip -d /tmp/ice-assets ); then \
       cp -a /tmp/ice-assets/Icebreaker-Games-assets/assets/. /ice/icebreaker/assets/; \
       echo "icebreaker: assets $(find /ice/icebreaker/assets -type f | wc -l) files"; \
+      node icebreaker/tools/seat4-topbar.mjs /ice/icebreaker/assets/skeleton/ui/battle.json /tmp/battle4.json \
+        && mv /tmp/battle4.json /ice/icebreaker/assets/skeleton/ui/battle.json \
+        && echo "icebreaker: co-op top bar patched for four seats" \
+        || echo "WARNING: four-seat top bar not patched (only two seats will show)" >&2; \
     else \
       echo "WARNING: icebreaker assets not fetched at build time; the entrypoint retries in the background" >&2; \
     fi; \

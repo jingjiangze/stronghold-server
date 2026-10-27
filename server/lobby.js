@@ -918,7 +918,7 @@ export class Lobby {
   // room.* handlers
   // ---------------------------------------------------------------------------------------------------
 
-  create(session, { mode, difficulty: asked, test, version: askedVersion, soloUnlimited, teamSize, variant } = {}) {
+  create(session, { mode, difficulty: asked, test, version: askedVersion, soloUnlimited, teamSize, variant, versusAlt } = {}) {
     // A test room exists only when the process switch allowed it. The check runs before the room is built.
     if (test === true && this.testEnabled !== true) return fail(ERR.TEST_DISABLED);
     // the official version (header "Official versions"): left out, the server's default
@@ -980,6 +980,8 @@ export class Lobby {
     if (mode === 'versus') room.teamSize = teamSize === 4 ? 4 : 2;
     // 插件房的规则集（例如 协同共竞 'xie'）：核心只存原样字符串，怎么解释由插件的 matchOptions 决定。
     if (typeof variant === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(variant)) room.variant = variant;
+    // 对抗是否每回合交换攻守（业主 2026-10-26）：缺省 true（交替）；显式 false 才固定首攻。
+    if (mode === 'versus') room.versusAlt = versusAlt !== false;
     // 「不限时」 only on a solo room of a version whose solo is timed (header). Anywhere else the key is ignored, so a
     // stray true cannot change a default or co-op create.
     if (mode === 'solo' && soloUnlimited === true && this.versionSoloTimed(version)) room.soloUnlimited = true;

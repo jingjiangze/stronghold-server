@@ -124,7 +124,9 @@ export function enemyAtGoal(w, c, e) {
       const p = w.players[s];
       if (!isDown(p)) { hit.push(s); continue; }
       p.revive = REVIVE_FRAMES;
-      const mate = n > 1 ? 1 - s : -1;
+      // 倒地的那一席让它的搭档替它吃这一下。搭档按 partnerOf 定义（两座互为搭档，四座同奇偶成对），
+      // 不能写 1 - s：两座以外那会算到 -1 / -2 这种不存在的座位上，与 partnerOf 的配对也自相矛盾。
+      const mate = partnerOf(s, n);
       if (mate >= 0 && !isDown(w.players[mate])) hit.push(mate);
     }
   }

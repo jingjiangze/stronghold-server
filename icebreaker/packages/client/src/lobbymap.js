@@ -2,6 +2,7 @@
 // on, the step's countdown and when it warns, the banner a change of phase brings, the stage choose panel's parts by
 // the player's role, whose pick it is, the lineup's options in order. Pure; the lobby page draws it.
 import { STEP_MS, STEP_HINT_MS, PICTURES } from '@icebreaker/mode-regular';
+import { partnerOf } from './roomtext.js';
 
 /** The pack's pages (页面-6). */
 export const PAGES = Object.freeze({
@@ -109,11 +110,12 @@ export const pictureOf = (art, level) => (Object.hasOwn(PICTURES, level) ? art?.
 /**
  * The pick step as the player sees it (房间-4): its turn; whether it may hand the pick over; what is left; what each
  * side keeps.
- * @param {{ you: number, picking: { by: number, yielded: boolean, left: string[], won: string[][] } }} v
+ * @param {{ you: number, members?: readonly unknown[], picking: { by: number, yielded: boolean, left: string[], won: string[][] } }} v
  */
 export function pickView(v) {
   const p = v.picking, mine = p.by === v.you;
-  return { mine, yielded: p.yielded, canYield: mine && !p.yielded && p.left.length >= 2, left: p.left, kept: p.won[v.you], theirs: p.won[1 - v.you] };
+  const mate = partnerOf(v.you, v.members?.length ?? 2);
+  return { mine, yielded: p.yielded, canYield: mine && !p.yielded && p.left.length >= 2, left: p.left, kept: p.won[v.you], theirs: p.won[mate] ?? [] };
 }
 
 /**

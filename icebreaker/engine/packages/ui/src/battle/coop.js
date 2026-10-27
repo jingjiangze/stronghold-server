@@ -25,7 +25,7 @@ import { refNode } from '../node.js';
  * left of this seat's pause request and of the mate's (−1 for none), the stage's task (none before the first), or
  * 堡垒守御's wave and the rest panel's state (界面-39).
  * @typedef {{ me: Side, mate: Side, speed: number, paused: boolean, asking: number, confirm?: number, task?: Task | null, fortress?: FortressTask | null,
- *   resting?: import('./resting.js').Resting | null }} CoopState
+ *   resting?: import('./resting.js').Resting | null, sides?: Side[], score?: { mine: number, theirs: number } }} CoopState
  */
 
 /** The objectives the task panel has a line for. */
@@ -42,6 +42,17 @@ export const coopSpeedSprite = (sp, speed) => (speed >= 2 ? sp.x2 : sp.x1);
 /** A side's countdown text: whole seconds, rounded up. @param {number} s */
 export const reviveText = (s) => String(Math.max(0, Math.ceil(s)));
 
+/** The pack's seat tags, in the order a seat list is shown: this seat, then the others. A 4-player pack has all four. */
+export const SEAT_TAGS = Object.freeze(['[my]', '[you]', '[mate2]', '[mate3]']);
+
+/**
+ * A ref of this seat's node, rewritten for another seat in the list: `[my]` stays, the rest take the pack's tags.
+ * Seats past the tags the pack has give their own `[my]`-less ref, which finds nothing and shows nothing.
+ * @param {string} ref @param {number} i
+ */
+export const seatRef = (ref, i) => (i === 0 ? ref : ref.replace('[my]', SEAT_TAGS[i] ?? '[you]'));
+
+
 /**
  * The co-op top bar on a UI; `update` shows a frame's state; taps on speed and pause call the handlers, and the answer
  * to the mate's pause request `on.confirm(accept)`.
@@ -52,15 +63,17 @@ export function createCoopTop(ui, c, on) {
   const scr = ui.open('coop.topbar'), root = scr.root, status = refNode(root, c.status.panel);
   scr.show('btn_menu', false);
   if (status) status.active = true;
-  for (const ref of [c.status.lifeLost, c.status.lifeLost?.replace('[my]', '[you]'), c.lag?.back]) { const n = refNode(root, ref); if (n) n.active = false; }
+  for (const ref of [...SEAT_TAGS.map((t) => c.status.lifeLost?.replace('[my]', t)), c.lag?.back]) { const n = refNode(root, ref); if (n) n.active = false; }
   scr.show('text_battle_end_time', false);
   for (const n of ['fortress', 'fortress_lastWave', 'slider_progress_outer']) scr.show(n, false);
+  // 2v2 的比分：素材包里没有这一组（两人局本来也不需要），有才用
+  const score = c.score ? refNode(root, c.score.panel) : null;
+  if (score) score.active = false;
   const confirm = refNode(root, c.pauseConfirm);
   if (confirm) {
     scr.tap('btn_confirm', () => on.confirm?.(true), confirm);
     scr.tap('btn_cancel/hotspot', () => on.confirm?.(false), confirm);
   }
-  const mateRef = (/** @type {string} */ ref) => ref.replace('[my]', '[you]');
   tapHit(scr, root, '@btn_speed_level/btn_speed_level_icon/hotspot', on.speed);
   tapHit(scr, root, `${c.pause}/collider`, on.pause);
   /** @type {CoopState | null} the state shown last */
@@ -69,11 +82,12 @@ export function createCoopTop(ui, c, on) {
     screen: scr,
     /** @param {CoopState} s */
     update(s) {
-      showSide(scr, root, c.status.life, s.me);
-      showSide(scr, root, mateRef(c.status.life), s.mate);
+      const sides = s.sides ?? [s.me, s.mate];
+      sides.forEach((side, i) => showSide(scr, root, seatRef(c.status.life, i), side));
       if (was) sideEntries(scr, root, c.enter, was, s);
       showSpeed(scr, root, c.speed, s, was);
       showPause(scr, root, c, s);
+      if (score) showScore(scr, root, c.score, s, score);
       if (confirm) showConfirm(scr, root, c, confirm, s);
       first ||= s.task?.stage ?? 0;
       if (status && s.fortress) showFortress(scr, status, s.fortress, c.timerWarn ?? TIMER_WARN);
@@ -235,6 +249,21 @@ function showFortress(scr, status, f, warn) {
 
 /** @param {Screen} scr @param {UiNode} root @param {string} ref @param {() => void} fn */
 function tapHit(scr, root, ref, fn) { const n = refNode(root, ref); if (n) scr.tap('', fn, n); }
+
+/**
+ * 2v2 的比分：两队剩余生命合计，夹在四席中间那条官方圆角底板上。只有四席才显示 —— 两人局（以及素材包
+ * 没有这组节点的情形）一个像素都不动，保持原样式。
+ * @param {Screen} scr @param {UiNode} root @param {Record<string, any>} c the pack's score refs
+ * @param {CoopState} s @param {UiNode} group
+ */
+function showScore(scr, root, c, s, group) {
+  const on = !!s.score && (s.sides?.length ?? 2) > 2;
+  if (group.active !== on) group.active = on;
+  if (!on) return;
+  const mine = refNode(root, c.mine), theirs = refNode(root, c.theirs);
+  if (mine) scr.text('', String(s.score?.mine ?? 0), mine);
+  if (theirs) scr.text('', String(s.score?.theirs ?? 0), theirs);
+}
 
 /**
  * A side's lives, and its countdown instead while it is down.

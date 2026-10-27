@@ -30,6 +30,35 @@ const HEX_GRADES = ['prismatic', 'gold', 'silver'];
 const COST_KEYS = ['dmg', 'round', 'deploy'];
 const GEAR_PENALTY = 10;
 
+/** 个人资金价目（业主 2026-10-26：熔毁商店也可以直接花个人资金买，不叠 debuff）。按档定价，数值可调。 */
+const FUNDS_PRICE = { prismatic: 8, gold: 5, silver: 3, gear: 6 };
+
+/**
+ * 一张熔毁卡的个人资金价（0 = 不能拿钱买）。
+ * 装备栏固定 gear 档；其余按 card.grade（prismatic / gold / silver）。
+ * @param {any} card
+ * @returns {number}
+ */
+function meltFundsPrice(card) {
+  if (!card || card.exhausted) return 0;
+  if (card.kind === 'gear') return FUNDS_PRICE.gear;
+  return FUNDS_PRICE[card.grade] || 0;
+}
+
+/**
+ * 扣款（业主 2026-10-26 三层资金）：装备从**个人储备**买，不动每回合资金。
+ * 余额不足返回 false（调用方已先判过，这里只兜底）。
+ */
+function es_safe_spend(ps, price) {
+  const have = Math.max(0, Math.floor(Number(ps.reserve) || 0));
+  if (have < price) return false;
+  ps.reserve = have - price;
+  return true;
+}
+
+/** 这一页能拿钱买装备的余额 = 个人储备。 */
+function es_spendable(ps) { return Math.max(0, Math.floor(Number(ps.reserve) || 0)); }
+
 /** 0..n-1 洗牌（用调用方给的 rng，保证可复现） */
 function shuffled(list, rng) {
   const a = list.slice();
@@ -194,8 +223,11 @@ export class MatchMeltdown {
     return OK;
   }
 
-  /** g.meltPick { slot }：买下某一栏（每栏 1 件，买过即售罄）。 */
-  meltPick(ps, slot) {
+  /**
+   * g.meltPick { slot, pay? }：买下某一栏（每栏 1 件，买过即售罄）。
+   * `pay='funds'` 用个人资金付（不叠 debuff）；缺省/'debuff' 走原来的敌人属性代价。
+   */
+  meltPick(ps, slot, pay = null) {
     const st = this.melt;
     if (!st || !st.open) return fail(ERR.WRONG_PHASE, '商店没有开启'); // i18n-ignore: developer error detail
     if (!ps.alive) return fail(ERR.ELIMINATED);
@@ -206,6 +238,13 @@ export class MatchMeltdown {
     if (!card || card.exhausted) return fail(ERR.BAD_TARGET, '这一栏已经到了极限'); // i18n-ignore
     if (offer.sold[slot]) return fail(ERR.ALREADY, '该栏已售罄'); // i18n-ignore: developer error detail
 
+    // 复审计 2026-10-27：先判支付能力并扣款，**再**发装备。
+    // 旧顺序（先 acquireItem 再判余额）在余额不足时会把装备塞进手牌、只回滚售罄标记 ⇒ 可白嫖。
+    const price0 = meltFundsPrice(card);
+    if (pay === 'funds') {
+      if (!(price0 > 0) || !(es_spendable(ps) >= price0)) return fail(ERR.NO_FUNDS);
+      if (!es_safe_spend(ps, price0)) return fail(ERR.NO_FUNDS);
+    }
     offer.sold[slot] = true;
     card.sold = true;
 
@@ -215,7 +254,7 @@ export class MatchMeltdown {
       try { ps.acquireItem(card.itemId, { source: 'melt' }); }
       catch (e) { this.reportError('melt item', e); }
     }
-    if (card.cost) {
+    if (card.cost && pay !== 'funds') {
       const key = card.cost.type;
       st.debt[key] = (Number(st.debt[key]) || 0) + card.cost.value;
     }
@@ -277,6 +316,18 @@ export class MatchMeltdown {
   }
 
   /** `dmg` 折算成等效生命倍率（10% 减伤 ≈ ×1.111 血量）。 */
+  /**
+   * 「部署回复」档（业主 2026-10-26 接线 / 2026-10-27 补）：debts.deploy 每 1% 让干员 DP 回复速率降 1%，
+   * 上限压到 20%（不低于 0）。乘在 battle flags 的 dpPerSec 上（sim/lifecycle.js 直接读它）。
+   * @returns {number} 0..1 的乘子
+   */
+  meltDeployMul() {
+    const st = this.melt;
+    if (!st) return 1;
+    const r = Math.max(0, Math.min(0.8, (Number(st.debt && st.debt.deploy) || 0) / 100));
+    return r > 0 ? 1 - r : 1;
+  }
+
   meltHpMul() {
     const st = this.melt;
     if (!st) return 1;
@@ -295,6 +346,8 @@ export class MatchMeltdown {
       cards: offer.cards.map((c, i) => ({ ...c, sold: !!offer.sold[i] })),
       sold: offer.sold.slice(),
       debt: { ...st.debt },
+      funds: es_spendable(ps),
+      prices: offer.cards.map((c) => meltFundsPrice(c)),
       growth: st.growth,
       closed: st.closed.has(ps.playerId),
       pool: { prismatic: st.pool.prismatic.length, gold: st.pool.gold.length, silver: st.pool.silver.length },

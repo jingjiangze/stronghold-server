@@ -302,6 +302,12 @@ export class Match {
     this.isVersus = this.mode === 'versus';
     this.coopHuntOn = false;   // 同盟狩猎未启用（对抗模式不需要）
     this.teamSize = this.isVersus && Number.isInteger(opts.teamSize) && opts.teamSize > 0 ? opts.teamSize : (this.isVersus ? 2 : 1);
+    // 对抗规则档（玩家 2026-10-26）：'bounty' = 赏金（线上那套）/ 'confront' = 对抗（纯玩家出怪）
+    // 「对抗」档两条判据都认：opts.versusRule（直连）或 modeId 前缀（子进程通道，isXie 同款）
+    this.versusRule = this.isVersus && (opts.versusRule === 'confront' || /^mode_confront_/.test(String(opts.modeId || ''))) ? 'confront' : 'bounty';
+    // 是否每回合交换攻守（业主 2026-10-26）：缺省 true；「纯对抗」里可以关掉 → 恒为首攻方进攻。
+    this.versusAlt = this.isVersus ? opts.versusAlt !== false : null;
+    // 协同资金没有「归属档」（业主 2026-10-27：团队 / 个人是同一笔结余在局内的两个去处，不是开局选项）。
     /** 攻防回合（2V2/4V4 从狩猎期起每回合红蓝互换）：当前回合的攻方/守方队伍 id；非攻防回合为 null。 */
     this.attackingTeam = null;
     this.defenderTeam = null;

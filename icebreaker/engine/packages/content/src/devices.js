@@ -38,6 +38,9 @@ export const DEVICE_PROFILES = Object.freeze({
   },
   // 轰隆隆先生：IG-DF-1 的装置卡里有它，张数 0，没有发放它的机制，场上不会出现
   trap_018_bomb: { profile: () => ({ inert: true }), source: `${PRTS}%E8%BD%B0%E9%9A%86%E9%9A%86%E5%85%88%E7%94%9F&oldid=417968` },
+  // L-44"留声机"：IG-4 / IG-6 场上的留声机。关卡记录里 atk 0、五项天赋全空、talentBb 空，没有可建模的行为，
+  // 就是一件 100 血、会被打掉的场地物。不登记它 levelAt 会以「devices not supported yet」把整张图拒掉。
+  trap_014_tower: { profile: () => ({}), source: `${PRTS}%E7%95%99%E5%A3%B0%E6%9C%BA` },
   // 地形增伤控制: 位于<玉门天灾工事>中的单位对位于普通地块中的非飞行单位，造成伤害提升至130%，受到伤害降低至70%
   trap_103_ymdgct: {
     works: (d) => ({ dealt: d.talentBb['ymdgct_damage_scale[up].damage_scale'], taken: d.talentBb['ymdgct_damage_scale[down].damage_scale'] }),

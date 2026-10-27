@@ -21,7 +21,16 @@ export function setup(api) {
     if (room && room.mode === 'versus' && !TEAM_SIZES.has(room.teamSize)) room.teamSize = 2;
   });
 
-  api.matchOptions((room) => (room && room.mode === 'versus' ? { teamSize: teamSizeOf(room) } : null));
+  // 规则档（业主 2026-10-26）：「赏金」= 当前线上那套（官方波次 + 替换份额）；「对抗」= 完全由玩家控制出怪。
+  // 走 room.variant（客户端 room.create 带过来），不进 modeId —— 避免动 data/config.json 的模式表。
+  const RULES = new Set(['bounty', 'confront']);
+  const ruleOf = (room) => (RULES.has(room && room.variant) ? room.variant : 'bounty');
+  api.matchOptions((room) => {
+    if (!room || room.mode !== 'versus') return null;
+    // 只走 versusRule（经 MatchProxy 的 wireOptions 白名单转发给子进程）。
+    // 不走 modeId 前缀：实测 mode_confront_* 会让 GameData 找不到该模式，波次价值塌成 0。
+    return { teamSize: teamSizeOf(room), versusRule: ruleOf(room), versusAlt: room.versusAlt !== false };
+  });
 
   api.beforeStart((room, session, lobby) => {
     if (!room || room.mode !== 'versus') return null;

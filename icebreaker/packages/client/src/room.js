@@ -40,7 +40,7 @@ const ASSETS = assetsUrl(), ART = new URL('ui/room/', ASSETS).href;
 let atlas = null;
 const music = createRoomMusic(new URL('audio/', ASSETS).href, readSettings(store).music);
 /** @type {import('./roomview.js').RoomState} */
-const S = { conn: '连接中', lobby: null, view: null, at: 0, draft: null, started: readStarted(), ping: null, emotes: [null, null], chatAt: -Infinity, seeking: null };
+const S = { conn: '连接中', lobby: null, view: null, at: 0, draft: null, started: readStarted(), ping: null, emotes: [null, null, null, null], chatAt: -Infinity, seeking: null };
 /** How often the page measures the lobby's latency (页面-6). */
 const PING_MS = 2000;
 /** @type {WebSocket | null} */
@@ -126,7 +126,7 @@ function onSought(m) {
 
 /** An emote a seat sent (房间-7): shown by that seat for its time. @param {any} m */
 function onEmote(m) {
-  if (m.seat !== 0 && m.seat !== 1) return;
+  if (!(m.seat >= 0 && m.seat < S.emotes.length)) return;
   S.emotes[m.seat] = { id: String(m.id), theme: String(m.theme), until: performance.now() + EMOTES.time * 1000 };
   lobby?.emote();
   setTimeout(draw, EMOTES.time * 1000 + 50);

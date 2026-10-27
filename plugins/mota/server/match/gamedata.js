@@ -90,20 +90,20 @@ export const DEFAULTS = Object.freeze({
     // cannot buy) rolls `basePct + keyPct`, capped at keyMaxPct (80) — user decision 2026-10-08. Off by default: the old
     // "broke and nothing affordable" ask stays.
     botAsk: { enabled: false, basePct: 8, brokePct: 40, keyPct: 60, maxPct: 50, keyMaxPct: 80 },
-    reserve: { convertPerPlayerMax: 2, perfectReward: 1, fullDefenceReward: 2, perfectRewardCapPerRound: 2 },
+    // 复审计 2026-10-27：convertPerPlayerMax 在改三层资金后已无读者（econSplitLeftover 不再用它），删除
+    reserve: { perfectReward: 1, fullDefenceReward: 2, perfectRewardCapPerRound: 2 },
     // relief (DESIGN §27, user decision 2026-10-09): the weakest player may take funds straight out of the team reserve
     // — itself, not on anyone's behalf, and one fund at a time (`amount`). Only a player at or below `lpThreshold` that
     // is (tied for) the team's lowest LP may take, capped `perPlayerPerRound` per player and `teamPerRound` for the
     // team. Off by default; a mode that ships it turns it on (协同共竞). lpThreshold defaults to the per-round LP cap,
     // i.e. "one worst-case round from elimination" (config lpCapPerRound 10, defaultStartLp 28).
     relief: { enabled: false, amount: 1, lpThreshold: 10, perPlayerPerRound: 2, teamPerRound: 4 },
-    // projects: the ones a mode lists are the ones it ships (a mode that drops 联合采购 simply does not name it); with
-    // no block at all the whole default set is used. 联合采购 grants free refreshes at the round start, 应急仓储 the
-    // leftover a player keeps at the prep end, 后勤调度 the team transfer cap (and, at Lv3, one more ask per player).
+    // projects（业主 2026-10-26 改口径）：只剩两个效果 ——
+    //   应急仓储 storehouse = 每级 +10%「个人储备获取」
+    //   后勤调度 logistics  = 每级 +10%「团队储备获取」
     projects: {
-      procure: { costs: [4, 8, 12] },
-      storehouse: { costs: [4, 4, 4] },
-      logistics: { costs: [4, 4, 4], teamCapBonus: [4, 8, 12], extraRequestsAtL3: 1 },
+      storehouse: { costs: [4, 4, 4, 4] },
+      logistics: { costs: [4, 4, 4, 4] },
     },
   },
   // 救援（促融共竞 / DESIGN §29）: a mode turns it on with `mode.revival = { enabled: true }` — 促融共竞 ships it on,
@@ -713,7 +713,6 @@ export class GameData {
         };
       })(),
       reserve: {
-        convertPerPlayerMax: nn(rv.convertPerPlayerMax, d.reserve.convertPerPlayerMax),
         perfectReward: nn(rv.perfectReward, d.reserve.perfectReward),
         // 全员都防住的那一档（业主 2026-10-18）：比「联防没漏」高一档，不是叠加
         fullDefenceReward: nn(rv.fullDefenceReward, d.reserve.fullDefenceReward),

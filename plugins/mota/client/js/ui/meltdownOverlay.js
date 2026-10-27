@@ -13,6 +13,7 @@ import { bondIconUrl, itemIconUrl } from './assetUrls.js';
 import { data } from '../data.js';
 import { hexById } from '../../../shared/hexes.js';
 import { HexGlyphIcon } from './hexGlyph.js';
+import { useState } from '../../vendor/hooks.module.js';
 import { t } from '../../../shared/i18n.js';
 
 const COST_SHORT = { dmg: '敌方减伤', allStats: '敌方全属性', round: '每回合全属性', deploy: '部署回复' };
@@ -91,7 +92,7 @@ function cardIcon(c) {
   </div>`;
 }
 
-function cardBody(c) {
+function cardBody(c, ctx = null) {
   if (c.exhausted) {
     return html`<div class="melt__dead">
       <div class="melt__dead-x">✕</div>
@@ -120,6 +121,11 @@ function cardBody(c) {
       <div class="melt__cost-v">${sign}${c.cost ? c.cost.value : 0}<small>%</small></div>
       <div class="melt__cost-l">${COST_LABEL[c.cost ? c.cost.type : 'dmg'] || ''}</div>
     </div>
+    ${ctx && ctx.pay === 'funds' ? html`<div class="melt__cost melt__cost--funds">
+      <div class="melt__cost-k">${t('个人储备')}</div>
+      <div class="melt__cost-v">${ctx.price}<small>${t(' 块')}</small></div>
+      <div class="melt__cost-l">${ctx.funds >= ctx.price ? t('余额充足') : t('资金不足')}</div>
+    </div>` : null}
     <div class="melt__stamp">${t('已售罄')}</div>`;
 }
 
@@ -127,7 +133,10 @@ function cardBody(c) {
  * @param {{ view: any, onPick?: (slot:number)=>void, onClose?: ()=>void }} props
  */
 export function MeltdownOverlay({ view, onPick = () => {}, onClose = () => {} }) {
+  const [pay, setPay] = useState('debuff');
   if (!view || !Array.isArray(view.cards) || !view.cards.length) return null;
+  const prices = Array.isArray(view.prices) ? view.prices : [];
+  const funds = Number(view.funds) || 0;
   const cards = view.cards;
   const sold = cards.filter((c) => c && c.sold).length;
   const debt = view.debt || {};
@@ -159,15 +168,28 @@ export function MeltdownOverlay({ view, onPick = () => {}, onClose = () => {} })
           : html`<div key=${c.kind === 'gear' ? 'gear' : c.itemId || c.hexId || `h${i}`}
               class=${`melt__card melt__card--${c.kind === 'gear' ? 'gear' : c.grade} ${c.sold ? 'is-sold' : ''}`}
               role="button" tabindex=${c.sold ? -1 : 0}
-              onClick=${(e) => { if (!c.sold) { meltFx(e.currentTarget); onPick(i); } }}
-              onKeyDown=${(e) => { if (!c.sold && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPick(i); } }}>
-            ${cardBody(c)}
+              onClick=${(e) => {
+                if (c.sold) return;
+                if (pay === 'funds' && !(funds >= (prices[i] || 0))) return;
+                meltFx(e.currentTarget); onPick(i, pay);
+              }}
+              onKeyDown=${(e) => {
+                if (c.sold) return;
+                if (pay === 'funds' && !(funds >= (prices[i] || 0))) return;
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(i, pay); }
+              }}>
+            ${cardBody(c, { pay, price: prices[i] || 0, funds })}
           </div>`))}
       </div>
 
       <div class="melt__foot">
         <button type="button" class="melt__close" onClick=${() => onClose()}>${t('关闭商店')}</button>
-        <div class="melt__hint">${t('不刷新 · 每栏限购 1 件 · 代价永久叠加')}</div>
+        <div class="melt__hint">
+          <label class="melt__pay"><input type="checkbox" checked=${pay === 'funds'}
+            onChange=${(e) => setPay(e.currentTarget.checked ? 'funds' : 'debuff')} />
+            ${t('用个人储备购买（不叠代价）')}</label>
+          <span class="melt__funds">${t('个人储备')} <b>${funds}</b></span>
+        </div>
         <div class="melt__count">${t('已签')} <b>${sold}</b> / ${cards.length}</div>
       </div>
     </div>

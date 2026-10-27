@@ -10,6 +10,7 @@
 // while it is off. State lives on the Match: `econRequests`, `econRound`, `econDebts`, `econCover*`, `teamReserve`,
 // `teamProjects` (personal funds stay on PlayerState).
 
+import { splitLeftoverShares } from './pureShares.js';
 import { PHASE, ERR } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
@@ -46,7 +47,7 @@ export const BOUNTY_MAX_SECONDS = 120;
 
 /**
  * 按座位数缩放房间级经济额度：4 人房 k=1（与旧行为逐字节一致）。
- * 个人额度（maxPerRequest / requestsPerRound / convertPerPlayerMax / perPlayerPerRound）不缩放。
+ * 个人额度（maxPerRequest / requestsPerRound / perPlayerPerRound）不缩放。
  */
 export function scaleTeamEcon(base, seats) {
   if (!base) return null;
@@ -201,8 +202,10 @@ export class MatchEconomy {
    */
   teamProjectRead(id, lv) {
     if (!this.teamEcon || !(lv > 0)) return 0;
-    if (id === 'storehouse') return lv;
-    if (id === 'logistics') return (this.teamEcon.projects.logistics.teamCapBonus || [])[lv - 1] || 0;
+    // 业主 2026-10-26：设施只保留两个效果 —— 应急仓储 = +个人储备获取；后勤调度 = +团队储备获取。
+    // 每级 +10%（3 级 = +30%），返回的是**百分点**，由 econSplitLeftover 换算。
+    if (id === 'storehouse') return lv * 10;
+    if (id === 'logistics') return lv * 10;
     return 0;
   }
 
@@ -291,6 +294,7 @@ export class MatchEconomy {
       : null;
     return {
       funds: ps.funds,
+      reserve: Math.max(0, Math.floor(Number(ps.reserve) || 0)),
       // 借还牌把这两格当**单个对象**读（`public/js/ui/econBar.js`）：`requestIn` = 别人向我借的那一条、
       // `requestOut` = 我发出的那一条。⚠ 不能发数组：空数组在 JS 里 truthy，会把「主动借钱」那颗按钮顶掉。
       requestIn: inbound.length
@@ -776,16 +780,58 @@ export class MatchEconomy {
 
   // ---- prep end, debts and the two PvE rewards -----------------------------------------------------
 
-  /** Prep end: leftover funds convert into the team reserve, capped (design §28). 坎诺特 bands keep everything. */
-  econConvertLeftover(ps) {
-    if (!this.teamEcon || this.teamEcon.borrowOnly) return;
-    if (this.gd.leftoverKeptBands.includes(ps.bandId)) return;
-    const conv = Math.min(Math.max(0, ps.funds - this.teamKeepFor(ps)), this.teamEcon.reserve.convertPerPlayerMax);
-    if (conv <= 0) return;
-    ps.funds -= conv;
-    this.teamReserve += conv;
+  /**
+   * 三层资金分配（业主 2026-10-26）：回合末把「每回合资金」拆进「个人储备」与「团队储备」。
+   *   · 个人储备：买装备用（熔毁商店），**必须多于团队储备**
+   *   · 团队储备：升级设施 / 复活队友用
+   *   · 应急仓储每级 +10% 个人份额；后勤调度每级 +10% 团队份额
+   * 团队份额另有硬约束：加完之后不允许超过该玩家的个人储备。
+   * @param {any} ps
+   */
+  econSplitLeftover(ps) {
+    if (!ps) return;
+    const keepAll = this.gd.leftoverKeptBands.includes(ps.bandId);
+    if (!this.teamEcon || this.teamEcon.borrowOnly) {
+      if (!keepAll) ps.funds = 0;
+      return;
+    }
+    if (keepAll) return; // 坎诺特阵营：整额留在每回合资金里
+    const left = Math.max(0, Math.floor(Number(ps.funds) || 0));
+    ps.funds = 0;
+    if (left <= 0) return;
+    const storeLv = Number(this.teamProjects.storehouse) || 0;
+    const logiLv = Number(this.teamProjects.logistics) || 0;
+    const personalRate = 1 + (this.teamProjectRead('storehouse', storeLv) || 0) / 100;
+    const teamRate = 1 + (this.teamProjectRead('logistics', logiLv) || 0) / 100;
+    const reserveNow = Math.max(0, Math.floor(Number(ps.reserve) || 0));
+    // 纯逻辑在 pureShares.js：守恒（余数归个人）· 顺序无关 · 个人储备 >= 团队储备。
+    // 实现与测试 import 同一份代码，避免「测试复刻版和实现漂移」。
+    const { personal, team } = splitLeftoverShares({
+      left, reserveNow, teamReserve: this.teamReserve, personalRate, teamRate,
+    });
+    ps.reserve = reserveNow + personal;
+    this.teamReserve += team;
     ps.dirty();
     this.markPublic();
+  }
+
+  /** 最弱存活玩家的个人储备（团队池上限，用来守住 ps.reserve >= teamReserve）。没人时 Infinity。 */
+  minPersonalReserve() {
+    let m = Infinity;
+    for (const pid of this.order) {
+      const ps = this.players.get(pid);
+      // 救援窗口里的席位（alive=false、pendingDeath=true）也要算：否则团队池可以在他躺着的这段时间
+      // 长到超过他的个人储备，救回来那一刻 `个人储备 >= 团队储备` 立刻失败（复审计 2026-10-27）。
+      if (!ps || (!ps.alive && !ps.pendingDeath)) continue;
+      m = Math.min(m, Math.max(0, Math.floor(Number(ps.reserve) || 0)));
+    }
+    return Number.isFinite(m) ? m : Infinity;
+  }
+
+  /** Prep end: leftover funds convert into the team reserve, capped (design §28). 坎诺特 bands keep everything. */
+  econConvertLeftover(ps) {
+    // 三层资金改造后统一走 econSplitLeftover（业主 2026-10-26）；保留入口供既有调用点使用。
+    if (typeof this.econSplitLeftover === 'function') return this.econSplitLeftover(ps);
   }
 
   /**
@@ -803,10 +849,12 @@ export class MatchEconomy {
     if (this.econRound.perfectGranted > 0) return 0;
     const cfg = this.teamEcon.reserve;
     const amount = full ? cfg.fullDefenceReward : cfg.perfectReward;
+    // 业主 2026-10-27：不再区分「归个人 / 归团队」——防守奖励恒进团队储备（个人储备只由回合末结余按比例补充）。
     const left = cfg.perfectRewardCapPerRound - this.econRound.perfectGranted;
     const n = Math.min(amount, Math.max(0, left));
     if (!(n > 0)) return 0;
-    this.teamReserve += n;
+    // 复审计 2026-10-27：团队池增长不得越过「最弱玩家的个人储备」，否则 ps.reserve >= teamReserve 不成立
+    this.teamReserve = Math.min(this.teamReserve + n, this.minPersonalReserve());
     this.econRound.perfectGranted += n;
     this.markPublic();
     const text = full ? msg('全员都防住了：协同资金 +{n}', { n }) : msg('联防没漏：协同资金 +{n}', { n });

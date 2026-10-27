@@ -158,9 +158,9 @@ async function setUp(match, art, changed, joined, opening) {
   const foeDevices = new Set(Object.entries(devices).filter(([, d]) => d.side === 'ENEMY').map(([k]) => k));
   // with the original UI the units' bars are its own (the engine's 界面-19), not the renderer's
   const opened = await early, pack = opened?.loaded ?? null;
-  const { models, meshes, kit, effects, textures } = await artOf;
+  const { models, meshes, kit, effects, textures, backdrop } = await artOf;
   const renderer = art ? createBattleRenderer({ canvas: /** @type {HTMLCanvasElement} */ ($('field')), level: content.level, textures, view: content.level.view, models, leaders, foeDevices,
-    kit, effects, skills: skillSlots(match), seat, bars: !pack, pixelScale: settings.scale, attackEffects: settings.attackEffects, deviceMeshes: meshes, flyers }) : null;
+    kit, effects, backdrop, skills: skillSlots(match), seat, bars: !pack, pixelScale: settings.scale, attackEffects: settings.attackEffects, deviceMeshes: meshes, flyers }) : null;
   const avatar = (/** @type {string} */ id) => art?.manifest.files[`avatar:${lookOf(id)}`] ? new URL(art.manifest.files[`avatar:${lookOf(id)}`].file, ASSETS).href : null;
   const ops = (content.decks?.[seat] ?? []).map((k) => ({ id: k, name: content.operators[k].name, avatar: avatar(content.operators[k].char ?? k) }))
     .filter((o) => o.avatar !== null).map((o) => ({ ...o, avatar: /** @type {string} */ (o.avatar) }));
@@ -179,13 +179,30 @@ async function setUp(match, art, changed, joined, opening) {
  * Spine models, the devices' meshes, the map theme's kit, the units' attack effects; none without the assets.
  * @param {Awaited<ReturnType<typeof assets>>} art @param {import('@aue/schema').Match} match @param {any} content
  */
+/**
+ * The battle's backdrop: the game's own blurred arena picture — the lobby's background art
+ * (`ui/lobby/BG_176ce236.webp`, 1559×960). The assets' manifest does not list that file, so it is fetched by path;
+ * no assets, or a failed fetch, leaves the renderer's built-in gradient in place.
+ */
+async function backdropArt() {
+  const one = { files: { backdrop: { file: 'ui/lobby/BG_176ce236.webp' } } };
+  const loaded = await loadTextures(one, ASSETS.href).catch(() => null);
+  return loaded?.get('backdrop') ?? null;
+}
+
+/**
+ * What the field draws with from the assets, loaded at once: the match's textures (the engine's 渲染-23), the units'
+ * Spine models, the devices' meshes, the map theme's kit, the units' attack effects, the backdrop; none without the assets.
+ * @param {Awaited<ReturnType<typeof assets>>} art @param {import('@aue/schema').Match} match @param {any} content
+ */
 async function fieldArt(art, match, content) {
-  if (!art) return { models: new Map(), meshes: new Map(), kit: null, effects: null, textures: new Map() };
+  if (!art) return { models: new Map(), meshes: new Map(), kit: null, effects: null, textures: new Map(), backdrop: null };
   const units = unitKeysOf(content), part = bootCounter('正在载入干员、敌人与赛场', 0.55, 0.98, 5);
   const each = (/** @type {Promise<any>} */ p) => p.finally(part);
-  const [textures, models, meshes, kit, effects] = await Promise.all([each(loadTextures(art.manifest, ASSETS.href, matchTextureKeys(content.level, units))),
-    each(spineModels(content)), each(deviceMeshes(content)), each(tileKit(match.level)), each(effectPack([...units.operators, ...units.enemies, ...units.devices]))]);
-  return { models, meshes, kit, effects, textures };
+  const [textures, models, meshes, kit, effects, backdrop] = await Promise.all([each(loadTextures(art.manifest, ASSETS.href, matchTextureKeys(content.level, units))),
+    each(spineModels(content)), each(deviceMeshes(content)), each(tileKit(match.level)), each(effectPack([...units.operators, ...units.enemies, ...units.devices])),
+    each(backdropArt())]);
+  return { models, meshes, kit, effects, textures, backdrop };
 }
 
 /**
@@ -232,7 +249,7 @@ async function openEarlyUi(stage) {
 function originalUi(match, content, avatar, opened) {
   const { ui, loaded, start } = opened, base = new URL('ui/', ASSETS).href;
   const deck = deckCards(match, content, seat, avatar, ROSTER);
-  const hud = createBattleHud(ui, { deck, coop: (match.decks?.length ?? 1) === 2, start });
+  const hud = createBattleHud(ui, { deck, coop: (match.decks?.length ?? 1) > 1, start });
   opened.stop();
   document.body.classList.add('original-ui');
   return { ui, hud, deck, icons: loaded.icons, iconBase: new URL('skills/', base).href };

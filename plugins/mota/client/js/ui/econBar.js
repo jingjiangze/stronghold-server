@@ -47,6 +47,9 @@ export function econBarModel({ priv, pub } = {}) {
     borrowOnly: econ.borrowOnly === true,
     // the player's own fee count, shown on the borrow control (the 促融共竞-style 费用 readout)
     funds: Number(priv && priv.funds) || 0,
+    // 个人储备（三层资金的第二层，业主 2026-10-26）：买装备（熔毁商店）用，跨回合保留
+    // 复审计：服务端把个人储备放在 priv.econ.reserve（不是顶层 priv.reserve），旧写法恒为 0
+    personalReserve: Number(priv && ((priv.econ && priv.econ.reserve) || priv.reserve)) || 0,
     reserve,
     transferLeft: Number(econ.transferLeft) || 0,
     requestLeft: Number(mine.requestLeft) || 0,

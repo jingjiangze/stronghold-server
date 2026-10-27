@@ -5,6 +5,7 @@
 import { KIND } from '@aue/schema';
 import { createMarks, createBattleEmotes, MARK_KIND } from '@aue/ui';
 import { EMOTES, MARKS, markAllowed } from '@icebreaker/mode-regular';
+import { partnerOf } from './battlehud.js';
 
 /** @typedef {import('@aue/schema').View} View */
 /** A mark shown: its seat, its tile, its kind, until when (page ms). @typedef {{ id: string, seat: number, row: number, col: number, type: number, until: number }} Mark */
@@ -68,7 +69,7 @@ export function createSignals(o) {
     if (!markAllowed(mine, performance.now()).ok) return;
     card?.closeMenu();
     dragCard(o, /** @type {ReturnType<typeof createMarks>} */ (card), D, (row, col) => {
-      if (mateOn(o.view(), 1 - o.seat, row, col)) card?.menu(atTile(row, col), (type) => send(row, col, type));
+      if (mateOn(o.view(), partnerOf(o.seat, o.view()?.players.length ?? 2), row, col)) card?.menu(atTile(row, col), (type) => send(row, col, type));
       else send(row, col, MARK_KIND.plain);
     });
   } }) : null;

@@ -322,9 +322,13 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
   // swallows the tap and says nothing. These stay pressable, every refusal names its reason, and a held press shows what
   // the level actually does (longPress.js).
   const refuse = (why) => { if (onRefuse) onRefuse(why); };
-  const projectWhat = (p, n) => (p.id === 'logistics'
-    ? t('全队每回合可调拨的资金上限 +{n}', { n })
-    : t('休整结束时最多保留 {n} 资金到下一回合', { n }));
+  // 三层资金（业主 2026-10-26 / 复审计 2026-10-27）：设施只剩两个效果，服务端 now/next 是「百分点」
+  // now/next 是「升到该等级后的累计百分点」（teamProjectRead 返回 lv*10），所以文案写「累计」而不是「每级」
+  const projectWhat = (p, n) => (p.id === 'storehouse'
+    ? t('累计 +{n}% 个人储备获取', { n })
+    : p.id === 'logistics'
+      ? t('累计 +{n}% 团队储备获取', { n })
+      : t('+{n}', { n }));
   const projectNote = (p) => {
     const head = t('{name} Lv{level}：{what}', { name: t(p.name), level: p.level, what: projectWhat(p, p.now) });
     if (p.maxed || p.next == null) return `${head}\n${t('已满级')}`;
@@ -337,6 +341,10 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
   }) : '');
   const reliefHold = longPress(reliefNote);
   return html`<div class="econbar" role="group" aria-label=${t('协同经济')}>
+    <span class="econbar__res econbar__mine" data-testid="personal-reserve"
+      title=${t('个人储备：回合末结余与防守奖励的积累，用于购买装备（熔毁商店）')}>
+      <b class="num">${econ.personalReserve || 0}</b><span class="econbar__micro">${t('个人储备')}</span>
+    </span>
     ${onOpenShop
       ? html`<button type="button" class="econbar__res econbar__shop" data-testid="open-melt-shop"
           title=${t('熔毁商店：点击打开，四栏各限购一件，代价本局永久叠加')}

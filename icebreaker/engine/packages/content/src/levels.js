@@ -5,6 +5,8 @@ import act1multi02 from '../data/levels/act1multi_02.json' with { type: 'json' }
 import act1multi06 from '../data/levels/act1multi_06.json' with { type: 'json' };
 import act1multiHard02 from '../data/levels/act1multi_hard-02.json' with { type: 'json' };
 import act1multiRm07 from '../data/levels/act1multi_rm07.json' with { type: 'json' };
+import act1multi07 from '../data/levels/act1multi_07.json' with { type: 'json' };
+import act1multiRm05 from '../data/levels/act1multi_rm05.json' with { type: 'json' };
 import act2multiRm01 from '../data/levels/act2multi_rm01.json' with { type: 'json' };
 import act1multiTr01 from '../data/levels/act1multi_tr01.json' with { type: 'json' };
 import act1multiFortressRm01 from '../data/levels/act1multi_fortress_rm01.json' with { type: 'json' };
@@ -19,7 +21,7 @@ import { CARRIED } from './carried.js';
 /** The extracted levels, by id. @type {Readonly<Record<string, any>>} */
 export const LEVELS = Object.freeze({
   act1multi_01: act1multi01, act1multi_02: act1multi02, act1multi_06: act1multi06, 'act1multi_hard-02': act1multiHard02, act1multi_rm07: act1multiRm07,
-  act2multi_rm01: act2multiRm01, act1multi_tr01: act1multiTr01, act1multi_fortress_rm01: act1multiFortressRm01, 'act1multi_fortress_hard-01': act1multiFortressHard01,
+  act1multi_07: act1multi07, act1multi_rm05: act1multiRm05, act2multi_rm01: act2multiRm01, act1multi_tr01: act1multiTr01, act1multi_fortress_rm01: act1multiFortressRm01, 'act1multi_fortress_hard-01': act1multiFortressHard01,
 });
 
 /** enemy_attribute_mul's keys and the enemy fields they multiply, with each field's value when the enemy has none. */
@@ -81,7 +83,10 @@ function optionsAt(options, d) {
 }
 
 /** The levels being tested (关卡-8): they load with enemy abilities that have no behaviour yet, which do nothing there. */
-export const TESTING = Object.freeze(['act1multi_fortress_rm01', 'act1multi_fortress_hard-01']);
+// 07 / rm05：关卡数据一直在磁盘上没接进来。它们的敌人有几项能力未实现（lasso / charge / boom 等），
+// 走 TESTING 通道放行 —— 未实现的能力不发动，页面标「测试中」，比整张图玩不到好。
+// hard-03 仍不可用：它的 env_system_new 符文两种难度都不支持，runes 检查在 TESTING 之前就 throw。
+export const TESTING = Object.freeze(['act1multi_fortress_rm01', 'act1multi_fortress_hard-01', 'act1multi_07', 'act1multi_rm05']);
 
 /** Whether a level is being tested (关卡-8): one of TESTING, or its file says so. @param {string} id @param {any} raw */
 const beingTested = (id, raw) => TESTING.includes(id) || raw.testing === true;

@@ -72,6 +72,15 @@ export function collectViolations(m, { limit = 25 } = {}) {
   // either while the rule set is off, and never a request that outlived its prep.
   if (m.teamEcon) {
     if (!Number.isInteger(m.teamReserve) || m.teamReserve < 0) fail(`team reserve ${m.teamReserve}`);
+    // 三层资金（业主 2026-10-26 / 复审计 2026-10-27）：个人储备必须非负，且每个活着的玩家
+    // 的个人储备都要 >= 团队储备 —— 只校验 teamReserve 非负会让这个不变量被静默破坏。
+    for (const pid of m.order) {
+      const ps = m.players.get(pid);
+      if (!ps || !ps.alive) continue;
+      const r = ps.reserve;
+      if (!(Number.isInteger(r) && r >= 0)) fail(`personal reserve ${r} of ${pid}`);
+      if (r < m.teamReserve) fail(`personal reserve ${r} < team reserve ${m.teamReserve} (${pid})`);
+    }
     const outs = new Map();
     for (const req of m.econRequests.values()) {
       if (m.phase !== PHASE.PREP) fail(`request ${req.id} outside PREP (${m.phase})`);

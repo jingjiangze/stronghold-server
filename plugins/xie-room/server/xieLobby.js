@@ -26,6 +26,7 @@ export function setup(api) {
   });
 
   api.matchOptions((room) => {
+    if (!room || room.mode !== 'coop') return null;
     const v = variantOf(room);
     if (!v) return null;
     const diff = String(room.difficulty || 'NORMAL').toLowerCase();

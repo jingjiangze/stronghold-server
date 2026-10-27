@@ -169,7 +169,15 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const [group, setGroup] = useState(null);
   const [picks, setPicks] = useState([]); // [{ enemyKey, gate, routeIndex?, time? }]
   const [position, setPosition] = useState('mid');
-  const patchPick = (i, patch) => setPicks((arr) => arr.map((p, k) => (k === i ? { ...p, ...patch } : p)));
+  // 路线按**种类**生效（业主 2026-10-26：不同种类可以不同路线，同一只不单独设）：改一行的路线 = 同 enemyKey 的
+  // 所有已放置怪一起改；时刻仍逐只可调（那是投放节奏，不是路线）。
+  const patchPick = (i, patch) => setPicks((arr) => {
+    const key = arr[i] && arr[i].enemyKey;
+    if (patch && Object.hasOwn(patch, 'routeIndex') && key) {
+      return arr.map((p) => (p.enemyKey === key ? { ...p, ...patch } : p));
+    }
+    return arr.map((p, k) => (k === i ? { ...p, ...patch } : p));
+  });
   useEffect(() => { setGroup(null); setPicks([]); setPosition('mid'); }, [conf && conf.round]);
   if (!conf || !conf.active) return null;
   const m = gd.m;
@@ -197,7 +205,9 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const plan = (rows) => {
     const out = [];
     let left = budget;
+    const cap = Math.max(1, Number(conf.maxPicks) || VERSUS_CONFRONT.maxPicks);
     for (const r of rows.slice().sort((a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key)))) {
+      if (out.length >= cap) break;
       if (r.value > left) continue;
       left -= r.value;
       out.push({ enemyKey: r.key, gate: out.length % 2 ? 'upper' : 'lower' });
@@ -380,6 +390,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
       ${stage === 'monster' ? html`<p class="confov__remain" data-testid="confront-remain">
         <b class="num">${t('本回合还能放 {n} 只', { n: canPlace })}</b>
         <span class="num t-dim">${t('（剩余价值 {left} / {budget}）', { left: remaining, budget })}</span>
+        <span class="t-dim" data-testid="confront-pool-round">${t('可选：第 1–{r} 回合出过的怪', { r: conf.round })}</span>
       </p>` : null}
 
       ${stage === 'target' ? html`<div class="confov__targets">

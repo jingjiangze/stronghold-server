@@ -29,11 +29,45 @@ export class MatchCombat {
    * Spawn list of a field after the onBattleStart handlers (which may edit `ev.spawns`): malformed entries are dropped
    * and a kill bounty is copied into `mods.bountyCoins`, so a leaked bounty enemy keeps paying its killer in 联防.
    */
+  /**
+   * 本场战斗的 DP flags：在 `gd.dp` 之上叠加熔毁商店的「部署回复」代价（debt.deploy）。
+   * sim 每帧用 flags.dpPerSec 回复 DP（sim/battle/lifecycle.js:81），所以压这里即可。
+   * @returns {{ dpInit:number, dpPerSec:number, dpMax:number }}
+   */
+  dpFlags() {
+    const base = this.gd.dp;
+    if (typeof this.meltDeployMul !== 'function') return base;
+    try {
+      const mul = this.meltDeployMul();
+      if (!(mul < 1)) return base;
+      return { ...base, dpPerSec: Math.max(0, Number(base.dpPerSec) * mul) };
+    } catch (e) { this.reportError('melt deploy', e); return base; }
+  }
+
   _sanitizeSpawns(list, ownerPlayerId = null) {
     const out = [];
     for (const s of Array.isArray(list) ? list : []) {
       if (!s || typeof s !== 'object' || typeof s.enemyKey !== 'string' || !this.gd.enemy(s.enemyKey)) continue;
       const spec = { ...s, mods: s.mods && typeof s.mods === 'object' ? { ...s.mods } : {} };
+      // 熔毁商店的代价（业主 2026-10-26 接线）：allStats/growth → 全属性；dmg → 等效血量。
+      // 复审计 2026-10-27：只在**还没贴过**时才乘 —— 普通场的 mods 会随漏怪带进联防、再随接力带进下一段，
+      // 每次 _sanitizeSpawns 都乘一遍会让联防 ×2、接力 ×3（与「漏怪保持同属性」的设计冲突）。
+      if (typeof this.meltMul === 'function' && typeof this.meltHpMul === 'function' && !spec.mods.meltApplied) {
+        try {
+          const gm = this.meltMul();
+          const hm = this.meltHpMul();
+          if (gm !== 1 || hm !== 1) {
+            const mul = (k, f) => { const v = Number(spec.mods[k]); return (Number.isFinite(v) && v > 0 ? v : 1) * f; };
+            spec.mods.hpMul = mul('hpMul', gm * hm);
+            spec.mods.atkMul = mul('atkMul', gm);
+            spec.mods.speedMul = mul('speedMul', gm);
+            // allStats = 「全属性」：sim 也消费 defMul / resMul（sim/battle/spawns.js:114,119），一并乘上
+            spec.mods.defMul = mul('defMul', gm);
+            spec.mods.resMul = mul('resMul', gm);
+          }
+          spec.mods.meltApplied = true;
+        } catch (e) { this.reportError('melt wiring', e); }
+      }
       if (ownerPlayerId && spec.ownerPlayerId == null) spec.ownerPlayerId = ownerPlayerId;
       const coins = spec.bounty && typeof spec.bounty === 'object' ? Math.trunc(Number(spec.bounty.coins) || 0) : 0;
       if (coins > 0 && spec.mods.bountyId == null && spec.mods.bountyCoins == null) spec.mods.bountyCoins = coins;
@@ -84,7 +118,7 @@ export class MatchCombat {
       spawns: this._sanitizeSpawns(Array.isArray(ev.spawns) ? ev.spawns : spawns, ps.playerId),
       routes: wave.routes,
       sharedBoss: null,
-      flags: { layerGainsEnabled: true, ...this.gd.dp },
+      flags: { layerGainsEnabled: true, ...this.dpFlags() },
       fieldId: `n:${ps.playerId}`,
       enemyOverrides: wave.overrides,
       waveId: wave.templateId,

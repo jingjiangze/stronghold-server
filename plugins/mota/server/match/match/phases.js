@@ -444,6 +444,11 @@ export class MatchPhases {
       this.confrontStage = null; this.confront = null; this.confrontSubs = null; this.confrontTargets = null;
       this._confrontRemoved = null;
     }
+    // 熔毁代价的「每回合全属性」档：每回合把 debt.round 累加进 growth（业主 2026-10-26 接线）
+    if (this.melt && this.melt.debt) {
+      const per = Math.max(0, Number(this.melt.debt.round) || 0);
+      if (per > 0) this.melt.growth = Math.max(0, Number(this.melt.growth) || 0) + per;
+    }
     const alive = this.alivePlayers();
     // the round's enemies (shared composition, generated now so the prep preview is exact). Planned BEFORE the players'
     // round start: its recompute() checks the board on the field the player deploys on this round (deployFieldOf reads
@@ -455,6 +460,10 @@ export class MatchPhases {
     } else {
       // stageId: a workshop stage may bind its own wave table to a round (shared/waveAuthoring.js; waves.js buildNormalWave)
       this.wave = buildNormalWave(this.gd, this.rngWaves, this.factions, r, this.stageId);
+      // 对抗：记下本回合真正生成的怪 —— 狩猎期「只能选该回合往前出过的怪」以它为真源（业主 2026-10-26）
+      if (this.isVersus) {
+        try { this.confrontRecordWave(r, this.wave); } catch (e) { this.reportError('confrontRecordWave', e); }
+      }
     }
     for (const ps of alive) ps.startRound(r);
     // hexDraftDisabled：业主 2026-10-26 口径 —— 协同共竞**不做海克斯三选一**（草案），只保留熔毁商店。

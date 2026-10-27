@@ -132,7 +132,8 @@ export class MatchInfra {
   /** @returns {{ attack:number, defend:number }|null} 非攻防回合 null */
   roleTeamsFor(r = this.round) {
     if (!this.isRoleRound(r)) return null;
-    const a = Math.abs((r - 1) % 2) === 0 ? 0 : 1;
+    // 业主 2026-10-26：`versusAlt === false`（纯对抗里关掉交替）时恒为首攻方进攻，不再按回合翻转。
+    const a = this.versusAlt === false ? 0 : (Math.abs((r - 1) % 2) === 0 ? 0 : 1);
     return { attack: a, defend: 1 - a };
   }
   isAttacker(ps) { return this.attackingTeam != null && this.teamIdOf(ps) === this.attackingTeam; }

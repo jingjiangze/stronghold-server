@@ -119,7 +119,8 @@ export class MatchViews {
             round: this.round,
             ratio: this.confrontRatio ? this.confrontRatio() : null,
             budget: this.confrontBudget ? this.confrontBudget() : null,
-            maxPicks: VERSUS_CONFRONT.maxPicks,
+            // 本回合一次最多放几只：对抗按官方出怪只数折半（confrontPlaceCap），协同沿用协议上限
+            maxPicks: this.confrontPlaceCap ? this.confrontPlaceCap() : VERSUS_CONFRONT.maxPicks,
             targets: this.confrontTargets ? Object.fromEntries(this.confrontTargets) : {},
             groups: (this.confrontGroups ? this.confrontGroups() : []).map((g) => ({ id: g.id, name: g.name, icon: g.icon, desc: g.desc, rows: (g.rows || []).map((r) => ({ key: r.key, name: r.name, value: r.value })) })),
             // 预设路线（攻方选路线 + 时刻；服务端按公式校验）

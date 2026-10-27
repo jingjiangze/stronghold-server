@@ -14,6 +14,8 @@ import { PLUGIN_OFFER_SLOTS } from './plugins/limits.js';
 const isInt = (v, lo = -Infinity, hi = Infinity) => Number.isInteger(v) && v >= lo && v <= hi;
 const isStr = (v, max = 64) => typeof v === 'string' && v.length <= max;
 const isBool = (v) => typeof v === 'boolean';
+/** 官方版本 id（DESIGN §35.23）：与核心 shared/protocol.js 同一口径 —— 浏览器拿的是这份顶替拷贝，缺了就发不出去。 */
+export const isVersionId = (v) => typeof v === 'string' && v.length <= 40 && /^[a-z0-9]{1,32}(?:@[A-Za-z0-9_]{1,16})?$/.test(v);
 const isId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_\-.:]+$/.test(v);
 const isUid = (v) => isInt(v, 1, 2 ** 31);
 const isNum = (v, lo = -Infinity, hi = Infinity) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
@@ -517,7 +519,7 @@ export const C2S = {
   // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
   // variant: a rule-set variant of a co-op room, mode_<variant>_<difficulty> ('xie' = 协同共竞, DESIGN §29);
   // absent ⇒ the plain mode_multi_*. Lobby.create 透传给 Room → Match opts（server/lobby.js）。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || v === 2 || v === 4, $optional: ['test', 'variant', 'private', 'randomStage', 'teamSize'] },
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || v === 2 || v === 4, versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, $optional: ['test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.ready': { ready: isBool },
@@ -525,6 +527,15 @@ export const C2S = {
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
+  // 以下 4 键原先整组缺失（核心有、本顶替拷贝没有 ⇒ 客户端一发包就在本地 BAD_MSG，服务端收不到）：
+  // - room.card：名片干员（ui/seatArt.js 的 pick 上报；本插件的 room.js 早已在发，只是被 CARD_SYNC 探测静默挡住）
+  // - state.resync：public/js/net.js:551 requestResync —— 断线重连后的状态补帧，**这份缺失等于重连永远不同步**
+  // - room.setAiTakeover / room.aiRequest / room.aiVote：观战席接管 AI 席位（server/lobby.js 均有 handler）
+  'room.setAiTakeover': { on: isBool },
+  'room.aiRequest': { botId: isId },
+  'room.aiVote': { voteId: (v) => typeof v === 'string' && v.length <= 16, approve: isBool },
+  'room.card': { charId: (v) => v === '' || isCharId(v) },
+  'state.resync': {},
   'room.addBot': {},
   'room.removeBot': { seat: (v) => isInt(v, 0, MAX_SEATS - 1) },
   // the host removes another human before the match (server/lobby.js kick; community report #17); playerId = the one the
@@ -571,12 +582,22 @@ export const C2S = {
   'room.list': {},
   // 私密开关（房主、非对局中）：默认公开，勾上后从公开列表消失。
   'room.setPrivate': { private: (v) => typeof v === 'boolean' },
+  // 官方版本切换（DESIGN §35.23，核心 0.3.2 起；本顶替拷贝原先整组缺失 ⇒ 客户端一发包就被判 BAD_MSG）：
+  // 房主提案 → 在座人类投票（全票通过才切；单人房立即切）；room.state.version / versionVote
+  'room.proposeVersion': { version: isVersionId },
+  'room.versionVote': { voteId: (v) => isInt(v, 1, 2 ** 31), agree: isBool },
+  'room.cancelVersionVote': { voteId: (v) => isInt(v, 1, 2 ** 31) },
+  // 「不限时」（§35.23.10）：只对 mode==='solo' 且该版本单人计时（config.version.rules.soloTimed）的房间生效；
+  // 缺省关，room.state 只在开启时带 soloUnlimited: true
+  'room.setSoloUnlimited': { on: isBool },
   // 对抗模式（2V2 / 4V4，2026-10-24）：狩猎期目标 / 布阵 / 悬赏提取、事件期选择
   'g.confrontTarget': { targetPlayerId: isId },
   'g.hex': { hexId: (v) => typeof v === 'string' && v.length > 0 && v.length <= 64 },
   'g.hexReroll': { slot: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
   'g.meltOpen': {},
-  'g.meltPick': { slot: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
+  'g.meltPick': { slot: (v) => Number.isInteger(v) && v >= 0 && v <= 8,
+    // 支付方式（业主 2026-10-26）：缺省/'debuff' = 吃敌人属性代价；'funds' = 花个人资金
+    pay: (v) => v == null || v === 'funds' || v === 'debuff' },
   'g.meltClose': {},
   'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 64, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), $optional: ['bosses'] },
   'g.confront.withdraw': { gold: (v) => isInt(v, 1, 100000) },

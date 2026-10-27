@@ -28,6 +28,7 @@ import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
 import { RANDOM_MODE } from '../../../shared/randomMode.js';
 import { html, confirmDialog, Button, Icon, MicroLabel, Panel, TextField, PingPill, Tooltip, Spinner, DifficultyIcon } from '../ui/components.js';
+
 import { toast, toastError } from '../ui/toasts.js';
 import { GuideButton, openGuide } from '../ui/guide.js';
 import { openStats } from './stats.js';
@@ -50,6 +51,16 @@ import { t, tc, N_ } from '../../../shared/i18n.js';
 import { NoticesButton } from '../ui/notices.js';
 import { C2S as SERVER_C2S } from '../../../shared/protocol.js';
 import { DEFAULT_DIFFICULTY, parsePlaytestParam } from './lobbyLinks.js';   // 协同共竞: xieRoom 与深链共用（Forge 转发层）
+
+// 对抗规则 dock 的样式只在插件里（css/screens/proto-dock.css），核心 index.html 不引用它：首次加载本模块时注入一次。
+// 与 game.js 注入 hex.css 同法；插件的客户端覆盖按同路径顶替页面资源，所以 /css/screens/proto-dock.css 拿到的是插件那份。
+if (typeof document !== 'undefined' && document.head && !document.querySelector('link[data-sp-plugin-css="proto-dock"]')) {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/css/screens/proto-dock.css';
+  link.setAttribute('data-sp-plugin-css', 'proto-dock');
+  document.head.appendChild(link);
+}
 
 /** Official mode texts (activity_table act2autochess.modeDataDict), fallback when config.json is absent. */
 export const MODE_TEXT = {
@@ -103,23 +114,24 @@ export function stageNote(stages) {
 const MODE_CARDS = [
   {
     id: 'solo', name: N_('独立模拟'), en: 'SOLO SIMULATION', icon: 'user',
-    desc: N_('独自调配资金与干员，以自己的节奏完成整场模拟。'),
-    points: [N_('1 名博士'), N_('休整期与机变阶段不限时')],
+    desc: N_('一个人的完整对局：自己买人、布阵、升级，扛过官方排好的每一波。休整期与机变阶段不限时，可以慢慢想。'),
+    points: [N_('1 名博士 · 无队友'), N_('官方波次 · 不分攻守'), N_('休整与机变不限时')],
   },
   {
     id: 'coop', name: N_('同盟模拟'), en: 'ALLIANCE SIMULATION', icon: 'users',
-    desc: N_('与至多 {n} 名博士组成同盟，共享干员池，联防协作抵御敌潮。'), params: { n: MAX_SEATS - 1 },
-    points: [N_('1–{n} 名博士 · 邀请真人队友'), N_('联防阶段 · 最终攻势合并生命值')], pointParams: { n: MAX_SEATS },
+    desc: N_('官方合作：每人自己一套棋盘、自己的钱，共享干员池；敌人的漏怪会打到相邻阵地，最终攻势按全队生命合计。'),
+    params: { n: MAX_SEATS - 1 },
+    points: [N_('1–{n} 名博士 · 邀请真人队友'), N_('联防相邻阵地 · 最终攻势合并生命值'), N_('无协同资金')], pointParams: { n: MAX_SEATS },
   },
   {
-    id: 'versus', name: N_('对抗模拟'), badge: 'NEW', en: 'VERSUS', icon: 'sword',
-    desc: N_('一队投放怪物、一队布防作战，攻守每回合轮换；事件期还能从词条里挑强化。'),
-    points: [N_('2V2（4 席）/ 4V4（8 席）'), N_('狩猎期对抗 · 事件期选择')],
+    id: 'versus', name: N_('赏金 / 控怪'), badge: 'NEW', en: 'VERSUS', icon: 'sword',
+    desc: N_('2V2 攻防：一队投放怪物、一队布防作战，攻守按回合交换。赏金＝官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金；控怪＝这一波出什么怪、走哪条路线、什么时候进场，全部由你决定。'),
+    points: [N_('固定 2V2（4 席）· 攻守轮换'), N_('赏金 / 控怪 两档 · 控怪可关掉攻守交换 · 事件期挑强化')],
   },
   {
     id: 'xie', name: N_('协同共竞'), badge: 'NEW', en: 'JOINT OP', icon: 'dice',
-    desc: N_('与队友借调资金、把结余汇进团队储备、全队表决买后勤项目，倒下的队友还能被救回来。'),
-    points: [N_('1–2 名博士 · 可带 AI 队友'), N_('借钱协同 · 共享池救援')],
+    desc: N_('两人共竞：可以互相借调资金、用协同资金买后勤项目与加时，倒下的队友还能被救回来。协同资金有两种归属——团队（进公共储备，谁都能用）或个人（防守奖励与结余都归自己）。'),
+    points: [N_('1–2 名博士 · 可带 AI 队友'), N_('协同资金：团队共享 / 个人自持 · 借贷与救援')],
   },
 ];
 
@@ -525,7 +537,8 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
  */
 function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficulty, onClose, matchmaking, brief, privateRoom, onPrivate,
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
-  testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null }) {
+  testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
+  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -575,18 +588,48 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
     <div class="proto-body">
       <section class="proto-stage">
         <${ProtocolScene} key=${difficulty} difficulty=${difficulty} />
-        <div class="proto-brief">
-          <span class="proto-brief__code num">${info.code}</span>
-          <b class="proto-brief__name">${t(DIFFICULTY_NAMES[difficulty])}</b>
-          <p>${t(card.desc, card.params)}</p>
+        <div class=${`proto-bottom${roomMode === 'versus' ? ' has-dock' : ''}`}>
+          <div class="proto-brief">
+            <span class="proto-brief__code num">${info.code}</span>
+            <b class="proto-brief__name">${t(DIFFICULTY_NAMES[difficulty])}</b>
+            <p>${t(card.desc, card.params)}</p>
+          </div>
+          ${roomMode === 'versus' ? html`<div class="proto-dock">
+            <div class="proto-dock__row" role="radiogroup" aria-label=${t('对抗规则')}>
+              ${[
+                { key: 'bounty', code: 'B', acc: '#e8b25c', name: t('赏金'), sub: t('替换部分官方出怪'),
+                  title: t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金') },
+                { key: 'confront', code: 'C', acc: '#e2653d', name: t('控怪'), sub: t('出怪 · 路线 · 时机全可控'),
+                  title: t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定') },
+                { key: 'ai', code: 'AI', acc: '#5cc9e8', name: t('AI 对抗'), sub: t('你控怪 · AI 布防'), locked: true,
+                  title: t('AI 对抗：你操作怪物、AI 布防（1–20 人，尚未开放）') },
+              ].map((r) => html`<button key=${r.key} type="button" role="radio" aria-checked=${versusRule === r.key ? 'true' : 'false'}
+                class=${`vsopt${versusRule === r.key ? ' is-on' : ''}`} style=${`--acc:${r.acc}`}
+                disabled=${!!busy || !!r.locked} title=${r.title}
+                onClick=${() => !r.locked && onVersusRule && onVersusRule(r.key)}>
+                <span class="vsopt__code">${r.code}</span>
+                <span class="vsopt__text"><b>${r.name}</b><small>${r.sub}</small></span>
+                ${r.locked ? html`<span class="vsopt__lock">${t('待开放')}</span>` : null}
+              </button>`)}
+            </div>
+            <div class="proto-dock__foot">
+              <span class="proto-dock__note">${versusRule === 'bounty'
+                ? t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金')
+                : versusRule === 'confront'
+                  ? t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定')
+                  : t('AI 对抗：你操作怪物、AI 布防（1–20 人，尚未开放）')}</span>
+              ${versusRule === 'confront' ? html`<label class="proto-versus__alt">
+                <input type="checkbox" checked=${versusAlt !== false} disabled=${!!busy}
+                  onChange=${(e) => onVersusAlt && onVersusAlt(e.currentTarget.checked)} />
+                <span>${t('每回合交换攻守')}</span></label>` : null}
+            </div>
+          </div>` : null}
         </div>
         ${brief ? html`<div class="proto-fp">${brief}</div>` : null}
       </section>
       <section class="proto-side">
-        ${roomMode === 'versus' ? html`<div class="proto-versus" role="radiogroup" aria-label=${t('对抗人数')}>
-          ${[2, 4].map((n) => html`<button key=${n} type="button" role="radio" aria-checked=${versusTeam === n ? 'true' : 'false'}
-            class=${`dpick__opt${versusTeam === n ? ' is-active' : ''}`} disabled=${!!busy}
-            onClick=${() => onVersusTeam && onVersusTeam(n)}>${n}V${n}</button>`)}
+        ${modeVariant === 'xie' ? html`<div class="proto-versus proto-versus--info">
+          <span class="proto-versus__note">${t('协同资金在局内分三层：每回合资金在休整结束时按比例转入个人储备（买装备）与团队储备（后勤项目 / 告急救济 / 救援）。个人储备始终不少于团队储备。')}</span>
         </div>` : null}
         <div class="proto-list" role="radiogroup" aria-label=${t('模拟难度')}>
           ${DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
@@ -832,6 +875,10 @@ export function LobbyScreen() {
   const [simulation, setSimulation] = useState(lobbySimulationPreference);
   // 对抗模式：2V2（teamSize 2，4 席）/ 4V4（teamSize 4，8 席）
   const [versusTeam, setVersusTeam] = useState(2);
+  // 对抗规则档（业主 2026-10-26）：赏金 = 线上那套（官方波次 + 替换份额），对抗 = 纯玩家出怪
+  const [versusRule, setVersusRule] = useState('bounty');
+  // 纯对抗里可以关掉「每回合交换攻守」（业主 2026-10-26）；赏金档恒交替。
+  const [versusAlt, setVersusAlt] = useState(true);
   const [difficulty, setDifficulty] = useState(() => preferredDifficulty(lobbySimulationPreference()));
   const [fpVariant, setFpVariant] = useState(firepowerVariantPreference);
   const roomMode = simulation === 'solo' ? 'solo' : simulation === 'versus' ? 'versus' : 'coop';
@@ -942,7 +989,8 @@ export function LobbyScreen() {
     const res = await net.request('room.create', {
       mode: roomMode, difficulty,
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
-      ...(simulation === 'versus' ? { teamSize: versusTeam } : {}),
+      ...(simulation === 'versus' ? { teamSize: 2, variant: versusRule,
+        versusAlt: versusRule === 'confront' ? versusAlt !== false : true } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });
     if (randomMode) await net.request('room.setRandomStage', { randomStage: true }).catch(() => {});
@@ -1109,6 +1157,7 @@ export function LobbyScreen() {
       privateRoom=${privateRoom} onPrivate=${setPrivateRoom} online=${online} maint=${maint} busy=${busy} isSearching=${isSearching}
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
       versusTeam=${versusTeam} onVersusTeam=${setVersusTeam}
+      versusRule=${versusRule} onVersusRule=${setVersusRule} versusAlt=${versusAlt} onVersusAlt=${setVersusAlt}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 

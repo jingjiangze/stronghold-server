@@ -9,7 +9,7 @@ import { PAGES, STEP_SCREENS, stepOf, countdownOf, bannerOf } from './lobbymap.j
 import { createStage, createStageList, createConfirm, playEntrance, classIcon, openStageDialog } from './lobbystage.js';
 import { createPick } from './lobbypick.js';
 import { createLineup } from './lobbylineup.js';
-import { clock, pingText, cardName } from './roomtext.js';
+import { clock, pingText, cardName, partnerOf } from './roomtext.js';
 import { createChat } from './lobbychat.js';
 
 
@@ -232,7 +232,7 @@ function wireSide(s, f, X) {
  * @param {Part} s @param {Record<string, any>} f @param {any} S @param {StepCtx} X @param {string} step
  */
 function sideUpdate(s, f, S, X, step) {
-  const v = S.view, me = v.you, mate = 1 - me, other = v.members[mate] ?? null, small = !fullSide(step);
+  const v = S.view, me = v.you, mate = partnerOf(me, v.members.length), other = v.members[mate] ?? null, small = !fullSide(step);
   const seen = SIDE_SEEN.get(s) ?? { small: null, ready: [false, false] };
   SIDE_SEEN.set(s, seen);
   setSwitch(s, f.tinyToggle ?? '@', small);

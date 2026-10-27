@@ -109,6 +109,7 @@ export class MatchSettle {
       });
       const through = this.uniteResultView ? this.uniteResultView.through : 0;
       const uniteRanWithLeakers = !!(uniteRan && plan && Array.isArray(plan.leakers) && plan.leakers.length);
+      // 业主 2026-10-27：不再有「归个人 / 归团队」两种归属——防线奖励恒进团队储备，判据只看漏怪与联防穿透。
       if (!ownLeak && through === 0) this.econDefenceReward({ full: true });
       else if (uniteRanWithLeakers && through === 0) this.econDefenceReward({ full: false });
     }

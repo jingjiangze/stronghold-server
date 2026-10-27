@@ -39,7 +39,7 @@ function project(mode, stage) {
  * @type {readonly Project[]}
  */
 export const PROJECTS = Object.freeze([
-  ...['act1multi_01', 'act1multi_06', 'act1multi_rm07', 'act1multi_ex01', 'act1multi_ex06', 'act1multi_hard-02'].map((stage) => project('NORMAL', stage)),
+  ...['act1multi_01', 'act1multi_06', 'act1multi_rm07', 'act1multi_07', 'act1multi_rm05', 'act1multi_ex01', 'act1multi_ex06', 'act1multi_hard-02'].map((stage) => project('NORMAL', stage)),
   ...['act1multi_fortress-rm01', 'act1multi_fortress-ex-rm01', 'act1multi_fortress-hard-01'].map((stage) => project('DEFENCE', stage)),
 ]);
 

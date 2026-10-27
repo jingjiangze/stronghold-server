@@ -6,7 +6,7 @@ import { place, fillList, setSwitch, showInvert } from './lobbykit.js';
 import { INVERSE } from '@icebreaker/mode-regular';
 import { holderCard, fillCard } from './lobbycards.js';
 import { LINEUP_VIEWS, lineupOptions } from './lobbymap.js';
-import { lineupCount } from './roomtext.js';
+import { lineupCount, partnerOf } from './roomtext.js';
 import { cardOf } from './lobbypick.js';
 
 /** @typedef {import('./lobbykit.js').Part} Part @typedef {import('./lobbystage.js').StepCtx} StepCtx @typedef {import('./roomtext.js').Pick} Pick */
@@ -174,7 +174,7 @@ function skills(v, S, X) {
  * @param {Part} v @param {any} S @param {StepCtx} X
  */
 function check(v, S, X) {
-  const f = v.view(), me = S.view.you, mate = 1 - me, mine = S.view.lineups[me] ?? draftOf(S).map((x) => x.id), theirs = S.view.lineups[mate];
+  const f = v.view(), me = S.view.you, mate = partnerOf(me, S.view.members.length), mine = S.view.lineups[me] ?? draftOf(S).map((x) => x.id), theirs = S.view.lineups[mate];
   // this player's cards with the skills and modules of its draft
   const chosen = new Map(draftOf(S).map((x) => [x.id, x]));
   fillList(v, f.mySquad, mine.length, (item, i) => {

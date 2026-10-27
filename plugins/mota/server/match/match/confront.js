@@ -40,6 +40,7 @@
 // — the panel shows the opponents as '?'. 同盟狩猎 is the one difference: its prey REPLACES nothing (the wave keeps
 // every original) and lands in the owning player's own wave (applyCoopHunt).
 // Installed on Match.prototype like the other method containers.
+import { sanitizeBotPickList } from './pureShares.js';
 import { PHASE, ERR, GEO, VERSUS_CONFRONT, COOP_HUNT, merchantRateFor, merchantCapFor } from '../../../shared/constants.js';
 import { confrontTraitGrade } from './confrontTraits.js';
 import { gateOf, roundMods, previewInfo } from '../waves.js';
@@ -60,15 +61,40 @@ import { OK, fail } from './common.js';
  * @param {any} e data/enemies.json record
  * @param {{ hpMul?: number, atkMul?: number }|null} scale
  */
+/** 新价值公式的量纲除数（见 confrontValue）。 */
+export const CONFRONT_VALUE_DIV = 120;
+
+/** 控怪档的目标出怪量 = 官方只数的这个比例（业主 2026-10-26：接近官方但只有 90%）。 */
+export const CONFRONT_VOLUME_SHARE = 0.9;
+
 export function confrontValue(e, scale = null) {
+  const s = (e && e.stats) || {};
+  const num = (v) => (Number.isFinite(v) ? v : 0);
+  const hp = num(s.maxHp) * (Number.isFinite(scale && scale.hpMul) ? scale.hpMul : 1);
+  const atk = num(s.atk) * (Number.isFinite(scale && scale.atkMul) ? scale.atkMul : 1);
+  // 业主 2026-10-26 重定义怪物价值：权重改成与官方强度模型一致（server/match/waves.js:84-96 的 attrPower 回退式
+  // atk×5 + hp×1 + def×3 + res×3），并**移除全部手工加成**（阻挡×60、远程×1.5、飞行按 2 块算、领袖 lpr 加成）。
+  // 审计依据：旧公式对「机制型」怪系统性高估（频次 ×3.0 / 飞行 ×2.1 / 远程 ×1.6 / BOSS ×2.4 / 三档特性 ×1.8），
+  // 对纯肉盾几乎零偏差，同强度带内现值最多差 354 倍。机制溢价现在只由特性档位分（confrontTraitStep）承担。
+  const stat = hp + atk * 5 + num(s.def) * 3 + num(s.res) * 3;
+  // 量纲归一（业主 2026-10-26）：÷120 后最便宜的怪落在个位数（R1 源石虫 ≈ 8），并且**一律整数**。
+  // 下限 1：任何怪都不出现 0 价值。预算/只数上限/特性档位分都用同一个函数，因此自动同尺度。
+  return Math.max(1, Math.round(stat / CONFRONT_VALUE_DIV));
+}
+
+/**
+ * 「赏金」档沿用的**旧**价值公式（2026-10-26 之前线上那套，一字未改）：业主口径「当前线上的旧构建独立为一个赏金模式」。
+ * 与 confrontValue（新定义）唯一的区别就是这套手工系数。
+ * @param {any} e data/enemies.json record
+ * @param {{ hpMul?: number, atkMul?: number }|null} scale
+ */
+export function confrontValueLegacy(e, scale = null) {
   const s = (e && e.stats) || {};
   const num = (v) => (Number.isFinite(v) ? v : 0);
   const hp = num(s.maxHp) * (Number.isFinite(scale && scale.hpMul) ? scale.hpMul : 1);
   const atk = num(s.atk) * (Number.isFinite(scale && scale.atkMul) ? scale.atkMul : 1);
   const blocks = e && e.isFlyEnemy ? 2 : num(s.blockCnt);
   const stat = hp + atk * 2 + num(s.def) * 2 + num(s.res) * 15 + Math.max(0, num(s.lpr) - 1) * hp * 0.6 + blocks * 60;
-  // 远程怪 (applyWay RANGED) 能越过阻挡输出，价值按 1.5 倍计价（维护者 2026-10-18）。
-  // 与特性分同处一个价值表：confrontTraitStep 用同一个 confrontValue 标定，所以特性仍占整表 30%。
   const ranged = e && e.applyWay === 'RANGED' ? 1.5 : 1;
   return Math.round(stat * ranged);
 }
@@ -284,7 +310,10 @@ export class MatchConfront {
     for (const k of confrontPool(this.data && this.data.factions)) {
       if (!en[k]) continue;
       // the same stat half confrontValueOf prices: 频次怪's manual 1.5× (user 2026-10-21) is part of the table's base
-      stat += Math.round(confrontValue(en[k], scale) * (times.has(k) ? 1.5 : 1));
+      // 特性档位分按**本档的口径**标定：赏金档沿用旧价值（含频次 ×1.5），对抗档用新定义
+      stat += Math.round(this.isConfrontRule()
+        ? confrontValue(en[k], scale)
+        : confrontValueLegacy(en[k], scale) * (times.has(k) ? 1.5 : 1));
       steps += scores[confrontTraitGrade(k) - 1] || 0;
     }
     this._traitStep = steps > 0 ? Math.round((share / (1 - share)) * stat / steps) : 0;
@@ -304,11 +333,13 @@ export class MatchConfront {
     const e = en[enemyKey];
     if (!e) return 0;
     const step = this.huntCfg().traitStepScores[confrontTraitGrade(enemyKey) - 1] || 0;
-    // 频次怪 (factions.types.TIMES, user 2026-10-21): priced 1.5× by hand — the same 增值 treatment 远程怪 (applyWay
-    // RANGED) got on 2026-10-18 (confrontValue's stat half × 1.5), so the trait half is untouched and keeps its share.
-    // A monster that is BOTH 频次 and 远程 stacks the two multipliers (×2.25 on the stat half).
-    const times = this.confrontTimesKeys().has(enemyKey) ? 1.5 : 1;
-    return Math.round(confrontValue(e, scale || this.confrontScale()) * times) + this.confrontTraitStep() * step;
+    const sc = scale || this.confrontScale();
+    // 「赏金」档沿用线上旧价值（含频次 ×1.5）；「对抗」档用新定义（官方权重、无手工加成）
+    if (!this.isConfrontRule()) {
+      const times = this.confrontTimesKeys().has(enemyKey) ? 1.5 : 1;
+      return Math.round(confrontValueLegacy(e, sc) * times) + this.confrontTraitStep() * step;
+    }
+    return Math.round(confrontValue(e, sc)) + this.confrontTraitStep() * step;
   }
 
   /** The 频次怪 (TIMES) type's monster keys (pool + entries), cached — confrontValueOf prices them 1.5× (user 2026-10-21). */
@@ -368,6 +399,9 @@ export class MatchConfront {
   /**
    * The groups offered in the 狩猎期: four of the official 特训敌人 types (two UP + two normal, drawn once per round),
    * each carrying its pool members priced in this round's currency (confrontValueOf). Recomputed when the round changes.
+   *
+   * 对抗（业主 2026-10-26）：池子**按回合卡住** —— 只给本局第 1..N 回合真正出过的怪（confrontSeenKeys），
+   * 官方哪个回合有哪些怪，攻方就只能选到那个回合为止。协同狩猎不走这条（COOP_HUNT 的猎物池不变）。
    * @returns {Array<{ id: string, name: string, icon: string|null, desc: string, up: boolean, rows: Array<{ key: string, name: string, value: number }> }>}
    */
   confrontGroups() {
@@ -375,9 +409,23 @@ export class MatchConfront {
     const sig = `${this.round}|${scale.hpMul}|${scale.atkMul}`;
     if (this._confrontGroups && this._confrontSig === sig) return this._confrontGroups;
     const en = (this.data && this.data.enemies) || {};
+    // 没有历史记录（老对局 / 第 1 回合还没建波）时退回全池，避免面板突然空掉
+    const seenSet = this.isConfrontRule() ? this.confrontSeenKeys() : null;
+    const seen = seenSet && seenSet.size ? seenSet : null;
     const all = confrontTypeGroups(this.data && this.data.factions, (k) => ({
       key: k, name: (en[k] && en[k].name) || k, value: this.confrontValueOf(k, scale),
-    }));
+    })).map((g) => (seen ? { ...g, rows: g.rows.filter((r) => seen.has(r.key)) } : g))
+      .filter((g) => !seen || (g.rows || []).length > 0);
+    // 业主 2026-10-26：官方出过的怪里，有一部分不属于任何「特训类型」池（模板直给的保证怪，如 slime）。
+    // 按「出过什么就能选什么」的规则它们不该消失 —— 单独收进一个「本局已出场」组，池子因此恰好等于见过的集合。
+    if (seen) {
+      const grouped = new Set();
+      for (const g of all) for (const r of g.rows || []) grouped.add(r.key);
+      const rest = [...seen].filter((k) => en[k] && !grouped.has(k))
+        .map((k) => ({ key: k, name: en[k].name || k, value: this.confrontValueOf(k, scale) }))
+        .sort((a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key)));
+      if (rest.length) all.push({ id: 'SEEN', name: '本局已出场', icon: null, desc: '', up: false, rows: rest });
+    }
     const byId = new Map(all.map((g) => [g.id, g]));
     // 最终狩猎 (R13) keeps the original 7-type panel; the 4-card draw (2 UP + 2 normal) is for the earlier hunt rounds.
     if (this.confrontHunt()) {
@@ -434,6 +482,74 @@ export class MatchConfront {
   /** The round's original wave spawns (every team faces the same synced one). */
   _confrontWaveSpawns() { return (this.wave && this.wave.spawns) || []; }
 
+  /**
+   * 记下某一回合真正生成的出怪 key（对抗的「按回合可选池」用它）。
+   * 由 phases.js 在 `this.wave = buildNormalWave(...)` 之后调用；占位槽替换后的 key 已经是最终怪。
+   * @param {number} round @param {{ spawns?: Array<{ enemyKey?: string }> } | null} wave
+   */
+  confrontRecordWave(round, wave) {
+    if (!this._confrontWaveHistory) this._confrontWaveHistory = new Map();
+    const set = new Set();
+    for (const s of (wave && wave.spawns) || []) if (s && typeof s.enemyKey === 'string' && s.enemyKey) set.add(s.enemyKey);
+    const r = Math.floor(Number(round) || 0);
+    if (r > 0) this._confrontWaveHistory.set(r, set);
+  }
+
+  /** 本局第 1..N 回合真正出过的怪（对抗狩猎池的回合闸门；N = 当前回合）。 */
+  confrontSeenKeys() {
+    const out = new Set();
+    for (const [r, set] of (this._confrontWaveHistory || new Map())) {
+      if (r <= this.round) for (const k of set) out.add(k);
+    }
+    return out;
+  }
+
+  /**
+   * 纯玩家出怪（业主 2026-10-26）：对抗里只要本回合有攻方真的投放了，守方面对的波次就**只有**投放的怪 ——
+   * 官方波次不再生成，但仍保留为「预算基准 + 可选池参考」（confrontWaveValue / confrontSeenKeys 照旧跑）。
+   * 没人投放时保持官方波次（否则会出现「空波次白送一回合」）。
+   */
+  confrontPurePlacement() {
+    // 只有「对抗」档才纯玩家出怪；「赏金」档（缺省）保持线上那套：官方波次 + 替换份额
+    return this.isConfrontRule() && !!this.confrontSubs && this.confrontSubs.size > 0;
+  }
+
+  /** 「对抗」档（业主 2026-10-26）：完全由玩家控制出怪。「赏金」档（缺省）= 当前线上那套。 */
+  isConfrontRule() { return this.isVersus && this.versusRule === 'confront'; }
+
+  /** 攻方人数（纯玩家出怪时按人均分官方波次价值；取不到时按每队人数兜底）。 */
+  attackingTeamSize() {
+    if (this.attackingTeam == null || typeof this.teamIdOf !== 'function') return Math.max(1, Number(this.teamSize) || 1);
+    const n = this.alivePlayers().filter((p) => this.teamIdOf(p) === this.attackingTeam).length;
+    return Math.max(1, n);
+  }
+
+  /** 这一回合的预算**至少要能放下几只**本回合的中位怪（随回合增长：R1-3 → 2，R4-6 → 3，R7-9 → 4 …）。 */
+  confrontMinUnits() { return 2 + Math.floor(Math.max(0, this.round - 1) / 3); }
+
+  /**
+   * 一次提交最多放几只（业主 2026-10-26：预算按官方出怪量重算之后，必须同时按官方只数封顶，
+   * 否则最便宜的怪能一次堆十几只）。对抗 = 本回合官方出怪只数的一半（至少 2 只）；协同狩猎沿用协议的 maxPicks。
+   */
+  confrontPlaceCap() {
+    const hard = this.huntCfg().maxPicks;
+    // 「赏金」档 = 线上原样：只受协议上限约束
+    if (!this.isConfrontRule()) return hard;
+    // 业主 2026-10-26：实际出怪量要「接近官方但只有 90%」——只数上限取官方只数的 0.9（至少 2 只）。
+    const official = this.confrontWaveCount();
+    return Math.min(hard, Math.max(2, Math.ceil(official * CONFRONT_VOLUME_SHARE)));
+  }
+
+  /** 本回合可选池（第 1..N 回合出过的怪）的价值中位数 —— 预算下限的基准，按回合缓存。 */
+  confrontPoolMedianValue() {
+    if (this._confrontPoolMedian != null && this._confrontPoolMedianRound === this.round) return this._confrontPoolMedian;
+    const en = (this.data && this.data.enemies) || {};
+    const vals = [...this.confrontSeenKeys()].filter((k) => en[k]).map((k) => this.confrontValueOf(k)).sort((a, b) => a - b);
+    this._confrontPoolMedian = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+    this._confrontPoolMedianRound = this.round;
+    return this._confrontPoolMedian;
+  }
+
   /** The value of the round's original wave, at this round's scaling. */
   confrontWaveValue() {
     const scale = this.confrontScale();
@@ -454,9 +570,21 @@ export class MatchConfront {
    * 2V2's placement budget: the wave value × the share × VERSUS_CONFRONT.budgetMul — PER PLAYER (个算个的). The 2V2
    * placement REPLACES originals, so its ×2 keeps the net addition at the share; the co-op hunt INSERTs its prey and
    * therefore uses `wave value × share` only (coopHuntPlans).
+   *
+   * 对抗另加**下限**（业主 2026-10-26：早期回合 5% 的份额连一只中位怪都买不起，面板上点什么都提示「剩余价值不足」）：
+   * 至少放得下 `confrontMinUnits()` 只本回合可选池的中位怪。只动对抗，协同狩猎的 `huntDeployBudget()` 口径不变。
    */
   confrontBudget() {
-    return Math.round(this.confrontWaveValue() * this.confrontRatio() * this.huntCfg().budgetMul);
+    const byShare = Math.round(this.confrontWaveValue() * this.confrontRatio() * this.huntCfg().budgetMul);
+    // 「赏金」档 = 线上原样：只按替换份额算，不加下限
+    if (!this.isConfrontRule()) return byShare;
+    // 「对抗」档：攻方就是这一波怪的全部来源，每名攻方分到「官方波次价值 ÷ 攻方人数」，再用池内中位怪托底
+    // 控怪档的预算与「0.9 官方出怪量」同源：官方波次价值 × 0.9 ÷ 攻方人数
+    const base = this.confrontPurePlacement()
+      ? Math.round((this.confrontWaveValue() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize())
+      : byShare;
+    const floor = Math.round(this.confrontPoolMedianValue() * this.confrontMinUnits());
+    return Math.max(base, floor);
   }
 
   /**
@@ -945,7 +1073,7 @@ export class MatchConfront {
     const arr = Array.isArray(picks) ? picks : [];
     const bArr = Array.isArray(bosses) ? bosses : [];
     // the count cap first: it is the protocol's own list bound too (shared/constants.js maxPicks mirrors it)
-    if (arr.length > VERSUS_CONFRONT.maxPicks) return fail(ERR.CONFRONT_COUNT);
+    if (arr.length > this.confrontPlaceCap()) return fail(ERR.CONFRONT_COUNT);
     if (bArr.length > VERSUS_CONFRONT.maxBosses) return fail(ERR.CONFRONT_COUNT);
     const member = this._confrontMember(ps, group, position, arr, bArr);
     if (!member) return fail(ERR.BAD_TARGET, 'illegal 对抗期 pick'); // i18n-ignore: 服务端内部 detail（客户端显示的是 ERR.BAD_TARGET 的文案）
@@ -953,8 +1081,10 @@ export class MatchConfront {
     // 防御：错误码常量缺失时 _confrontMember 可能返回 { error: undefined }；没有 sub 就绝不能静默写入（否则玩家派怪被丢弃）
     if (!member.sub) return fail(ERR.BAD_MSG, 'confront submission rejected');
     this.confrontSubs.set(ps.playerId, member.sub);
-    this.markPublic();
-    this.maybeFinishConfront();
+    // 收尾异常不得吞掉一次**已经成功**的提交（业主 2026-10-26：线上点提交恒报 INTERNAL，
+    // 而 pick 其实已入库）。阶段收尾出错记日志、照常返回 OK。
+    try { this.markPublic(); } catch (e) { this.reportError('confront markPublic', e); }
+    try { this.maybeFinishConfront(); } catch (e) { this.reportError('confront finish', e); }
     return OK;
   }
 
@@ -1035,7 +1165,7 @@ export class MatchConfront {
       const picks = [];
       let left = budget;
       for (const r of recs.slice().sort((a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key)))) {
-        if (picks.length >= VERSUS_CONFRONT.maxPicks) break;
+        if (picks.length >= this.confrontPlaceCap()) break;
         if (r.value > left) continue;
         left -= r.value;
         picks.push({ enemyKey: r.key, gate: picks.length % 2 ? 'upper' : 'lower' });
@@ -1050,8 +1180,67 @@ export class MatchConfront {
         if (p.length) { gi = i; picks = p; break; }
       }
     }
-    this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks, bosses: [], total: picks.length, ratio: this.confrontRatio(), budget, seat: ps.seat });
+    // 业主 2026-10-26：AI 也要「操作怪物」—— 不再只丢默认路线，按怪物移动方式挑可用路线并错开投放时刻。
+    // 插件可用 `server.modules.matchClass()` 包装 Match 覆写 `_botConfrontPlan` 做更强的决策（不碰引擎）。
+    // 复审计 2026-10-27：bot 路径原先直接写库、绕过 _confrontMember 的全部校验
+    // （time / routeIndex / 路线长度 / routeCost 预算）。这里走同一套判据，非法字段就地纠正。
+    // 复审计 2026-10-27：即使一条都买不起也必须写 sub —— `maybeFinishConfront` 要求「人人有 sub」，
+    // 否则阶段要空等满 prepTime（65s）才由 deadline 收尾。
+    const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
+    this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses: [], total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat });
     this.markPublic();
+  }
+
+  /**
+   * AI 投放计划钩子（业主 2026-10-26）：默认 = 给每只怪挑一条**移动方式匹配**的路线并按行程错开时刻。
+   * 插件可用 `server.modules.matchClass(fn)` 包装 Match 覆写本方法（例如按守方布阵选路），不需要改引擎。
+   * @param {any} ps @param {Array<{enemyKey:string, gate:'upper'|'lower'}>} picks @param {'front'|'mid'|'back'} position
+   * @returns {Array<{enemyKey:string, gate:string, routeIndex?:number, time?:number}>}
+   */
+  _botConfrontPlan(ps, picks, position = 'mid') {
+    void ps; void position;
+    const list = Array.isArray(picks) ? picks : [];
+    if (!list.length) return list;
+    const routes = (this._confrontRoutes().routes || []).length;
+    const tl = Math.max(1, Number(this.wave && this.wave.timeLimit) || 60);
+    const out = [];
+    let slot = 0;
+    for (const p of list) {
+      // 只挑「这条路线这只怪走得通」的（confrontRouteMetrics 会按 WALK/FLY 与可达性返回 null）
+      const compat = [];
+      for (let i = 0; i < routes; i++) {
+        const m = this.confrontRouteMetrics(i, p.enemyKey);
+        if (m) compat.push({ i, travel: Number(m.travel) || 0 });
+      }
+      const pick = compat.length ? compat[slot++ % compat.length] : null;
+      const travel = pick ? pick.travel : 0;
+      const room = Math.max(0, tl - travel - 2);
+      // 按顺序铺在可用时间窗里（至少 1 秒间隔），同一路线会分摊到不同时刻
+      const time = room > 0 ? Math.min(room, Math.round((out.length * room) / Math.max(1, list.length))) : undefined;
+      out.push({ ...p, ...(pick ? { routeIndex: pick.i } : {}), ...(Number.isFinite(time) ? { time } : {}) });
+    }
+    return out;
+  }
+
+  /**
+   * bot 投放的校验（与 `_confrontMember` 同判据，但**修复式**：非法字段就地剥掉，不整单拒绝，
+   * 否则 bot 会交白卷）。规则：
+   *   · routeIndex 必须 `confrontRouteMetrics` 非 null 且 `len <= 40`，否则去掉（回落默认路线）
+   *   · time 夹到 `[0, timeLimit]`，且必须满足 `time + travel + 2 <= timeLimit`，否则去掉
+   *   · 路线长度计入预算（长度 ×2），超预算时先剥 routeIndex，再不行就截断列表
+   * @param {Array<{enemyKey:string, gate:string, routeIndex?:number, time?:number}>} picks
+   * @param {number} budget
+   * @returns {Array<object>}
+   */
+  _sanitizeBotPicks(picks, budget) {
+    // 纯逻辑在 pureShares.js（与测试共用同一份代码）
+    return sanitizeBotPickList(picks, {
+      timeLimit: Math.max(1, Number(this.wave && this.wave.timeLimit) || 60),
+      cap: this.confrontPlaceCap ? this.confrontPlaceCap() : VERSUS_CONFRONT.maxPicks,
+      metricsOf: (i2, key) => this.confrontRouteMetrics(i2, key),
+      spentOf: (list) => this.confrontSpent(list),
+      budget: Number(budget) > 0 ? Number(budget) : this.confrontBudget(),
+    });
   }
 
   /**
@@ -1190,9 +1379,15 @@ export class MatchConfront {
   applyConfront(spawns, sub, ps) {
     const bosses = sub && Array.isArray(sub.bosses) ? sub.bosses : [];
     const picks = sub && Array.isArray(sub.picks) ? sub.picks : [];
-    if (!sub || !Array.isArray(spawns) || !spawns.length || (!picks.length && !bosses.length)) return spawns;
+    // 纯玩家出怪（confrontPurePlacement）：官方怪一律不进守方波次，只保留别的攻方已经投进来的（confrontPlaced），
+    // 于是「替换官方份额」这一步在对抗里自然退化成空操作 —— 守方看到的全是玩家投放。
+    const pure = typeof this.confrontPurePlacement === 'function' && this.confrontPurePlacement();
+    if (!sub || !Array.isArray(spawns)) return spawns;
+    const base = pure ? spawns.filter((s) => s && s.confrontPlaced === true) : spawns;
+    if (!pure && (!spawns.length || (!picks.length && !bosses.length))) return spawns;
+    if (pure && !picks.length && !bosses.length) return base.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
     // a boss-only placement ([ASSUMED] user 2026-10-21): the free boss 格 replaces nothing — it only appends its bosses
-    if (!picks.length) return this._confrontBossSpawns(spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined })), sub, ps);
+    if (!picks.length) return this._confrontBossSpawns(base.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined })), sub, ps);
     const scale = this.confrontScale();
     // price the originals EXACTLY like confrontWaveValue prices the wave (confrontValueOf = stats + the graded 特性
     // score at this round's scale), so the value actually dropped / the wave value is the nominal share (5→15 %, 50 %
@@ -1200,7 +1395,7 @@ export class MatchConfront {
     // multipliers are deliberately NOT part of this price: confrontWaveValue and the budget use the base wave, and a
     // replacement share must stay comparable with them.
     const valueOf = (key) => this.confrontValueOf(key, scale);
-    const out = spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
+    const out = base.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
     // The round's replacement share belongs to the RECEIVER, not to each attacker: when several placements land on the
     // same player (a stack — see assignConfrontTarget), the LATER ones only add monsters — the original wave is shaved
     // at most confrontRatio() in total. Without this a 4V4 stack would replace N × confrontRatio() of the wave (4 ×

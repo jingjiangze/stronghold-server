@@ -46,10 +46,23 @@ function skyBackdrop() {
   return texture;
 }
 
-/** Gives the scene its backdrop and the fog that blends the far terrain into it — nothing exists beyond the
- *  battlefield, so a flat colour used to cut the map's edge into a plate. @param {THREE.Scene} scene */
-function applySky(scene) {
-  scene.background = skyBackdrop() ?? new THREE.Color(SKY_FOG_COLOR);
+/** 官方背景图（浅色的虚化场景）压到这个亮度：不压暗的话它比战场还亮，地图的边就没了。 */
+export const SKY_BACKDROP_INTENSITY = 0.16;
+
+/**
+ * Gives the scene its backdrop and the fog that blends the far terrain into it — nothing exists beyond the
+ * battlefield, so a flat colour used to cut the map's edge into a plate.
+ *
+ * `backdrop` is the official scene art (the game's own blurred arena picture); without one the scene falls back to the
+ * built-in gradient. @param {THREE.Scene} scene @param {THREE.Texture | null} backdrop
+ */
+function applySky(scene, backdrop) {
+  if (backdrop) {
+    scene.background = backdrop;
+    scene.backgroundIntensity = SKY_BACKDROP_INTENSITY;
+  } else {
+    scene.background = skyBackdrop() ?? new THREE.Color(SKY_FOG_COLOR);
+  }
   scene.fog = new THREE.Fog(SKY_FOG_COLOR, SKY_FOG_NEAR, SKY_FOG_FAR);
 }
 
@@ -66,6 +79,7 @@ function applySky(scene) {
  *   enemies' colour (渲染-5, 渲染-16)
  * @property {boolean} [bars] whether the renderer draws the units' bars (渲染-5; default true): false when the page draws
  *   the battle UI's own (界面-19)
+ * @property {THREE.Texture | null} [backdrop] the battle's background art (the game's own blurred arena picture); without one the scene uses a built-in gradient
  * @property {import('./kit.js').LoadedKit | null} [kit] the map theme's tile kit (渲染-7); without one the tiles are flat
  *   textures
  * @property {import('./fx/player.js').FxPack | null} [effects] the units' attack effects (渲染-10…渲染-12); none without
@@ -129,7 +143,7 @@ export function createBattleRenderer(o) {
   // the counts cover a whole frame (the scene and the overlays), reset at its start
   renderer.info.autoReset = false;
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
-  applySky(scene);
+  applySky(scene, o.backdrop ?? null);
   const highlight = createHighlight(o.level), patch = highlight.patch;
   const terrain = o.kit ? createKitTerrain(o.level, o.kit, terrainTextures(o), patch) : createTerrain(o.level, o.textures, patch);
   const units = createUnits(o.textures, o.models, o.foeDevices, o.deviceMeshes, o.flyers), field = { ...o.level, highland: o.kit?.kit.highland };

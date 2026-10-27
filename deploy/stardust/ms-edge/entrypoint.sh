@@ -114,10 +114,12 @@ if [ -z "$ICE_WHY" ]; then
 fi
 
 start_ice() {
+    # --seats 4：四人房（2v2）。默认是 2 —— 上游的合作人数。四人局按奇偶分队（0/2 与 1/3），
+    # 顶栏四席 + 中间比分、房间页按「我 + 我的搭档」显示，都是按这个座位数做的。
     ( cd "$ICE_DIR" && exec node packages/server/src/main.js --host 127.0.0.1 --port "$ICE_PORT" \
-        --trust-proxy --max-rooms 30 --max-battles 6 ) &
+        --trust-proxy --max-rooms 30 --max-battles 6 --seats 4 ) &
     ICE_PID=$!
-    echo "sp-edge: icebreaker on 127.0.0.1:$ICE_PORT (pid $ICE_PID)"
+    echo "sp-edge: icebreaker on 127.0.0.1:$ICE_PORT (pid $ICE_PID) seats=4"
 }
 
 # 刻意**不等**它监听：等就等于把主站的首个请求押在附加玩法上。nginx 先起，/icebreaker/ 头几秒可能 502。

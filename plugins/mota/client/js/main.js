@@ -56,12 +56,15 @@ import { LoadoutHost } from './screens/loadout.js';
 import { StatsHost } from './screens/stats.js';
 import { installRehearsal } from './battle/rehearsal.js';
 import { recordResult, installStatsRecorder } from './ui/stats.js';
-import { installLoadoutSync, installOwnershipSync, installDiySync, installSkinsSync } from './ui/loadoutSync.js';
+import { installLoadoutSync, installOwnershipSync, installDiySync, installSkinsSync, installSettingsViews } from './ui/loadoutSync.js';
 import { startBuildGuard } from './ui/buildGuard.js';
 import { initLang, useLang, tickerText } from './ui/lang.js';
 import { t, N_, translateWire } from '../../shared/i18n.js';
 import { recordError, installTrafficMeter } from './diag.js';
 import { installContent, installContentSet } from './content.js';
+// 官方版本列表（DESIGN §35.23）：核心 main.js 在这里写 store.versions；插件版 main.js 顶替了它，
+// 少这一句房间页就拿不到版本清单（版本 pill / VersionPicker 会是空的）。
+import { sanitizeVersions } from './versions.js';
 import { cosmetics } from './cosmetics.js';
 
 const RESTORE_GRACE_MS = 1500;
@@ -191,6 +194,8 @@ function onWelcome(msg) {
     installedPlugins: pluginCount(msg.content),
     installedNotices: msg.content?.notices === true,
     testMode: msg.testMode === true,
+    // the official versions the server enables (protocol §2; absent: the switch is off — versions.js)
+    versions: sanitizeVersions(msg.versions),
   });
   welcomeAt = Date.now();
 
@@ -442,6 +447,9 @@ async function boot() {
 
   wireNet();
   installStatsRecorder(store); // follows the match on screen, so a 放弃模拟 can be recorded (ui/stats.js)
+  // 官方 0.3.2 起的派生视图：存档真值按干员存（byChar / notOwnedChars），entries / notOwned 由数据重算 ——
+  // 不接这个，切内容集 / 版本后屏幕会一直显示旧版本的派生视图。
+  installSettingsViews();
   installLoadoutSync({ net });
   installOwnershipSync({ net });
   installDiySync({ net });

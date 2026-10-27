@@ -44,7 +44,9 @@ export class PlayerRound {
     for (const uid of [...this._tempDue.keys()]) if (!this.temp.some((p) => p && p.uid === uid)) this._tempDue.delete(uid);
     // (queued reward offers stay: they last until picked, startRound)
     this.clearUnfrozenShop();
-    if (!this.gd.leftoverKeptBands.includes(this.bandId)) this.funds = 0;
+    // 三层资金（业主 2026-10-26）：每回合资金 → 个人储备 / 团队储备（由 Match 的分配函数决定比例与设施加成）。
+    if (this.match && typeof this.match.econSplitLeftover === 'function') this.match.econSplitLeftover(this);
+    else if (!this.gd.leftoverKeptBands.includes(this.bandId)) this.funds = 0;
     this.ready = true;
     this.dirty();
   }
@@ -54,6 +56,9 @@ export class PlayerRound {
   eliminate(round) {
     this.alive = false;
     this.ready = false;
+    // 三层资金：永久淘汰时个人储备一并清空（与 funds / pendingFunds 同口径）。
+    // 注意：救援分支（revival)只置 alive=false，**不**走这里；若将来加「淘汰后复活」，这里的清零会丢储备。
+    this.reserve = 0;
     this.eliminatedRound = round;
     const all = [];
     for (const p of this.board.values()) all.push(p);

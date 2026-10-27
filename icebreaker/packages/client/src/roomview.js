@@ -4,7 +4,7 @@
 // the styles carry the activity's icons when the assets have them (页面-5).
 import { STYLES, EMOTES, INVERSE, MATCH, emoteSceneOf, modeOf } from '@icebreaker/mode-regular';
 import { h } from './dom.js';
-import { PHASE_TITLES, clock, inviteText, turnText, lineupCount, styleText, cardName } from './roomtext.js';
+import { PHASE_TITLES, clock, inviteText, turnText, lineupCount, styleText, cardName, partnerOf } from './roomtext.js';
 import { skillLevelText, trainingText } from './training.js';
 
 /** @typedef {import('@icebreaker/mode-regular').BoxEntry} BoxEntry @typedef {import('./roomtext.js').Pick} Pick */
@@ -172,7 +172,7 @@ function pick(S, A) {
     h('div', { class: 'ops' }, p.left.map((/** @type {string} */ id) => h('button', { disabled: !mine, onclick: () => A.send({ t: 'pick', id }) }, A.nameOf(id)))),
     h('button', { disabled: !mine || p.yielded || p.left.length < 2, onclick: () => A.send({ t: 'handover' }) }, '让出这次选择'),
     h('p', {}, `你保留：${p.won[v.you].map(A.nameOf).join('、') || '—'}`),
-    h('p', {}, `对方保留：${p.won[1 - v.you].map(A.nameOf).join('、') || '—'}`));
+    h('p', {}, `对方保留：${(p.won[partnerOf(v.you, v.members.length)] ?? []).map(A.nameOf).join('、') || '—'}`));
 }
 
 /** A lineup option's row: in or out, its skill and module. @param {RoomState} S @param {RoomActions} A @param {string} id @param {string} tag */
@@ -193,7 +193,7 @@ function optionRow(S, A, id, tag) {
 
 /** 组建上场阵容 and 准备就绪 (房间-5, 房间-6). @param {RoomState} S @param {RoomActions} A */
 function lineup(S, A) {
-  const v = S.view, o = v.options[v.you], other = v.options[1 - v.you], draft = S.draft ?? [], why = lineupCount(draft);
+  const v = S.view, mate = partnerOf(v.you, v.members.length), o = v.options[v.you], other = v.options[mate] ?? { kept: [] }, draft = S.draft ?? [], why = lineupCount(draft);
   const recruits = new Set((S.lobby?.recruits ?? []).map((e) => e.id)), set = v.lineups[v.you], ready = v.ready[v.you];
   const rows = [...o.kept.map((/** @type {string} */ id) => optionRow(S, A, id, '编队')), ...o.drawn.map((/** @type {string} */ id) => optionRow(S, A, id, '可选')),
     ...o.extra.map((/** @type {string} */ id) => optionRow(S, A, id, recruits.has(id) ? '临时招募' : '可选'))];
@@ -204,9 +204,9 @@ function lineup(S, A) {
     h('div', { class: 'row' },
       h('button', { disabled: !!why, onclick: () => A.send({ t: 'lineup', lineup: draft }) }, set ? '重新提交阵容' : '提交阵容'),
       h('button', { class: 'primary', disabled: !set, 'aria-pressed': String(ready), onclick: () => A.send({ t: 'ready', on: !ready }) }, ready ? '取消准备' : '准备就绪')),
-    h('p', { class: 'muted' }, '你的比赛风格：', styleLine(A, v.styles[v.you]), ' · 对方：', styleLine(A, v.styles[1 - v.you])),
+    h('p', { class: 'muted' }, '你的比赛风格：', styleLine(A, v.styles[v.you]), ' · 对方：', styleLine(A, v.styles[mate])),
     h('p', { class: 'muted' }, `对方编队：${other.kept.map(A.nameOf).join('、') || '—'}`),
-    h('p', { class: 'muted' }, `对方${v.ready[1 - v.you] ? '已准备就绪' : v.lineups[1 - v.you] ? '已提交阵容' : '正在组建阵容'}`));
+    h('p', { class: 'muted' }, `对方${v.ready[mate] ? '已准备就绪' : v.lineups[mate] ? '已提交阵容' : '正在组建阵容'}`));
 }
 
 /** After a matched match (房间-10): 继续一起玩, and whether the mate chose it. @param {RoomState} S @param {RoomActions} A */

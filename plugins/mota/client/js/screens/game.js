@@ -1014,7 +1014,7 @@ function MatchScreen() {
     const me = Array.isArray(L.pub?.players) ? L.pub.players.find((p) => p && p.playerId === L.myId) : null;
     // `econ` 在别处算，且本回调 deps 是 []：这里现算一份，免得读到首帧的旧值
     const econNow = econBarModel({ priv: L.priv, pub: L.pub });
-    const ask = r ? readyFundsPrompt(L.priv, { keptBands: data.get('config')?.economy?.leftoverFundsKeptByBands, autoplay: !!me?.autoplay, econ: econNow, convertMax: data.get('config')?.economy?.reserve?.convertPerPlayerMax }) : null;
+    const ask = r ? readyFundsPrompt(L.priv, { keptBands: data.get('config')?.economy?.leftoverFundsKeptByBands, autoplay: !!me?.autoplay, econ: econNow }) : null;
     if (ask) {
       if (askingReady.current) return;
       askingReady.current = true;
@@ -1888,7 +1888,7 @@ function MatchScreen() {
       onReroll=${async (slot) => { setHexRerollSlot(slot); try { await net.request('g.hexReroll', { slot }); } catch {} finally { setHexRerollSlot(null); } }} />` : null}
 
     ${!spectator && alive && priv?.meltdown ? html`<${MeltdownOverlay} view=${priv.meltdown}
-      onPick=${async (slot) => { try { await net.request('g.meltPick', { slot }); } catch {} }}
+      onPick=${async (slot, pay) => { try { await net.request('g.meltPick', pay ? { slot, pay } : { slot }); } catch {} }}
       onClose=${async () => { try { await net.request('g.meltClose', {}); } catch {} }} />` : null}
 
     ${hasOffers && !sp && !personalChoice ? html`<${OfferOverlay} pub=${pub} myId=${myId} readOnly=${spectator || !alive} onAction=${actions.offer} />` : null}
