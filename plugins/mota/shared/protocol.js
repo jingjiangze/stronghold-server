@@ -599,7 +599,7 @@ export const C2S = {
     // 支付方式（业主 2026-10-26）：缺省/'debuff' = 吃敌人属性代价；'funds' = 花个人资金
     pay: (v) => v == null || v === 'funds' || v === 'debuff' },
   'g.meltClose': {},
-  'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 64, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), $optional: ['bosses'] },
+  'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 128, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), $optional: ['bosses'] },
   'g.confront.withdraw': { gold: (v) => isInt(v, 1, 100000) },
   'g.event.pick': { target: (v) => EVENT_TARGETS_ALL.includes(v) },
   // 随机地图开关（2026-10-22；房主，开局前）

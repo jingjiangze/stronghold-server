@@ -540,9 +540,27 @@ export class MatchConfront {
     return Math.min(hard, Math.max(2, Math.ceil(official * CONFRONT_VOLUME_SHARE)));
   }
 
+  /**
+   * 只数下限（业主 2026-10-27：控怪的出怪量要接近官方、只要 90%）。
+   *
+   * 为什么需要它：预算是**价值预算**（`0.9 × 波次价值 ÷ 攻方人数`），而 90% 是**只数目标**。单只价值跨度极大
+   * （实测本局 8 ~ 1113，约 140 倍），同一笔预算买最便宜的能放一百多只、买中位的只放 2 只 —— 只数目标完全没有保证。
+   * 审计实测：R1 官方 6 只、预算 45、中位单价 21 ⇒ 每名攻方只能放 2 只，两个攻方合计 4 只 = 官方 67%。
+   *
+   * 这里把「按中位单价买下 90% 只数（按攻方人数摊）」作为预算下限，保证合格搭配一定买得到；
+   * 想放更贵的怪就自然少放几只，价值上限仍由 `confrontPurePlacement` 那条 base 约束（取 max，不封顶）。
+   * 赏金档（非控怪）不适用：那一档本来就是「替换一小部分」，官方波次才是主体。
+   */
+  confrontCountFloor() {
+    if (!this.isConfrontRule()) return 0;
+    const attackers = Math.max(1, this.attackingTeamSize());
+    const share = Math.max(1, Math.ceil((this.confrontWaveCount() * CONFRONT_VOLUME_SHARE) / attackers));
+    const median = this.confrontPoolMedianValue();
+    return Math.round(median * share);
+  }
+
   /** 本回合可选池（第 1..N 回合出过的怪）的价值中位数 —— 预算下限的基准，按回合缓存。 */
-  confrontPoolMedianValue() {
-    if (this._confrontPoolMedian != null && this._confrontPoolMedianRound === this.round) return this._confrontPoolMedian;
+  confrontPoolMedianValue() {    if (this._confrontPoolMedian != null && this._confrontPoolMedianRound === this.round) return this._confrontPoolMedian;
     const en = (this.data && this.data.enemies) || {};
     const vals = [...this.confrontSeenKeys()].filter((k) => en[k]).map((k) => this.confrontValueOf(k)).sort((a, b) => a - b);
     this._confrontPoolMedian = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
@@ -583,7 +601,12 @@ export class MatchConfront {
     const base = this.confrontPurePlacement()
       ? Math.round((this.confrontWaveValue() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize())
       : byShare;
-    const floor = Math.round(this.confrontPoolMedianValue() * this.confrontMinUnits());
+    // 下限取两者较大：① 老口径「至少放得下 N 只中位怪」；② 只数下限「按中位价买得下 90% 官方只数（按攻方摊）」。
+    // ② 是 2026-10-27 补的：没有它，价值预算与只数目标脱钩，实测 R1 只能放 4 只（官方 6 只的 67%）。
+    const floor = Math.max(
+      Math.round(this.confrontPoolMedianValue() * this.confrontMinUnits()),
+      this.confrontCountFloor(),
+    );
     return Math.max(base, floor);
   }
 

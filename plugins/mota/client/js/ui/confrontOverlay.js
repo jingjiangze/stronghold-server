@@ -236,6 +236,9 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   /** A tap on a greyed (unaffordable) monster: a light hint, never a submit/place. */
   const notEnough = () => toast(t('剩余价值不足，放不下这只怪物'), 'warn');
   const add = (rec) => {
+    // 只数上限（2026-10-27）：手动点选此前不查只数，靠服务端 CONFRONT_COUNT 兜底；现在在客户端就挡住，
+    // 免得玩家辛苦排好一队再被整单拒掉。
+    if (picks.length >= maxPicks) { toast(t('本回合最多只能放 {n} 只', { n: maxPicks }), 'warn'); return; }
     if (overBudget(rec)) return notEnough();
     if (!fits(rec)) return;
     setPicks((p) => [...p, { enemyKey: rec.key, gate: 'lower' }]);
