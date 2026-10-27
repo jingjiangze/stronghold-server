@@ -18,6 +18,9 @@ on:
 
 permissions:
   contents: write
+  # 用 GITHUB_TOKEN 推的提交不会触发下游 workflow（GitHub 防循环），
+  # 所以追平后要显式 dispatch branch-sync，这需要 actions: write
+  actions: write
 
 concurrency:
   group: sync-from-ms
@@ -58,6 +61,8 @@ jobs:
           fi
 
       - name: 比对内容并追平
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git fetch origin ms --force
@@ -68,28 +73,33 @@ jobs:
           git ls-tree -r "$MS"  | awk -F'\t' '$2 !~ /^\.github\//' | sort > /tmp/dst.txt
 
           if diff -q /tmp/src.txt /tmp/dst.txt > /dev/null; then
-            echo "内容已一致（魔搭 $(git rev-parse --short "$SRC")），无需追平"
-            exit 0
+            echo "ms 内容已一致（魔搭 $(git rev-parse --short "$SRC")）"
+          else
+            echo "--- 差异（< 魔搭 / > GitHub ms）---"
+            diff /tmp/src.txt /tmp/dst.txt | head -40 || true
+
+            # 以魔搭内容为底树，再把 .github/ 从当前 ms 保留回来
+            git read-tree "$SRC"
+            git ls-tree -r "$MS" -- .github | while read -r mode type sha path; do
+              git update-index --add --cacheinfo "$mode,$sha,$path"
+            done
+
+            NEWTREE=$(git write-tree)
+            if [ "$NEWTREE" = "$(git rev-parse "$MS^{tree}")" ]; then
+              echo "合成树与现 ms 相同，无需推送"
+            else
+              NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$MS" \
+                -m "sync(ms): 自动追平魔搭 $(git rev-parse --short "$SRC")（tree $(git rev-parse --short "$SRC^{tree}")）")
+              echo "新 ms commit: $NEWCOMMIT"
+              git push origin "$NEWCOMMIT:refs/heads/ms"
+              echo "已推送 ms"
+            fi
           fi
 
-          echo "--- 差异（< 魔搭 / > GitHub ms）---"
-          diff /tmp/src.txt /tmp/dst.txt | head -40 || true
-
-          # 以魔搭内容为底树，再把 .github/ 从当前 ms 保留回来
-          git read-tree "$SRC"
-          git ls-tree -r "$MS" -- .github | while read -r mode type sha path; do
-            git update-index --add --cacheinfo "$mode,$sha,$path"
-          done
-
-          NEWTREE=$(git write-tree)
-          if [ "$NEWTREE" = "$(git rev-parse "$MS^{tree}")" ]; then
-            echo "合成树与现 ms 相同，无需推送"; exit 0
-          fi
-          NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$MS" \
-            -m "sync(ms): 自动追平魔搭 $(git rev-parse --short "$SRC")（tree $(git rev-parse --short "$SRC^{tree}")）")
-          echo "新 ms commit: $NEWCOMMIT"
-          git push origin "$NEWCOMMIT:refs/heads/ms"
-          echo "已推送，branch-sync 的 sync-baidu 会自动重建 baidu"
+          # GITHUB_TOKEN 推的 commit 不会触发 push 型 workflow（GitHub 防循环），
+          # 所以这里无条件显式 dispatch；sync-baidu 自身幂等，树相同会直接跳过。
+          gh workflow run branch-sync.yml --ref ms -f mode=sync-baidu
+          echo "已 dispatch branch-sync(mode=sync-baidu)"
 
       - name: 结果摘要
         if: always()
