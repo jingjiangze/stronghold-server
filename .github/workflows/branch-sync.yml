@@ -39,32 +39,27 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
-      - name: 校验 baidu ⊆ ms + deploy/baidu
+      - name: 守卫 —— baidu 不得有未回填 ms 的运行时提交
         run: |
           set -euo pipefail
           git fetch origin ms baidu --force
-          git diff --name-only origin/ms origin/baidu > /tmp/diff.txt || true
-          echo "--- ms..baidu 差异文件 ($(wc -l < /tmp/diff.txt)) ---"
-          cat /tmp/diff.txt
-          BAD=$(grep -v '^deploy/baidu/' /tmp/diff.txt || true)
-          if [ -n "$BAD" ]; then
-            echo "::error::baidu 上出现 deploy/baidu 之外的差异，分支模型被破坏："
-            echo "$BAD"
-            echo "::error::处理：把 baidu 的运行时改动 backport 回 ms，再让 sync-baidu 重建 baidu"
+
+          # 方向很重要：判据是「baidu 上有 ms 没有的提交」，不是「两边树不相等」。
+          # 否则 ms 一前进、sync-baidu 还没跑完，这里就会误报红。
+          VIOL=$(git log origin/ms..origin/baidu --oneline -- . ':(exclude)deploy/baidu' || true)
+          if [ -n "$VIOL" ]; then
+            echo "::error::baidu 上有 deploy/baidu 之外的提交（热修未回填 ms，分支模型被破坏）："
+            echo "$VIOL"
+            echo "::error::处理：dispatch 本 workflow，mode=backport 开 PR 回 ms；合并后再让 sync-baidu 重建 baidu"
             exit 1
           fi
-          echo "OK: 差异全部在 deploy/baidu/ 内"
+          echo "OK: baidu 没有未回填 ms 的运行时提交"
 
-      - name: 确认没有 baidu 侧的未回填提交
-        continue-on-error: true
-        run: |
-          HOTFIX=$(git log origin/ms..origin/baidu --oneline -- . ':(exclude)deploy/baidu' || true)
-          if [ -n "$HOTFIX" ]; then
-            echo "::warning::baidu 上有 deploy/baidu 之外的提交（需 backport）："
-            echo "$HOTFIX"
-          else
-            echo "OK: baidu 没有待回填的运行时提交"
-          fi
+          BEHIND=$(git rev-list --count origin/baidu..origin/ms || echo 0)
+          echo "ms 领先 baidu ${BEHIND} 个提交 —— >0 属正常，sync-baidu 会自动重建"
+
+          echo "--- 当前 ms..baidu 差异文件 ---"
+          git diff --name-only origin/ms origin/baidu || true
 
   sync-baidu:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/ms') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'sync-baidu')
