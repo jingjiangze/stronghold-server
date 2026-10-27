@@ -1,0 +1,144 @@
+name: branch-sync
+
+# 分支模型（唯一真相）：
+#   ms    = 魔搭侧运行时内容（上游 + 本地改动），**不含** deploy/baidu
+#   baidu = ms 的 tree + deploy/baidu/**（唯一允许的差异面）
+#
+# 三个 job：
+#   guard      —— 守卫：baidu 与 ms 的差异必须全部落在 deploy/baidu/ 下
+#   sync-baidu —— 单向自动：ms 前进后，自动把 baidu 重建为「ms tree + 现有 deploy/baidu」
+#   backport   —— 反向半自动：baidu 上有 deploy/baidu 之外的改动时，开 PR 回 ms（不自动合）
+#
+# 为什么放在 Actions：本机到 GitHub 的 git 协议不通（直连不可达、代理被 reset），
+# 只有 runner 上有真实推送能力。
+
+on:
+  push:
+    branches: [ms, baidu]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '执行哪个动作'
+        type: choice
+        options: [guard, sync-baidu, backport]
+        default: guard
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: branch-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'guard')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 校验 baidu ⊆ ms + deploy/baidu
+        run: |
+          set -euo pipefail
+          git fetch origin ms baidu --force
+          git diff --name-only origin/ms origin/baidu > /tmp/diff.txt || true
+          echo "--- ms..baidu 差异文件 ($(wc -l < /tmp/diff.txt)) ---"
+          cat /tmp/diff.txt
+          BAD=$(grep -v '^deploy/baidu/' /tmp/diff.txt || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::baidu 上出现 deploy/baidu 之外的差异，分支模型被破坏："
+            echo "$BAD"
+            echo "::error::处理：把 baidu 的运行时改动 backport 回 ms，再让 sync-baidu 重建 baidu"
+            exit 1
+          fi
+          echo "OK: 差异全部在 deploy/baidu/ 内"
+
+      - name: 确认没有 baidu 侧的未回填提交
+        continue-on-error: true
+        run: |
+          HOTFIX=$(git log origin/ms..origin/baidu --oneline -- . ':(exclude)deploy/baidu' || true)
+          if [ -n "$HOTFIX" ]; then
+            echo "::warning::baidu 上有 deploy/baidu 之外的提交（需 backport）："
+            echo "$HOTFIX"
+          else
+            echo "OK: baidu 没有待回填的运行时提交"
+          fi
+
+  sync-baidu:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/ms') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'sync-baidu')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 重建 baidu = ms tree + 现有 deploy/baidu
+        run: |
+          set -euo pipefail
+          git fetch origin ms baidu --force
+          MS=$(git rev-parse origin/ms)
+          BAIDU=$(git rev-parse origin/baidu)
+
+          # 安全闸门：baidu 上若有 deploy/baidu 之外的提交，说明有热修没回填 ms，
+          # 此时重建会把这些改动抹掉 —— 中止，要求先 backport。
+          HOTFIX=$(git log "$MS".."$BAIDU" --oneline -- . ':(exclude)deploy/baidu' || true)
+          if [ -n "$HOTFIX" ]; then
+            echo "::error::baidu 上有未回填 ms 的运行时提交，重建会丢失它们，已中止："
+            echo "$HOTFIX"
+            exit 1
+          fi
+
+          if ! git cat-file -e "$BAIDU:deploy/baidu" 2>/dev/null; then
+            echo "::error::baidu 缺少 deploy/baidu，无法复用"; exit 1
+          fi
+
+          # 用底层命令拼树：读 ms 的树，再把 baidu 的 deploy/baidu/** 覆盖进去
+          git read-tree "$MS"
+          git ls-tree -r "$BAIDU" -- deploy/baidu | while read -r mode type sha path; do
+            git update-index --add --cacheinfo "$mode,$sha,$path"
+          done
+          NEWTREE=$(git write-tree)
+          OLDBAIDUTREE=$(git rev-parse "$BAIDU^{tree}")
+          if [ "$NEWTREE" = "$OLDBAIDUTREE" ]; then
+            echo "baidu 已是最新，无需重建"; exit 0
+          fi
+          NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$MS" \
+            -m "chore(sync): baidu 跟随 ms 重建（ms=$(echo $MS | cut -c1-8)）")
+          echo "新 baidu commit: $NEWCOMMIT"
+          git push origin "$NEWCOMMIT:refs/heads/baidu" --force
+
+  backport:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'backport'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 把 baidu 的运行时改动开成 PR 回 ms
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin ms baidu --force
+          git diff --name-only origin/ms...origin/baidu -- . ':(exclude)deploy/baidu' > /tmp/rt.txt || true
+          if [ ! -s /tmp/rt.txt ]; then
+            echo "baidu 没有 deploy/baidu 之外的改动，无需 backport"; exit 0
+          fi
+          echo "--- 待回填文件 ---"; cat /tmp/rt.txt
+          BR="auto/backport-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BR" origin/ms
+          git diff origin/ms...origin/baidu -- . ':(exclude)deploy/baidu' | git apply --index || {
+            echo "::error::直接 apply 失败（可能有冲突），请人工处理"; exit 1; }
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "backport: 百度侧运行时改动回填 ms
+
+来源分支: baidu ($(git rev-parse --short origin/baidu))
+涉及文件:
+$(cat /tmp/rt.txt)"
+          git push origin "$BR"
+          gh pr create --base ms --head "$BR" \
+            --title "backport: 百度侧改动回填魔搭线" \
+            --body "自动从 \`baidu\` 分支提取 \`deploy/baidu/\` 之外的改动。
+
+**合并前请确认**：这些改动是否也应该出现在魔搭线上；合并后 \`sync-baidu\` 会自动把 baidu 重建到新 ms。"
