@@ -114,6 +114,7 @@ function cardBody(c, ctx = null) {
         <span class=${`melt__tag ${tagCls}`}>${c.kind === 'gear' ? t('6 阶装备') : `${GRADE_LABEL[c.grade]}${t('装备')}`}</span>
         <span class="melt__tag">${c.kind === 'gear' ? t('主盟约专属') : t('装备')}</span>
       </div>
+      ${c.source ? html`<div class="melt__source">${t('出处 · {s}', { s: c.source })}</div>` : null}
       <p class="melt__desc">${c.desc || ''}</p>
     </div>
     <div class="melt__cost">

@@ -322,7 +322,8 @@ export class MatchEvent {
     const opps = this.isVersus ? this.order.filter((p) => this.teamIdOf(p) !== mine).sort((a, b) => a.seat - b.seat) : [];
     // 2V2 exposes two opponents (oppA / oppB); 4V4 all four (oppC / oppD join them) — the keys the room offers are
     // eventTargetKeys(), so a 2V2 pick can never name oppC.
-    return { self: ps, mate, oppA: opps[0] ?? null, oppB: opps[1] ?? null, oppC: opps[2] ?? null, oppD: opps[3] ?? null };
+    return { self: ps, mate, oppA: opps[0] ?? null, oppB: opps[1] ?? null, oppC: opps[2] ?? null, oppD: opps[3] ?? null,
+      oppE: opps[4] ?? null, oppF: opps[5] ?? null, oppG: opps[6] ?? null, oppH: opps[7] ?? null, oppI: opps[8] ?? null, oppJ: opps[9] ?? null };
   }
 
   /** The target map as playerIds (`m.public.event.targets`). */

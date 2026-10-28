@@ -1079,20 +1079,25 @@ export class MatchConfront {
     this.maybeFinishConfront();
   }
 
-  /** Step 2 ends as soon as EVERY attacker holds a submission (its window is only the cap). */
+  /** Step 2 ends when EVERY attacker has CONFIRMED (草稿不算). Its window is the round's prep time, so a player may keep
+   *  editing until the deadline (业主 2026-10-27：提交与确认出击拆成两步，截止前可改投放)。 */
   maybeFinishConfront() {
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster') return;
     const alive = this.confrontActors();
-    if (alive.length && alive.every((p) => this.confrontSubs.has(p.playerId))) this.finishConfront();
+    if (alive.length && alive.every((p) => this.confrontSubs.get(p.playerId)?.committed === true)) this.finishConfront();
   }
 
-  /** `g.confront { group, position, picks, bosses }` in step 2: the monsters a player throws at their target. `bosses`
-   *  (the 事件期 boss 格, user 2026-10-21) is optional — an old client never sends it. */
-  submitConfront(ps, { group, position, picks, bosses }) {
+  /** `g.confront { group, position, picks, bosses, commit }` in step 2: the monsters a player throws at their target.
+   *  `bosses` (the 事件期 boss 格, user 2026-10-21) is optional — an old client never sends it. `commit` splits the flow in
+   *  two (业主 2026-10-27): without it the submission is a **draft** that may be overwritten any number of times until the
+   *  deadline; with it the placement is final and the phase advances once every attacker has confirmed. */
+  submitConfront(ps, { group, position, picks, bosses, commit }) {
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster') return fail(ERR.WRONG_PHASE);
     if (!ps.alive) return fail(ERR.ELIMINATED);
     if (this.attackingTeam != null && this.teamIdOf(ps) !== this.attackingTeam) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters');
-    if (this.confrontSubs.has(ps.playerId)) return fail(ERR.ALREADY);
+    // 已确认出击 = 定局，不能再改；草稿可以反复覆盖（这一步以前是 ALREADY 一刀切，见 2026-10-27 的交互改版）
+    const prev = this.confrontSubs.get(ps.playerId);
+    if (prev && prev.committed === true) return fail(ERR.ALREADY);
     const arr = Array.isArray(picks) ? picks : [];
     const bArr = Array.isArray(bosses) ? bosses : [];
     // the count cap first: it is the protocol's own list bound too (shared/constants.js maxPicks mirrors it)
@@ -1103,7 +1108,8 @@ export class MatchConfront {
     if (member.error) return fail(member.error);
     // 防御：错误码常量缺失时 _confrontMember 可能返回 { error: undefined }；没有 sub 就绝不能静默写入（否则玩家派怪被丢弃）
     if (!member.sub) return fail(ERR.BAD_MSG, 'confront submission rejected');
-    this.confrontSubs.set(ps.playerId, member.sub);
+    const sub = { ...member.sub, committed: commit === true };
+    this.confrontSubs.set(ps.playerId, sub);
     // 收尾异常不得吞掉一次**已经成功**的提交（业主 2026-10-26：线上点提交恒报 INTERNAL，
     // 而 pick 其实已入库）。阶段收尾出错记日志、照常返回 OK。
     try { this.markPublic(); } catch (e) { this.reportError('confront markPublic', e); }
@@ -1213,7 +1219,7 @@ export class MatchConfront {
     // 复审计 2026-10-27：即使一条都买不起也必须写 sub —— `maybeFinishConfront` 要求「人人有 sub」，
     // 否则阶段要空等满 prepTime（65s）才由 deadline 收尾。
     const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
-    this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses: [], total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat });
+    this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses: [], total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
     this.markPublic();
   }
 

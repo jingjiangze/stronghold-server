@@ -18,7 +18,7 @@ export const DEV_BUILD = /-dev$/.test(APP_VERSION);
  */
 export const PLUGIN_API = Object.freeze({ current: 2, min: 1 });
 
-export const MAX_SEATS = 4;
+export const MAX_SEATS = 20;   // 2026-10-27：对抗房总人数 2..20（客户端那份早就是 20，两边从此一致）
 /**
  * Spectator seats of a co-op room (community report #26, owner's decision 2026-10-04) — a remake feature: the official
  * room has 1–4 players and no spectator seat (there only eliminated players and 联防 bystanders watch, research 09 §3.1).

@@ -110,7 +110,7 @@ export class MatchViews {
         && (this.phase === PHASE.CONFRONT || (this.confront && this.confront.size)) ? (() => {
         const src = this.phase === PHASE.CONFRONT ? (this.confrontSubs || new Map()) : (this.confront || new Map());
         const subs = {};
-        for (const [pid, s2] of src) subs[pid] = s2 ? { group: s2.group, position: s2.position || null, picks: s2.picks || [], total: (s2.picks || []).length, target: s2.target || null, coins: this.confrontBountyOf(s2.picks) } : null;
+        for (const [pid, s2] of src) subs[pid] = s2 ? { group: s2.group, position: s2.position || null, picks: s2.picks || [], total: (s2.picks || []).length, target: s2.target || null, coins: this.confrontBountyOf(s2.picks), committed: s2.committed === true } : null;
         return {
           confront: {
             active: this.phase === PHASE.CONFRONT,

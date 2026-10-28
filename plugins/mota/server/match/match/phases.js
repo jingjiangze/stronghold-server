@@ -424,8 +424,9 @@ export class MatchPhases {
     // 顺序要紧：必须在 `_planBossWaves` 之前（同一关的出战表按新图的几何算）。
     const bossNext = (x) => x === this.gd.bossRound || x === this.gd.hiddenRound;
     if (this.randomStage === false) {
-      if (bossNext(r)) this.pickBossStage(r);
-      this.nextStageId = bossNext(r + 1) ? (this.bossStageFor(r + 1) || this.stageId) : this.stageId;
+      // 业主 2026-10-27：**关掉就整局同一张图** —— boss 关也不再刷新。此前「关 = 开局一张、boss 关刷新一次」
+      // 会让玩家在 R14/R15 看到地图被换掉（线上反馈「关了还是被切图」）。
+      this.nextStageId = this.stageId;
     } else if (this.isXie) {
       this.pickRoundStage(r);
     } else if (bossNext(r)) {

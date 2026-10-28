@@ -406,6 +406,8 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .spov__turntxt .icon { width: .26rem; height: .26rem; }
 .spov__turntxt.is-mine { color: var(--mint-400); text-shadow: 0 0 .16rem rgba(23, 249, 183, .45); animation: blink 1.2s ease-in-out infinite; }
 .spov__turntxt.is-done { color: var(--mint-400); }
+/* 草稿态（2026-10-27）：已保存但还没确认出击 —— 用琥珀色区分「可继续改」与「已锁定」 */
+.spov__turntxt.is-draft { color: var(--amber, #f2b544); }
 /* someone else deciding: the name over 正在决策…, right-aligned, an hourglass beside them */
 .spov__turntxt.is-other { gap: .12rem; color: #eef1f0; }
 .spov__turntxt.is-other .icon { width: .34rem; height: .34rem; }

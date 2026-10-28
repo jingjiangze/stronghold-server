@@ -8,17 +8,20 @@
 // 座位表在核心里固定是 MAX_SEATS 长、空位为 null；这里只把前 want 个位置填上，超出的位置保持 null 并在有人占位时拒绝开局，
 // 因此不需要核心认识「对抗房座位上限」。
 
-const TEAM_SIZES = new Set([2, 4]);
+// 业主 2026-10-27：分边人数从「只认 2 / 4」放开到 1..10（总人数 2..20 偶数自定义）。
+const TEAM_MIN = 1;
+const TEAM_MAX = 10;
+const validTeam = (n) => Number.isInteger(n) && n >= TEAM_MIN && n <= TEAM_MAX;
 
-/** 分边人数的规范值：只认 2 / 4，其余回落 2。 */
-const teamSizeOf = (room) => (TEAM_SIZES.has(room?.teamSize) ? room.teamSize : 2);
+/** 分边人数的规范值：1..10 原样，其余回落 2。 */
+const teamSizeOf = (room) => (validTeam(room?.teamSize) ? room.teamSize : 2);
 
 /**
  * @param {{ roomInit: Function, matchOptions: Function, beforeStart: Function }} api
  */
 export function setup(api) {
   api.roomInit((room) => {
-    if (room && room.mode === 'versus' && !TEAM_SIZES.has(room.teamSize)) room.teamSize = 2;
+    if (room && room.mode === 'versus' && !validTeam(room.teamSize)) room.teamSize = 2;
   });
 
   // 规则档（业主 2026-10-26）：「赏金」= 当前线上那套（官方波次 + 替换份额）；「对抗」= 完全由玩家控制出怪。

@@ -46,6 +46,11 @@
 .proto-versus__alt { flex: none; display: inline-flex; align-items: center; gap: .06rem; padding: .03rem .12rem; font-size: max(.13rem, 10px); color: #cdd2d0; white-space: nowrap;
   background: rgba(0, 0, 0, .45); border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px; cursor: pointer; }
 .proto-versus__alt input { width: max(.2rem, 13px); height: max(.2rem, 13px); accent-color: var(--mint-500); }
+/* 人数选择（业主 2026-10-27：偶数自定义，最大 20 人 = 每队 10） */
+.proto-team { display: inline-flex; align-items: center; gap: .06rem; font-size: max(.13rem, 10px); color: #cdd2d0; white-space: nowrap; }
+.proto-team select { height: max(.32rem, 20px); padding: 0 .06rem; font: inherit; font-size: max(.13rem, 10px); color: #e9eceb;
+  background: #1b1d1e; border: 1px solid rgba(255, 255, 255, .18); border-radius: .06rem; }
+.proto-team select:disabled { opacity: .5; }
 
 /* 协同资金归属（协同共竞的 xie 模式，右侧面板）：容器 .proto-versus 此前没有任何规则，两个 dpick__opt 竖着堆成
    默认按钮（与三按钮同一类问题）。这里补容器与按钮的外框，说明文字单独占一行。 */

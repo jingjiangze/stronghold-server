@@ -367,6 +367,9 @@ function sameSkins(a, b) {
 }
 
 /** One room: 4 seat slots, host, difficulty, optional running match. */
+/** 已占用的玩家座位数（bot 也算；观众不算）——对抗房用它把人数封在 2 × teamSize。 */
+const takenSeats = (room) => room.seats.reduce((n, s) => n + (s ? 1 : 0), 0);
+
 export class Room {
   /**
    * @param {string} code @param {'solo'|'coop'} mode @param {string} difficulty @param {number} now
@@ -482,6 +485,9 @@ export class Room {
       difficulty: this.difficulty,
       aiPicksLast: this.aiPicksLast,
       inMatch: !!this.match,
+      // 座位上限（2026-10-27）：对抗房 = 2 × teamSize。此前没有这个字段，客户端按 MAX_SEATS(20) 画满，
+      // 2V2 房也显示 20 个座位（线上反馈）。
+      ...(this.mode === 'versus' && this.teamSize ? { seatCap: this.teamSize * 2 } : {}),
       seats: this.seats.map((s) => (s
         ? { seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left,
           // a room with gameplay plugins (header "Gameplay plugins"): has this player's page loaded and checked its content?
@@ -976,8 +982,9 @@ export class Lobby {
     if (cur) this.removeMember(cur, session.playerId);
     const room = new Room(code, mode, difficulty, this.now(), version);
     room.test = test === true;
-    // 插件房的分边人数（2 → 4 席，4 → 8 席）：核心只存这一个选项，怎么用由 plugins/mota 的 matchOptions 决定。
-    if (mode === 'versus') room.teamSize = teamSize === 4 ? 4 : 2;
+    // 插件房的分边人数（每队人数，总人数 = 2 × teamSize）：核心只存这一个选项，怎么用由插件的 matchOptions 决定。
+    // 2026-10-27 业主：从「只认 2/4」放开到 1..10（总人数 2..20 偶数自定义）。
+    if (mode === 'versus') room.teamSize = Number.isInteger(teamSize) && teamSize >= 1 && teamSize <= 10 ? teamSize : 2;
     // 插件房的规则集（例如 协同共竞 'xie'）：核心只存原样字符串，怎么解释由插件的 matchOptions 决定。
     if (typeof variant === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(variant)) room.variant = variant;
     // 对抗是否每回合交换攻守（业主 2026-10-26）：缺省 true（交替）；显式 false 才固定首攻。
@@ -1013,6 +1020,9 @@ export class Lobby {
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
     if (room.match) return fail(ERR.ROOM_STARTED);
     if (room.mode === 'solo') return fail(ERR.ROOM_FULL, 'solo room');
+    // 对抗房的座位上限 = 2 × 每队人数（2026-10-27）：此前只受 seats 数组长度（20）约束，
+    // 于是 2V2 房能被坐进 5 个人，直到开局 beforeStart 才被拒。
+    if (room.mode === 'versus' && room.teamSize && takenSeats(room) >= room.teamSize * 2) return fail(ERR.ROOM_FULL);
     const idx = room.freeSeat();
     if (idx < 0) return fail(ERR.ROOM_FULL);
     // a human takes a player seat: the version vote is void (header "Official versions") — before the seat is taken, so
@@ -1597,6 +1607,8 @@ export class Lobby {
     if (room.match) return fail(ERR.ROOM_STARTED);
     this.dropReplay(room, session.playerId);
     if (room.mode === 'solo') return fail(ERR.ROOM_FULL, 'solo rooms cannot have AI teammates');
+    // 对抗房：bot 也算座位，封在 2 × 每队人数（2026-10-27）
+    if (room.mode === 'versus' && room.teamSize && takenSeats(room) >= room.teamSize * 2) return fail(ERR.ROOM_FULL);
     const idx = room.freeSeat();
     if (idx < 0) return fail(ERR.ROOM_FULL);
     const used = new Set(room.seats.filter((s) => s && s.isBot).map((s) => s.name));

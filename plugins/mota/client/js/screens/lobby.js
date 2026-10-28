@@ -622,6 +622,12 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                 <input type="checkbox" checked=${versusAlt !== false} disabled=${!!busy}
                   onChange=${(e) => onVersusAlt && onVersusAlt(e.currentTarget.checked)} />
                 <span>${t('每回合交换攻守')}</span></label>` : null}
+              <label class="proto-team" title=${t('每队人数：2 人一队 = 4 人房，10 人一队 = 20 人房')}>
+                <span>${t('人数')}</span>
+                <select value=${String(versusTeam)} disabled=${!!busy}
+                  onChange=${(e) => onVersusTeam && onVersusTeam(Number(e.currentTarget.value))}>
+                  ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => html`<option key=${n} value=${String(n)}>${t('{n}V{n}（{total} 人）', { n, total: n * 2 })}</option>`)}
+                </select></label>
             </div>
           </div>` : null}
         </div>
@@ -989,7 +995,7 @@ export function LobbyScreen() {
     const res = await net.request('room.create', {
       mode: roomMode, difficulty,
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
-      ...(simulation === 'versus' ? { teamSize: 2, variant: versusRule,
+      ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
         versusAlt: versusRule === 'confront' ? versusAlt !== false : true } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });

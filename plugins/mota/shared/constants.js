@@ -364,7 +364,9 @@ export const MIN_SEATS = 2;
 // ===== 对抗模式（2V2 / 4V4，2026-10-24 移植自 Forge 的 versus 实现）=====
 // 模式口径：`room.mode = 'versus'` + `teamSize`（2 → 4 席，4 → 8 席），模式 id 走既有 `mode_<variant>_<difficulty>`
 // （本树用 variant 'versus' / 'versus4' 区分两队人数）。常量与 Forge 的 shared/constants.js 同值，便于逐文件移植。
-export const VERSUS_TEAM_SIZE = 2;      // 2V2 的每队人数（room.create 的 teamSize 默认）
+export const VERSUS_TEAM_SIZE = 2;
+/** 每队人数上限（业主 2026-10-27：总人数 2..20 偶数 ⇒ 每队 1..10） */
+export const VERSUS_TEAM_MAX = 10;      // 2V2 的每队人数（room.create 的 teamSize 默认）
 export const VERSUS_TEAMS = 2;          // 两队（红 / 蓝）
 export const CONFRONT_ROSTER_MS = 5000; // 狩猎期布阵后的花名册亮相
 export const EVENT_ROSTER_MS = 5000;    // 事件期布阵公布
@@ -414,14 +416,15 @@ export const EVENT_TARGETS = Object.freeze(['self', 'mate', 'oppA', 'oppB']);
  * The protocol accepts this whole set and the match slices it by `teamSize` — a key outside the room's slice is a
  * plain ERR.BAD_TARGET.
  */
-export const EVENT_TARGETS_ALL = Object.freeze(['self', 'mate', 'oppA', 'oppB', 'oppC', 'oppD']);
+export const EVENT_TARGETS_ALL = Object.freeze(['self', 'mate', 'oppA', 'oppB', 'oppC', 'oppD', 'oppE', 'oppF', 'oppG', 'oppH', 'oppI', 'oppJ']);
 /**
  * The target keys of a versus room with `teamSize` players per team.
  * @param {number} [teamSize] 2 = 2V2 (4 keys), 4 = 4V4 (6 keys)
  * @returns {readonly string[]}
  */
 export const eventTargetsFor = (teamSize = 2) => {
-  const n = Math.max(2, Math.min(4, Math.trunc(Number(teamSize) || 2)));
+  // 业主 2026-10-27：队伍规模改成偶数自定义、最大 20 人（每队 1..10），对手目标键随之扩到 oppJ
+  const n = Math.max(1, Math.min(VERSUS_TEAM_MAX, Math.trunc(Number(teamSize) || 2)));
   return n <= 2 ? EVENT_TARGETS : EVENT_TARGETS_ALL.slice(0, 2 + n);
 };
 /** A self-targeted entry's magnitude multiplier (all numeric values in the entry, refresh uses included). */

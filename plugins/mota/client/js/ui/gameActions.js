@@ -211,6 +211,6 @@ export const actions = {
   removeSpectator: (playerId) => act('room.removeSpectator', { playerId }, { sfx: 'back' }),
   // 对抗模式（2V2 / 4V4）：狩猎期目标 / 布阵、事件期选择
   confrontTarget: (targetPlayerId) => act('g.confrontTarget', { targetPlayerId }, { sfx: 'confirm' }),
-  confront: (group, position, picks) => act('g.confront', { group, position, picks }, { sfx: 'confirm' }),
+  confront: (group, position, picks, commit = true) => act('g.confront', { group, position, picks, commit: commit === true }, { sfx: 'confirm' }),
   eventPick: (target) => act('g.event.pick', { target }, { sfx: 'confirm' }),
 };

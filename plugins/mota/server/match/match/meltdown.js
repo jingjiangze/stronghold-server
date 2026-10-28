@@ -42,6 +42,9 @@ const FUNDS_PRICE = { prismatic: 8, gold: 5, silver: 3, gear: 6 };
 function meltFundsPrice(card) {
   if (!card || card.exhausted) return 0;
   if (card.kind === 'gear') return FUNDS_PRICE.gear;
+  // 业主 2026-10-27：商店卖的是「游戏内装备」，价格就跟装备自己的 `items.json.price` 走（×2 换算成储备单位），
+  // 不再只按品阶定死。品阶价只作为兜底（老局 / 卡片缺 price 时）。
+  if (Number.isFinite(card.price) && card.price > 0) return card.price;
   return FUNDS_PRICE[card.grade] || 0;
 }
 
@@ -180,6 +183,7 @@ export class MatchMeltdown {
       iconId: gear.iconId || gear.trapId || '',
       tier: 6,
       owner: main ? `${main.rec.name} · ${main.layers} 层` : '',
+      source: String(gear.category || ''),
       cost: { type: 'allStats', value: GEAR_PENALTY },
       sold: false,
     } : { kind: 'gear', slot: 0, exhausted: true, name: '', desc: '', cost: null });
@@ -205,6 +209,10 @@ export class MatchMeltdown {
         desc: String(rec.desc || rec.descRaw || '').replace(/\n/g, ' '),
         iconId: rec.iconId || rec.trapId || '',
         tier: Number(rec.tier) || 0,
+        // 出处（业主 2026-10-27：商店要备注装备出处）——取 items.json 的 category：STAT/ECONOMY/BOND/RECRUIT/ON_HIT/...
+        source: String(rec.category || ''),
+        // 价格取装备自己的 price（×2 换到储备单位，夹在 2..12）：1~3 块的装备 → 2~6，6 阶 4 块 → 8
+        price: Math.max(2, Math.min(12, Math.round((Number(rec.price) || 2) * 2))),
         cost: { type, value: COST_VALUE[grade][type] },
         sold: false,
       });

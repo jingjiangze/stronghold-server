@@ -519,7 +519,7 @@ export const C2S = {
   // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
   // variant: a rule-set variant of a co-op room, mode_<variant>_<difficulty> ('xie' = 协同共竞, DESIGN §29);
   // absent ⇒ the plain mode_multi_*. Lobby.create 透传给 Room → Match opts（server/lobby.js）。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || v === 2 || v === 4, versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, $optional: ['test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, $optional: ['test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.ready': { ready: isBool },
@@ -599,7 +599,7 @@ export const C2S = {
     // 支付方式（业主 2026-10-26）：缺省/'debuff' = 吃敌人属性代价；'funds' = 花个人资金
     pay: (v) => v == null || v === 'funds' || v === 'debuff' },
   'g.meltClose': {},
-  'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 128, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), $optional: ['bosses'] },
+  'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 128, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), commit: isBool, $optional: ['bosses', 'commit'] },
   'g.confront.withdraw': { gold: (v) => isInt(v, 1, 100000) },
   'g.event.pick': { target: (v) => EVENT_TARGETS_ALL.includes(v) },
   // 随机地图开关（2026-10-22；房主，开局前）

@@ -511,7 +511,7 @@ export const C2S = {
   // default create stays the message it was.
   // 插件房的模式与分边人数：引擎协议表是权威，所以插件自己的房间模式必须在**这里**放行（`api.protocol()` 只新增键，
   // 不覆盖已有键）。只有「模式枚举 + 队伍人数」两项，玩法本体仍全在 plugins/mota。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true, version: isVersionId, soloUnlimited: isBool, teamSize: (v) => v == null || v === 2 || v === 4, versusAlt: (v) => v == null || typeof v === 'boolean', variant: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)), $optional: ['test', 'difficulty', 'version', 'soloUnlimited', 'teamSize', 'variant', 'versusAlt'] },
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true, version: isVersionId, soloUnlimited: isBool, teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', variant: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)), $optional: ['test', 'difficulty', 'version', 'soloUnlimited', 'teamSize', 'variant', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.ready': { ready: isBool },

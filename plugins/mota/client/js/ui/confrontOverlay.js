@@ -160,7 +160,7 @@ function EnemyChip({ m, rec, count, onAdd, disabled, blocked, hint }) {
 }
 
 /**
- * @param {{ pub:any, busy?:boolean, onTarget:(targetPlayerId:string)=>void, onConfirm:(group:number, position:string, picks:object[])=>void }} props
+ * @param {{ pub:any, busy?:boolean, onTarget:(targetPlayerId:string)=>void, onConfirm:(group:number, position:string, picks:object[], commit?:boolean)=>void }} props
  */
 export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const gd = useGameData();
@@ -292,7 +292,9 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
     setOverIdx(null);
   };
   const mine = conf.subs ? conf.subs[myId] : null;
-  const submitted = !!mine;
+  // 两步提交（业主 2026-10-27）：草稿（committed=false）可反复改，只有「确认出击」才锁面板。
+  const submitted = !!(mine && mine.committed === true);
+  const drafted = !!mine && !submitted;
   const foesPicked = mates.every((p) => targets[p.playerId]);
   /**
    * 自动选择: fill the budget the way the AI does — most expensive monster that still fits, walking the types in order
@@ -340,7 +342,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
     setPicks(out);
     setPosition(lastSquad.position || 'mid');
   };
-  const confirm = () => {
+  const confirm = (commit = true) => {
     if (!picks.length) return;
     lastSquad = {
       keys: picks.map((p) => p.enemyKey),
@@ -349,7 +351,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
       times: picks.map((p) => p.time),
       position,
     };
-    onConfirm(group, position, picks);
+    onConfirm(group, position, picks, commit);
   };
 
   // 悬赏名单 / 投放公示 (the server's roster hold): the submissions are final, the battles have not started. The pick /
@@ -374,7 +376,8 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
                 <span class="spov__bar">|</span><span class="spov__desc">${t('第 {r} 回合 · 你的怪只会出现在这个对手的波次', { r: conf.round })}</span></h2>`}
           <p class="spov__sub">${stage === 'target'
             ? (myTarget ? t('已锁定目标，等待队友与对手') : t('点击一个 ? 头像框锁定你的目标'))
-            : (submitted ? t('你已提交，等待其他玩家') : t('点怪加入；可切换类型继续添加（不限数量，只限总价值）'))}</p>
+            : (submitted ? t('你已确认出击，等待其他玩家')
+              : (drafted ? t('草稿已保存 · 截止前可以继续改，确认出击才锁定') : t('点怪加入；可切换类型继续添加（不限数量，只限总价值）')))}</p>
         </div>
         <div class="spov__turn">
           ${conf.hunt ? html`<span class="spov__turntxt is-final">${t('最终狩猎')}</span>` : null}
@@ -382,13 +385,15 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
           ${Number(pub?.deadline) > 0 ? html`<${Countdown} deadline=${pub.deadline} size="sm" />` : null}
           ${stage === 'monster'
             ? (submitted
-              ? html`<span class="spov__turntxt is-done"><${Icon} name="check" />${t('已提交')}</span>`
-              : html`<span class="spov__turntxt">${t('已用价值 {spent}/{budget}', { spent, budget })}</span>`)
+              ? html`<span class="spov__turntxt is-done"><${Icon} name="check" />${t('已确认')}</span>`
+              : html`<span class="spov__turntxt${drafted ? ' is-draft' : ''}">${t('已用价值 {spent}/{budget}', { spent, budget })}</span>`)
             : null}
           ${stage === 'monster' && !submitted ? html`<${Button} variant="secondary" size="md" title=${t('按价值自动挑满预算，之后可以手动调整')} onClick=${autoPick}>${t('自动选择')}<//>` : null}
           ${stage === 'monster' && !submitted && lastSquad ? html`<${Button} variant="secondary" size="md" title=${t('沿用上一轮的编队（按本轮预算重新装填）')} onClick=${reuse}>${t('沿用上轮')}<//>` : null}
+          ${stage === 'monster' && !submitted && group != null ? html`<${Button} variant="secondary" size="md" title=${t('先存一份草稿：截止前可以继续改，不会推进阶段')}
+            disabled=${picks.length === 0 || busy} onClick=${() => confirm(false)}>${t('保存草稿')}<//>` : null}
           ${stage === 'monster' && !submitted && group != null ? html`<${Button} variant="primary" size="lg" icon="check" loading=${busy}
-            disabled=${picks.length === 0} onClick=${confirm}>${t('提交（{n} 只 · {spent}/{budget}）', { n: picks.length, spent, budget })}<//>` : null}
+            disabled=${picks.length === 0} onClick=${() => confirm(true)}>${t('确认出击（{n} 只 · {spent}/{budget}）', { n: picks.length, spent, budget })}<//>` : null}
         </div>
       </header>
 
