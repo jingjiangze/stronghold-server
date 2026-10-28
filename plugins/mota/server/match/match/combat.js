@@ -52,6 +52,17 @@ export class MatchCombat {
       // 熔毁商店的代价（业主 2026-10-26 接线）：allStats/growth → 全属性；dmg → 等效血量。
       // 复审计 2026-10-27：只在**还没贴过**时才乘 —— 普通场的 mods 会随漏怪带进联防、再随接力带进下一段，
       // 每次 _sanitizeSpawns 都乘一遍会让联防 ×2、接力 ×3（与「漏怪保持同属性」的设计冲突）。
+      // 藏品（业主 2026-10-27）：只接「敌方 hp/atk」这一档（引擎有 hpMul/atkMul 通道）；幂等标记防联防/接力重复乘。
+      if (typeof this.relicEnemyMul === 'function' && !spec.mods.relicApplied) {
+        try {
+          const rm = this.relicEnemyMul();
+          if (rm && (rm.hp || rm.atk)) {
+            spec.mods.hpMul = (Number(spec.mods.hpMul) || 1) * (1 + Number(rm.hp || 0));
+            spec.mods.atkMul = (Number(spec.mods.atkMul) || 1) * (1 + Number(rm.atk || 0));
+            spec.mods.relicApplied = true;
+          }
+        } catch (e) { this.reportError('relic mods', e); }
+      }
       if (typeof this.meltMul === 'function' && typeof this.meltHpMul === 'function' && !spec.mods.meltApplied) {
         try {
           const gm = this.meltMul();

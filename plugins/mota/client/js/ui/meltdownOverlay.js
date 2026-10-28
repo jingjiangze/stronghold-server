@@ -133,7 +133,7 @@ function cardBody(c, ctx = null) {
 /**
  * @param {{ view: any, onPick?: (slot:number)=>void, onClose?: ()=>void }} props
  */
-export function MeltdownOverlay({ view, onPick = () => {}, onClose = () => {} }) {
+export function MeltdownLegacy({ view, onPick = () => {}, onClose = () => {} }) {
   const [pay, setPay] = useState('debuff');
   if (!view || !Array.isArray(view.cards) || !view.cards.length) return null;
   const prices = Array.isArray(view.prices) ? view.prices : [];
@@ -192,6 +192,115 @@ export function MeltdownOverlay({ view, onPick = () => {}, onClose = () => {} })
           <span class="melt__funds">${t('个人储备')} <b>${funds}</b></span>
         </div>
         <div class="melt__count">${t('已签')} <b>${sold}</b> / ${cards.length}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+
+/**
+ * 目录式道具商店（业主 2026-10-27）：按品阶分组列出本局全部可售装备，
+ * 顶部页签「全部 / 一阶…六阶」，每件一张卡（名称、品阶、出处、效果、价格、状态）。
+ * 数据：`m.private.meltdown.catalog = { level, funds, groups:[{tier, rows:[{itemId,name,desc,tier,source,price,unlocked,affordable}]}] }`
+ * 动作：`g.meltBuy { itemId }` / `g.meltClose`。
+ */
+export function MeltdownOverlay({ view, onBuy = () => {}, onBuyRelic = () => {}, onClose = () => {} }) {
+  const cat = view && view.catalog;
+  const [board, setBoard] = useState('item'); // 'item' = 道具 / 'relic' = 藏品
+  const [tier, setTier] = useState(0);        // 道具板块里的品阶筛选（0 = 全部）
+  if (!cat) return null;
+  const relics = Array.isArray(cat.relics) ? cat.relics : [];
+  const hasRelics = relics.length > 0;
+  const groups = tier ? cat.groups.filter((g) => g.tier === tier) : cat.groups;
+
+  /** 切板块：同时滚动容器（触屏/触控板也能手动滑，scroll-snap 负责吸附） */
+  const goBoard = (id) => {
+    setBoard(id);
+    const box = document.querySelector('.mshop__boards');
+    if (box) box.scrollTo({ left: id === 'relic' ? box.clientWidth : 0, behavior: 'smooth' });
+  };
+
+  const card = (r, kind) => html`<article key=${r.itemId || r.relicId} class=${`mshop__card${r.unlocked ? '' : ' is-locked'}`}>
+    <div class="mshop__row">
+      <span class="mshop__badge">${kind === 'relic' ? t('藏品 · T{n}', { n: r.tier }) : t('{n} 阶 · T{n}', { n: r.tier })}</span>
+      <span class="mshop__src">${r.source}</span>
+    </div>
+    <div class="mshop__main">
+      <span class="mshop__icon">
+        ${(() => {
+          // 藏品自带 icon（/assets/relics/<id>.png，由插件 client overlay 提供）；装备走 manifest.items
+          const url = kind === 'relic'
+            ? (r.icon || null)
+            : (r.iconId ? itemIconUrl(data.get('assets'), r.iconId) : null);
+          return url
+            ? html`<${Img} src=${url} fallback=${html`<span class="mshop__glyph">✦</span>`} />`
+            : html`<span class="mshop__glyph">✦</span>`;
+        })()}
+      </span>
+      <div class="mshop__txt">
+        <h4 class="mshop__name">${r.name}</h4>
+        <p class="mshop__desc">${r.desc}</p>
+      </div>
+    </div>
+    <div class="mshop__foot">
+      <span class="mshop__price"><b class="num">${r.price}</b><small>${t(' 块')}</small></span>
+      ${!r.unlocked
+        ? html`<span class="mshop__state is-lock">${t('商店等级不足')}</span>`
+        : !r.affordable
+          ? html`<span class="mshop__state is-poor">${t('资金不足')}</span>`
+          : html`<button type="button" class="mshop__buy"
+              onClick=${() => (kind === 'relic' ? onBuyRelic(r.relicId) : onBuy(r.itemId))}>${t('购买')}</button>`}
+    </div>
+  </article>`;
+
+  return html`<div class="mshop" role="dialog" aria-label=${t('道具商店')}>
+    <div class="mshop__veil"></div>
+    <div class="mshop__panel">
+      <header class="mshop__head">
+        <div class="mshop__titlebox">
+          <span class="mshop__micro">ITEM SHOP // EQUIPMENT</span>
+          <h2 class="mshop__title">${t('道具商店')}</h2>
+        </div>
+        <nav class="mshop__boards-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected=${board === 'item' ? 'true' : 'false'}
+            class=${`mshop__btab${board === 'item' ? ' is-on' : ''}`} onClick=${() => goBoard('item')}>${t('道具')}</button>
+          ${hasRelics ? html`<button type="button" role="tab" aria-selected=${board === 'relic' ? 'true' : 'false'}
+            class=${`mshop__btab${board === 'relic' ? ' is-on' : ''}`} onClick=${() => goBoard('relic')}>${t('藏品')}</button>` : null}
+        </nav>
+        <div class="mshop__wallet" title=${t('个人储备：回合末结余按比例转入，用来买装备')}>
+          <b class="num">${cat.funds}</b><span>${t('个人储备')}</span>
+        </div>
+        <button type="button" class="mshop__close" onClick=${() => onClose()}><span aria-hidden="true">×</span>${t('关闭商店')}</button>
+      </header>
+      <p class="mshop__rule">
+        ${t('商店等级 Lv{lv}', { lv: cat.level })}
+        <i>·</i>${t('价格 = 装备原价 ×2')}
+        <i>·</i>${t('采购等阶 ≤ 商店等级')}
+        ${hasRelics ? html`<i>·</i>${t('左右滑动切换 道具 / 藏品')}` : null}
+      </p>
+      <div class="mshop__boards">
+        <section class="mshop__board" data-board="item">
+          <nav class="mshop__tabs" role="tablist">
+            <button type="button" role="tab" aria-selected=${!tier ? 'true' : 'false'}
+              class=${`mshop__tab${!tier ? ' is-on' : ''}`} onClick=${() => setTier(0)}>${t('全部')}</button>
+            ${cat.groups.map((g) => html`<button key=${g.tier} type="button" role="tab" aria-selected=${tier === g.tier ? 'true' : 'false'}
+              class=${`mshop__tab${tier === g.tier ? ' is-on' : ''}`} onClick=${() => setTier(g.tier)}>${t('{n} 阶', { n: g.tier })}</button>`)}
+          </nav>
+          <div class="mshop__scroll">
+            ${groups.map((g) => html`<section key=${g.tier} class="mshop__sec">
+              <h3 class="mshop__sec-t">${t('{n} 阶装备', { n: g.tier })}<small>TIER ${g.tier}</small></h3>
+              <div class="mshop__grid">${g.rows.map((r) => card(r, 'item'))}</div>
+            </section>`)}
+          </div>
+        </section>
+        ${hasRelics ? html`<section class="mshop__board" data-board="relic">
+          <div class="mshop__scroll">
+            <section class="mshop__sec">
+              <h3 class="mshop__sec-t">${t('藏品')}<small>RELICS</small></h3>
+              <div class="mshop__grid">${relics.map((r) => card(r, 'relic'))}</div>
+            </section>
+          </div>
+        </section>` : null}
       </div>
     </div>
   </div>`;

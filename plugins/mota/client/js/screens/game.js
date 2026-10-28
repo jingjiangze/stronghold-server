@@ -1888,7 +1888,8 @@ function MatchScreen() {
       onReroll=${async (slot) => { setHexRerollSlot(slot); try { await net.request('g.hexReroll', { slot }); } catch {} finally { setHexRerollSlot(null); } }} />` : null}
 
     ${!spectator && alive && priv?.meltdown ? html`<${MeltdownOverlay} view=${priv.meltdown}
-      onPick=${async (slot, pay) => { try { await net.request('g.meltPick', pay ? { slot, pay } : { slot }); } catch {} }}
+      onBuy=${async (itemId) => { try { await net.request('g.meltBuy', { itemId }); } catch {} }}
+      onBuyRelic=${async (relicId) => { try { await net.request('g.meltBuyRelic', { relicId }); } catch {} }}
       onClose=${async () => { try { await net.request('g.meltClose', {}); } catch {} }} />` : null}
 
     ${hasOffers && !sp && !personalChoice ? html`<${OfferOverlay} pub=${pub} myId=${myId} readOnly=${spectator || !alive} onAction=${actions.offer} />` : null}

@@ -20,6 +20,8 @@ export class MatchIntents {
       case 'g.hexReroll': return this.hexReroll(ps, msg.slot);
       case 'g.meltOpen': return this.meltdownRequest(ps);
       case 'g.meltPick': return this.meltPick(ps, msg.slot);
+      case 'g.meltBuy': return this.meltBuy(ps, msg.itemId);
+      case 'g.meltBuyRelic': return this.meltBuyRelic(ps, msg.relicId);
       case 'g.meltClose': return this.meltClose(ps);
       case 'g.confront.withdraw': return this.withdrawBounty(ps, msg);
       case 'g.event.pick': return this.pickEvent(ps, msg.target);

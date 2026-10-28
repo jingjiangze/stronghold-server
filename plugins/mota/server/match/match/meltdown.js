@@ -19,6 +19,7 @@ import { PHASE, ERR } from '../../../shared/constants.js';
 import { HEXES, hexById } from '../../../shared/hexes.js';
 import { OK, fail } from './common.js';
 import { freeSlot } from '../board.js';
+import { isShopItem } from '../../sim/simdata.js';
 
 /** 三种代价 × 三档数值：品阶 → 数值 */
 const COST_VALUE = {
@@ -39,6 +40,11 @@ const FUNDS_PRICE = { prismatic: 8, gold: 5, silver: 3, gear: 6 };
  * @param {any} card
  * @returns {number}
  */
+/** 一件装备的资金价：跟装备自己的 items.json.price 走（×2 换到储备单位，夹 2..12）。 */
+function meltItemPrice(rec) {
+  return Math.max(2, Math.min(12, Math.round((Number(rec && rec.price) || 2) * 2)));
+}
+
 function meltFundsPrice(card) {
   if (!card || card.exhausted) return 0;
   if (card.kind === 'gear') return FUNDS_PRICE.gear;
@@ -274,6 +280,159 @@ export class MatchMeltdown {
     return OK;
   }
 
+  /** 商店等级（采购等阶上限）：R1-2 → 1，R3-4 → 2 …… 封顶 6（业主 2026-10-27：目录式商店） */
+  meltShopLevel() { return Math.min(6, Math.max(1, Math.ceil((Number(this.round) || 1) / 2))); }
+
+  /**
+   * 目录式道具商店（业主 2026-10-27）：把本局可售装备按品阶分组下发，每件带价格 / 出处 / 可买状态。
+   * 盟约专属（requiresBondId）不进目录——它们仍走「主盟约专属」那栏。
+   */
+  meltCatalog(ps) {
+    const level = this.meltShopLevel();
+    const have = Math.max(0, Math.floor(Number(es_spendable(ps)) || 0));
+    const groups = [];
+    const byTier = (this.gd && this.gd.shopItemsByTier) || {};
+    for (let t = 1; t <= 6; t++) {
+      // byTier[t] 是**装备 id 字符串**数组（gamedata.js 的 shopItemsByTier），先还原成记录再判
+      const rows = (byTier[t] || [])
+        .map((id) => (typeof this.gd.item === 'function' ? this.gd.item(id) : (typeof id === 'object' ? id : null)))
+        .filter((it) => it && !it.requiresBondId && isShopItem(it))
+        .map((it) => {
+          const price = meltItemPrice(it);
+          return {
+            itemId: String(it.id || it.baseId || ''),
+            name: String(it.name || it.id || ''),
+            desc: String(it.desc || it.descRaw || '').replace(/\n/g, ' '),
+            iconId: String(it.iconId || it.trapId || ''),
+            tier: t,
+            source: String(it.category || ''),
+            price,
+            unlocked: t <= level,
+            affordable: have >= price,
+          };
+        })
+        .sort((a, b) => (a.price - b.price) || a.name.localeCompare(b.name));
+      if (rows.length) groups.push({ tier: t, rows });
+    }
+    return { level, funds: have, groups, relics: this.meltRelicRows(level, have) };
+  }
+
+  /**
+   * 藏品（业主 2026-10-27）：数据来自插件的 `data/relics.json`（`{ relics: [...] }`）。
+   * **当前该文件为空数组**，所以客户端不会出现「藏品」页签；把真实数据放进去即自动出现，代码不用改。
+   * 条目字段：`id / name / desc / tier / set（出处）/ cost（个人储备价，缺省按 tier）`。
+   */
+  meltRelicRows(level, have) {
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const list = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    return list
+      .filter((r) => r && typeof r.id === 'string' && r.id)
+      .map((r) => {
+        const tier = Math.max(1, Math.min(6, Number(r.tierNum) || (r.tier === 'red' ? 4 : 2)));
+        const price = Math.max(2, Math.min(12, Math.round(Number(r.price) || (tier >= 4 ? 8 : 4))));
+        return {
+          kind: String(r.kind || ''),
+          icon: String(r.icon || `/assets/relics/${r.id}.png`),
+          relicId: r.id,
+          name: String(r.name || r.id),
+          desc: String(r.desc || '').replace(/\n/g, ' '),
+          iconId: String(r.iconId || r.icon || ''),
+          tier,
+          source: String(r.set || r.source || ''),
+          price,
+          unlocked: tier <= level,
+          affordable: have >= price,
+        };
+      });
+  }
+
+  /**
+   * 藏品效果聚合（业主 2026-10-27）：把已拥有藏品的声明式效果汇总给战斗层。
+   * 现状（只接引擎已有通道）：`enemy/enemyRank(BOSS/ELITE).{hp,atk}` → 敌人 hpMul/atkMul；
+   * `deployCap` → ps.deployCapBonus；`lpCap` / `immediate.{funds,lp,items}` 在获得时立即结算。
+   * 其余（ally / price / rule.*——57 条走 rule DSL）本局暂不生效，见交付说明。
+   */
+  relicEnemyMul() {
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    if (!defs.length) return { hp: 0, atk: 0 };
+    const idx = new Map(defs.map((r) => [r.id, r]));
+    const acc = { hp: 0, atk: 0 };
+    const add = (o) => {
+      if (!o || typeof o !== 'object') return;
+      if (Number.isFinite(o.hp)) acc.hp += o.hp;
+      if (Number.isFinite(o.atk)) acc.atk += o.atk;
+    };
+    const players = this.players && typeof this.players.values === 'function' ? this.players.values() : [];
+    for (const ps of players) {
+      for (const id of (ps && Array.isArray(ps.relics) ? ps.relics : [])) {
+        const def = idx.get(id);
+        const e = def && def.effect;
+        if (!e) continue;
+        add(e.enemy);
+        if (e.enemyRank) { add(e.enemyRank.BOSS); add(e.enemyRank.ELITE); }
+      }
+    }
+    return acc;
+  }
+
+  /** 获得藏品时结算「一次性」效果（资金 / 生命 / 装备 / 部署上限 / 生命上限）。 */
+  relicGrantInstant(ps, def) {
+    const e = (def && def.effect) || {};
+    const im = e.immediate && typeof e.immediate === 'object' ? e.immediate : null;
+    if (im) {
+      if (Number.isFinite(im.funds) && im.funds) ps.addFunds(Math.trunc(im.funds), { reason: 'relic' });
+      if (Number.isFinite(im.lp) && im.lp) ps.lp = Math.max(1, (Number(ps.lp) || 0) + Math.trunc(im.lp));
+      if (Array.isArray(im.items)) for (const itemId of im.items) { try { ps.acquireItem(itemId, { source: 'relic' }); } catch { /* 池子/数据守卫 */ } }
+    }
+    if (Number.isFinite(e.deployCap) && e.deployCap) ps.deployCapBonus = (Number(ps.deployCapBonus) || 0) + Math.trunc(e.deployCap);
+    if (Number.isFinite(e.lpCap) && e.lpCap) ps.lp = Math.max(1, (Number(ps.lp) || 0) + Math.trunc(e.lpCap));
+  }
+
+  /** 按 relicId 购买藏品：校验商店等级 → 个人储备，再扣款并记入 `ps.relics`。 */
+  meltBuyRelic(ps, relicId) {
+    const st = this.melt;
+    if (!st || !st.open) return fail(ERR.WRONG_PHASE, '商店没有开启'); // i18n-ignore
+    if (!ps.alive) return fail(ERR.ELIMINATED);
+    const row = this.meltRelicRows(this.meltShopLevel(), Math.max(0, Math.floor(Number(es_spendable(ps)) || 0)))
+      .find((r) => r.relicId === relicId);
+    if (!row) return fail(ERR.BAD_TARGET, 'not a relic'); // i18n-ignore
+    if (!row.unlocked) return fail(ERR.WRONG_PHASE, 'shop level too low'); // i18n-ignore
+    if (!(es_spendable(ps) >= row.price)) return fail(ERR.NO_FUNDS);
+    if (!es_safe_spend(ps, row.price)) return fail(ERR.NO_FUNDS);
+    if (!Array.isArray(ps.relics)) ps.relics = [];
+    ps.relics.push(relicId);
+    const rawR = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const defR = rawR && Array.isArray(rawR.relics) ? rawR.relics.find((r) => r.id === relicId) : null;
+    try { this.relicGrantInstant(ps, defR); } catch (e) { this.reportError('relic instant', e); }
+    ps.dirty();
+    this.markPrivate(ps);
+    this.markPublic();
+    return OK;
+  }
+
+  /** 按 itemId 购买（目录式商店）：先判等阶/余额/手牌，再扣个人储备，最后发装备。 */
+  meltBuy(ps, itemId) {
+    const st = this.melt;
+    if (!st || !st.open) return fail(ERR.WRONG_PHASE, '商店没有开启'); // i18n-ignore
+    if (!ps.alive) return fail(ERR.ELIMINATED);
+    const rec = this.gd && typeof this.gd.item === 'function' ? this.gd.item(itemId) : null;
+    if (!rec || !isShopItem(rec) || rec.requiresBondId) return fail(ERR.BAD_MSG, 'not a shop item'); // i18n-ignore
+    const tier = Number(rec.tier) || 0;
+    if (tier > this.meltShopLevel()) return fail(ERR.WRONG_PHASE, 'shop level too low'); // i18n-ignore
+    const price = meltItemPrice(rec);
+    if (!(es_spendable(ps) >= price)) return fail(ERR.NO_FUNDS);
+    if (typeof freeSlot === 'function' && freeSlot(ps.hand) < 0) return fail(ERR.HAND_FULL);
+    if (!es_safe_spend(ps, price)) return fail(ERR.NO_FUNDS);
+    try { ps.acquireItem(itemId, { source: 'melt' }); }
+    catch (e) { this.reportError('melt buy', e); }
+    ps.recompute();
+    ps.dirty();
+    this.markPrivate(ps);
+    this.markPublic();
+    return OK;
+  }
+
   /** g.meltClose：不买 / 买完离开。所有人都关掉之后才继续下一关。 */
   meltClose(ps) {
     const st = this.melt;
@@ -359,6 +518,8 @@ export class MatchMeltdown {
       growth: st.growth,
       closed: st.closed.has(ps.playerId),
       pool: { prismatic: st.pool.prismatic.length, gold: st.pool.gold.length, silver: st.pool.silver.length },
+      // 目录式商店：按品阶分组的全量可售装备（每件带价格/出处/可买状态）
+      catalog: typeof this.meltCatalog === 'function' ? this.meltCatalog(ps) : null,
     };
   }
 }

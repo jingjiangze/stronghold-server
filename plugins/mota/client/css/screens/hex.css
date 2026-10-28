@@ -870,3 +870,79 @@
 @media (prefers-reduced-motion: reduce) {
   .hxd__card--duo, .hxd__card--duo::after, .hxd__card--duo.is-choosing { animation: none; }
 }
+
+
+/* ==========================================================================================
+   目录式道具商店（业主 2026-10-27）：按品阶分组、顶部页签、每件装备一张卡。
+   取代原来的四栏熔毁卡（.melt__* 保留在文件上半部分，旧组件 MeltdownLegacy 仍可用）。
+   ========================================================================================== */
+.mshop { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; }
+.mshop__veil { position: absolute; inset: 0; background: rgba(3, 5, 6, .82); backdrop-filter: blur(2px); }
+.mshop__panel { position: relative; display: flex; flex-direction: column; width: min(13.4rem, 94vw); max-height: 88vh;
+  padding: .16rem .2rem .18rem; color: #e6eae9;
+  background: linear-gradient(180deg, rgba(12, 16, 17, .97), rgba(7, 10, 11, .98));
+  border: 1px solid #2c383c; box-shadow: 0 .1rem .5rem rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .06); }
+.mshop__head { display: flex; align-items: flex-start; gap: .2rem; padding-bottom: .1rem; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.mshop__titlebox { display: flex; flex-direction: column; gap: .02rem; }
+.mshop__micro { font-family: var(--font-display); font-size: max(.13rem, 9px); letter-spacing: .22em; color: #6f7b7e; }
+.mshop__title { margin: 0; font-size: max(.42rem, 22px); font-weight: 900; letter-spacing: .06em; }
+.mshop__wallet { margin-left: auto; display: flex; align-items: baseline; gap: .06rem; padding: .06rem .12rem;
+  font-size: max(.13rem, 9px); color: #9aa5a3; background: rgba(0, 0, 0, .45); border: 1px solid #37446a; }
+.mshop__wallet b { font-size: max(.3rem, 16px); color: #9ed0ff; }
+.mshop__close { display: inline-flex; align-items: center; gap: .05rem; height: max(.42rem, 26px); padding: 0 .12rem;
+  font: inherit; font-size: max(.15rem, 10px); color: #cdd3d1; cursor: pointer; background: rgba(0, 0, 0, .4);
+  border: 1px solid rgba(255, 255, 255, .18); }
+.mshop__close:hover { border-color: #7f8b8d; color: #fff; }
+.mshop__close span { font-size: 1.2em; line-height: 1; }
+.mshop__rule { margin: .08rem 0 0; font-size: max(.13rem, 9px); color: #7f8b8d; }
+.mshop__rule i { margin: 0 .06rem; font-style: normal; color: #4c585b; }
+.mshop__tabs { display: flex; flex-wrap: wrap; gap: .06rem; padding: .1rem 0 .08rem; }
+.mshop__tab { height: max(.36rem, 22px); padding: 0 .14rem; font: inherit; font-size: max(.15rem, 10px);
+  color: #9aa5a3; cursor: pointer; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .12); }
+.mshop__tab:hover { color: #fff; border-color: #58666a; }
+.mshop__tab.is-on { color: #0d1a16; background: var(--mint-500); border-color: var(--mint-500); font-weight: 800; }
+.mshop__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding-right: .04rem; }
+.mshop__sec { padding: .06rem 0 .12rem; }
+.mshop__sec-t { display: flex; align-items: baseline; gap: .1rem; margin: 0 0 .08rem; font-size: max(.18rem, 11px); color: #cfd6d4; }
+.mshop__sec-t small { font-family: var(--font-display); font-size: .72em; letter-spacing: .18em; color: #5d6a6d; }
+.mshop__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.5rem, 1fr)); gap: .12rem; }
+.mshop__card { display: flex; flex-direction: column; gap: .04rem; padding: .1rem .12rem; min-height: 1.36rem;
+  background: linear-gradient(180deg, #171d1f, #0e1213); border: 1px solid #2b3538; }
+.mshop__card:hover { border-color: #4c5c60; }
+.mshop__card.is-locked { opacity: .45; filter: grayscale(.7); }
+.mshop__row { display: flex; align-items: center; justify-content: space-between; gap: .08rem; }
+.mshop__badge { padding: 0 .06rem; font-size: max(.12rem, 8px); font-weight: 800; color: #0d1a16; background: #7fd6bb; }
+.mshop__src { font-size: max(.11rem, 8px); letter-spacing: .06em; color: #5f6c6e; }
+.mshop__main { display: flex; align-items: flex-start; gap: .08rem; }
+.mshop__icon { flex: none; display: grid; place-items: center; width: .52rem; height: .52rem; padding: .03rem;
+  background: radial-gradient(circle at 50% 40%, #1c2a2e, #0b1112 75%); border: 1px solid #2b3538; }
+.mshop__icon img { width: 100%; height: 100%; object-fit: contain; }
+.mshop__glyph { font-size: max(.3rem, 16px); color: #7fd6bb; }
+.mshop__txt { display: flex; flex-direction: column; gap: .02rem; min-width: 0; }
+.mshop__name { margin: .02rem 0 0; font-size: max(.2rem, 12px); font-weight: 800; color: #eef2f1; }
+.mshop__desc { flex: 1 1 auto; margin: 0; font-size: max(.13rem, 9px); line-height: 1.45; color: #94a09d;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mshop__foot { display: flex; align-items: center; justify-content: space-between; gap: .08rem; padding-top: .06rem;
+  border-top: 1px solid rgba(255, 255, 255, .08); }
+.mshop__price { display: inline-flex; align-items: baseline; gap: .02rem; color: #f0f4f3; }
+.mshop__price b { font-size: max(.24rem, 14px); }
+.mshop__price small { font-size: max(.12rem, 8px); color: #7f8b8d; }
+.mshop__buy { height: max(.34rem, 22px); padding: 0 .14rem; font: inherit; font-size: max(.14rem, 9px); font-weight: 800;
+  color: #0d1a16; cursor: pointer; background: var(--mint-500); border: 0; }
+.mshop__buy:hover { filter: brightness(1.08); }
+.mshop__state { font-size: max(.13rem, 9px); color: #6e7a7c; }
+.mshop__state.is-poor { color: #d08a5a; }
+.mshop__state.is-lock { color: #7a6a8f; }
+
+
+/* 双板块（2026-10-27）：道具 / 藏品 两块并排，横向 scroll-snap 滑动切换 */
+.mshop__boards-tabs { display: flex; align-items: center; gap: .06rem; margin-left: auto; }
+.mshop__btab { height: max(.42rem, 26px); padding: 0 .22rem; font: inherit; font-size: max(.17rem, 11px); font-weight: 800;
+  letter-spacing: .06em; color: #9aa5a3; cursor: pointer; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .14); }
+.mshop__btab:hover { color: #fff; border-color: #58666a; }
+.mshop__btab.is-on { color: #0d1a16; background: var(--mint-500); border-color: var(--mint-500); }
+.mshop__boards { flex: 1 1 auto; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; scrollbar-width: none; }
+.mshop__boards::-webkit-scrollbar { display: none; }
+.mshop__board { flex: 0 0 100%; min-width: 0; display: flex; flex-direction: column; scroll-snap-align: start; scroll-snap-stop: always; }
+.mshop__wallet { margin-left: .12rem; }
