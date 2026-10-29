@@ -1,25 +1,16 @@
 name: sync-from-ms
 
-# 定时把 GitHub 的 ms 分支追平到魔搭（ModelScope）线上内容。
+# ⚠️ 2026-10-29 起主从翻转：**百度/GitHub baidu 是主干，魔搭是下游**。
+# 本 workflow 的定时 schedule 已停用 —— 否则它会定期把魔搭的旧内容拉回来覆盖主干改动。
+# 保留 workflow_dispatch 仅供「抢救」：万一主干丢了、需要把魔搭现网内容拉回来时手动跑一次。
 #
-# 为什么在 Actions 而不在本机：本机 git 到 GitHub 的协议不通（直连不可达、代理被 reset），
-# 且用户要求本机不留任何计划任务。Actions 的 schedule 跑在 GitHub 侧，不占本机。
-#
-# 需要的凭据：无。魔搭仓库（jingjiangze/Stronghold-Protocol）匿名可读，实测 ls-remote 与浅克隆均通过。
-#
-# 链路：
-#   ModelScope master ──(本 workflow)──> GitHub ms ──(branch-sync: sync-baidu)──> GitHub baidu
-#   └──> 百度服务器 `bash /opt/stronghold/deploy/baidu/sync.sh`
+# 现行方向：本机 → GitHub baidu ──(branch-sync)──> ms ──(push-to-modelscope)──> 魔搭
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
-  # 用 GITHUB_TOKEN 推的提交不会触发下游 workflow（GitHub 防循环），
-  # 所以追平后要显式 dispatch branch-sync，这需要 actions: write
   actions: write
 
 concurrency:
@@ -40,8 +31,6 @@ jobs:
 
       - name: 拉取魔搭线上（深度 1，带 blob，保证能往 GitHub 推）
         env:
-          # 魔搭并非匿名可读：runner 上实测 must authenticate。
-          # 该值来自本机 git 凭据助手里的 oauth2 password，存为仓库 secret。
           MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
         run: |
           set -euo pipefail
@@ -53,58 +42,37 @@ jobs:
           SRC=$(git rev-parse FETCH_HEAD)
           echo "SRC=$SRC" >> "$GITHUB_ENV"
           echo "魔搭线上: $(git rev-parse --short "$SRC")  tree=$(git rev-parse --short "$SRC^{tree}")"
-          # 基本健全性：文件数太少说明抓错了东西
           N=$(git ls-tree -r "$SRC" | wc -l)
           echo "文件数: $N"
           if [ "$N" -lt 1000 ]; then
             echo "::error::魔搭内容异常（文件数 $N < 1000），中止"; exit 1
           fi
 
-      - name: 比对内容并追平
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: 拉回到 baidu（主干）
         run: |
           set -euo pipefail
-          git fetch origin ms --force
-          MS=$(git rev-parse origin/ms)
+          git fetch origin baidu --force
+          BAIDU=$(git rev-parse origin/baidu)
 
-          # 比内容。排除 .github/：那是 GitHub 侧独有的（本仓库的 CI 定义不在魔搭里）
+          # 比内容，排除 .github/（GitHub 侧独有）
           git ls-tree -r "$SRC" | awk -F'\t' '$2 !~ /^\.github\//' | sort > /tmp/src.txt
-          git ls-tree -r "$MS"  | awk -F'\t' '$2 !~ /^\.github\//' | sort > /tmp/dst.txt
-
+          git ls-tree -r "$BAIDU" | awk -F'\t' '$2 !~ /^\.github\// && $2 !~ /^deploy\/baidu\//' | sort > /tmp/dst.txt
           if diff -q /tmp/src.txt /tmp/dst.txt > /dev/null; then
-            echo "ms 内容已一致（魔搭 $(git rev-parse --short "$SRC")）"
-          else
-            echo "--- 差异（< 魔搭 / > GitHub ms）---"
-            diff /tmp/src.txt /tmp/dst.txt | head -40 || true
-
-            # 以魔搭内容为底树，再把 .github/ 从当前 ms 保留回来
-            git read-tree "$SRC"
-            git ls-tree -r "$MS" -- .github | while read -r mode type sha path; do
-              git update-index --add --cacheinfo "$mode,$sha,$path"
-            done
-
-            NEWTREE=$(git write-tree)
-            if [ "$NEWTREE" = "$(git rev-parse "$MS^{tree}")" ]; then
-              echo "合成树与现 ms 相同，无需推送"
-            else
-              NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$MS" \
-                -m "sync(ms): 自动追平魔搭 $(git rev-parse --short "$SRC")（tree $(git rev-parse --short "$SRC^{tree}")）")
-              echo "新 ms commit: $NEWCOMMIT"
-              git push origin "$NEWCOMMIT:refs/heads/ms"
-              echo "已推送 ms"
-            fi
+            echo "内容已一致（魔搭 $(git rev-parse --short "$SRC")）"; exit 0
           fi
+          echo "--- 差异（< 魔搭 / > baidu）---"
+          diff /tmp/src.txt /tmp/dst.txt | head -40 || true
 
-          # GITHUB_TOKEN 推的 commit 不会触发 push 型 workflow（GitHub 防循环），
-          # 所以这里无条件显式 dispatch；sync-baidu 自身幂等，树相同会直接跳过。
-          gh workflow run branch-sync.yml --ref ms -f mode=sync-baidu
-          echo "已 dispatch branch-sync(mode=sync-baidu)"
-
-      - name: 结果摘要
-        if: always()
-        run: |
-          echo "### sync-from-ms" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 魔搭: \`${SRC:0:8}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- GitHub ms: \`$(git rev-parse origin/ms 2>/dev/null | cut -c1-8 || echo n/a)\`" >> "$GITHUB_STEP_SUMMARY"
+          # 以魔搭内容为底树，再把 .github/ 与 deploy/baidu/ 从 baidu 保留回来
+          git read-tree "$SRC"
+          git ls-tree -r "$BAIDU" -- .github deploy/baidu | while read -r mode type sha path; do
+            git update-index --add --cacheinfo "$mode,$sha,$path"
+          done
+          NEWTREE=$(git write-tree)
+          if [ "$NEWTREE" = "$(git rev-parse "$BAIDU^{tree}")" ]; then
+            echo "合成树与现 baidu 相同，无需推送"; exit 0
+          fi
+          NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$BAIDU" \
+            -m "recover(baidu): 从魔搭线上拉回 $(git rev-parse --short "$SRC")")
+          git push origin "$NEWCOMMIT:refs/heads/baidu"
+          echo "已推送到 baidu，branch-sync 会自动镜像到 ms"

@@ -115,51 +115,32 @@ bash /opt/stronghold/deploy/baidu/install.sh --with-nginx
 - 机器人建议：只监听 `127.0.0.1`，由本机进程 connect；**不要**为它单独开公网端口
 - 若与游戏服互相调用，走 `http://127.0.0.1:3000` 即可，不经 nginx
 
-## 分支同步方案（ms ⇄ baidu）
-
-**分支模型（唯一真相）**
-
-| 分支 | 内容 | 谁在改 |
-|---|---|---|
-| `ms` | 魔搭侧运行时内容（上游 + 本地改动），**不含** `deploy/baidu` | 本机改代码后推送 |
-| `baidu` | `ms` 的 tree + `deploy/baidu/**` | 只由同步流程写入 |
-
-**唯一允许的差异面 = `deploy/baidu/`**。任何运行时文件在 baidu 上被改，都必须在 `ms` 里也有，否则守卫报错。
-
-**三个 job（`.github/workflows/branch-sync.yml`）**
-
-| job | 触发 | 作用 |
-|---|---|---|
-| `guard` | push 到 ms/baidu | 断言 `git diff ms baidu` 全部落在 `deploy/baidu/` 下，越界即 fail |
-| `sync-baidu` | push 到 `ms`（自动）/ 手动 | 用底层 git 命令重建 `baidu` = `ms` tree + 现有 `deploy/baidu/**`；**若 baidu 上有非 deploy 提交则中止**（防止抹掉热修） |
-| `backport` | 手动 dispatch | 把 `baidu` 上 `deploy/baidu/` 之外的改动打成 patch，开 PR 回 `ms`（**不自动合**） |
-
-**完整回路**
+## 分支与同步（2026-10-29 翻转：**百度为主**）
 
 ```
-本机改代码 ──push──> ms ──(自动 sync-baidu)──> baidu ──服务器 sync.sh──> 线上
-                        ↑                                           │
-                        └──── (手动 backport 开 PR) ←── 百度侧热修 ──┘
+本机工作区（唯一编辑环境）
+   └─push─> GitHub baidu（主干）──(branch-sync: sync-ms)──> GitHub ms
+                                                            └──(push-to-modelscope)──> 魔搭 Studio 仓库
+                                                                                        └─ 需在控制台点一次「部署」
+GitHub baidu ──(服务器 stronghold-sync.timer :07/:37)──> /opt/stronghold（只读消费端）
 ```
 
-**服务器侧更新（已自动化）**：`stronghold-sync.timer` 每 30 分钟（:07/:37，错开 CI 的 */30）跑一次 `deploy/baidu/sync.sh`，日志看 `journalctl -t stronghold-sync`。行为：
+| 分支 | 内容 | 谁写 |
+|---|---|---|
+| `baidu` | 运行时内容 + `deploy/baidu/**`，**主干** | 本机推送（Git Data API，本机 git 协议不通） |
+| `ms` | `baidu` 的 tree **去掉 `deploy/baidu/**`** | 只由 `branch-sync` 的 `sync-ms` 写 |
 
-- 无新提交 → 健康检查后结束
-- 有新提交但**有人在线**（humans/rooms/sessions/matches 非 0）→ **本轮推迟**，不打断对局，下个周期再试
-- 只动 `deploy/baidu/` 文档/脚本 → 应用后**不重启** node 进程（但 `stronghold.service` / `stronghold-sync.*` / `nginx/*` 变更会一并装进 `/etc` 并 `daemon-reload` / `reload nginx`）
-- 应用后健康检查（healthz ok + plugins≥8 + lobby.js 可取）不过 → **自动回滚**到上一个 commit 并重启
-- 退出码非 0 = FAIL（systemd 会记录失败）
+**workflow**
 
-> 注意：`sync.sh` 自身在运行过程中被 `git reset` 替换，改动**下一轮才生效**（脚本已被 shell 读入内存）。
+| 文件 | 触发 | 作用 |
+|---|---|---|
+| `branch-sync.yml` | push baidu/ms、手动 | `guard`（插件跟踪 + ms 只能是 baidu 去掉 deploy/baidu）+ `sync-ms`（重建 ms 并 dispatch 下游） |
+| `push-to-modelscope.yml` | ms push（由 sync-ms dispatch）、手动 | 用 `MODELSCOPE_TOKEN` 把 ms 推到魔搭 Studio；**推完仍需控制台点「部署」** |
+| `sync-from-ms.yml` | **仅手动**（schedule 已停用） | 抢救用：把魔搭现网内容拉回 baidu 主干 |
 
-手动跑同一脚本：`bash /opt/stronghold/deploy/baidu/sync.sh`
+**服务器侧**：`stronghold-sync.timer` 每 30 分钟（:07/:37）跑 `sync.sh`，纯拉取应用；
+**服务器上直接改代码会被自动 stash 并告警**（编辑请在 本机 → GitHub 做完）。
 
-**手动兜底**：本机 git 到 GitHub 的协议不通（直连不可达 / 代理被 reset），改 ref 一律用 Git Data API（blobs → trees → commits → PATCH ref），不要指望 `git push`。
-
-**动手前的两个已知复发面**
-
-1. `plugins/` 在 `.gitignore` 里，**新增插件文件必须 `git add -f`**，否则静默丢失（`b4754eae` 就是这么把 mota 插件整条弄挂的）。推之前跑 `node tools/check-plugin-tracked.mjs`。
-2. `install.sh` 的 `chown -R` 会改 `.git` 属主，root 跑 git 报 `dubious ownership`、`reset --hard` 静默不执行 ⇒ 已在 install.sh 与 sync.sh 里登记 `safe.directory`。
 
 ## CDN
 

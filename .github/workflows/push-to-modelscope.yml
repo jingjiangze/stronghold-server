@@ -1,0 +1,70 @@
+name: push-to-modelscope
+
+# 把 GitHub 的 ms 分支推到魔搭（ModelScope Studio 仓库）。
+#
+# 触发：ms 一有推送就推（ms 由 branch-sync 从 baidu 派生），也可手动 dispatch。
+#
+# ⚠️ 平台限制：**推完仍需在魔搭 Studio 控制台点一次「部署」**才生效。
+#    魔搭没有可用的重建触发 API（实测 6 个端点全 404，空提交/Dockerfile 变更都不触发）。
+#
+# 凭据：secret MODELSCOPE_TOKEN（魔搭 personal access token，repo 内已配置）。
+
+on:
+  push:
+    branches: [ms]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push-to-modelscope
+  cancel-in-progress: true
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: 设置提交身份
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: 推到魔搭 Studio 仓库
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MODELSCOPE_TOKEN:-}" ]; then
+            echo "::error::缺少 secret MODELSCOPE_TOKEN"; exit 1
+          fi
+          git fetch origin ms --force
+          MS=$(git rev-parse origin/ms)
+
+          git remote add msrc "https://oauth2:${MODELSCOPE_TOKEN}@www.modelscope.cn/studios/jingjiangze/Stronghold-Protocol.git"
+          git fetch --depth 1 msrc master
+          REMOTE=$(git rev-parse FETCH_HEAD)
+          echo "魔搭当前: $(git rev-parse --short "$REMOTE")  tree=$(git rev-parse --short "$REMOTE^{tree}")"
+          echo "待推入  : $(git rev-parse --short "$MS")  tree=$(git rev-parse --short "$MS^{tree}")"
+
+          SRC_TREE=$(git rev-parse "$MS^{tree}")
+          if [ "$SRC_TREE" = "$(git rev-parse "$REMOTE^{tree}")" ]; then
+            echo "内容已一致，无需推送"; exit 0
+          fi
+
+          # 新提交以魔搭当前 head 为父，保证快进推送、历史不断
+          NEWCOMMIT=$(git commit-tree "$SRC_TREE" -p "$REMOTE" \
+            -m "sync from baidu: 镜像 GitHub ms $(git rev-parse --short "$MS")")
+          echo "新魔搭 commit: $NEWCOMMIT"
+          git push msrc "$NEWCOMMIT:refs/heads/master"
+          echo "::notice::已推送到魔搭，仍需在 Studio 控制台点一次「部署」才生效"
+
+      - name: 结果摘要
+        if: always()
+        run: |
+          echo "### push-to-modelscope" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "推送完成后请到魔搭 Studio 控制台点 **部署**（平台无重建 API）。" >> "$GITHUB_STEP_SUMMARY"

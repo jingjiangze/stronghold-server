@@ -1,31 +1,29 @@
 name: branch-sync
 
-# 分支模型（唯一真相）：
-#   ms    = 魔搭侧运行时内容（上游 + 本地改动），**不含** deploy/baidu
-#   baidu = ms 的 tree + deploy/baidu/**（唯一允许的差异面）
-#
-# 三个 job：
-#   guard      —— 守卫：baidu 与 ms 的差异必须全部落在 deploy/baidu/ 下
-#   sync-baidu —— 单向自动：ms 前进后，自动把 baidu 重建为「ms tree + 现有 deploy/baidu」
-#   backport   —— 反向半自动：baidu 上有 deploy/baidu 之外的改动时，开 PR 回 ms（不自动合）
+# 分支模型（2026-10-29 翻转：**百度为主**）
+#   baidu = 主干，运行时内容 + deploy/baidu/**
+#   ms    = 由 baidu 派生：baidu 的 tree 去掉 deploy/baidu/**
+#   方向：baidu ──> ms ──> 魔搭（见 push-to-modelscope.yml）
 #
 # 为什么放在 Actions：本机到 GitHub 的 git 协议不通（直连不可达、代理被 reset），
 # 只有 runner 上有真实推送能力。
 
 on:
   push:
-    branches: [ms, baidu]
+    branches: [baidu, ms]
   workflow_dispatch:
     inputs:
       mode:
         description: '执行哪个动作'
         type: choice
-        options: [guard, sync-baidu, backport]
+        options: [guard, sync-ms]
         default: guard
 
 permissions:
   contents: write
-  pull-requests: write
+  # GITHUB_TOKEN 推的 commit 不会触发下游 workflow（GitHub 防循环），
+  # 所以镜像完 ms 后要显式 dispatch push-to-modelscope
+  actions: write
 
 concurrency:
   group: branch-sync-${{ github.ref }}
@@ -40,109 +38,73 @@ jobs:
         with: { fetch-depth: 0 }
 
       - name: 守卫 —— 插件跟踪（b4754eae 类事故的门禁）
-        # 磁盘上有文件但没进 git → 发布树缺文件 → mota 整条插件被判无效。
-        # 工具是纯 node 标准库 + git CLI，可直接跑。
         run: |
-          git fetch origin ms --force
-          git checkout -q --detach origin/ms
+          git fetch origin baidu --force
+          git checkout -q --detach origin/baidu
           node tools/check-plugin-tracked.mjs
 
-      - name: 守卫 —— baidu 不得有未回填 ms 的运行时提交
+      - name: 守卫 —— ms 只能是 baidu 去掉 deploy/baidu
         run: |
           set -euo pipefail
-          git fetch origin ms baidu --force
-
-          # 方向很重要：判据是「baidu 上有 ms 没有的提交」，不是「两边树不相等」。
-          # 否则 ms 一前进、sync-baidu 还没跑完，这里就会误报红。
-          VIOL=$(git log origin/ms..origin/baidu --oneline -- . ':(exclude)deploy/baidu' || true)
-          if [ -n "$VIOL" ]; then
-            echo "::error::baidu 上有 deploy/baidu 之外的提交（热修未回填 ms，分支模型被破坏）："
-            echo "$VIOL"
-            echo "::error::处理：dispatch 本 workflow，mode=backport 开 PR 回 ms；合并后再让 sync-baidu 重建 baidu"
+          git fetch origin baidu ms --force
+          DIFF=$(git diff --name-only origin/baidu origin/ms || true)
+          echo "--- baidu vs ms 差异 ($(printf '%s\n' "$DIFF" | grep -c . || true)) ---"
+          printf '%s\n' "$DIFF" | head -20
+          BAD=$(printf '%s\n' "$DIFF" | grep -v '^deploy/baidu/' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::ms 上出现 deploy/baidu 之外的差异（ms 应完全镜像 baidu）："
+            echo "$BAD"
+            echo "::error::处理：dispatch 本 workflow，mode=sync-ms 重建 ms"
             exit 1
           fi
-          echo "OK: baidu 没有未回填 ms 的运行时提交"
+          echo "OK: 差异全部在 deploy/baidu/ 内"
+          BEHIND=$(git rev-list --count origin/ms..origin/baidu || echo 0)
+          echo "baidu 领先 ms ${BEHIND} 个提交（>0 时由 sync-ms 自动重建，非错误）"
 
-          BEHIND=$(git rev-list --count origin/baidu..origin/ms || echo 0)
-          echo "ms 领先 baidu ${BEHIND} 个提交 —— >0 属正常，sync-baidu 会自动重建"
-
-          echo "--- 当前 ms..baidu 差异文件 ---"
-          git diff --name-only origin/ms origin/baidu || true
-
-  sync-baidu:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/ms') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'sync-baidu')
+  sync-ms:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/baidu') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'sync-ms')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
       - name: 设置提交身份
-        # commit-tree / commit 都需要 ident，runner 默认没有
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-      - name: 重建 baidu = ms tree + 现有 deploy/baidu
-        run: |
-          set -euo pipefail
-          git fetch origin ms baidu --force
-          MS=$(git rev-parse origin/ms)
-          BAIDU=$(git rev-parse origin/baidu)
-
-          # 安全闸门：baidu 上若有 deploy/baidu 之外的提交，说明有热修没回填 ms，
-          # 此时重建会把这些改动抹掉 —— 中止，要求先 backport。
-          HOTFIX=$(git log "$MS".."$BAIDU" --oneline -- . ':(exclude)deploy/baidu' || true)
-          if [ -n "$HOTFIX" ]; then
-            echo "::error::baidu 上有未回填 ms 的运行时提交，重建会丢失它们，已中止："
-            echo "$HOTFIX"
-            exit 1
-          fi
-
-          if ! git cat-file -e "$BAIDU:deploy/baidu" 2>/dev/null; then
-            echo "::error::baidu 缺少 deploy/baidu，无法复用"; exit 1
-          fi
-
-          # 用底层命令拼树：读 ms 的树，再把 baidu 的 deploy/baidu/** 覆盖进去
-          git read-tree "$MS"
-          git ls-tree -r "$BAIDU" -- deploy/baidu | while read -r mode type sha path; do
-            git update-index --add --cacheinfo "$mode,$sha,$path"
-          done
-          NEWTREE=$(git write-tree)
-          OLDBAIDUTREE=$(git rev-parse "$BAIDU^{tree}")
-          if [ "$NEWTREE" = "$OLDBAIDUTREE" ]; then
-            echo "baidu 已是最新，无需重建"; exit 0
-          fi
-          NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$MS" \
-            -m "chore(sync): baidu 跟随 ms 重建（ms=$(echo $MS | cut -c1-8)）")
-          echo "新 baidu commit: $NEWCOMMIT"
-          git push origin "$NEWCOMMIT:refs/heads/baidu" --force
-
-  backport:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'backport'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-
-      - name: 把 baidu 的运行时改动开成 PR 回 ms
+      - name: 重建 ms = baidu 去掉 deploy/baidu
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git fetch origin ms baidu --force
-          git diff --name-only origin/ms...origin/baidu -- . ':(exclude)deploy/baidu' > /tmp/rt.txt || true
-          if [ ! -s /tmp/rt.txt ]; then
-            echo "baidu 没有 deploy/baidu 之外的改动，无需 backport"; exit 0
+          git fetch origin baidu ms --force
+          BAIDU=$(git rev-parse origin/baidu)
+          MS=$(git rev-parse origin/ms)
+
+          # 安全闸门：ms 上若有 baidu 没有的运行时提交，重建会抹掉它们
+          HOTFIX=$(git log "$BAIDU".."$MS" --oneline -- . ':(exclude)deploy/baidu' || true)
+          if [ -n "$HOTFIX" ]; then
+            echo "::error::ms 上有 baidu 没有的运行时提交，重建会丢失，已中止："
+            echo "$HOTFIX"
+            exit 1
           fi
-          echo "--- 待回填文件 ---"; cat /tmp/rt.txt
-          BR="auto/backport-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BR" origin/ms
-          git diff origin/ms...origin/baidu -- . ':(exclude)deploy/baidu' | git apply --index || {
-            echo "::error::直接 apply 失败（可能有冲突），请人工处理"; exit 1; }
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "backport: 百度侧运行时改动回填 ms（来源 baidu@$(git rev-parse --short origin/baidu)）" \
-                   -m "涉及文件见 PR 描述；这是自动 backport，合并前请人工 review。"
-          git push origin "$BR"
-          gh pr create --base ms --head "$BR" \
-            --title "backport: 百度侧改动回填魔搭线" \
-            --body "自动从 baidu 分支提取 deploy/baidu/ 之外的改动（来源 baidu@$(git rev-parse --short origin/baidu)）。合并前请确认这些改动是否也应出现在魔搭线上；合并后 sync-baidu 会自动把 baidu 重建到新 ms。"
+
+          tmp=$(mktemp -d); export GIT_INDEX_FILE="$tmp/index"
+          git read-tree "$BAIDU"
+          git ls-tree -r "$BAIDU" -- deploy/baidu | while read -r mode type sha path; do
+            git update-index --force-remove "$path"
+          done
+          NEWTREE=$(git write-tree)
+          rm -rf "$tmp"; unset GIT_INDEX_FILE
+
+          if [ "$NEWTREE" = "$(git rev-parse "$MS^{tree}")" ]; then
+            echo "ms 已是最新，无需重建"; exit 0
+          fi
+          NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$BAIDU" \
+            -m "sync(ms): 镜像 baidu $(git rev-parse --short "$BAIDU")（去掉 deploy/baidu）")
+          echo "新 ms commit: $NEWCOMMIT"
+          git push origin "$NEWCOMMIT:refs/heads/ms"
+          # 显式触发下游（GITHUB_TOKEN 推送不触发 push 型 workflow）
+          gh workflow run push-to-modelscope.yml --ref ms
+          echo "已 dispatch push-to-modelscope"

@@ -50,28 +50,13 @@ health_ok() {
 
 say "0. 当前 $(git log -1 --format='%h %s')"
 
-# 1b. 先让 CI 去追平魔搭。
-# 原因：GitHub 对 public 仓库的 schedule 有节流（实测 */30 实际 4–7 小时才跑一次），
-# 且用 GITHUB_TOKEN 推的 commit 不会再触发下游 workflow。所以由服务器端主动 dispatch。
-if [ -f /root/.github_token ]; then
-  TOK=$(cat /root/.github_token)
-  CODE=$(curl -sS -o /dev/null -w '%{http_code}' -m 25 -X POST \
-    -H "Authorization: Bearer $TOK" -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/jingjiangze/stronghold-server/actions/workflows/sync-from-ms.yml/dispatches" \
-    -d '{"ref":"ms"}' || echo 000)
-  say "1b. 已请求 CI 追平魔搭（HTTP $CODE）"
-  if [ "$CODE" = "204" ]; then
-    # 轮询等 baidu 被重建（最多 90s）；拿不到也没关系，本轮失败下轮再来
-    BEFORE=$(git rev-parse HEAD)
-    for i in $(seq 1 18); do
-      sleep 5
-      git -c http.proxy="$PROXY" fetch --depth 1 origin "$BRANCH" >/dev/null 2>&1 || true
-      [ "$(git rev-parse FETCH_HEAD)" != "$BEFORE" ] && { say "     CI 已推新提交"; break; }
-      [ "$i" = "18" ] && say "     90s 内 baidu 未变化（CI 可能仍在跑，下一轮再拉）"
-    done
-  fi
-else
-  say "1b. 跳过主动追平（/root/.github_token 不存在）"
+# 2026-10-29 起服务器是**只读消费端**（主干在 GitHub baidu）。工作树若有本地改动，
+# 说明有人直接在服务器上动了代码 —— 自动 stash 保留后继续，避免被 reset 静默抹掉。
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+  say "WARN: 工作树有本地改动（本机才是编辑环境）→ 自动 stash 保留"
+  git stash push -u -m "auto-stash $(date '+%F %T')" >/dev/null 2>&1 \
+    && say "     已 stash，可用 'git -C $APP_DIR stash list' 找回" \
+    || say "     stash 失败，请人工检查"
 fi
 
 say "1. 拉取 origin/$BRANCH（GitHub 直连 17KB/s，走本机 mihomo）"
