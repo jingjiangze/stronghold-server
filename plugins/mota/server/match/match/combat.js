@@ -56,9 +56,10 @@ export class MatchCombat {
       if (typeof this.relicEnemyMul === 'function' && !spec.mods.relicApplied) {
         try {
           const rm = this.relicEnemyMul();
-          if (rm && (rm.hp || rm.atk)) {
+          if (rm && (rm.hp || rm.atk || rm.speed)) {
             spec.mods.hpMul = (Number(spec.mods.hpMul) || 1) * (1 + Number(rm.hp || 0));
             spec.mods.atkMul = (Number(spec.mods.atkMul) || 1) * (1 + Number(rm.atk || 0));
+            if (rm.speed) spec.mods.speedMul = (Number(spec.mods.speedMul) || 1) * (1 + Number(rm.speed || 0));
             spec.mods.relicApplied = true;
           }
         } catch (e) { this.reportError('relic mods', e); }

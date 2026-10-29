@@ -210,7 +210,7 @@ export function MeltdownOverlay({ view, onBuy = () => {}, onBuyRelic = () => {},
   const [tier, setTier] = useState(0);        // 道具板块里的品阶筛选（0 = 全部）
   if (!cat) return null;
   const relics = Array.isArray(cat.relics) ? cat.relics : [];
-  const hasRelics = relics.length > 0;
+  const hasRelics = false; // 藏品已改成三选一，不再进商店（业主 2026-10-27）
   const groups = tier ? cat.groups.filter((g) => g.tier === tier) : cat.groups;
 
   /** 切板块：同时滚动容器（触屏/触控板也能手动滑，scroll-snap 负责吸附） */

@@ -412,6 +412,27 @@ export class MatchPhases {
         }
       }
     } catch (e) { this.reportError?.('meltdown open', e); }
+    // 藏品三选一（业主 2026-10-27）：协同房 R4 / R8 / R12 各一次，非阻塞（选完或 20s 超时自动取第一张）。
+    try {
+      if ((String(this.modeId || '').startsWith('mode_xie_') || this.isRogue === true) && typeof this.relicOffer === 'function'
+        && typeof this.relicDraftRound === 'function' && this.relicDraftRound(r)) {
+        this.relicOffer();
+      }
+    } catch (e) { this.reportError?.('relic offer', e); }
+    // 肉鸽随机事件（不期而遇）：R3 / R6 / R9，非阻塞，20s 超时取第一个选项。
+    try {
+      if (this.isRogue === true && typeof this.rogueEventOffer === 'function'
+        && typeof this.rogueEventRound === 'function' && this.rogueEventRound(r)) {
+        this.rogueEventOffer();
+      }
+    } catch (e) { this.reportError?.('rogue event', e); }
+    // 肉鸽：本回合随机词缀，开局给所有人一条提示（数值已并进敌人乘区）
+    try {
+      if (this.isRogue === true && typeof this.rogueRoundAffix === 'function') {
+        const aff = this.rogueRoundAffix(r);
+        if (aff && aff.label) for (const ps of this.alivePlayers()) this.toast(ps, 'info', aff.label);
+      }
+    } catch (e) { this.reportError?.('rogue affix toast', e); }
     // 攻防回合：狩猎期窗口内每回合红蓝互换攻守（首攻红队）；非攻防回合两者为 null。
     const role = this.roleTeamsFor(r);
     this.attackingTeam = role ? role.attack : null;

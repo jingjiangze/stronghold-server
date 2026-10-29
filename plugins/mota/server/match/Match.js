@@ -300,6 +300,8 @@ export class Match {
     this.mode = opts.mode === 'solo' ? 'solo' : opts.mode === 'versus' ? 'versus' : 'coop';
     /** 对抗模式（2V2 / 4V4）：两队共享 HP、各自 boss 池；规则在 match/confront.js + event.js。 */
     this.isVersus = this.mode === 'versus';
+    // 房间玩法变体（room.variant：'xie' / 'rogue' / null）。注意不要用 this.variant —— 那是「参赛人数超出最大座位」的布尔。
+    this.roomVariant = typeof opts.variant === 'string' ? opts.variant : null;
     this.coopHuntOn = false;   // 同盟狩猎未启用（对抗模式不需要）
     this.teamSize = this.isVersus && Number.isInteger(opts.teamSize) && opts.teamSize > 0 ? opts.teamSize : (this.isVersus ? 2 : 1);
     // 对抗规则档（玩家 2026-10-26）：'bounty' = 赏金（线上那套）/ 'confront' = 对抗（纯玩家出怪）
@@ -351,6 +353,8 @@ export class Match {
     /** window sequence (diagnostics and messages) */
     this.offerSeq = 0;
     this.gd = new GameData(this.data, this.modeId);
+    // 肉鸽模式：让 GameData 关掉团队经济（协同资金/团队储备那套不适用）
+    try { this.gd.matchIsRogue = this.isRogue; } catch { /* frozen gd */ }
     if (!this.difficulty) this.difficulty = this.gd.difficulty;
     this.isSolo = this.mode === 'solo' || this.gd.isSolo;
     /** 「AI 队友最后选择」 (opts.aiPicksLast, GitHub #338): humans draft before AI seats (MatchPhases.humansFirst) */

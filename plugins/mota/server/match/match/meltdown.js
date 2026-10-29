@@ -357,7 +357,7 @@ export class MatchMeltdown {
     const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
     if (!defs.length) return { hp: 0, atk: 0 };
     const idx = new Map(defs.map((r) => [r.id, r]));
-    const acc = { hp: 0, atk: 0 };
+    const acc = { hp: 0, atk: 0, speed: 0 };
     const add = (o) => {
       if (!o || typeof o !== 'object') return;
       if (Number.isFinite(o.hp)) acc.hp += o.hp;
@@ -371,6 +371,19 @@ export class MatchMeltdown {
         if (!e) continue;
         add(e.enemy);
         if (e.enemyRank) { add(e.enemyRank.BOSS); add(e.enemyRank.ELITE); }
+      }
+    }
+    // 肉鸽：本回合随机词缀 + 事件里累积的敌人修正一起算进来
+    if (this.isRogue === true) {
+      const aff = typeof this.rogueRoundAffix === 'function' ? this.rogueRoundAffix() : null;
+      if (aff && aff.kind === 'hp') acc.hp += aff.mul;
+      if (aff && aff.kind === 'atk') acc.atk += aff.mul;
+      if (aff && aff.kind === 'speed') acc.speed += aff.mul;
+      for (const ps of players) {
+        const b = ps && ps.rogueAffixBonus;
+        if (!b) continue;
+        acc.hp += Number(b.hp) || 0;
+        acc.atk += Number(b.atk) || 0;
       }
     }
     return acc;
@@ -387,6 +400,204 @@ export class MatchMeltdown {
     }
     if (Number.isFinite(e.deployCap) && e.deployCap) ps.deployCapBonus = (Number(ps.deployCapBonus) || 0) + Math.trunc(e.deployCap);
     if (Number.isFinite(e.lpCap) && e.lpCap) ps.lp = Math.max(1, (Number(ps.lp) || 0) + Math.trunc(e.lpCap));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 藏品三选一（业主 2026-10-27：藏品不做商店，改成海克斯那样的随机三选一；仅协同、别太频繁）
+  // 节奏：协同房 R4 / R8 / R12 各一次，每人 1 份 3 选 1，20 秒不选自动取第一张。
+  // ---------------------------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------------------------
+  // 肉鸽随机元素（业主 2026-10-27，参考明日方舟集成战略）：
+  //   ① 不期而遇（随机事件，2 选 1，R3/R6/R9）
+  //   ② 每回合随机词缀（敌人 +hp / +atk / +移速 之一，按 seed+回合确定，可复现）
+  // ---------------------------------------------------------------------------------------------
+
+  /** 不期而遇事件表（内联，避免再拉一个数据插件；要做成可配再挪 data/）。 */
+  rogueEvents() {
+    return [
+      { id: 'ev_peddler', name: '拾荒者', desc: '一个拾荒者愿意用废料换你的储备。', choices: [
+        { id: 'a', label: '给他 2 资金，换 1 件装备', funds: -2, item: 'random' },
+        { id: 'b', label: '抢下他的货，敌人更凶（+8% 全属性）', affix: { hp: 0.08, atk: 0.08 } },
+      ] },
+      { id: 'ev_shrine', name: '残破的神龛', desc: '供奉着什么，靠近时有低语。', choices: [
+        { id: 'a', label: '供奉 3 资金，得 2 生命上限', funds: -3, lp: 2 },
+        { id: 'b', label: '无视它，白拿 2 资金', funds: 2 },
+      ] },
+      { id: 'ev_wounded', name: '濒死的干员', desc: '他还有一口气，身上带着部署凭证。', choices: [
+        { id: 'a', label: '救他：-3 生命，+1 部署上限', lp: -3, deployCap: 1 },
+        { id: 'b', label: '搜他的包：+3 资金', funds: 3 },
+      ] },
+      { id: 'ev_gamble', name: '赌局', desc: '一个戴兜帽的人摊开牌。', choices: [
+        { id: 'a', label: '押上 4 资金，赢了翻倍（五成）', gamble: { stake: 4, win: 8 } },
+        { id: 'b', label: '不赌，拿 1 资金走人', funds: 1 },
+      ] },
+      { id: 'ev_altar', name: '怪异的祭坛', desc: '石面上刻着看不懂的字。', choices: [
+        { id: 'a', label: '献上 2 生命，本局敌人 -6% 攻击', lp: -2, affix: { atk: -0.06 } },
+        { id: 'b', label: '砸了它：+2 资金，敌人 +6% 生命', funds: 2, affix: { hp: 0.06 } },
+      ] },
+    ];
+  }
+
+  rogueEventRound(r) { return r === 3 || r === 6 || r === 9; }
+
+  /** 发一份不期而遇（每人独立抽一个事件；非阻塞，20s 超时取第一个选项）。 */
+  rogueEventOffer() {
+    if (this.isRogue !== true) return;
+    const table = this.rogueEvents();
+    if (!table.length) return;
+    const round = Number(this.round) || 1;
+    const rng = createRng(deriveSeed(this.seed, `rogue-event:${round}`));
+    for (const ps of this.alivePlayers()) {
+      if (!ps || (Array.isArray(ps.rogueOffer) && ps.rogueOffer)) continue;
+      const ev = table[Math.floor(rng() * table.length)];
+      if (!ev) continue;
+      ps.rogueOffer = { round, eventId: ev.id, name: ev.name, desc: ev.desc,
+        choices: ev.choices.map((c) => ({ id: c.id, label: c.label })) };
+      ps.rogueOfferTable = ev;
+      try { this.markPrivate(ps); } catch (e) { this.reportError('rogue offer', e); }
+    }
+    try { this.markPublic(); } catch { /* best effort */ }
+    try { this._rogueTimer = this.later(20, () => this.rogueEventTimeout()); } catch { /* no scheduler */ }
+  }
+
+  rogueEventTimeout() {
+    for (const ps of this.alivePlayers()) {
+      const o = ps && ps.rogueOffer;
+      if (o && o.choices && o.choices.length) { try { this.roguePick(ps, o.choices[0].id, { auto: true }); } catch { /* best effort */ } }
+    }
+  }
+
+  /** 选中一个选项并立即结算（资金 / 生命 / 部署上限 / 装备 / 赌局 / 敌人词缀）。 */
+  roguePick(ps, choiceId, { auto = false } = {}) {
+    if (!ps || !ps.alive) return fail(ERR.ELIMINATED);
+    const offer = ps && ps.rogueOffer;
+    if (!offer || !offer.choices) return fail(ERR.BAD_TARGET, 'no rogue event'); // i18n-ignore
+    const ev = ps.rogueOfferTable || null;
+    const pick = ev && Array.isArray(ev.choices) ? ev.choices.find((c) => c.id === choiceId) : null;
+    if (!pick) return fail(ERR.BAD_TARGET, 'bad choice'); // i18n-ignore
+    ps.rogueOffer = null;
+    ps.rogueOfferTable = null;
+    // 结算
+    if (Number.isFinite(pick.funds) && pick.funds) {
+      if (pick.funds > 0) ps.addFunds(pick.funds, { reason: 'rogue' });
+      else { const pay = Math.min(Math.max(0, Number(ps.funds) || 0), -pick.funds); if (pay > 0) ps.spend(pay); }
+    }
+    if (Number.isFinite(pick.lp) && pick.lp) ps.lp = Math.max(1, (Number(ps.lp) || 0) + pick.lp);
+    if (Number.isFinite(pick.deployCap) && pick.deployCap) ps.deployCapBonus = (Number(ps.deployCapBonus) || 0) + pick.deployCap;
+    if (pick.item === 'random') {
+      const pool = (this.gd && this.gd.shopItemsByTier && this.gd.shopItemsByTier[2]) || [];
+      const id = pool.length ? pool[Math.floor((Number(this.seed) || 1) % pool.length)] : null;
+      if (id) { try { ps.acquireItem(id, { source: 'rogue' }); } catch { /* pool guard */ } }
+    }
+    if (pick.gamble) {
+      const roll = createRng(deriveSeed(this.seed, `gamble:${this.round}:${ps.playerId}`))();
+      const stake = Math.max(0, Number(pick.gamble.stake) || 0);
+      const pay = Math.min(Math.max(0, Number(ps.funds) || 0), stake);
+      if (pay > 0) ps.spend(pay);
+      if (roll < 0.5) ps.addFunds(pick.gamble.win || 0, { reason: 'rogue-gamble' });
+    }
+    if (pick.affix && typeof pick.affix === 'object') {
+      ps.rogueAffixBonus = ps.rogueAffixBonus || { hp: 0, atk: 0 };
+      if (Number.isFinite(pick.affix.hp)) ps.rogueAffixBonus.hp += pick.affix.hp;
+      if (Number.isFinite(pick.affix.atk)) ps.rogueAffixBonus.atk += pick.affix.atk;
+    }
+    try { ps.dirty && ps.dirty(); } catch { /* noop */ }
+    try { this.recompute && this.recompute(ps); } catch { /* noop */ }
+    try { this.markPrivate(ps); } catch (e) { this.reportError('rogue pick markPrivate', e); }
+    try { this.markPublic(); } catch (e) { this.reportError('rogue pick markPublic', e); }
+    void auto;
+    return OK;
+  }
+
+  /** 本回合的随机词缀（按 seed+回合确定，可复现）：敌人 +hp / +atk / +移速 之一。 */
+  rogueRoundAffix(r = this.round) {
+    if (this.isRogue !== true) return null;
+    const p = createRng(deriveSeed(this.seed, `affix:${r}`))();
+    if (p < 0.34) return { kind: 'hp', mul: 0.12, label: '敌人生命 +12%' };
+    if (p < 0.67) return { kind: 'atk', mul: 0.12, label: '敌人攻击 +12%' };
+    return { kind: 'speed', mul: 0.1, label: '敌人移速 +10%' };
+  }
+
+  /** 藏品候选池（来自 relics-87 插件的 data/relics.json，经 gd.raw.relics 到达）。 */
+  relicPool() {
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const list = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    return list.filter((r) => r && typeof r.id === 'string' && r.id);
+  }
+
+  /** 藏品节奏：协同 R4/R8/R12 各一次；肉鸽（独立模式）每 2 回合一次（业主 2026-10-27：肉鸽就是靠藏品滚起来）。 */
+  relicDraftRound(r) {
+    if (this.isRogue === true) return r === 1 || (r >= 2 && r % 2 === 0); // 肉鸽：开局一份 + 之后每 2 回合
+    return r === 4 || r === 8 || r === 12;
+  }
+
+  /** 给每名存活玩家发一份 3 选 1（独立抽，不与他人共享）。 */
+  relicOffer() {
+    if (!String(this.modeId || '').startsWith('mode_xie_')) return;
+    const pool = this.relicPool();
+    if (!pool.length) return;
+    const round = Number(this.round) || 1;
+    const rng = createRng(deriveSeed(this.seed, `relic:${round}`));
+    const shuffle = (arr) => {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    };
+    for (const ps of this.alivePlayers()) {
+      if (!ps || (Array.isArray(ps.relics) && ps.relics.length >= 3)) continue; // 每人本局最多 3 件
+      if (Array.isArray(ps.relicOffer) && ps.relicOffer.length) continue;         // 已经有一份没选完
+      const owned = new Set(Array.isArray(ps.relics) ? ps.relics : []);
+      const take = shuffle(pool.filter((r) => !owned.has(r.id))).slice(0, 3);
+      if (!take.length) continue;
+      ps.relicOffer = take.map((r) => r.id);
+      // 卡面数据一并带上（客户端不用自己查表）
+      ps.relicOfferCards = take.map((r) => ({
+        id: r.id,
+        name: String(r.name || r.id),
+        desc: String(r.desc || ''),
+        icon: String(r.icon || `/assets/relics/${r.id}.png`),
+        tier: String(r.tier || ''),
+        set: String(r.set || ''),
+        kind: String(r.kind || ''),
+      }));
+      ps.relicOfferRound = round;
+      try { this.markPrivate(ps); } catch (e) { this.reportError('relic offer', e); }
+    }
+    try { this.markPublic(); } catch { /* best effort */ }
+    // 超时兜底：不选就取第一张（与海克斯草案一致）
+    try {
+      this._relicTimer = this.later(20, () => this.relicTimeout());
+    } catch { /* 无调度器时忽略 */ }
+  }
+
+  relicTimeout() {
+    for (const ps of this.alivePlayers()) {
+      const offer = ps && Array.isArray(ps.relicOffer) ? ps.relicOffer : null;
+      if (offer && offer.length) { try { this.relicPick(ps, offer[0], { auto: true }); } catch { /* best effort */ } }
+    }
+  }
+
+  /** 选一件：只接受自己 offer 里的 id；入手后立即结算一次性效果。 */
+  relicPick(ps, relicId, { auto = false } = {}) {
+    if (!ps || !ps.alive) return fail(ERR.ELIMINATED);
+    const offer = Array.isArray(ps.relicOffer) ? ps.relicOffer : null;
+    if (!offer || !offer.length) return fail(ERR.BAD_TARGET, 'no relic offer'); // i18n-ignore
+    if (!offer.includes(relicId)) return fail(ERR.BAD_TARGET, 'not offered'); // i18n-ignore
+    const def = this.relicPool().find((r) => r.id === relicId) || null;
+    ps.relicOffer = null;
+    ps.relicOfferCards = null;
+    if (!Array.isArray(ps.relics)) ps.relics = [];
+    ps.relics.push(relicId);
+    try { this.relicGrantInstant(ps, def); } catch (e) { this.reportError('relic instant', e); }
+    try {
+      this.toast(ps, 'info', (def && def.kind === 'negative' ? '获得负面藏品：' : '获得增益藏品：') + ((def && def.name) || relicId));
+    } catch { /* toast 尽力而为 */ }
+    try { ps.dirty && ps.dirty(); } catch { /* noop */ }
+    try { this.markPrivate(ps); } catch (e) { this.reportError('relic pick markPrivate', e); }
+    try { this.markPublic(); } catch (e) { this.reportError('relic pick markPublic', e); }
+    void auto;
+    return OK;
   }
 
   /** 按 relicId 购买藏品：校验商店等级 → 个人储备，再扣款并记入 `ps.relics`。 */

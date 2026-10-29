@@ -639,7 +639,7 @@ export class GameData {
     const mode = obj(this.mode.teamEconomy);
     const conf = obj(this.economy.team);
     const src = Object.keys(mode).length ? mode : conf;
-    if (src.enabled !== true || this.isSolo) return null;
+    if (src.enabled !== true || this.isSolo || this.matchIsRogue === true) return null;
     const d = DEFAULTS.teamEconomy;
     const nn = (v, dflt) => (Number.isInteger(v) && v >= 0 ? v : dflt);
     const pi = (v, dflt) => (Number.isInteger(v) && v > 0 ? v : dflt);

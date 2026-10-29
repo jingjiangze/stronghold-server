@@ -101,6 +101,8 @@ import { Ticker } from '../ui/ticker.js';
 import { EmoteWheel } from '../ui/emotes.js';
 import { ConfrontOverlay, ConfrontClash } from '../ui/confrontOverlay.js';
 import { HexOverlay, normalizeHexOffer } from '../ui/hexOverlay.js';
+import { RelicOverlay, normalizeRelicOffer } from '../ui/relicOverlay.js';
+import { RogueEventOverlay, normalizeRogueOffer } from '../ui/rogueEventOverlay.js';
 import { MeltdownOverlay } from '../ui/meltdownOverlay.js';
 import { EventOverlay } from '../ui/eventOverlay.js';
 import { EffectsList } from '../ui/effectsList.js';
@@ -283,6 +285,8 @@ function MatchScreen() {
   const [personalBusy, setPersonalBusy] = useState(null);
   // 海克斯草案 / 熔毁商店（从 hexmod 移植）：服务端下发在 m.private 里，这里只做展示与转发。
   const [hexBusy, setHexBusy] = useState(null);
+  const [relicBusy, setRelicBusy] = useState(null);
+  const [rogueBusy, setRogueBusy] = useState(null);
   const [hexRerollSlot, setHexRerollSlot] = useState(null); // { choiceId, idx }: an older request cannot clear a newer pick
   const [layer, setLayer] = useState('ALL');             // 联防 / 最终攻势 camera: 'L' | 'ALL' | 'R'
   const [pen, setPen] = useState(false);                 // the camera shows the enemy preview pen (research 09 §2)
@@ -1891,6 +1895,13 @@ function MatchScreen() {
       onBuy=${async (itemId) => { try { await net.request('g.meltBuy', { itemId }); } catch {} }}
       onBuyRelic=${async (relicId) => { try { await net.request('g.meltBuyRelic', { relicId }); } catch {} }}
       onClose=${async () => { try { await net.request('g.meltClose', {}); } catch {} }} />` : null}
+
+    ${!spectator && alive && normalizeRelicOffer(priv) ? html`<${RelicOverlay} cards=${normalizeRelicOffer(priv)}
+      busyId=${relicBusy} round=${priv?.relicOfferRound || 0}
+      onPick=${async (relicId) => { setRelicBusy(relicId); try { await net.request('g.relicPick', { relicId }); } finally { setRelicBusy(null); } }} />` : null}
+
+    ${!spectator && alive && normalizeRogueOffer(priv) ? html`<${RogueEventOverlay} offer=${normalizeRogueOffer(priv)} busy=${!!rogueBusy}
+      onPick=${async (choiceId) => { setRogueBusy(choiceId); try { await net.request('g.roguePick', { choiceId }); } finally { setRogueBusy(null); } }} />` : null}
 
     ${hasOffers && !sp && !personalChoice ? html`<${OfferOverlay} pub=${pub} myId=${myId} readOnly=${spectator || !alive} onAction=${actions.offer} />` : null}
     ${sp ? html`<${ChoiceOverlay} pub=${pub} sp=${sp} myId=${myId} solo=${solo} busyIdx=${spBusy} total=${total}

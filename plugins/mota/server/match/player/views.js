@@ -149,6 +149,12 @@ export class PlayerViews {
       hexOfferDraft: this.hexOfferDraft || 0,
       hexOffer: Array.isArray(this.hexOffer) ? this.hexOffer.slice() : null,
       hexOfferPicked: this.hexOfferPicked || null,
+      // 藏品三选一（业主 2026-10-27）：只下发自己那份 offer 的 id 列表
+      relicOffer: Array.isArray(this.relicOfferCards) ? this.relicOfferCards.slice() : null,
+      relicOfferRound: this.relicOfferRound || 0,
+      // 肉鸽随机事件（2026-10-27）：{ round, eventId, name, desc, choices:[{id,label}] }
+      rogueOffer: this.rogueOffer || null,
+      relics: Array.isArray(this.relics) ? this.relics.slice() : [],
       hexStats: typeof this.m.hexStatsView === 'function' ? this.m.hexStatsView(this) : null,
       hexGrade: this.hexGrade || null,
       hexRerolls: Array.isArray(this.hexRerolls) ? this.hexRerolls.slice() : null,

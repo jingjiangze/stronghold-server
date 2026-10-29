@@ -602,6 +602,10 @@ export const C2S = {
   'g.meltBuy': { itemId: (v) => isId(v) },
   // 藏品页签（业主 2026-10-27）：按 relicId 购买；数据为空时客户端不显示该页签
   'g.meltBuyRelic': { relicId: (v) => isId(v) },
+  // 藏品三选一（业主 2026-10-27）：只能选自己 offer 里的 id
+  'g.relicPick': { relicId: (v) => isId(v) },
+  // 肉鸽随机事件（2026-10-27）：选一个选项
+  'g.roguePick': { choiceId: (v) => typeof v === 'string' && v.length > 0 && v.length <= 32 },
   'g.meltClose': {},
   'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 128, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), commit: isBool, $optional: ['bosses', 'commit'] },
   'g.confront.withdraw': { gold: (v) => isInt(v, 1, 100000) },

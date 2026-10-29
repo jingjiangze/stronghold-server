@@ -946,3 +946,15 @@
 .mshop__boards::-webkit-scrollbar { display: none; }
 .mshop__board { flex: 0 0 100%; min-width: 0; display: flex; flex-direction: column; scroll-snap-align: start; scroll-snap-stop: always; }
 .mshop__wallet { margin-left: .12rem; }
+
+
+/* 肉鸽「不期而遇」：复用 .hxd 骨架，只补选项按钮（2026-10-27） */
+.rgv__choices { display: flex; flex-direction: column; gap: .1rem; width: min(6.2rem, 88vw); margin-top: .12rem; }
+.rgv__choice { display: flex; align-items: center; gap: .12rem; padding: .12rem .14rem; font: inherit; color: #dfe9f5;
+  text-align: left; cursor: pointer; background: linear-gradient(180deg, rgba(20, 34, 52, .9), rgba(10, 18, 28, .95));
+  border: 1px solid #2b4a6b; }
+.rgv__choice:hover:not(:disabled) { border-color: #4da3ff; box-shadow: 0 0 .12rem rgba(77, 163, 255, .35); }
+.rgv__choice:disabled { opacity: .5; cursor: default; }
+.rgv__key { flex: none; display: grid; place-items: center; width: max(.34rem, 22px); height: max(.34rem, 22px);
+  font-size: max(.14rem, 9px); font-weight: 800; color: #0b1622; background: #7fb6ff; }
+.rgv__label { font-size: max(.17rem, 11px); line-height: 1.4; }

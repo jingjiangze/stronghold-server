@@ -488,6 +488,8 @@ export class Room {
       // 座位上限（2026-10-27）：对抗房 = 2 × teamSize。此前没有这个字段，客户端按 MAX_SEATS(20) 画满，
       // 2V2 房也显示 20 个座位（线上反馈）。
       ...(this.mode === 'versus' && this.teamSize ? { seatCap: this.teamSize * 2 } : {}),
+      // 玩法变体（xie / rogue）：客户端按它区分入口与文案
+      ...(typeof this.variant === 'string' && this.variant ? { variant: this.variant } : {}),
       seats: this.seats.map((s) => (s
         ? { seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left,
           // a room with gameplay plugins (header "Gameplay plugins"): has this player's page loaded and checked its content?

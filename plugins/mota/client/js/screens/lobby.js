@@ -130,8 +130,13 @@ const MODE_CARDS = [
   },
   {
     id: 'xie', name: N_('协同共竞'), badge: 'NEW', en: 'JOINT OP', icon: 'dice',
-    desc: N_('两人共竞：可以互相借调资金、用协同资金买后勤项目与加时，倒下的队友还能被救回来。协同资金有两种归属——团队（进公共储备，谁都能用）或个人（防守奖励与结余都归自己）。'),
-    points: [N_('1–2 名博士 · 可带 AI 队友'), N_('协同资金：团队共享 / 个人自持 · 借贷与救援')],
+    desc: N_('两人共竞：可以互相借调资金、用协同资金买后勤项目与加时，倒下的队友还能被救回来。资金分三层——每回合资金、个人储备（买装备）、团队储备（升设施 / 救济 / 救援）。'),
+    points: [N_('1–2 名博士 · 可带 AI 队友'), N_('三层资金：每回合 / 个人储备 / 团队储备 · 借贷与救援')],
+  },
+  {
+    id: 'rogue', name: N_('肉鸽模拟'), badge: 'NEW', en: 'ROGUELIKE', icon: 'dice',
+    desc: N_('肉鸽玩法：每 2 回合抽一次藏品三选一，藏品永久改变这一局——敌人更凶，你也更强。没有协同资金与后勤项目，全靠藏品滚起来。'),
+    points: [N_('可带 AI 队友 · 每 2 回合一次藏品三选一'), N_('每人本局最多 3 件藏品 · 无协同资金')],
   },
 ];
 
@@ -995,6 +1000,7 @@ export function LobbyScreen() {
     const res = await net.request('room.create', {
       mode: roomMode, difficulty,
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
+      ...(simulation === 'rogue' ? { variant: 'rogue' } : {}),
       ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
         versusAlt: versusRule === 'confront' ? versusAlt !== false : true } : {}),
       ...(testMode && asTest ? { test: true } : {}),
