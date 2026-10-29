@@ -1,0 +1,13 @@
+[Unit]
+Description=Pull latest stronghold baidu build every 30 minutes
+
+[Timer]
+# :07 与 :37 —— 错开 CI 侧 sync-from-ms 的 */30（0/30 分），给 CI 留出追平时间
+OnCalendar=*:07/30
+# 错过的周期开机后补跑一次
+Persistent=true
+# 必须显式指定，否则报 "unit to trigger not loaded"
+Unit=stronghold-sync.service
+
+[Install]
+WantedBy=timers.target

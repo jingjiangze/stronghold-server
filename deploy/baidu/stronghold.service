@@ -1,0 +1,29 @@
+[Unit]
+Description=Stronghold Protocol server (Baidu Lightweight Server)
+Documentation=https://github.com/jingjiangze/stronghold-server/blob/baidu/deploy/baidu/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stronghold
+Group=stronghold
+WorkingDirectory=/opt/stronghold
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# 只绑 loopback：对外统一走 nginx（:80）。勿改回 0.0.0.0，否则绕过反代
+Environment=HOST=127.0.0.1
+Environment=SP_PLUGIN_SCRIPTS=trusted-force
+# 给 V8 堆设上限：实测常驻 RSS 约 230MB，1536MB 足够；
+# 不设的话 V8 会自动往 ~1/2 物理内存长，和后续的 QQ 机器人抢内存
+Environment=NODE_OPTIONS=--max-old-space-size=1536
+ExecStart=/usr/local/node-v22.11.0/bin/node server/index.js
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stronghold
+
+[Install]
+WantedBy=multi-user.target
