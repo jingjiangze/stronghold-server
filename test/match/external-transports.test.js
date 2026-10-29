@@ -123,6 +123,11 @@ test('stdio timeout cancels a slow request while the child answers others, and k
   t.after(() => silent.close());
   await assert.rejects(silent.request(observation, new AbortController().signal));
   assert.equal(silent.child, null);
+  // Nothing may outlive the body: a request still pending here would be settled from a timer after the test returns, and
+  // the runner reports that as asynchronous activity (a CI-only flake until the transport learned to stay quiet once closed).
+  await new Promise((r) => setTimeout(r, silent.config.timeoutMs + 50));
+  assert.equal(c.pending.size, 0, 'the first transport left no request pending');
+  assert.equal(silent.pending.size, 0, 'nor did the silent one');
 });
 
 test('stdio reply with an ID that was never sent is a protocol error', async t => {

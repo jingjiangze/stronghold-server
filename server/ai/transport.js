@@ -97,7 +97,13 @@ export class StdioAI {
         finish(true);
       };
       // No line from the child since this request was written: treat as a hang and restart after backoff.
-      const timer = setTimeout(() => (this.child === child && this.replies === replies ? this.breakChild() : cancel()), this.config.timeoutMs);
+      // A closed transport settles nothing: close() already rejected whatever was pending, and a timer firing later
+      // would surface as a rejection nobody awaits (the test runner blames the test that had already returned).
+      const timer = setTimeout(() => {
+        if (this.closed) return;
+        if (this.child === child && this.replies === replies) this.breakChild();
+        else cancel();
+      }, this.config.timeoutMs);
       const finish = (error, reply) => {
         clearTimeout(timer);
         signal.removeEventListener('abort', cancel);
