@@ -44,38 +44,21 @@ jobs:
           node tools/check-plugin-tracked.mjs
 
       - name: 守卫 —— ms 只能是 baidu 去掉 deploy/baidu
-        # 方向很重要：baidu 领先 ms 是正常的（sync-ms 稍后追），
-        # 违规的是「ms 里有 baidu 没有的路径」或「两边都有但内容不同」。
+        # 判据用「提交」而不是「文件」：baidu 领先 ms 是正常的（sync-ms 稍后追平），
+        # 真正违规的是 ms 上存在 baidu 没有、且动了 deploy/baidu 之外路径的提交。
         run: |
           set -euo pipefail
           git fetch origin baidu ms --force
-          python3 - <<'PY'
-          import subprocess, sys
-          def tree(ref):
-              out = subprocess.run(["git","ls-tree","-r",ref],capture_output=True,text=True).stdout
-              d = {}
-              for line in out.splitlines():
-                  meta, path = line.split("	", 1)
-                  d[path] = meta.split()[2]
-              return d
-          ms, bd = tree("origin/ms"), tree("origin/baidu")
-          bad = []
-          for path, sha in ms.items():
-              if path.startswith("deploy/baidu/"):
-                  continue
-              if path not in bd:
-                  bad.append((path, "ms 独有"))
-              elif bd[path] != sha:
-                  bad.append((path, "内容与 baidu 不同"))
-          if bad:
-              print("::error::ms 与 baidu 不一致（ms 应完全镜像 baidu 去掉 deploy/baidu）：")
-              for path, why in bad[:20]:
-                  print(f"  {why}: {path}")
-              print("::error::处理：dispatch 本 workflow，mode=sync-ms 重建 ms")
-              sys.exit(1)
-          ahead = [p for p in bd if p not in ms]
-          print(f"OK: ms 的 {len(ms)} 个文件在 baidu 中全部存在且一致；baidu 多出 {len(ahead)} 个文件（含 deploy/baidu），属正常")
-          PY
+          VIOL=$(git log origin/baidu..origin/ms --oneline -- . ':(exclude)deploy/baidu' || true)
+          if [ -n "$VIOL" ]; then
+            echo "::error::ms 上有 baidu 没有的运行时提交（ms 应完全由 baidu 派生）："
+            echo "$VIOL"
+            echo "::error::处理：dispatch 本 workflow，mode=sync-ms 重建 ms"
+            exit 1
+          fi
+          echo "OK: ms 没有 baidu 之外的运行时提交"
+          BEHIND=$(git rev-list --count origin/ms..origin/baidu || echo 0)
+          echo "baidu 领先 ms ${BEHIND} 个提交（>0 属正常，sync-ms 会自动追平）"
 
   sync-ms:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/baidu') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'sync-ms')
