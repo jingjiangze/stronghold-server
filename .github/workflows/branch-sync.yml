@@ -103,7 +103,9 @@ jobs:
           NEWCOMMIT=$(git commit-tree "$NEWTREE" -p "$BAIDU" \
             -m "sync(ms): 镜像 baidu $(git rev-parse --short "$BAIDU")（去掉 deploy/baidu）")
           echo "新 ms commit: $NEWCOMMIT"
-          git push origin "$NEWCOMMIT:refs/heads/ms"
+          # ms 是 CI 独占的镜像分支，父提交指向 baidu，与远端旧镜像提交是兄弟关系
+          # ⇒ 必须 force（普通推送会 non-fast-forward 被拒）
+          git push --force origin "$NEWCOMMIT:refs/heads/ms"
           # 显式触发下游（GITHUB_TOKEN 推送不触发 push 型 workflow）
           gh workflow run push-to-modelscope.yml --ref ms
           echo "已 dispatch push-to-modelscope"
