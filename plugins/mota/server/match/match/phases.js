@@ -426,11 +426,18 @@ export class MatchPhases {
         this.rogueEventOffer();
       }
     } catch (e) { this.reportError?.('rogue event', e); }
-    // 肉鸽：本回合随机词缀，开局给所有人一条提示（数值已并进敌人乘区）
+    // 肉鸽：本回合随机词缀 + 紧急作战（数值已并进敌人乘区；紧急回合给全队补偿资金）
     try {
       if (this.isRogue === true && typeof this.rogueRoundAffix === 'function') {
         const aff = this.rogueRoundAffix(r);
-        if (aff && aff.label) for (const ps of this.alivePlayers()) this.toast(ps, 'info', aff.label);
+        const hot = typeof this.rogueEmergencyRound === 'function' && this.rogueEmergencyRound(r);
+        for (const ps of this.alivePlayers()) {
+          if (hot) {
+            try { ps.addFunds(4, { reason: 'rogue-emergency' }); } catch { /* noop */ }
+            this.toast(ps, 'warn', `紧急作战：敌人生命 +25% / 攻击 +20%，补偿 +4 资金`);
+          }
+          if (aff && aff.label) this.toast(ps, 'info', aff.label);
+        }
       }
     } catch (e) { this.reportError?.('rogue affix toast', e); }
     // 攻防回合：狩猎期窗口内每回合红蓝互换攻守（首攻红队）；非攻防回合两者为 null。
@@ -448,7 +455,8 @@ export class MatchPhases {
       // 业主 2026-10-27：**关掉就整局同一张图** —— boss 关也不再刷新。此前「关 = 开局一张、boss 关刷新一次」
       // 会让玩家在 R14/R15 看到地图被换掉（线上反馈「关了还是被切图」）。
       this.nextStageId = this.stageId;
-    } else if (this.isXie) {
+    } else if (this.isXie || this.isRogue === true) {
+      // 协同共竞与肉鸽都每回合换图（肉鸽靠它做「每层不同地图」）；stageIdForRound 自带 seed 派生，重放安全
       this.pickRoundStage(r);
     } else if (bossNext(r)) {
       this.pickBossStage(r);

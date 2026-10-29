@@ -379,6 +379,11 @@ export class MatchMeltdown {
       if (aff && aff.kind === 'hp') acc.hp += aff.mul;
       if (aff && aff.kind === 'atk') acc.atk += aff.mul;
       if (aff && aff.kind === 'speed') acc.speed += aff.mul;
+      // 紧急作战：整波强化（与词缀/藏品共用同一幂等标记，不会重复乘）
+      if (typeof this.rogueEmergencyRound === 'function' && this.rogueEmergencyRound(this.round)) {
+        acc.hp += 0.25;
+        acc.atk += 0.2;
+      }
       for (const ps of players) {
         const b = ps && ps.rogueAffixBonus;
         if (!b) continue;
@@ -509,6 +514,9 @@ export class MatchMeltdown {
     void auto;
     return OK;
   }
+
+  /** 紧急作战回合（肉鸽）：R5 / R9 —— 敌人更强，但回合开始给全队 +4 资金补偿。 */
+  rogueEmergencyRound(r) { return this.isRogue === true && (r === 5 || r === 9); }
 
   /** 本回合的随机词缀（按 seed+回合确定，可复现）：敌人 +hp / +atk / +移速 之一。 */
   rogueRoundAffix(r = this.round) {
