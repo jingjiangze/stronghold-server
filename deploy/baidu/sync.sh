@@ -60,7 +60,16 @@ if [ -f /root/.github_token ]; then
     "https://api.github.com/repos/jingjiangze/stronghold-server/actions/workflows/sync-from-ms.yml/dispatches" \
     -d '{"ref":"ms"}' || echo 000)
   say "1b. 已请求 CI 追平魔搭（HTTP $CODE）"
-  [ "$CODE" = "204" ] && sleep 25   # 给 CI 留出追平 + 重建 baidu 的时间
+  if [ "$CODE" = "204" ]; then
+    # 轮询等 baidu 被重建（最多 90s）；拿不到也没关系，本轮失败下轮再来
+    BEFORE=$(git rev-parse HEAD)
+    for i in $(seq 1 18); do
+      sleep 5
+      git -c http.proxy="$PROXY" fetch --depth 1 origin "$BRANCH" >/dev/null 2>&1 || true
+      [ "$(git rev-parse FETCH_HEAD)" != "$BEFORE" ] && { say "     CI 已推新提交"; break; }
+      [ "$i" = "18" ] && say "     90s 内 baidu 未变化（CI 可能仍在跑，下一轮再拉）"
+    done
+  fi
 else
   say "1b. 跳过主动追平（/root/.github_token 不存在）"
 fi
