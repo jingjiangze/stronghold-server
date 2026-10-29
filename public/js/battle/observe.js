@@ -54,7 +54,11 @@ export function observeTarget(p, pub, myId, { observing = false, ownDone = false
   if (!meAlive || !own) return { fieldId: target.fieldId };
   if (own.fieldId === target.fieldId) return { reason: t('队友与你在同一战场，使用 ‹ › 切换视角') };
   if (target.kind === 'boss' || target.kind === 'hidden') return { reason: t('无法查看另一组队友的战场') };
-  if (own.kind === 'normal' && own.live !== false && !ownDone) return { reason: t('作战中无法查看队友，作战结束后可前往查看') };
+  // 业主 2026-10-30：**战斗进行中不再提供「查看队友战场」**。原来这里返回一句「作战中无法查看队友，
+  // 作战结束后可前往查看」的提示，实际效果就是「点了没反应 + 每次都弹一句废话」（本地客户端在战斗中只拥有
+  // 自己那块战场）。现在改成 reason: null —— 静默不动作，也不弹提示；战后/prep 的查看保持不变，
+  // 联防单位查看、淘汰者与观战席跟随走的仍是其它分支，不受影响。
+  if (own.kind === 'normal' && own.live !== false && !ownDone) return { reason: null };
   return { fieldId: target.fieldId };
 }
 
