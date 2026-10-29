@@ -111,15 +111,17 @@ test('stdio abort cancels only that request; its late reply is ignored and the c
 });
 
 test('stdio timeout cancels a slow request while the child answers others, and kills a silent child', async t => {
-  const c = new StdioAI({ ...stdioConfig([process.execPath, '-e', ECHO]), timeoutMs: 200 });
+  // 1500 ms, not 200: a cold `node` spawn on a loaded 2-vCPU Windows runner can outlast a 200 ms timeout, and then the
+  // very first request comes back as 'transport' — the test would measure the interpreter start, not the cancellation.
+  // The slow reply's delay stays well past the timeout, so the cancellation under test is still a real timeout.
+  const c = new StdioAI({ ...stdioConfig([process.execPath, '-e', ECHO]), timeoutMs: 1500 });
   t.after(() => c.close());
   const child = c.child ?? (c.start(), c.child);
-  // Warm the child before the pair below: spawning node costs more than the 200 ms timeout on a loaded runner, and each
-  // request's timeout runs from the moment it is written — without the warm-up `quick` loses the race to the interpreter
-  // start, the timeout kills the child, and `quick` itself comes back as 'transport' instead of the reply this test is about.
+  // Warm the child before the pair below: each request's timeout runs from the moment it is written, so without the
+  // warm-up `quick` races the interpreter start instead of the 50 ms it is meant to win.
   assert.equal((await c.request({ ...observation, id: 'warm' }, new AbortController().signal)).id, 'warm');
-  const slow = c.request({ ...observation, id: 'slow', delay: 400 }, new AbortController().signal);
-  const quick = c.request({ ...observation, id: 'quick', delay: 20 }, new AbortController().signal);
+  const slow = c.request({ ...observation, id: 'slow', delay: 3000 }, new AbortController().signal);
+  const quick = c.request({ ...observation, id: 'quick', delay: 50 }, new AbortController().signal);
   assert.equal((await quick).id, 'quick');
   await assert.rejects(slow);
   assert.equal(c.child, child);
