@@ -8,7 +8,7 @@ import { CHAR, manifest, chess } from '../helpers/pictureSkins.js';
 
 test('picture-only picker updates a card and avatar live, preserves other seats and restores defaults',
   { skip: process.env.SP_E2E !== '1' || !hasChrome(), timeout: 60000 }, async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const server = await startServer({ port: 0, host: '127.0.0.1', quiet: true, assetIndex: false });
     const puppeteer = (await import('puppeteer-core')).default;
     let browser;

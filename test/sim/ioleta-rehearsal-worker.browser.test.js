@@ -37,7 +37,7 @@ describe('ioleta + contact in the production browser rehearsal Worker', {
 }, () => {
   let server, browser;
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const puppeteer = (await import('puppeteer-core')).default;
     server = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-first-run'] });

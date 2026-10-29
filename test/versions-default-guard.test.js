@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { CONTENT_HASH_VERSION, contentHashOf, simHashOf } from '../shared/plugins/identity.js';
 import { gameplayDataFiles, computeVanillaContent } from '../server/plugins/identity.js';
 import { DATA_SHIM_JS } from '../server/http/static.js';
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { TestClient } from './helpers/wsClient.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

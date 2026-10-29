@@ -156,7 +156,7 @@ for (const { route, versions } of [
   { route: 'vote', versions: ['act1autochess', 'act2autochess', 'act1autochess'] },
 ]) {
   test(`${route}: ${versions.join(' → ')} item pixels on every surface and reload`, { skip: !enabled, timeout: 180000 }, async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const saved = process.env.SP_TEST_MODE;
     process.env.SP_TEST_MODE = '1';
     let srv, c;

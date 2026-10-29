@@ -314,6 +314,7 @@ describe('extracted board-scene files (when a local client was extracted)', { sk
         assert.ok(obj.split('\n').some((l) => l.startsWith('f ')), `${m.path} has faces`);
       }
     }
+    if (!hasFiles) return;          // the manifest carries the groups; the files under public/assets/local/ are the artifact
     const bkg = JSON.parse(readFileSync(onDisk(manifest.groups['mesh/map_autochess_bkg'].prefab.path), 'utf8'));
     assert.deepEqual(bkg.map((n) => n.name), ['S_Background_common', 'S_Background_shadow']);
   });

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import WebSocket from 'ws';
 import { attachWebSocket, narrowDeflateOffer, WS_DEFLATE } from '../server/http/websocket.js';
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { rawClient } from './helpers/wsRawClient.js';
 
 const BIG = JSON.stringify({ t: 'm.public', players: Array.from({ length: 200 }, (_, i) => ({ playerId: `p_${i % 4}`, name: '阿米娅', lp: 30, phase: 'PREP' })) });

@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { Lobby } from '../server/lobby.js';
 import { SessionRegistry } from '../server/net.js';
 import { StubMatch } from '../server/match/StubMatch.js';

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { Match } from '../server/match/Match.js';
 import { TestClient } from './helpers/wsClient.js';
 

@@ -14,7 +14,7 @@ import { createTrustedRuntime } from '../../server/plugins/trustedRuntime.js';
 import { TRUSTED_HEALTH_BYTES } from '../../server/plugins/trustedApi.js';
 import { checkScript } from '../../shared/plugins/scriptCheck.js';
 import { readPluginManifest } from '../../shared/plugins/manifest.js';
-import { startServer } from '../../server/index.js';
+import { startServer } from '../../server/boot-main.js';
 
 const quiet = {info(){},warn(){},error(){}};
 const zeros = ['::','::0','0::0','0::','0000::','::0000','0:0:0:0:0:0:0:0000',

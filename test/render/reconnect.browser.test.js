@@ -16,7 +16,7 @@ function rendered() {
 for (const delayed of [false, true]) test(`closing and reopening a real match restores its scene and operator models (delayed=${delayed})`, {
   skip: process.env.RENDER_E2E !== '1' || !existsSync(executable) || !art, timeout: 240000,
 }, async t => {
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const puppeteer = (await import('puppeteer-core')).default;
   // This fixture tests renderer recovery, not the background hash scan of every installed art file.
   const server = await startServer({ port: 0, host: '127.0.0.1', quiet: true, assetIndex: false, seedFn: () => 123 });

@@ -47,7 +47,7 @@ describe('hub lobby (real server, headless Chrome)', { skip: !ENABLED && 'set SP
   let base;
 
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const puppeteer = (await import('puppeteer-core')).default;
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     base = `http://127.0.0.1:${srv.port}`;

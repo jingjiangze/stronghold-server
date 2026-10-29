@@ -14,7 +14,7 @@ const rows = [{ id: 'sargon', count: 2, remaining: 3.2 }, { id: 'siracusaAspd', 
 describe('#746 bond timer settings and selected-unit card', { skip: !ENABLED && 'set SP_E2E=1 with Chrome' }, () => {
   let srv, browser, base;
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     base = `http://127.0.0.1:${srv.port}`;
     const puppeteer = (await import('puppeteer-core')).default;

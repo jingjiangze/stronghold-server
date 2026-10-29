@@ -18,7 +18,7 @@ import { loadProfile, pinGroupOf, pinnedShaOf } from '../tools/versions/profiles
 import { bondActiveType, selfBackupPreset, launchModes, launchMilestones, applyAdapters } from '../tools/versions/adapters.mjs';
 import { validateReferences } from '../shared/plugins/validate.js';
 import { DATA_DIR, VERSION_DATA_FILES, getData, getVersionData, loadData, resetVersionData, versionDataDir } from '../server/data.js';
-import { createStaticHandler, startServer } from '../server/index.js';
+import { createStaticHandler, startServer } from '../server/boot-main.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BUILD = join(ROOT, 'tools', 'build-data.mjs');

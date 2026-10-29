@@ -24,7 +24,7 @@ const YAK_V2 = 'chess_char_1_02_a';
 const YAK_V1 = 'chess_char_2_03_a';
 
 async function startVersionServer() {
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: process.env.SP_E2E_VERBOSE !== '1', versions: { enabled: 'all' },
     versionVoteMs: 4000, versionRetryMs: 500, matchHost: { matchOptions: { timerScale: 0.1, combatSpeed: 16, botRehearsal: 0 } } });
   for (const t0 = Date.now(); Date.now() - t0 < 20000;) {

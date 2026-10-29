@@ -9,7 +9,7 @@ const art = existsSync(new URL('../../public/assets/local/map/autochess/TX_autoc
 describe('renderer recovery after transient resource failures', { skip: !enabled }, () => {
   let srv, browser, serverRun = false;
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const { Match } = await import('../../server/match/Match.js');
     class RecoveryMatch extends Match { constructor(opts) { super({ ...opts, clientCombat: !serverRun }); } }
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, MatchClass: RecoveryMatch, seedFn: () => 123 });

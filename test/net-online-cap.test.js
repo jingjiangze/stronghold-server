@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { TestClient } from './helpers/wsClient.js';
 
 /** Start a server on a free port, run `fn({ url })`, and always close it. */

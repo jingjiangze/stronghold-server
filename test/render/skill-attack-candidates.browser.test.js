@@ -28,7 +28,7 @@ describe('verified skill attacks with real Spine models', { skip: !enabled && 's
   before(async () => {
     assert.ok(CHROME && existsSync(CHROME), 'CHROME_PATH must name an installed Chrome');
     assert.ok(existsSync(path.join(ROOT, 'public/assets/local/fx/index.json')), 'install the local effects index');
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const puppeteer = (await import('puppeteer-core')).default;
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: gpuArgs() });

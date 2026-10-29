@@ -23,7 +23,7 @@ test('mounted rosters follow the room content without a language switch', { skip
       'data/name.json': { patch: 1, ops: [{ op: 'set', file: 'chess', id: IDS[i], path: ['name'], value: id }] },
     });
   }
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, pluginsDir: tmp });
   const P = (await import('puppeteer-core')).default;
   const host = new Client(P, srv.url, 'host', { prefix: 'loadout-content', w: 1600, h: 900 });

@@ -97,7 +97,7 @@ test('classifyAddresses: IPv6 kinds, and one entry per /64', () => {
 });
 
 test('lanUrls lists IPv4 first, brackets IPv6, and drops link-local', async () => {
-  const { lanUrls } = await import('../server/index.js');
+  const { lanUrls } = await import('../server/boot-main.js');
   const urls = lanUrls(3000);
   for (const u of urls) assert.match(u, /^http:\/\/(\[[0-9a-fA-F:]+\]|\d{1,3}(?:\.\d{1,3}){3}):3000$/, u);
   assert.ok(!urls.some((u) => u.includes('[fe80:')), 'no link-local URLs');
@@ -115,7 +115,7 @@ test('the default bind is one dual-stack socket, and an explicit host is not rew
 
   const saved = process.env.HOST;
   delete process.env.HOST;
-  const { startServer } = await import('../server/index.js');
+  const { startServer } = await import('../server/boot-main.js');
   const get = (srv, host) => new Promise((resolve) => {
     const req = http.get({ host, port: srv.port, path: '/healthz' }, (res) => { res.resume(); resolve(res.statusCode); });
     req.on('error', (e) => resolve(e.code || 0));
@@ -157,7 +157,7 @@ test('when :: cannot be bound, the default falls back to 0.0.0.0; EADDRINUSE doe
   const orig = proto.listen;
   const saved = process.env.HOST;
   delete process.env.HOST;
-  const { startServer } = await import('../server/index.js');
+  const { startServer } = await import('../server/boot-main.js');
 
   const stub = (failCode) => {
     const tried = [];

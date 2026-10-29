@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Client,hasChrome,sleep} from '../e2e/client.mjs';
 import {scriptFixture} from '../helpers/scriptFixtures.js';
-import {startServer} from '../../server/index.js';
+import {startServer} from '../../server/boot-main.js';
 const enabled=process.env.SP_E2E==='1' && hasChrome();
 test('two sandbox-script players start without consent and Worker battles verify under site CSP', {skip:!enabled,timeout:300000},async t=>{
  const f=scriptFixture(t,{mode:'sandbox'});f.put('training',`export default sp => sp.content.register({install(b){b.on('battleStart',()=>{for(const u of b.allyUnits)b.addBuff(u,{key:'training',mods:{atkFlat:2}});});}});`);

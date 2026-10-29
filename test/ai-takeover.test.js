@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {startServer} from '../server/index.js';
+import {startServer} from '../server/boot-main.js';
 import {TestClient} from './helpers/wsClient.js';
 async function fixture(t,testRoom=false,enabled=true){
   const srv=await startServer({port:0,host:'127.0.0.1',quiet:true,botRehearsal:0}),clients=[];

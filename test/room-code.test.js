@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseRoomCode, lobbyOptionsFrom } from '../server/http/config.js';
-import { roomCodeFromArgv } from '../server/index.js';
+import { roomCodeFromArgv } from '../server/boot-main.js';
 import { Lobby, Room } from '../server/lobby.js';
 
 test('parseRoomCode: four letters or digits, upper-cased; blank means random', () => {

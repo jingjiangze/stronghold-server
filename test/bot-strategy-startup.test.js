@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { Match } from '../server/match/Match.js';
 import { LEGACY_BOT } from '../server/match/botStrategyContract.js';
 import { TestClient } from './helpers/wsClient.js';

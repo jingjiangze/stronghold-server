@@ -24,7 +24,7 @@ before(async () => {
   if (!enabled) return;
   process.env.SP_BOT_STRATEGY = 'ioleta-adaptive';
   process.env.SP_BOT_REHEARSAL = 'host';
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const { Match } = await import('../../server/match/Match.js');
   class FastMatch extends Match {
     constructor(o) { super({ ...o, timerScale: 0.5 }); matches.push(this); }

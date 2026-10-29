@@ -49,7 +49,7 @@ describe('cosmetic plugins in the browser (P1a)', { skip: !ENABLED && 'set SP_E2
       assets: { chars: { [roomId]: { avatar: 'art/red.png' } } } }), { 'art/red.png': png(8, 8, [255, 0, 0, 255]) });
     writePlugin(path.join(tmp, 'my-skin'), cosmetic({ name: { zh: '绿色头像', en: 'Green avatar' }, scope: ['personal'],
       assets: { chars: { [personalId]: { avatar: 'art/green.png' } } } }), { 'art/green.png': png(8, 8, [0, 255, 0, 255]) });
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, pluginsDir: tmp });
     // the content-hash index (built ~1 s after the start): the page then loads the served manifest's /assets/~<hash>/ URLs
     for (const t0 = Date.now(); Date.now() - t0 < 20000;) {
@@ -146,7 +146,7 @@ describe('cosmetic plugins in the browser (P1a)', { skip: !ENABLED && 'set SP_E2
 
   test('a server without plugins: its page never asks for the catalogue (title, the room\'s 插件 panel, 设置)', { timeout: 2 * 60 * 1000 }, async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-plugins-none-'));
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, pluginsDir: tmp });
     const seen = [];
     srv.server.on('request', (req) => seen.push(req.url));

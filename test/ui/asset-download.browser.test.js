@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { startServer } from '../../server/index.js';
+import { startServer } from '../../server/boot-main.js';
 import { hash16 } from '../../server/http/assetIndex.js';
 import { CHROME, hasChrome } from '../e2e/client.mjs';
 

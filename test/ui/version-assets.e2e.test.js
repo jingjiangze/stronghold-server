@@ -36,7 +36,7 @@ async function close(c, selector) {
 for (const version of VERSIONS.filter((v) => v.dir)) test(`${version.label}: lobby pictures, real match and settlement`, {
   skip: !enabled, timeout: 9 * 60 * 1000,
 }, async (t) => {
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true,
     matchHost: { matchOptions: { timerScale: 0.05, combatSpeed: 32, botRehearsal: 0 } } });
   const P = (await import('puppeteer-core')).default;

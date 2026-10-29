@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 import { STATE_DELTA_VERSION, StateReceiver } from '../shared/stateDelta.js';
 import { TestClient } from './helpers/wsClient.js';
 

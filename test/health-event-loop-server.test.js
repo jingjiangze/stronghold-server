@@ -7,7 +7,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { startServer } from '../server/index.js';
+import { startServer } from '../server/boot-main.js';
 
 let savedSample;
 beforeEach(() => { savedSample = process.env.SP_LOOP_SAMPLE; process.env.SP_LOOP_SAMPLE = '1'; });

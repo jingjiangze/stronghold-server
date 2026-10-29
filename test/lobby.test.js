@@ -11,7 +11,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { startServer, parseRange, acceptsGzip, pickEncoding, parseTrustProxy } from '../server/index.js';
+import { startServer, parseRange, acceptsGzip, pickEncoding, parseTrustProxy } from '../server/boot-main.js';
 import { loadData, lookup, getChess, getBond, getBand, getMode, getConfig, INDEXED_FILES } from '../server/data.js';
 import * as dataModule from '../server/data.js';
 import { CODE_ALPHABET, BOT_NAMES, DEFAULT_DIFFICULTY } from '../server/lobby.js';

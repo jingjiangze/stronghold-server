@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startServer } from '../../server/index.js';
+import { startServer } from '../../server/boot-main.js';
 import { getData } from '../../server/data.js';
 import { createPluginRegistry } from '../../server/plugins/registry.js';
 import { createContentSets } from '../../server/plugins/contentSets.js';

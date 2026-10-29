@@ -7,7 +7,7 @@ const ENABLED = process.env.SP_E2E === '1' && existsSync(CHROME);
 describe('0.2.3 follow-up client features', { skip: !ENABLED }, () => {
   let server, browser, base;
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const puppeteer = (await import('puppeteer-core')).default;
     server = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     base = `http://127.0.0.1:${server.port}`;

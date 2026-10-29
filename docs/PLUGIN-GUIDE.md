@@ -405,6 +405,7 @@ unequip（official／allow）；每项下面显示作用说明。选「继承」
 | 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_MANIFEST_VERSION` | 缺少 "manifest": 2，或者写成了别的数 | 在 plugin.json 里写上 "manifest": 2（这是清单格式的版本，现在只能是 2）。（工作台可一键修复） |
 | 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_ID` | 文件夹名「{id}」不能当插件 id | 插件 id 就是文件夹名：2–32 个小写英文字母、数字或 -，不能以 - 开头（例如 texas-red）。把文件夹改个名就行。 |
 | 插件能用，但检查时有提示 | `PLUGIN_ID_MISMATCH` | 清单里写的 "id" 和文件夹名「{id}」不一样，以文件夹名为准 | 删掉清单里的 "id"（文件夹名就是 id），或者把它改得和文件夹名一样。（工作台可一键修复） |
+| 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_CSP` | 「csp」只能是 "off" 或 { "<指令>": ["https://…"] }，来源必须是明确的 https 源 | "off" 只给受信任插件；对象形式只接受 img / media / connect / style / font / frame / worker，每条最多 16 个 https 来源（或 http://localhost）。 |
 | 插件能用，但检查时有提示 | `PLUGIN_FIELD_UNKNOWN` | 「{where}」不是清单里的字段，被忽略了 | 检查拼写（大小写也要一样），或者删掉它。（工作台可一键修复） |
 | 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_CLASS` | 没有写插件类别 "class"，或者写了不认识的类别 | 外观插件写 "class": "cosmetic"。可选的类别：lang（语言）、cosmetic（外观）、content（数据）、script、ui、trusted。 |
 | 插件能用，但检查时有提示 | `PLUGIN_TEXT` | 「{where}」应该是一段文字，或者 { "语言": "文字" }，被忽略了 | 写成 "名字"，或者 { "zh": "名字", "en": "Name" }。 |

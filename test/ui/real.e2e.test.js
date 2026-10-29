@@ -458,7 +458,7 @@ describe('real server + real browsers', { skip: !ENABLED && 'set SP_REAL_E2E=1 (
   let base;
 
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     puppeteer = (await import('puppeteer-core')).default;
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     // the content-hash index first, so the pages load the served manifests' /assets/~<hash>/… URLs like a player's

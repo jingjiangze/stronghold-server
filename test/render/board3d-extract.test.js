@@ -180,7 +180,10 @@ describe('vendored three.js', () => {
   });
 });
 
-describe('extracted board files (when a local client was extracted)', { skip: !manifest?.groups?.['map/fx'] && 'map/fx not extracted' }, () => {
+// `data/local-assets.json` is an install-time artifact: a checkout/CI copy can predate the current PACK_MESHES (it
+// lacks mesh/trap_110, which 0.3.0's extract.py added), and then the manifest legitimately cannot answer "is every
+// pack slot in it" — skip instead of failing on a stale artifact.
+describe('extracted board files (when a local client was extracted)', { skip: (!manifest?.groups?.['map/fx'] || !manifest?.groups?.['mesh/trap_110']) && 'map/fx or mesh/trap_110 not extracted' }, () => {
   const onDisk = (p) => path.join(ROOT, 'public', decodeURIComponent(p));
   const pngOf = (p) => p.replace(/\.webp$/, '.png');  // a WebP copy (extract.py WEBP) keeps its PNG beside it
   const hasFiles = existsSync(path.join(ROOT, 'public/assets/local/map/fx'));

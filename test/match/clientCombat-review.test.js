@@ -16,7 +16,7 @@ import { validateClientResult, specBounds, HeadlessPacer, HeadlessJob, runHeadle
 import { VirtualScheduler } from '../../server/match/scheduler.js';
 import { GameData } from '../../server/match/gamedata.js';
 import { uniteSurvivors } from '../../server/match/unite.js';
-import { startServer } from '../../server/index.js';
+import { startServer } from '../../server/boot-main.js';
 import { TestClient } from '../helpers/wsClient.js';
 import { FakeBattle } from './fakeBattle.js';
 import { DATA, makeMatch, checkInvariants } from './harness.js';

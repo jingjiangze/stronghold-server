@@ -7,7 +7,7 @@ const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Conte
 const skip = process.env.RENDER_E2E !== '1' || !existsSync(CHROME);
 
 test('finished field idles living Spine models and drains effects; paused feed does neither', { skip, timeout: 90000 }, async () => {
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const puppeteer = (await import('puppeteer-core')).default;
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
   let browser;

@@ -5,7 +5,7 @@ import { IOLETA_POLICY, createIoletaPrepSteps } from '../../server/match/botIole
 import { getBotStrategy } from '../../server/match/botStrategies.js';
 import { refreshIoletaPlan, ioletaPlan, IOLETA_OPS as O } from '../../server/match/botIoletaPolicy.js';
 import { makeMatch, give, giveItem, checkInvariants, DATA } from './harness.js';
-import { startServer } from '../../server/index.js';
+import { startServer } from '../../server/boot-main.js';
 import { replayTestMatch } from '../../server/match/testReplay.js';
 
 const levelUp = (m, ps) => legacyLevelUp(m, ps, { policy: IOLETA_POLICY });

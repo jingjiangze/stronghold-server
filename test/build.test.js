@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { computeBuildTag, buildTag, resetBuildTag } from '../server/index.js';
+import { computeBuildTag, buildTag, resetBuildTag } from '../server/boot-main.js';
 import { checkBuildOnce } from '../public/js/ui/buildGuard.js';
 
 /** A throwaway browser runtime, independent of the build tag's input list. */

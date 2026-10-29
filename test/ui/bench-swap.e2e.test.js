@@ -12,7 +12,7 @@ before(async () => {
   if (!enabled) return;
   savedTestMode = process.env.SP_TEST_MODE;
   process.env.SP_TEST_MODE = '1';
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, assetIndex: false,
     versions: { enabled: 'all' }, matchHost: { matchOptions: { botRehearsal: 0 } } });
 });

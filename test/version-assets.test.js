@@ -9,6 +9,9 @@ import { fxFixture } from './helpers/fxFixtures.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const assets = JSON.parse(readFileSync(path.join(root, 'data/assets.json'), 'utf8'));
+/** fx.py's texture path imports Pillow; a runner without it cannot exercise the extractor (same probe as board3d-extract). */
+const HAS_PY = spawnSync('python3', ['--version']).status === 0;
+const HAS_PIL = HAS_PY && spawnSync('python3', ['-c', 'import PIL']).status === 0;
 
 test('every official version declares comparable pictures, models, clips, icons and scenes without installed art', () => {
   const result = assetCoverage({ root, local: { groups: {} } });
@@ -47,7 +50,7 @@ test('add-only keeps existing nested values, arrays and null while admitting new
   assert.deepEqual(old.chars.old.events, ['a']);
 });
 
-test('fx discovery includes each season even when their chess ids collide', (t) => {
+test('fx discovery includes each season even when their chess ids collide', { skip: !HAS_PY && 'no python3' }, (t) => {
   const f = fxFixture(t);
   f.put('data/chess.json', { shared: { charId: 'char_9001_current', skills: [{ skillId: 'sk_current' }] } });
   f.put('data/versions/earlier/chess.json', { shared: { charId: 'char_9002_earlier', skills: [{ skillId: 'sk_earlier' }] } });
@@ -63,7 +66,7 @@ test('fx discovery includes each season even when their chess ids collide', (t) 
   assert.deepEqual(gd.skillOverrides, { char_9002_earlier: { sk_shared: 'skchr_earlier_1' } }, 'official art overrides stay scoped to their operator');
 });
 
-test('add-only FX extraction retains shared metadata and old files while crawling only new units', (t) => {
+test('add-only FX extraction retains shared metadata and old files while crawling only new units', { skip: !HAS_PIL && 'no Pillow (PIL)' }, (t) => {
   const f = fxFixture(t);
   const script = `import sys,json,pathlib
 from unittest.mock import patch

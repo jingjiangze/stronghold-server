@@ -46,7 +46,7 @@ describe('GitHub #8 and #484: 本局信息 in the strategy draft (real server, h
   const browsers = [];
 
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     puppeteer = (await import('puppeteer-core')).default;
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     base = `http://127.0.0.1:${srv.port}`;

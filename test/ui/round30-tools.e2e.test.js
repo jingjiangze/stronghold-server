@@ -7,7 +7,7 @@ import { CHROME, hasChrome } from '../e2e/client.mjs';
 describe('round30 tool and compound-tooltip browser boundaries', { skip: !(process.env.SP_E2E === '1' && hasChrome()) }, () => {
   let srv, browser, page;
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     srv = await startServer({ host: '127.0.0.1', port: 0, quiet: true });
     const P = (await import('puppeteer-core')).default;
     browser = await P.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-background-timer-throttling'] });

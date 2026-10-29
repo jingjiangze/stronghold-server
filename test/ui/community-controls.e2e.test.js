@@ -7,7 +7,7 @@ const enabled = process.env.SP_E2E === '1' && existsSync(CHROME);
 describe('community UI: lobby header and shared DIY details', { skip: !enabled }, () => {
   let srv, browser;
   before(async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     const P = (await import('puppeteer-core')).default;
     browser = await P.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });

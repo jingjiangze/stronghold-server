@@ -9,7 +9,7 @@ const request = (c, type, body = {}) => c.page.evaluate((type, body) => globalTh
 
 for (const version of ['act1autochess', 'act1autochess@V1_1', 'act2autochess@V2_1']) {
   test(`${version}: the real client renders and buys naturally rolled equipment`, { skip: !enabled, timeout: 120_000 }, async () => {
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const saved = process.env.SP_TEST_MODE;
     process.env.SP_TEST_MODE = '1';
     let srv;

@@ -20,7 +20,9 @@ jobs:
   test:
     name: test (${{ matrix.os }}, node ${{ matrix.node }}, shard ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # 60, not 25: the suite is ~2754 s measured and the four shards are only as balanced as ci-shards.json's timings,
+    # which are stale (two shards hit 30 min on 2026-10-29 while two finished in 9). Rebalance the table, then lower it.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

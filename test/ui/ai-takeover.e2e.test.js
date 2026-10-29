@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 const chrome=process.env.CHROME_PATH;
 test('a spectator requests an AI in the browser, receives majority approval and reloads into the inherited seat', {skip:process.env.SP_E2E!=='1'||!chrome||!existsSync(chrome),timeout:120000},async()=>{
-  const {startServer}=await import('../../server/index.js'),{TestClient}=await import('../helpers/wsClient.js'),puppeteer=(await import('puppeteer-core')).default;
+  const {startServer}=await import('../../server/boot-main.js'),{TestClient}=await import('../helpers/wsClient.js'),puppeteer=(await import('puppeteer-core')).default;
   const srv=await startServer({port:0,host:'127.0.0.1',quiet:true,botRehearsal:0}),clients=[],browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--no-proxy-server',`--explicitly-allowed-ports=${srv.port}`]});
   try{
     const player=async name=>{const c=await TestClient.connect(srv.url.replace('http','ws')+'/ws');clients.push(c);c.id=(await c.hello(name)).playerId;return c;};
@@ -33,7 +33,7 @@ test('a spectator requests an AI in the browser, receives majority approval and 
 test('the host can enable the default-off takeover setting through the room UI', {
   skip: process.env.SP_E2E !== '1' || !chrome || !existsSync(chrome), timeout: 60000,
 }, async t => {
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const { default: puppeteer } = await import('puppeteer-core');
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, botRehearsal: 0 });
   t.after(() => srv.close());

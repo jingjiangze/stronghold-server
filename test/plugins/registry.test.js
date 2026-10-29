@@ -204,7 +204,7 @@ test('one unreadable entry never stops the scan, the registry or the server: JSO
     assert.match(why['plugins/deep-one/'], /"manifest": \[…\] is not 2/);
     assert.ok(scan.plugins.some((p) => p.id === 'deep-pack'), 'a deep but ignorable value only warns (0.2.0 stopped the whole scan here)');
     assert.ok(scan.plugins.some((p) => p.id === 'marathon'), 'the other entries are read');
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, publicDir: path.join(root, 'public'), packsDir: path.join(root, 'packs'), pluginsDir: path.join(root, 'plugins') });
     try {
       assert.equal((await fetch(`${srv.url}/plugins/index.json`)).status, 200);
@@ -234,7 +234,7 @@ test('the plugins folder defaults to the one beside the packs folder; a static i
 
 test('the server: GET /plugins/index.json (never cached, the vanilla hash), a lang plugin through /packs/, nothing else of plugins/ served', async () => {
   const root = exampleRoot();
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, publicDir: path.join(root, 'public'), packsDir: path.join(root, 'packs'), pluginsDir: path.join(root, 'plugins') });
   try {
     const get = (u) => fetch(srv.url + u);

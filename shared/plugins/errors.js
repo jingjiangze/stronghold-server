@@ -175,6 +175,11 @@ export const PLUGIN_ERRORS = Object.freeze({
     zh: '清单里写的 "id" 和文件夹名「{id}」不一样，以文件夹名为准', en: 'The "id" in the manifest is not the folder name “{id}”; the folder name decides',
     fix: { zh: '删掉清单里的 "id"（文件夹名就是 id），或者把它改得和文件夹名一样。', en: 'Remove "id" from the manifest (the folder name is the id) or make it the folder name.' },
   },
+  PLUGIN_CSP: {
+    level: 'problem', doc: D.manifest,
+    zh: '「csp」只能是 "off" 或 { "<指令>": ["https://…"] }，来源必须是明确的 https 源', en: '“csp” is "off" or { "<directive>": ["https://…"] } with explicit https origins',
+    fix: { zh: '"off" 只给受信任插件；对象形式只接受 img / media / connect / style / font / frame / worker，每条最多 16 个 https 来源（或 http://localhost）。', en: '"off" is for trusted plugins only; the object form accepts img / media / connect / style / font / frame / worker with up to 16 https origins each (or http://localhost).' },
+  },
   PLUGIN_FIELD_UNKNOWN: {
     level: 'warning', doc: D.manifest, autofix: 'dropField',
     zh: '「{where}」不是清单里的字段，被忽略了', en: '“{where}” is not a field of the manifest and is ignored',

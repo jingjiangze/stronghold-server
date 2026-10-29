@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { startServer } from '../../server/index.js';
+import { startServer } from '../../server/boot-main.js';
 import { studioAllowed, isStudioChange, isLocalHost, hostName, studioMode } from '../../server/studio/gate.js';
 import { createPluginFiles, StudioError } from '../../server/studio/files.js';
 import { suggestId, isStudioPath } from '../../server/studio/index.js';

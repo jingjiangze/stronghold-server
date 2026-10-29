@@ -21,7 +21,7 @@ describe('render engine in headless Chrome', { skip }, () => {
   let srv, browser;
   before(async () => {
     const puppeteer = (await import('puppeteer-core')).default;
-    const { startServer } = await import('../../server/index.js');
+    const { startServer } = await import('../../server/boot-main.js');
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
     // the content-hash index first: every page then loads the served manifest's /assets/~<hash>/… URLs (ASSETS.md)
     await srv.assetIndex?.whenReady();

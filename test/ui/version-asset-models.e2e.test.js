@@ -19,7 +19,7 @@ const out = process.env.SP_VERSION_ASSET_SHOTS;
 const shot = async (c, name) => { if (out) { mkdirSync(out, { recursive: true }); await c.page.screenshot({ path: path.join(out, name + '.png') }); } };
 
 test('earlier-only bodies, attack/skill clips, summons and official skill/talent effects', { skip: !enabled, timeout: 5 * 60 * 1000 }, async () => {
-  const { startServer } = await import('../../server/index.js');
+  const { startServer } = await import('../../server/boot-main.js');
   const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
   const P = (await import('puppeteer-core')).default;
   const c = new Client(P, srv.url, 'version-models', { w: 1600, h: 900 });
