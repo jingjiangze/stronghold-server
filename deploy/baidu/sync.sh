@@ -25,17 +25,31 @@ cd "$APP_DIR"
 git config --system --add safe.directory "$APP_DIR" 2>/dev/null || true
 OLD=$(git rev-parse HEAD)
 
-# 有人在线 = /healthz 的 humans/rooms/sessions/matches 任一非 0。
+# 有人在线 = /healthz 的 humans/rooms/matches 任一非 0。
+# **不数 sessions**：它是 SessionRegistry 的大小，含「已断开但仍在 10 分钟重连窗口里」的会话
+# （server/net.js 的 reconnectWindowMs），所以只要有人来过又走了，sessions 会持续非 0 达 10 分钟——
+# 用它判忙会让部署在活跃时段永远 DEFER（2026-10-30 实测：00:07 与 00:37 两轮都因此被挡）。
+# 真正要保护的是"有人在房间里 / 有对局在跑"，humans/rooms/matches 三项就够。
 # healthz 拿不到（服务已挂）→ 按"不忙"处理：服务挂了更要尽快修。
 busy() {
   local s k v
   s=$(curl -sf -m 10 "http://127.0.0.1:$PORT/healthz" || true)
   [ -n "$s" ] || return 1
-  for k in humans rooms sessions matches; do
+  for k in humans rooms matches; do
     v=$(printf '%s' "$s" | grep -o "\"$k\":[0-9]*" | head -1 | cut -d: -f2)
     [ "${v:-0}" != "0" ] && return 0
   done
   return 1
+}
+
+# 计数快照，只用于日志：DEFER 时要能一眼看出是哪个字段挡的
+counts() {
+  local s out=""
+  s=$(curl -sf -m 10 "http://127.0.0.1:$PORT/healthz" || true)
+  for k in humans rooms matches sessions; do
+    out="$out $k=$(printf '%s' "$s" | grep -o "\"$k\":[0-9]*" | head -1 | cut -d: -f2)"
+  done
+  printf '%s' "${out# }"
 }
 
 # 健康判据：healthz ok:true + plugins 数量正常(>=8，实测 11) + 首屏 JS 可取
@@ -78,7 +92,8 @@ NEED_RESTART=0
 [ -n "$RUNTIME" ] && NEED_RESTART=1
 
 if [ "$NEED_RESTART" = 1 ] && busy; then
-  say "3. DEFER: 有人在线（humans/rooms/sessions/matches 非 0），保留 $(git rev-parse --short "$OLD")，本轮不应用"
+  # 把四个计数都印出来：没有数字时只能靠猜是哪个字段挡的（2026-10-30 排查就卡在这里）
+  say "3. DEFER: 有人在线（$(counts)），保留 $(git rev-parse --short "$OLD")，本轮不应用"
   exit 0
 fi
 
@@ -95,6 +110,10 @@ for u in stronghold.service stronghold-sync.service stronghold-sync.timer; do
   fi
 done
 [ "$UNIT_CHANGED" = 1 ] && systemctl daemon-reload
+# daemon-reload 会重算 timer，但显式重启一次才确定拿到新的 OnCalendar（改了频率就该立刻生效）
+if [ "$UNIT_CHANGED" = 1 ] && printf '%s\n' "$CHANGED" | grep -q '^deploy/baidu/stronghold-sync\.timer$'; then
+  systemctl restart stronghold-sync.timer && say "3a. timer 已按新频率重启"
+fi
 
 if printf '%s\n' "$CHANGED" | grep -q '^deploy/baidu/nginx/' && command -v nginx >/dev/null 2>&1; then
   install -m 0644 "$APP_DIR/deploy/baidu/nginx/stronghold.conf" /etc/nginx/conf.d/stronghold.conf

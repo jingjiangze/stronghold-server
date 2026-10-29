@@ -1,9 +1,11 @@
 [Unit]
-Description=Pull latest stronghold baidu build every 30 minutes
+Description=Pull latest stronghold baidu build every 10 minutes
 
 [Timer]
-# :07 与 :37 —— 错开 CI 侧 sync-from-ms 的 */30（0/30 分），给 CI 留出追平时间
-OnCalendar=*:07/30
+# 每 10 分钟（:00/:10/:20…）—— 推完 baidu 后盒子最迟 10 分钟内变成最新。
+# 2026-10-30：原来 30 分钟一档，叠加 sessions 误判的 DEFER，实测盒子上落后了两个提交；
+# 拉分支是纯只读 fetch + 一次 diff，频率提高的成本可以忽略。
+OnCalendar=*:00/10
 # 错过的周期开机后补跑一次
 Persistent=true
 # 必须显式指定，否则报 "unit to trigger not loaded"
