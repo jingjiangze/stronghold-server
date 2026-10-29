@@ -291,6 +291,58 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
     setDragIdx(null);
     setOverIdx(null);
   };
+  // 选目标列表：对手多（10V10 有 10 个）时要能横向滑；滚动条已隐藏，靠滚轮/拖动/触控
+  const foesRef = useRef(null);
+  useEffect(() => {
+    const el = foesRef.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      if (el.scrollWidth <= el.clientWidth + 1) return;
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!d) return;
+      el.scrollLeft += d;
+      e.preventDefault();
+    };
+    let drag = null;
+    const onDown = (e) => {
+      if (el.scrollWidth <= el.clientWidth + 1) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      drag = { x: e.clientX, left: el.scrollLeft, moved: false };
+      el.setPointerCapture?.(e.pointerId);
+      el.classList.add('is-drag');
+    };
+    const onMove = (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x;
+      if (Math.abs(dx) > 3) drag.moved = true;
+      el.scrollLeft = drag.left - dx;
+      if (drag.moved) e.preventDefault();
+    };
+    const onUp = (e) => {
+      if (!drag) return;
+      el.classList.remove('is-drag');
+      el.releasePointerCapture?.(e.pointerId);
+      if (drag.moved) {
+        const kill = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+        el.addEventListener('click', kill, { capture: true, once: true });
+        setTimeout(() => el.removeEventListener('click', kill, { capture: true }), 60);
+      }
+      drag = null;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+    };
+  }, [stage]);
+
   const mine = conf.subs ? conf.subs[myId] : null;
   // 两步提交（业主 2026-10-27）：草稿（committed=false）可反复改，只有「确认出击」才锁面板。
   const submitted = !!(mine && mine.committed === true);
@@ -404,7 +456,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
       </p>` : null}
 
       ${stage === 'target' ? html`<div class="confov__targets">
-        <div class="confov__foes">
+        <div class="confov__foes" ref=${foesRef}>
           ${foes.map((f) => html`<button key=${f.playerId} type="button" class=${cx('conffoe', `conffoe--${f.team === 0 ? 'blue' : 'red'}`, myTarget === f.playerId && 'is-sel')}
             disabled=${!!myTarget || busy} onClick=${() => onTarget(f.playerId)}>
             <span class="conffoe__q">?</span>

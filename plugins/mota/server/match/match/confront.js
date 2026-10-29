@@ -65,7 +65,7 @@ import { OK, fail } from './common.js';
 export const CONFRONT_VALUE_DIV = 120;
 
 /** 控怪档的目标出怪量 = 官方只数的这个比例（业主 2026-10-26：接近官方但只有 90%）。 */
-export const CONFRONT_VOLUME_SHARE = 0.9;
+export const CONFRONT_VOLUME_SHARE = 1;   // 业主 2026-10-27：每回合至少要能放出「官方同等只数」（原 0.9 永远少于官方）
 
 export function confrontValue(e, scale = null) {
   const s = (e && e.stats) || {};
@@ -552,11 +552,11 @@ export class MatchConfront {
    * 赏金档（非控怪）不适用：那一档本来就是「替换一小部分」，官方波次才是主体。
    */
   confrontCountFloor() {
-    if (!this.isConfrontRule()) return 0;
-    const attackers = Math.max(1, this.attackingTeamSize());
-    const share = Math.max(1, Math.ceil((this.confrontWaveCount() * CONFRONT_VOLUME_SHARE) / attackers));
+    // 两个档都保「只数」：业主 2026-10-27「至少每回合出的怪相当于官方能出的怪」。
+    // 不再按攻方人数摊 —— 每个攻方各自把怪投给自己的目标守方，按人均摊会让人数越多越放不满。
+    const need = Math.max(2, Math.ceil(this.confrontWaveCount() * CONFRONT_VOLUME_SHARE));
     const median = this.confrontPoolMedianValue();
-    return Math.round(median * share);
+    return Math.round(median * need);
   }
 
   /** 本回合可选池（第 1..N 回合出过的怪）的价值中位数 —— 预算下限的基准，按回合缓存。 */
@@ -594,8 +594,10 @@ export class MatchConfront {
    */
   confrontBudget() {
     const byShare = Math.round(this.confrontWaveValue() * this.confrontRatio() * this.huntCfg().budgetMul);
-    // 「赏金」档 = 线上原样：只按替换份额算，不加下限
-    if (!this.isConfrontRule()) return byShare;
+    // 只数下限（2026-10-27）：按中位价买得下「官方同等只数」。赏金档以前不加下限，R1 只够买 1 只（官方 5 只）。
+    const countFloor = this.confrontCountFloor();
+    // 「赏金」档：份额预算与只数下限取大
+    if (!this.isConfrontRule()) return Math.max(byShare, countFloor);
     // 「对抗」档：攻方就是这一波怪的全部来源，每名攻方分到「官方波次价值 ÷ 攻方人数」，再用池内中位怪托底
     // 控怪档的预算与「0.9 官方出怪量」同源：官方波次价值 × 0.9 ÷ 攻方人数
     const base = this.confrontPurePlacement()
@@ -605,7 +607,7 @@ export class MatchConfront {
     // ② 是 2026-10-27 补的：没有它，价值预算与只数目标脱钩，实测 R1 只能放 4 只（官方 6 只的 67%）。
     const floor = Math.max(
       Math.round(this.confrontPoolMedianValue() * this.confrontMinUnits()),
-      this.confrontCountFloor(),
+      countFloor,
     );
     return Math.max(base, floor);
   }

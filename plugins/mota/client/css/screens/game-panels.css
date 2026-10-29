@@ -870,7 +870,12 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 
 /* 对抗期 step 1: the opponents as '?' frames — team colour + P number only (the client never learns who they are) */
 .confov__targets { display: flex; flex-direction: column; align-items: center; gap: .16rem; padding: .12rem 0 .2rem; }
-.confov__foes { display: flex; gap: .5rem; }
+.confov__foes { display: flex; gap: .5rem; max-width: 100%; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; touch-action: pan-x; cursor: grab; padding-bottom: .02rem; }
+/* 对手多的时候（10V10 有 10 个）要能横向滑；业主不要可见滚动条（2026-10-27） */
+.confov__foes::-webkit-scrollbar { display: none; }
+.confov__foes.is-drag { cursor: grabbing; }
+.confov__foes > * { flex: none; }
 .conffoe { position: relative; width: 1.5rem; height: 1.7rem; display: grid; place-items: center; cursor: pointer;
   background: linear-gradient(180deg, rgba(20, 24, 22, .92), rgba(8, 10, 9, .96)); transition: transform var(--t-fast), border-color var(--t-fast); }
 .conffoe--blue { border: 2px solid #3d78c4; box-shadow: inset 0 0 .4rem rgba(74, 163, 255, .16); }
