@@ -64,6 +64,9 @@ export default [
       'public/dev/**',
       '.cache/**',
       'coverage/**',
+      // 独立子项目：自带 eslint.config.js（从 @aue/lint 取配置，根目录没装这个 workspace 包）。
+      // 不忽略的话根 `eslint .` 会去加载它并因缺包直接崩，整个 lint 步骤红（2026-10-29）。
+      'icebreaker/**',
     ],
   },
   {
