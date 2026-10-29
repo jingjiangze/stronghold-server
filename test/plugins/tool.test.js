@@ -114,7 +114,9 @@ test('the cosmetic template: original real media and installed references, no fi
   assert.deepEqual([r.problems, r.warnings], [[], []]);
   assert.equal(r.plugin.class, 'cosmetic');
   assert.ok(r.plugin.visual.ops.some((o) => o.ref), 'installed references remain usable');
-  assert.equal(r.plugin.visual.served.size, 2, 'both original files are served');
+  // served covers the files the overlay names; the template names none (README: "changes no file of the game — every entry
+  // is a reference"; the sample media beside it only show the folder layout a plugin with its own art uses).
+  assert.equal(r.plugin.visual.served.size, 0, 'the template serves no file of its own');
   const m = JSON.parse(fs.readFileSync(path.join(tpl, 'plugin.json'), 'utf8'));
   assert.equal(m.id, undefined, 'the folder name decides the id: a copy needs no edit of it');
   assert.equal((await quiet(['check', tpl])).code, 0);

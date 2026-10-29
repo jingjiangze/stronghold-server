@@ -24,7 +24,15 @@
     "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
   },
   {
+    "name": "manifest.field.capabilities",
+    "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
+  },
+  {
     "name": "manifest.field.class",
+    "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
+  },
+  {
+    "name": "manifest.field.code",
     "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
   },
   {
@@ -37,6 +45,10 @@
   },
   {
     "name": "manifest.field.credits",
+    "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
+  },
+  {
+    "name": "manifest.field.csp",
     "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
   },
   {
@@ -113,6 +125,10 @@
   },
   {
     "name": "manifest.field.name",
+    "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
+  },
+  {
+    "name": "manifest.field.needs",
     "anchor": "shared/plugins/manifest.js#MANIFEST_FIELDS"
   },
   {
@@ -1241,6 +1257,10 @@
   },
   {
     "name": "error.PLUGIN_ID_MISMATCH",
+    "anchor": "shared/plugins/errors.js#PLUGIN_ERRORS"
+  },
+  {
+    "name": "error.PLUGIN_CSP",
     "anchor": "shared/plugins/errors.js#PLUGIN_ERRORS"
   },
   {

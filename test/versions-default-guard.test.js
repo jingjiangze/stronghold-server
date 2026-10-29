@@ -31,7 +31,7 @@ const HOW = 'an intended change of the default version must regenerate test/fixt
 
 /** The gameplay data files of the default version (gameplayDataFiles: data/*.json without the presentation files). */
 const GAMEPLAY = ['backups', 'bands', 'bonds', 'bosses', 'chess', 'choices', 'config', 'effects', 'enemies', 'factions',
-  'garrisons', 'items', 'stages', 'tokens', 'tuning', 'waves'];
+  'garrisons', 'items', 'skins', 'stages', 'tokens', 'tuning', 'waves'];
 
 const VERSION_ENV = ['SP_VERSIONS', 'SP_VERSION_DEFAULT', 'SP_MAX_VERSION_HOSTS'];
 const HEX64 = /^[0-9a-f]{64}$/;

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/boot-main.js';
 import { Match } from '../server/match/Match.js';
@@ -62,18 +63,38 @@ test('unset, empty and explicit legacy selections start a real room with a worki
   }
 });
 
-test('the process entry exits with a clear configuration error for an invalid strategy', () => {
-  const result = spawnSync(process.execPath, ['server/index.js'], {
+test('the process entry reports an invalid strategy on the boot-diag port instead of serving a game', async () => {
+  // runMain opens the boot-diag port when start() throws (containers judge health by the port, and their logs are often
+  // unreadable), so the entry no longer exits for a bad configuration: what this pins is the report it serves — the
+  // strategy it rejected — and that no game is listening behind it.
+  const probe = net.createServer();
+  const port = await new Promise((resolve) => probe.listen(0, '127.0.0.1', () => resolve(probe.address().port)));
+  await new Promise((r) => probe.close(r));
+  const child = spawn(process.execPath, ['server/index.js'], {
     cwd: fileURLToPath(new URL('..', import.meta.url)),
-    env: { ...process.env, SP_BOT_STRATEGY: 'legcay', PORT: '0' },
-    encoding: 'utf8', timeout: 15000, windowsHide: true,
+    env: { ...process.env, SP_BOT_STRATEGY: 'legcay', PORT: String(port), HOST: '127.0.0.1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  assert.ifError(result.error);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /\[boot\] failed to start/);
-  assert.match(result.stderr, /Invalid SP_BOT_STRATEGY.*legcay.*available: legacy/);
-  assert.match(result.stderr, /Unset SP_BOT_STRATEGY/);
-  assert.doesNotMatch(result.stdout, /Local:/);
+  let log = '';
+  child.stdout.on('data', (b) => { log += b; });
+  child.stderr.on('data', (b) => { log += b; });
+  try {
+    let body = null;
+    for (let i = 0; i < 100 && !body; i++) {
+      try { body = await (await fetch(`http://127.0.0.1:${port}/healthz`)).json(); }
+      catch { await new Promise((r) => setTimeout(r, 150)); }
+    }
+    assert.ok(body, `the boot-diag port never answered; log:\n${log}`);
+    assert.equal(body.ok, false);
+    assert.equal(body.boot, 'failed');
+    assert.match(body.error, /Invalid SP_BOT_STRATEGY: Unknown bot strategy: legcay; available: legacy/);
+    assert.match(body.error, /Unset SP_BOT_STRATEGY/);
+    assert.equal(body.env.PORT, String(port));
+    assert.match(log, /\[boot\] failed to start/);
+    assert.doesNotMatch(log, /Local:/, 'no game is served');
+  } finally {
+    child.kill();
+  }
 });
 
 test('external selection requires operator transport configuration before listening', async () => {

@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { MAX_SEATS } from '../shared/constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -1119,14 +1120,18 @@ describe('screen helpers', () => {
         { seat: 3, playerId: 'ai_1', name: 'AI·华法琳', isBot: true, ready: true, connected: true },
       ],
     };
-    assert.equal(normalizeSeats(room).length, 4);
+    // The server allocates MAX_SEATS slots for every room and any free one takes a player (server/lobby.js:411,469), and
+    // the lobby's own co-op text advertises MAX_SEATS doctors — so a co-op room pads to MAX_SEATS, not to four.
+    assert.equal(normalizeSeats(room).length, MAX_SEATS);
     assert.equal(normalizeSeats({ mode: 'solo', seats: [room.seats[0], null, null, null] }).length, 1);
-    assert.deepEqual(normalizeSeats({ mode: 'coop', seats: 'bad' }), [null, null, null, null]);
+    assert.deepEqual(normalizeSeats({ mode: 'coop', seats: 'bad' }), new Array(MAX_SEATS).fill(null));
+    assert.deepEqual(normalizeSeats({ mode: 'solo', seatCap: 4, seats: [] }).length, 1, 'solo wins over seatCap');
+    assert.equal(normalizeSeats({ mode: 'versus', seatCap: 3, seats: [] }).length, 3, 'the room seatCap wins over MAX_SEATS');
     let f = roomFacts(room, 'h');
     assert.equal(f.isHost, true);
     assert.equal(f.canStart, false, 'guest not ready');
     assert.equal(f.humans.length, 2);
-    assert.equal(f.emptySeats, 1);
+    assert.equal(f.emptySeats, MAX_SEATS - 3);
     assert.equal(f.readyHumans, 1, 'host counts as ready (start = host ready)');
     room.seats[1].ready = true;
     f = roomFacts(room, 'h');
@@ -1155,7 +1160,7 @@ describe('screen helpers', () => {
     assert.equal(f.spectating, true);
     assert.equal(f.mine, null);
     assert.equal(f.humans.length, 1, 'never a player');
-    assert.equal(f.emptySeats, 3, 'a free player seat stays free (入座)');
+    assert.equal(f.emptySeats, MAX_SEATS - 1, 'a free player seat stays free (入座)');
     assert.deepEqual(f.spectators.map((x) => x.playerId), ['s']);
     const hf = roomFacts(room, 'h');
     assert.equal(hf.canStart, true, 'a spectator never blocks the start');

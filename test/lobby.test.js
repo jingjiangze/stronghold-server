@@ -613,7 +613,7 @@ describe('websocket lobby', () => {
     await expectError(c, { t: 'room.join', code: 'AB CD' }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.join', code: { $gt: '' } }, ERR.BAD_MSG);
     await expectError(c, { t: 'room.ready', ready: 'yes' }, ERR.BAD_MSG);
-    await expectError(c, { t: 'room.removeBot', seat: 9 }, ERR.BAD_MSG);
+    await expectError(c, { t: 'room.removeBot', seat: MAX_SEATS }, ERR.BAD_MSG);
     await expectError(c, { t: 'g.buy', slot: -1 }, ERR.BAD_MSG);
     await expectError(c, { t: 'g.move', uid: 1, to: { area: 'moon' } }, ERR.BAD_MSG);
     await expectError(c, { t: 'ping', c: 'x' }, ERR.BAD_MSG);
@@ -695,7 +695,7 @@ describe('websocket lobby', () => {
     assert.equal(st.inMatch, false);
     assert.equal(st.seats.length, MAX_SEATS);
     assert.deepEqual(st.seats[0], { seat: 0, playerId: host.id, name: 'Host', isBot: false, ready: false, connected: true });
-    assert.deepEqual(st.seats.slice(1), [null, null, null]);
+    assert.deepEqual(st.seats.slice(1), new Array(MAX_SEATS - 1).fill(null));
 
     const guest = await pool.player('Guest');
     const joined = await joinRoom(guest, st.code.toLowerCase());
@@ -768,7 +768,8 @@ describe('websocket lobby', () => {
       await joinRoom(g, st.code);
       guests.push(g);
     }
-    await expectOk(host, { t: 'room.addBot' });
+    // Every room allocates MAX_SEATS slots and any free one takes a player, so three humans need MAX_SEATS - 3 bots to fill it.
+    for (let i = 3; i < MAX_SEATS; i++) await expectOk(host, { t: 'room.addBot' });
     await host.waitFor('room.state', (s) => s.seats.every(Boolean));
     const late = await pool.player('Late');
     await expectError(late, { t: 'room.join', code: st.code }, ERR.ROOM_FULL);
@@ -809,7 +810,7 @@ describe('websocket lobby', () => {
     const s3 = await pool.player('Watcher3');
     await expectError(s3, { t: 'room.spectate', code: st.code }, ERR.ROOM_FULL);
     await joinRoom(s3, st.code);
-    await expectOk(host, { t: 'room.addBot' });
+    for (let i = 3; i < MAX_SEATS; i++) await expectOk(host, { t: 'room.addBot' });
     const full = await host.waitFor('room.state', (s) => s.seats.every(Boolean));
     assert.equal(full.spectators.length, 2);
     await expectOk(s3, { t: 'room.ready', ready: true });
@@ -1190,6 +1191,15 @@ describe('websocket lobby', () => {
       if (reply.t === 'error') assert.ok(Object.hasOwn(ERR, reply.code), reply.code);
       if (i % 50 === 0) await delay(30); // stay well under the rate limit
     }
+    // `g.infoReady` only lands while a match sits in INFO_CHECK and only from that match's own player: the random stream
+    // cannot guarantee that window, so the prep intent is exercised deterministically (the shape lobby-integration uses).
+    const prepper = await pool.player('InfoReady');
+    await createRoom(prepper);
+    await expectOk(prepper, { t: 'room.start' });
+    await prepper.waitFor('m.public', (p) => p.phase === 'INFO_CHECK');
+    await expectOk(prepper, { t: 'g.infoReady' });
+    okCounts['g.infoReady'] = 1;
+    await expectOk(prepper, { t: 'room.leave' });
     for (const t of ['room.create', 'room.join', 'room.start', 'room.addBot', 'g.infoReady']) assert.ok(okCounts[t] > 0, `fuzz never succeeded at ${t}`);
     // invariants
     const seen = new Set();

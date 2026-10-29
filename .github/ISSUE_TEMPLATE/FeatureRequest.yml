@@ -39,6 +39,14 @@ body:
         请详细描述这个功能实现的效果。
     validations:
       required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本号
+      description: 标题画面角落显示的那个版本号；用发布压缩包的话就写发布压缩包的文件名；从源码运行的话写 `git rev-parse --short HEAD` 的前 7 位。只作对照，不必精确。
+      placeholder: 例如 0.3.3 / v0.3.3-20261025 / bcfcba84
+    validations:
+      required: true
   - type: checkboxes
     id: revision
     attributes:

@@ -84,11 +84,12 @@ import { t, tc } from '../../../shared/i18n.js';
 const MAX_RENDERED_SEATS = 256;
 
 /**
- * Seats padded to the room's capacity (co-op 4, solo 1, or the room's own `seatCap`), each null or a seat record.
+ * Seats padded to the room's capacity (solo 1, otherwise the room's own `seatCap`, otherwise `MAX_SEATS`), each null or a
+ * seat record.
  *
- * `room.state.seatCap` is the server's real cap (server/lobby.js sends it for versus rooms, teamSize × 2). The
- * constants only fill in when it is absent: `MAX_SEATS` is the versus default (2..20 since 2026-10-27), while a co-op
- * room keeps the four seats server/lobby.js documents — padding it out to the versus maximum drew sixteen empty cards.
+ * The server allocates `MAX_SEATS` slots for every room (server/lobby.js: `new Array(MAX_SEATS).fill(null)`, any free slot
+ * takes a player) and sends `seatCap` only when the room differs from that default (versus: teamSize × 2, 2026-10-27).
+ * Co-op follows `MAX_SEATS` too — the lobby's own mode text advertises "与至多 {MAX_SEATS - 1} 名博士组成同盟".
  * @param {any} room room.state payload
  * @returns {(null | {seat:number, playerId:any, name:string, isBot:boolean, ready:boolean, connected:boolean})[]}
  */
@@ -97,7 +98,6 @@ export function normalizeSeats(room) {
   let cap = MAX_SEATS;
   if (room?.mode === 'solo') cap = 1;
   else if (Number.isInteger(declared) && declared >= 1) cap = Math.min(declared, MAX_RENDERED_SEATS);
-  else if (room?.mode === 'coop') cap = 4;
   const src = Array.isArray(room?.seats) ? room.seats : [];
   const out = [];
   for (let i = 0; i < cap; i++) {

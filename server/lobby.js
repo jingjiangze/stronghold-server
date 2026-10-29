@@ -4,7 +4,9 @@
 // Rules (the choices where DESIGN is silent are marked ▸):
 //   * Rooms are keyed by 4-letter codes from an unambiguous alphabet (no I/O, letters only). Join codes are
 //     case-insensitive.
-//   * 'solo' rooms hold exactly one human and never bots. 'coop' rooms have 4 seats (humans + AI bots).
+//   * 'solo' rooms hold exactly one human and never bots. Every room allocates MAX_SEATS slots and any free one takes a
+//     player, so 'coop' rooms seat up to MAX_SEATS humans (the lobby's mode text advertises the same); a versus room is
+//     the only one that narrows that with `seatCap` (teamSize × 2, 2026-10-27).
 //     Humans and bots take the lowest free seat index; seat indexes never compact.
 //   * ▸ Being in a LOBBY room and sending room.create / room.join implicitly leaves it. While your room is
 //     in a match, create/join of another room fails with ROOM_STARTED (send g.leave or room.leave first).

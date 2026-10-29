@@ -70,10 +70,13 @@ replacement. No route or frozen plugin grammar member is added; the stable surfa
 | `manifest.field.assets` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.authors` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.base` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
+| `manifest.field.capabilities` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.class` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
+| `manifest.field.code` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.complete` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.conflicts` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.credits` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
+| `manifest.field.csp` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.data` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.description` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.dsl` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
@@ -93,6 +96,7 @@ replacement. No route or frozen plugin grammar member is added; the stable surfa
 | `manifest.field.manifest` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.modes` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.name` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
+| `manifest.field.needs` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.notices` | stable | 0.3.1 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.numberUnits` | stable | 0.3.0 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
 | `manifest.field.offers` | stable | 0.3.1 | `shared/plugins/manifest.js#MANIFEST_FIELDS` |
@@ -383,6 +387,7 @@ replacement. No route or frozen plugin grammar member is added; the stable surfa
 | `error.PLUGIN_MANIFEST_VERSION` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |
 | `error.PLUGIN_ID` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |
 | `error.PLUGIN_ID_MISMATCH` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |
+| `error.PLUGIN_CSP` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |
 | `error.PLUGIN_FIELD_UNKNOWN` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |
 | `error.PLUGIN_CLASS` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |
 | `error.PLUGIN_TEXT` | stable | 0.3.0 | `shared/plugins/errors.js#PLUGIN_ERRORS` |

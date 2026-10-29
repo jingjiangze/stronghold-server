@@ -36,8 +36,12 @@ test('the listen entry points default to ::, and the image stays on IPv4', () =>
   assert.match(doc('scripts/launch.mjs'), /process\.env\.HOST \|\| '::'/);
   assert.match(doc('tools/doctor.mjs'), /process\.env\.HOST \|\| '::'/);
   assert.match(doc('README.md'), /\| `HOST` \| `::` \|/);
-  assert.match(doc('Dockerfile'), /HOST=0\.0\.0\.0/);
+  // This fork's image is the ModelScope one (deploy/stardust/ms-edge): nginx owns the platform port (7860) and the game
+  // process listens on loopback inside the container, so the image still never binds a wildcard — only the address family
+  // differs from upstream's 0.0.0.0. entrypoint.sh sets HOST=0.0.0.0 only for the stand-alone fallback path.
+  assert.match(doc('Dockerfile'), /HOST=127\.0\.0\.1/);
   assert.doesNotMatch(doc('Dockerfile'), /HOST=::/);
+  assert.doesNotMatch(doc('Dockerfile'), /HOST=0\.0\.0\.0/);
 });
 
 test('listenAddress: the option wins over the environment, the environment over the default', () => {
