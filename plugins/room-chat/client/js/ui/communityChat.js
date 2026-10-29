@@ -27,6 +27,26 @@ function appendMessageTimestamp(element, value) {
 
 let manifestPromise;
 export const stickerManifest = () => manifestPromise ||= fetch(MANIFEST_URL,{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error('表情暂不可用');return r.json();}).catch(e=>{manifestPromise=null;throw e;});
+// 预取清单：贴纸面板原来只在**第一次点击**时才 fetch 清单、再同步建 76 个 <img>，
+// 慢网络下就是「点了没反应」（2026-10-30 反馈）。清单只有几 KB 且同源，模块加载时先拉一次。
+if (typeof window !== 'undefined') stickerManifest().catch(() => {});
+// 面板只建一次：76 个按钮与图片复用，之后点开只是挂上/摘下同一棵 DOM。
+let stickerGrid = null;
+export async function stickerPicker() {
+  if (stickerGrid) return stickerGrid;
+  const manifest = await stickerManifest(), grid = document.createElement('div');
+  grid.className = 'community-stickers';
+  for (const item of manifest) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.title = item.name; button.setAttribute('aria-label', item.name);
+    const preview = stickerImage(item.id, manifest, { preview: true });
+    button.append(preview);
+    button.addEventListener('click', () => sendSticker(item.id));
+    grid.append(button);
+  }
+  stickerGrid = grid;
+  return grid;
+}
 export function stickerImage(id, manifest, { preview = true } = {}) {
   const item = manifest.find(s => s.id === id);
   if (!item) return null;
@@ -44,14 +64,11 @@ export function stickerImage(id, manifest, { preview = true } = {}) {
   image.src = local;
   return image;
 }
+/** 贴纸点击回调由挂载方逐次设置（面板 DOM 复用，不重建）。 */
+let sendSticker = () => {};
 export async function mountStickerPicker(container, onSend) {
-  const manifest = await stickerManifest(), grid = document.createElement('div'); grid.className='community-stickers';
-  for (const item of manifest) {
-    const button=document.createElement('button');button.type='button';button.title=item.name;button.setAttribute('aria-label',item.name);
-    const preview=stickerImage(item.id,manifest,{preview:true});
-    button.append(preview);button.addEventListener('click',()=>onSend(item.id));grid.append(button);
-  }
-  container.replaceChildren(grid);
+  sendSticker = onSend;
+  container.replaceChildren(await stickerPicker());
 }
 const activeBubbles = new Map();
 export async function showBattleSticker(message) {

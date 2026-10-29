@@ -129,7 +129,10 @@ function schedulePendingJoin() {
     try {
       await joinKnown('room.join', code);
     } catch (err) {
-      toastError(err);
+      // 深链在点击与请求之间被解散/关闭时，服务端只能回 ROOM_NOT_FOUND；这个码在当前上下文里没有信息量，
+      // 弹 toast 只会让玩家看到一个「本来就不存在的房间」的错误（2026-10-29 诊断里那条 31 分钟会话的噪音）。
+      if (err?.code === 'ROOM_NOT_FOUND') clearPendingJoin();
+      else toastError(err);
     } finally {
       joinInFlight = false;
       clearPendingJoin();

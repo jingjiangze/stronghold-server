@@ -412,12 +412,12 @@ const PROPOSE_RETRY_MS = 1200;
 
 /**
  * 随机地图开关（2026-10-22 业主口径；room.setRandomStage，房主开局前）。
- * 开（默认）：每回合从本难度的战场池随机抽一张（协同共竞的原有规则）；
- * 关：开局前随机抽一张，整局不换，只在 Boss 关刷新一次。
- * `room.state.randomStage` 只在关掉时出现 —— 缺省就是开。
+ * 开：每回合从本难度的战场池随机抽一张（协同共竞的原有规则）；
+ * 关（2026-10-30 起的默认）：整局同一张图，Boss 关也不换。
+ * `room.state.randomStage` 只在**开**时出现 —— 缺省就是关。
  */
 function RandomStageToggle({ room, isHost, busy, onToggle }) {
-  const on = room.randomStage !== false;
+  const on = room.randomStage === true;
   return html`<div class="ailast">
     <${Tooltip} text=${on ? t('每回合从本难度的战场池随机抽取') : t('开局随机一张，Boss 关刷新')}>
       <button type="button" role="switch" aria-checked=${on ? 'true' : 'false'}

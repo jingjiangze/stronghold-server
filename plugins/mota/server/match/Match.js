@@ -541,9 +541,9 @@ export class Match {
     this.variant = this.participants > MAX_SEATS;
 
     // per-match setup (DESIGN §6.5)
-    // 随机地图开关（2026-10-22 业主口径）：默认开 = 协同共竞每回合换图；关 = 开局随机一张、只在 boss 关刷新一次。
-    // 读它的地方是 match/phases.js 的 _startRoundAfterOffers（INFO_CHECK 重抽不碰战场）。
-    this.randomStage = opts.randomStage !== false;
+    // 随机地图开关（2026-10-22 业主口径，2026-10-30 改默认为**关**）：开 = 协同共竞每回合换图；
+    // 关（默认）= 整局同一张图。读它的地方是 match/phases.js 的 _startRoundAfterOffers（INFO_CHECK 重抽不碰战场）。
+    this.randomStage = opts.randomStage === true;
     const setup = setupMatchWaves(this.gd, this.rngSetup);
     this.stageId = setup.stageId;
     this.stage = this.stageId ? this.gd.stage(this.stageId) : null;

@@ -528,16 +528,15 @@ export class MatchConfront {
   confrontMinUnits() { return 2 + Math.floor(Math.max(0, this.round - 1) / 3); }
 
   /**
-   * 一次提交最多放几只（业主 2026-10-26：预算按官方出怪量重算之后，必须同时按官方只数封顶，
-   * 否则最便宜的怪能一次堆十几只）。对抗 = 本回合官方出怪只数的一半（至少 2 只）；协同狩猎沿用协议的 maxPicks。
+   * 一次提交最多放几只。
+   *
+   * 业主 2026-10-30 口径：**按价值算，不设只数上限**。此前（2026-10-26）这里用「本回合官方只数」封顶，
+   * 早期回合官方只数小（R1 只有 6 只），玩家看到的就是「本回合最多只能放 4 只」——与「预算是价值预算」
+   * 自相矛盾。现在只留协议的硬上限（maxPicks，防一次误提交塞爆消息），真正的约束是 Σ价值 ≤ 预算；
+   * 出怪节奏由波次的时段（官方 time/interval）决定，见 `_confrontInsertTime`。
    */
   confrontPlaceCap() {
-    const hard = this.huntCfg().maxPicks;
-    // 「赏金」档 = 线上原样：只受协议上限约束
-    if (!this.isConfrontRule()) return hard;
-    // 业主 2026-10-26：实际出怪量要「接近官方但只有 90%」——只数上限取官方只数的 0.9（至少 2 只）。
-    const official = this.confrontWaveCount();
-    return Math.min(hard, Math.max(2, Math.ceil(official * CONFRONT_VOLUME_SHARE)));
+    return this.huntCfg().maxPicks;
   }
 
   /**

@@ -121,14 +121,15 @@ export function setup(api) {
   api.roomInit((room) => {
     if (!Array.isArray(room.chat)) room.chat = [];
     if (!Number.isInteger(room.chatSeq)) room.chatSeq = 0;
-    if (room.randomStage === undefined) room.randomStage = true;
+    // 2026-10-30 业主口径：**默认关**（整局同一张图），开才每回合换图。
+    if (room.randomStage === undefined) room.randomStage = false;
   });
 
-  // room.state：只在关掉时带 randomStage（默认房间字节不变）
-  api.roomState((room) => (room.randomStage === false ? { randomStage: false } : null));
+  // room.state：只在**开**时带 randomStage（默认关闭 ⇒ 默认房间字节不变）
+  api.roomState((room) => (room.randomStage === true ? { randomStage: true } : null));
 
-  // Match opts：只有关掉时才带（正常房间的 match opts 不长出新字段）
-  api.matchOptions((room) => (room.randomStage === false ? { randomStage: false } : {}));
+  // Match opts：只有开时才带（默认房间的 match opts 不长出新字段）
+  api.matchOptions((room) => (room.randomStage === true ? { randomStage: true } : {}));
 
   // ---- 房间事件 ----
   api.onRoom('joined', (room, session) => { sendHistory(room, session); });

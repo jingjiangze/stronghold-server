@@ -1005,7 +1005,7 @@ export function LobbyScreen() {
         versusAlt: versusRule === 'confront' ? versusAlt !== false : true } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });
-    if (randomMode) await net.request('room.setRandomStage', { randomStage: true }).catch(() => {});
+    // 随机地图默认关（2026-10-30）：不再在建房时强开；要换图请在房间里用「随机地图」开关。
     return res;
   });
   const queueMatch = () => run('queue', () => net.request('match.queue', { mode: roomMode, difficulty, random: randomMode, ...(randomMode ? { variant } : {}), fillBots: false }));
