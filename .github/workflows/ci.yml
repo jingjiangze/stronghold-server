@@ -13,16 +13,21 @@ permissions:
   contents: read
 
 jobs:
+  # The suite is sharded (ci-shards.json): one job per OS × shard. The whole suite is ~2754 s of test time measured
+  # (ci-shards.json `measured`), i.e. ~46 minutes in a single job — it can never fit a job timeout, and a bare
+  # `node --test` also picks up every other .js under test/ (helpers, fixtures, tools/test-*.mjs), which is not the
+  # suite (tools/ci.mjs TEST_FILES). `npm run test` runs exactly those files; SHARD picks this job's slice.
   test:
-    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    name: test (${{ matrix.os }}, node ${{ matrix.node }}, shard ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        # 22 and 24 = the maintained LTS lines (24 is what `winget install OpenJS.NodeJS.LTS` installs today)
-        node: [22, 24]
+        # 22 = the line the suite runs on. node 24 has its own lane (the guard tests), so a new LTS is still covered.
+        node: [22]
+        shard: [0, 1, 2, 3]
     env:
       # Browser/E2E suites gate themselves on these (and on a local Chrome + downloaded game assets, which CI never
       # has): keep them off explicitly. Suites that need .cache/gamedata, public/assets or data/local-assets.json skip.
@@ -30,6 +35,7 @@ jobs:
       SP_REAL_E2E: '0'
       RENDER_E2E: '0'
       NO_COLOR: '1'
+      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v7
 
@@ -45,7 +51,7 @@ jobs:
         run: node tools/setup.mjs --check --no-local
 
       - name: Unit & integration tests
-        run: node --test
+        run: npm run test
 
       - name: Server smoke test (boot, /healthz, index.html, doctor)
         shell: bash
@@ -66,6 +72,26 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:3000/vendor/pixi.min.js
           node tools/doctor.mjs || true
           kill $pid || true
+
+  # The node 24 lane runs the CI guard tests only (the workflow/shard wiring), never the suite: they must hold on the
+  # newest LTS, and running the suite twice doubles the matrix for no extra coverage.
+  node24:
+    name: node 24 (guards)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install (npm ci → postinstall copies public/vendor)
+        run: npm ci --no-audit --no-fund
+
+      - name: CI guard tests (sharding and workflow wiring)
+        run: npm run test:guards
 
   # Separate from the test matrix so lint / types / import boundaries run once, not four times.
   # Lint warnings do not fail the job (npm run lint does not pass --max-warnings=0).
@@ -92,3 +118,23 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+  # The golden corpus is a job of its own: it depends on nothing, so a red suite still reports it, and it does not
+  # multiply across the test matrix.
+  golden:
+    name: golden (corpus regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (npm ci → postinstall copies public/vendor)
+        run: npm ci --no-audit --no-fund
+
+      - name: Full Golden regression check
+        run: npm run golden

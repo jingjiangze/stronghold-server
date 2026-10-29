@@ -42,5 +42,26 @@ try {
   await diagPort(e);
 }
 
-if (mod) mod.main?.();
-else if (isProcessEntry(import.meta.url)) runMain(async () => { throw new Error('boot-main.js did not load'); });
+// The public API: tests and tools import these from the entry (docs/ARCHITECTURE.md: `startServer() … server/index.js`;
+// docs/ENGINE-SURFACE.md names it the same way, and server/boot-main.js is where they live). They are re-exported from
+// the namespace the dynamic import above already resolved instead of a static `export … from`, so a top-level import
+// failure still reaches diagPort above instead of throwing at link time with no diagnostic port.
+export const DATA_SHIM_JS = mod?.DATA_SHIM_JS;
+export const acceptsGzip = mod?.acceptsGzip;
+export const buildTag = mod?.buildTag;
+export const computeBuildTag = mod?.computeBuildTag;
+export const createStaticHandler = mod?.createStaticHandler;
+export const parseRange = mod?.parseRange;
+export const parseTrustProxy = mod?.parseTrustProxy;
+export const pickEncoding = mod?.pickEncoding;
+export const resetBuildTag = mod?.resetBuildTag;
+export const roomCodeFromArgv = mod?.roomCodeFromArgv;
+export const startServer = mod?.startServer;
+
+// Only the process entry boots (`node server/index.js`, npm start, the deploy units). Importing the entry — 46 test files
+// do — must not bind a port: that would fight the `startServer({ port: 0 })` each test opens, and the tests are the
+// reason these symbols are exported at all.
+if (isProcessEntry(import.meta.url)) {
+  if (mod) mod.main?.();
+  else runMain(async () => { throw new Error('boot-main.js did not load'); });
+}

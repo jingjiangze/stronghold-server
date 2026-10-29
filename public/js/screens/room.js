@@ -77,12 +77,27 @@ import { useRise } from '../ui/transitions.js';
 import { t, tc } from '../../../shared/i18n.js';
 
 /**
- * Seats padded to the room's capacity (co-op 4, solo 1), each null or a seat record.
+ * Upper bound on the seat cards padded out from `room.state.seatCap`. A sanity clamp, not policy: without it a bogus
+ * `seatCap` (1e9) would loop forever instead of drawing a room, and above it the extra seats could hold nobody the
+ * client can address anyway. The 100-seat port carries the same rule (plugins/alliance-20/client/js/screens/room.js).
+ */
+const MAX_RENDERED_SEATS = 256;
+
+/**
+ * Seats padded to the room's capacity (co-op 4, solo 1, or the room's own `seatCap`), each null or a seat record.
+ *
+ * `room.state.seatCap` is the server's real cap (server/lobby.js sends it for versus rooms, teamSize × 2). The
+ * constants only fill in when it is absent: `MAX_SEATS` is the versus default (2..20 since 2026-10-27), while a co-op
+ * room keeps the four seats server/lobby.js documents — padding it out to the versus maximum drew sixteen empty cards.
  * @param {any} room room.state payload
  * @returns {(null | {seat:number, playerId:any, name:string, isBot:boolean, ready:boolean, connected:boolean})[]}
  */
 export function normalizeSeats(room) {
-  const cap = room?.mode === 'solo' ? 1 : MAX_SEATS;
+  const declared = room?.seatCap;
+  let cap = MAX_SEATS;
+  if (room?.mode === 'solo') cap = 1;
+  else if (Number.isInteger(declared) && declared >= 1) cap = Math.min(declared, MAX_RENDERED_SEATS);
+  else if (room?.mode === 'coop') cap = 4;
   const src = Array.isArray(room?.seats) ? room.seats : [];
   const out = [];
   for (let i = 0; i < cap; i++) {
