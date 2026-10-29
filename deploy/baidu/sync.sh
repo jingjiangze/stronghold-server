@@ -72,8 +72,8 @@ fi
 CHANGED=$(git diff --name-only "$OLD" "$NEW" || true)
 say "2. 有新提交 $(git log -1 --format='%h %s' FETCH_HEAD)，变更 $(printf '%s\n' "$CHANGED" | wc -l) 个文件"
 
-# 运行时代码变更 → 必须重启；只动 deploy/baidu 文档/脚本 → 不重启
-RUNTIME=$(printf '%s\n' "$CHANGED" | grep -v '^deploy/baidu/' || true)
+# 运行时代码变更 → 必须重启；只动 deploy/baidu 文档/脚本、或 .github/（CI 定义）→ 不重启
+RUNTIME=$(printf '%s\n' "$CHANGED" | grep -v -e '^deploy/baidu/' -e '^\.github/' || true)
 NEED_RESTART=0
 [ -n "$RUNTIME" ] && NEED_RESTART=1
 
