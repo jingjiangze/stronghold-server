@@ -80,6 +80,14 @@ counts_at() {
 # 任何一步失败都 return 1，调用方退回「直接重启」；旧实例始终在线服务，宁可这次不更新。
 # 开关是文件 /etc/stronghold-bluegreen（存在即启用），不放进 unit —— 改它不需要重启任何东西。
 UPSTREAM_CONF=/etc/nginx/stronghold-upstream.conf
+# 真正在接流量的端口 = nginx 上游文件里那一个（蓝绿会在 3000 / 3001 之间来回切）。
+# 2026-10-31 修：无新提交分支原先用 health_ok（默认探 $PORT=3000），蓝绿切到 3001 后
+# 3000 已停 ⇒ 每轮都打一条假的「健康检查不过」。这里复用 bg_swap 同一行 sed，别再造第三套口径。
+active_port() {
+  local a
+  a=$(sed -n 's/^server 127\.0\.0\.1:\([0-9]\+\).*/\1/p' "$UPSTREAM_CONF" 2>/dev/null | head -1)
+  printf '%s' "${a:-$PORT}"
+}
 bg_swap() {
   local act idle idleunit wait left
   act=$(sed -n 's/^server 127\.0\.0\.1:\([0-9]\+\).*/\1/p' "$UPSTREAM_CONF" 2>/dev/null | head -1)
@@ -143,7 +151,9 @@ NEW=$(git rev-parse FETCH_HEAD)
 
 if [ "$OLD" = "$NEW" ]; then
   say "2. 无新提交"
-  if health_ok; then say "健康检查 PASS"; else say "WARN: 健康检查不过（无变更，未动作）"; fi
+  # 探「正在接流量的那一色」，不是写死的 3000（蓝绿切到 green=3001 后 3000 已停）
+  AP=$(active_port)
+  if health_ok "$AP"; then say "健康检查 PASS（端口 $AP）"; else say "WARN: 健康检查不过（端口 $AP，无变更，未动作）"; fi
   exit 0
 fi
 
@@ -185,8 +195,11 @@ fi
 if printf '%s\n' "$CHANGED" | grep -q '^deploy/baidu/nginx/' && command -v nginx >/dev/null 2>&1; then
   # 上游地址先落盘：新站点配置 include 它，缺了 nginx -t 必失败（会把整站打挂）
   if [ ! -f "$UPSTREAM_CONF" ]; then
-    printf 'server 127.0.0.1:%s;\n' "$PORT" > "$UPSTREAM_CONF"
-    say "3a. 已建立上游文件 $UPSTREAM_CONF（→ $PORT）"
+    # 别写死 3000：蓝绿切到 green 后 3000 是停的，写错会把整站导到死端口。先看哪一色真的在答话。
+    ap=""
+    for p in "$PORT" 3001; do curl -sf -m 3 "http://127.0.0.1:$p/healthz" >/dev/null 2>&1 && { ap=$p; break; }; done
+    printf 'server 127.0.0.1:%s;\n' "${ap:-$PORT}" > "$UPSTREAM_CONF"
+    say "3a. 已建立上游文件 $UPSTREAM_CONF（→ ${ap:-$PORT}）"
   fi
   install -m 0644 "$APP_DIR/deploy/baidu/nginx/stronghold.conf" /etc/nginx/conf.d/stronghold.conf
   if nginx -t >/dev/null 2>&1; then systemctl reload nginx; say "3a. 已更新并重载 nginx 站点配置"
