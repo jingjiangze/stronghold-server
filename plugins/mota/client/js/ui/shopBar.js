@@ -322,13 +322,14 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
   // swallows the tap and says nothing. These stay pressable, every refusal names its reason, and a held press shows what
   // the level actually does (longPress.js).
   const refuse = (why) => { if (onRefuse) onRefuse(why); };
-  // 三层资金（业主 2026-10-26 / 复审计 2026-10-27）：设施只剩两个效果，服务端 now/next 是「百分点」
-  // now/next 是「升到该等级后的累计百分点」（teamProjectRead 返回 lv*10），所以文案写「累计」而不是「每级」
-  const projectWhat = (p, n) => (p.id === 'storehouse'
-    ? t('累计 +{n}% 个人储备获取', { n })
-    : p.id === 'logistics'
-      ? t('累计 +{n}% 团队储备获取', { n })
-      : t('+{n}', { n }));
+  // 商店设施三项（业主 2026-10-30「升级项搬到商店」）：now/next 现在是**级数**，文案按 id 出
+  const projectWhat = (p, n) => (p.id === 'shopLevel'
+    ? t('商店等级 +{n}', { n })
+    : p.id === 'teamIncome'
+      ? t('每回合协同资金上限 +{n}', { n })
+      : p.id === 'equipCost'
+        ? t('装备价格 −{n}', { n })
+        : t('+{n}', { n }));
   const projectNote = (p) => {
     const head = t('{name} Lv{level}：{what}', { name: t(p.name), level: p.level, what: projectWhat(p, p.now) });
     if (p.maxed || p.next == null) return `${head}\n${t('已满级')}`;

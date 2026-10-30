@@ -97,12 +97,13 @@ export const DEFAULTS = Object.freeze({
     // team. Off by default; a mode that ships it turns it on (协同共竞). lpThreshold defaults to the per-round LP cap,
     // i.e. "one worst-case round from elimination" (config lpCapPerRound 10, defaultStartLp 28).
     relief: { enabled: false, amount: 1, lpThreshold: 10, perPlayerPerRound: 2, teamPerRound: 4 },
-    // projects（业主 2026-10-26 改口径）：只剩两个效果 ——
-    //   应急仓储 storehouse = 每级 +10%「个人储备获取」
-    //   后勤调度 logistics  = 每级 +10%「团队储备获取」
+    // 商店设施（业主 2026-10-30「升级项搬到商店吧（商店也是花协同资金）」）：三项都用团队储备买，
+    // 效果分别是 商店等级上限 +1 / 团队储备每回合收入上限 +1 / 装备价格 −1（下限 2）。
+    // 价格按「14 回合、团队池收入 ≈ 1-4/回合」的规模定：单局最多点满 1.5 棵树，别指望全开。
     projects: {
-      storehouse: { costs: [4, 4, 4, 4] },
-      logistics: { costs: [4, 4, 4, 4] },
+      shopLevel: { costs: [4, 5, 6, 8] },
+      teamIncome: { costs: [3, 5, 7] },
+      equipCost: { costs: [4, 6] },
     },
   },
   // 救援（促融共竞 / DESIGN §29）: a mode turns it on with `mode.revival = { enabled: true }` — 促融共竞 ships it on,

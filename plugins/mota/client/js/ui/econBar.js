@@ -3,7 +3,8 @@
 // m.public.econ; while that key is absent the model is null and the bar renders nothing (the capability probe).
 import { N_ } from '../../../shared/i18n.js';
 
-const PROJECT_NAMES = Object.freeze({ procure: N_('联合采购'), storehouse: N_('应急仓储'), logistics: N_('后勤调度') });
+// 商店设施三项（业主 2026-10-30「升级项搬到商店」，花协同资金）
+const PROJECT_NAMES = Object.freeze({ shopLevel: N_('商店等级'), teamIncome: N_('协同资金获取'), equipCost: N_('装备造价') });
 
 /**
  * @param {{ priv?: any, pub?: any }} o the store's match slices (m.private / m.public)

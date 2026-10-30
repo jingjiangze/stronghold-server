@@ -19,6 +19,8 @@ import { PHASE, ERR } from '../../../shared/constants.js';
 import { HEXES, hexById } from '../../../shared/hexes.js';
 import { OK, fail } from './common.js';
 import { freeSlot } from '../board.js';
+// 商店设施三项效果（业主 2026-10-30）：商店等级 / 协同资金获取 / 装备造价
+import { shopLevelOf, equipPriceOf } from './projectEffects.js';
 import { isShopItem } from '../../sim/simdata.js';
 
 /** 三种代价 × 三档数值：品阶 → 数值 */
@@ -40,9 +42,10 @@ const FUNDS_PRICE = { prismatic: 8, gold: 5, silver: 3, gear: 6 };
  * @param {any} card
  * @returns {number}
  */
-/** 一件装备的资金价：跟装备自己的 items.json.price 走（×2 换到储备单位，夹 2..12）。 */
-function meltItemPrice(rec) {
-  return Math.max(2, Math.min(12, Math.round((Number(rec && rec.price) || 2) * 2)));
+/** 一件装备的资金价：跟装备自己的 items.json.price 走（×2 换到储备单位，夹 2..12）。
+ *  商店设施「装备造价」每级再 −1（下限 2，业主 2026-10-30 的平衡口径）。 */
+function meltItemPrice(rec, equipLevel = 0) {
+  return equipPriceOf(Math.max(2, Math.min(12, Math.round((Number(rec && rec.price) || 2) * 2))), equipLevel);
 }
 
 function meltFundsPrice(card) {
@@ -292,7 +295,11 @@ export class MatchMeltdown {
   }
 
   /** 商店等级（采购等阶上限）：R1-2 → 1，R3-4 → 2 …… 封顶 6（业主 2026-10-27：目录式商店） */
-  meltShopLevel() { return Math.min(6, Math.max(1, Math.ceil((Number(this.round) || 1) / 2))); }
+  meltShopLevel() {
+    const base = Math.min(6, Math.max(1, Math.ceil((Number(this.round) || 1) / 2)));
+    // 商店设施「商店等级」每级 +1（业主 2026-10-30「升级是提示商店等级」）；硬顶在 projectEffects 里夹住
+    return shopLevelOf(base, this.teamProjects && this.teamProjects.shopLevel);
+  }
 
   /**
    * 目录式道具商店（业主 2026-10-27）：把本局可售装备按品阶分组下发，每件带价格 / 出处 / 可买状态。
@@ -309,7 +316,7 @@ export class MatchMeltdown {
         .map((id) => (typeof this.gd.item === 'function' ? this.gd.item(id) : (typeof id === 'object' ? id : null)))
         .filter((it) => it && !it.requiresBondId && isShopItem(it))
         .map((it) => {
-          const price = meltItemPrice(it);
+          const price = meltItemPrice(it, this.teamProjects && this.teamProjects.equipCost);
           return {
             itemId: String(it.id || it.baseId || ''),
             name: String(it.name || it.id || ''),
@@ -650,7 +657,7 @@ export class MatchMeltdown {
     if (!rec || !isShopItem(rec) || rec.requiresBondId) return fail(ERR.BAD_MSG, 'not a shop item'); // i18n-ignore
     const tier = Number(rec.tier) || 0;
     if (tier > this.meltShopLevel()) return fail(ERR.WRONG_PHASE, 'shop level too low'); // i18n-ignore
-    const price = meltItemPrice(rec);
+    const price = meltItemPrice(rec, this.teamProjects && this.teamProjects.equipCost);
     if (!(es_spendable(ps) >= price)) return fail(ERR.NO_FUNDS);
     if (typeof freeSlot === 'function' && freeSlot(ps.hand) < 0) return fail(ERR.HAND_FULL);
     if (!es_safe_spend(ps, price)) return fail(ERR.NO_FUNDS);

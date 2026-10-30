@@ -16,6 +16,8 @@ import { PHASE, ERR } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
 // 借钱优先取团队储备：纯分配逻辑（池子先垫多少、还剩多少问队友）
 import { splitPoolFill } from './poolFill.js';
+// 商店设施三项的效果（商店等级 / 协同资金获取 / 装备造价）
+import { teamIncomeCapOf } from './projectEffects.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
 import { buildNormalWave, buildBossWave } from '../waves.js';
 import { botEconRespond } from '../bot.js';
@@ -155,7 +157,9 @@ export class MatchEconomy {
    */
   econRequestsPerRound(ps = null) {
     if (!this.teamEcon) return 0;
-    const extra = this.teamProjects.logistics >= 3 ? this.teamEcon.projects.logistics.extraRequestsAtL3 || 0 : 0;
+    // 2026-10-30：`logistics` 项目已下线（升级项搬进商店）—— 老配置里若还留着就照旧吃它的加成，没有就是 0。
+    const logi = this.teamEcon.projects.logistics;
+    const extra = logi && (this.teamProjects.logistics || 0) >= 3 ? logi.extraRequestsAtL3 || 0 : 0;
     const base = this.teamEcon.transfer.requestsPerRound + extra;
     if (!ps) return base;
     return Math.max(0, Math.min(base, Math.trunc(this.gd.income(this.round + 1))));
@@ -208,15 +212,18 @@ export class MatchEconomy {
   /** Funds the team may still move this round (the base cap + 后勤调度). */
   teamTransferCap() {
     if (!this.teamEcon) return 0;
-    const lv = this.teamProjects.logistics;
-    const bonus = lv > 0 ? this.teamEcon.projects.logistics.teamCapBonus[lv - 1] || 0 : 0;
+    // 同上：`logistics` 下线后 `teamProjects.logistics` 是 undefined，必须按 0 处理（否则 NaN 会污染额度）
+    const logi = this.teamEcon.projects.logistics;
+    const lv = this.teamProjects.logistics || 0;
+    const bonus = logi && logi.teamCapBonus && lv > 0 ? logi.teamCapBonus[lv - 1] || 0 : 0;
     return this.teamEcon.transfer.teamCapPerRound + bonus;
   }
 
   /** Leftover funds a player keeps at the prep end (应急仓储). 坎诺特 bands keep everything and skip this reading. */
   teamKeepFor(ps) {
     void ps;
-    return this.teamEcon ? this.teamProjects.storehouse : 0;
+    // `storehouse`（应急仓储）已下线：不再有「结余保留」这一效果，恒 0（坎诺特例外走 leftoverKeptBands）
+    return this.teamEcon ? (this.teamProjects.storehouse || 0) : 0;
   }
 
   /**
@@ -229,10 +236,9 @@ export class MatchEconomy {
    */
   teamProjectRead(id, lv) {
     if (!this.teamEcon || !(lv > 0)) return 0;
-    // 业主 2026-10-26：设施只保留两个效果 —— 应急仓储 = +个人储备获取；后勤调度 = +团队储备获取。
-    // 每级 +10%（3 级 = +30%），返回的是**百分点**，由 econSplitLeftover 换算。
-    if (id === 'storehouse') return lv * 10;
-    if (id === 'logistics') return lv * 10;
+    // 业主 2026-10-30「升级项搬进商店」：三项的 now/next 都是**级数**（客户端按 id 出文案），不再是百分点。
+    // 旧的两个百分点项目（storehouse/logistics）随个人储备一起下线。
+    if (id === 'shopLevel' || id === 'teamIncome' || id === 'equipCost') return Math.max(0, Math.floor(Number(lv) || 0));
     return 0;
   }
 
@@ -883,7 +889,9 @@ export class MatchEconomy {
     const cfg = this.teamEcon.reserve;
     const amount = full ? cfg.fullDefenceReward : cfg.perfectReward;
     // 业主 2026-10-27：不再区分「归个人 / 归团队」——防守奖励恒进团队储备（个人储备只由回合末结余按比例补充）。
-    const left = cfg.perfectRewardCapPerRound - this.econRound.perfectGranted;
+    // 商店设施「协同资金获取」每级 +1 到**每回合收入上限**（业主 2026-10-30：升级项搬进商店，花协同资金）
+    const cap = teamIncomeCapOf(cfg.perfectRewardCapPerRound, this.teamProjects && this.teamProjects.teamIncome);
+    const left = cap - this.econRound.perfectGranted;
     const n = Math.min(amount, Math.max(0, left));
     if (!(n > 0)) return 0;
     // 业主 2026-10-30：个人储备下线后，「团队池增长不得超过最弱玩家个人储备」这条钳制随之取消
