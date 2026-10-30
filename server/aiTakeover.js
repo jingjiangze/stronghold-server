@@ -24,7 +24,7 @@ export function transferAiSeat(lobby, room, applicantId, botId) {
   const m = room.match, session = lobby.registry.byId(applicantId), spectator = room.spectatorOf(applicantId);
   const ps = m?.players?.get(botId), seat = room.seatOf(botId);
   if (room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION) return fail('AI handover is disabled');
-  if (!session?.connected || !session.ws || !spectator || !ps?.isBot || ps.left || !ps.alive || !seat || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen || !inWindow(m)) return fail('AI handover unavailable');
+  if (!session?.connected || !session.ws || !spectator || !ps?.isBot || ps.left || !ps.alive || !seat || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen) return fail('AI handover unavailable');
   if (room.modded || m.hosted) return fail('AI handover is unavailable in isolated plugin matches');
   if (lobby.registry.byId(botId)) return fail('AI seat already has a session');
   const conn = lobby.network?.conns.get(session.ws);
@@ -79,7 +79,7 @@ export function reconcileAiTakeover(lobby, room) {
 export function aiTakeover(lobby, session, msg) {
   const room = lobby.roomOf(session), m = room?.match;
   if (room && reconcileAiTakeover(lobby, room)) lobby.broadcastState(room);
-  if (!room || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION || !m || m.hosted || room.modded || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen || !inWindow(m)) return fail('AI handover requires preparation in an original-content match');
+  if (!room || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION || !m || m.hosted || room.modded || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen) return fail('AI handover requires preparation in an original-content match');
   let votes = pending.get(room); if (!votes) pending.set(room, votes = new Map());
   const sync = () => { snapshot(room, votes); lobby.broadcastState(room); };
   if (msg.t === 'room.aiRequest') {
@@ -111,7 +111,7 @@ export function aiTakeover(lobby, session, msg) {
 }
 
 /**
- * 随机交接 (2026-10-31): 房主打开了 aiTakeoverEnabled 的 coop 房里，本局会在 3–9 回合中随机挑一个回合，在该回合的
+ * 随机交接 (2026-10-31): 房主同时打开 aiTakeoverEnabled 与 aiRandomHandover 的 coop 房里，本局会在 3–9 回合中随机挑一个回合，在该回合的
  * PREP 开始替一名在线观战者向一个存活的 AI 席发起接管请求。仍然走同一套投票（不替任何人做决定），每局最多一次；
  * 挑回合/挑人/挑席都用对战种子派生，回放与测试可复现。
  * Called from lobby `opts.onPrepStart` (the match reports every PREP start).
@@ -119,7 +119,7 @@ export function aiTakeover(lobby, session, msg) {
  */
 export function maybeRandomAiTakeover(lobby, room, round) {
   const m = room?.match;
-  if (!m || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION) return false;
+  if (!m || room.aiTakeoverEnabled !== true || room.aiRandomHandover !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION) return false;
   if (room.modded || m.hosted || m.ended || m.disposed || m.emergencyFrozen) return false;
   if (m.phase !== 'PREP' || round !== m.round || !inWindow(m) || room.aiRandomFired === true) return false;
   const rng = seededRng(Number(m.seed) >>> 0, round);
