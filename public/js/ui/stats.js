@@ -804,7 +804,7 @@ export function exportStats(stats) {
 
 // ---- aggregation (what the page shows; records may hold more than any view uses) ------------------------------------
 
-const SELF_STATS = ['dmgDealt', 'kills', 'bossDamage', 'activatedLayers', 'merges', 'itemsEquipped', 'gold', 'perfectRounds', 'refreshes', 'leaks', 'lpLost'];
+const SELF_STATS = ['dmgDealt', 'kills', 'bossDamage', 'bossBroadcasts', 'activatedLayers', 'merges', 'itemsEquipped', 'gold', 'perfectRounds', 'refreshes', 'leaks', 'lpLost'];
 
 /**
  * The row that "is me" in a record: selfId, else the only human, else seat 0 — records written by

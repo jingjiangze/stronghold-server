@@ -318,8 +318,6 @@ export class Match {
     this.difficulty = opts.difficulty;
     this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
     this.seed = (Number(opts.seed) >>> 0) || 1;
-    // 大厅钩子：每次 PREP 开始报一个回合号（server/lobby.js opts.onPrepStart → server/aiTakeover.js 的随机交接）
-    this.onPrepStart = typeof opts.onPrepStart === 'function' ? opts.onPrepStart : null;
     // 房间旗子（海克斯 / 无尽 / 三海克斯局…）：默认 hexEnabled=true，协同共竞与常规房都吃这套默认值。
     this.flags = normalizeRoomFlags(opts.flags);
     this.log = opts.log || noopLog;

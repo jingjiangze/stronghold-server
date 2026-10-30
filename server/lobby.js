@@ -2045,15 +2045,11 @@ export class Lobby {
     try { seed = this.seedFn() >>> 0; } catch { seed = randomInt(2 ** 32); }
     const modded = room.modded;
     // 随机交接是每局一次的（server/aiTakeover.js）：新对局把上一次的落点清掉。
-    room.aiRandomRound = null; room.aiRandomFired = false;
+    room.aiRandomRound = null; room.aiRandomFired = false; room._aiRandomSeen = null;
     try {
       const opts = {
         // 插件的 Match opts（例如对抗的分边人数）——引擎字段在前，插件只能补自己认识的键
         ...(this.ext?.options?.(room) || {}),
-        // 观战接管 AI 的随机回合 (server/aiTakeover.js maybeRandomAiTakeover)：PREP 每次开始报一次本回合号
-        onPrepStart: (r) => {
-          try { maybeRandomAiTakeover(this, room, r); } catch (e) { this.log.error('[lobby] random AI handover failed', e); }
-        },
         roomCode: room.code,
         mode: room.mode,
         difficulty: room.difficulty,
@@ -2169,6 +2165,12 @@ export class Lobby {
   /** Match broadcast; the latest m.public and a broadcast m.result are also kept for the replay. */
   matchBroadcast(room, ctx, msg, encoded = null) {
     if (msg.t === 'm.public' && reconcileAiTakeover(this, room)) this.broadcastState(room);
+    // 随机交接 (server/aiTakeover.js)：插件的 Match 跑在 match host 的 worker 里，lobby 传进去的回调跨不过去，
+    // 所以房间能看到的「回合钟」只有它自己的 m.public 帧——每回合的 PREP 帧到了就试一次（内部有窗口与一次性判定）。
+    if (msg.t === 'm.public' && msg.phase === 'PREP' && msg.round !== room._aiRandomSeen) {
+      room._aiRandomSeen = msg.round;
+      try { maybeRandomAiTakeover(this, room, msg.round); } catch (e) { this.log.error('[lobby] random AI handover failed', e); }
+    }
     const data = this.broadcastRoom(room, msg, encoded);
     if (data == null) return;
     if (msg.t === 'm.public') ctx.lastPublic = data;
