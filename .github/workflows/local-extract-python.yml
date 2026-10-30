@@ -11,7 +11,11 @@ permissions:
 jobs:
   compile:
     name: local-extract (Python 3.8 syntax)
-    runs-on: ubuntu-latest
+    # ⚠️ 钉 22.04：`setup-python` 在 ubuntu-26.04 的缓存里**没有 3.8**（实测报
+    # `The version '3.8' with architecture 'x64' was not found for Ubuntu 26.04`），
+    # 于是这条检查从 2026-10-30 起在 baidu 上**一直红**。3.8 是本 job 的判据本身
+    # （`tools/setup.mjs` 的 findPython() 接受 3.8+），不能为了跑绿就抬版本。
+    runs-on: ubuntu-22.04
     # [ASSUMED] Five minutes covers interpreter setup and syntax compilation (DESIGN §35.2).
     timeout-minutes: 5
     steps:
