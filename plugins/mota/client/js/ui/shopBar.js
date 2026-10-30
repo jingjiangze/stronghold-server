@@ -389,6 +389,14 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
         if (econ.relief.teamLeft <= 0) return refuse(t('本回合全队的救济次数已用完'));
         actions.econRelief();
       }}>${t('领取救济')}<b class="num">${econ.relief.amount}</b></button>` : null}
+    ${econ.deposit ? html`<button type="button" class=${cx('econbar__relief', !econ.deposit.can && 'is-off')}
+      title=${econ.deposit.done ? t('本回合已经存入过协同资金（每人每回合最多 1 次）') : t('把本回合 1 点资金存入协同资金（每人每回合最多 1 次）')}
+      onClick=${() => {
+        if (!editable) return refuse(t('休整期才能存入协同资金'));
+        if (econ.deposit.done) return refuse(t('本回合已经存入过协同资金'));
+        if (!econ.deposit.can) return refuse(t('当前无法存入（资金不足，或已经准备就绪）'));
+        actions.econDeposit();
+      }}>${t('存入协同资金')}<b class="num">1</b></button>` : null}
   </div>`;
 }
 

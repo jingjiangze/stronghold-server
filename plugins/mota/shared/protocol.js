@@ -693,6 +693,9 @@ export const C2S = {
   // 救济 (user decision 2026-10-09): the weakest player takes one fund out of the team reserve. No arguments — who may
   // take is the server's decision (it must be the (tied) lowest LP, hurt enough, in PREP, not ready).
   'g.econ.relief': {},
+  // 主动存入（业主 2026-10-30）：把本回合 1 点资金存进团队储备。无参数 —— 金额恒为 1，每人每回合最多一次，
+  // 由服务端（econDepositedBy）判上限，客户端多传反而会被协议拒。
+  'g.econ.deposit': {},
   // 赏金加时 (业主 2026-10-18：「赏金机制，花钱买时间」): 休整期用协同资金给全队买一段准备时间。
   // 无参数——买多少秒、多少钱由服务端按本回合已买次数决定（BOUNTY_COSTS 递增）。
   'g.econ.bounty': {},

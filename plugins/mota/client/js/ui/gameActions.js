@@ -201,6 +201,9 @@ export const actions = {
   // 救济 (DESIGN §27): take one fund out of the team reserve. No arguments — the server decides who may take, and it
   // refuses anyone but the (tied) weakest teammate at or below the threshold.
   econRelief: () => act('g.econ.relief', {}, { sfx: 'confirm', detailText: RELIEF_DETAIL_TEXT }),
+  // 主动存入（业主 2026-10-30）：把本回合 1 点资金放进团队储备。无参数 —— 金额恒为 1、每人每回合 1 次，
+  // 服务端按 econDepositedBy 判上限；被拒时落到通用的 ERR_TEXT（RATE / NO_FUNDS）即可。
+  econDeposit: () => act('g.econ.deposit', {}, { sfx: 'confirm' }),
   // 赏金加时 (2026-10-18): 休整期用协同资金给全队买准备时间。秒数/价格由服务端决定（本回合已买次数递增）。
   econBounty: () => act('g.econ.bounty', {}, { sfx: 'confirm', detailText: BOUNTY_DETAIL_TEXT }),
   // 还钱 / 催钱 (2026-10-17): 债务不再是下回合自动扣，借款人点还、债权人点催。

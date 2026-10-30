@@ -80,6 +80,8 @@ export class MatchEconomy {
     this.econRound = { round: 0, spent: 0, byPlayer: new Map(), perfectGranted: 0, bounty: 0 };
     /** The ids this player has already been refused by this round (被拒后可换人再借, user decision 2026-10-08). */
     this.econDeniedBy = new Map();
+    /** 本回合已经主动存入过的席位（业主 2026-10-30：每人每回合最多存 1）；回合边界清空。 */
+    this.econDepositedBy = new Set();
     /**
      * 方案 B: what each borrower owes, paid out of the income of the next round — Map<borrowerId, { to, amount, round }[]>.
      * Funds still clear every round; only the debt rides on income. A borrower who is eliminated before paying voids
@@ -176,7 +178,29 @@ export class MatchEconomy {
     this.econReliefByPlayer.clear();
     // 后勤项目的升级提案也是**回合内**的事：回合边界一到就作废。没有这一句，一条谁都不再表态的提案会永久挂住，
     // 把 `canPropose` 一直卡在 false，全队此后再也无法提案（业主 2026-10-12 的口径里提案只发生在休整期）。
+    // 主动存入（g.econ.deposit）也是**每回合每人最多 1**：边界一到就重新允许
+    this.econDepositedBy.clear();
     this.projectVote = null;
+  }
+
+  /**
+   * 主动存入（业主 2026-10-30）：把本回合 1 点资金放进团队储备。
+   *
+   * 结余不再自动进池之后，这是玩家补充团队池的**唯一主动手段**，所以有两条硬约束：每人每回合最多 1 次，
+   * 且只能在自己还没 Ready 的 PREP 里做（`econGate` 已经覆盖存活/阶段/ready 三条）。
+   */
+  econDeposit(ps) {
+    const gate = this.econGate(ps);
+    if (gate) return gate;
+    if (this.econDepositedBy.has(ps.playerId)) return fail(ERR.RATE, 'already deposited this round');
+    if (Math.floor(Number(ps.funds) || 0) < 1) return fail(ERR.NO_FUNDS);
+    ps.funds = Math.floor(Number(ps.funds) || 0) - 1;
+    this.teamReserve += 1;
+    this.econDepositedBy.add(ps.playerId);
+    ps.dirty();
+    this.markPublic();
+    for (const p of this.players.values()) this.toast(p, 'info', msg('{name} 存入协同资金 +1', { name: ps.name || '队友' }));
+    return OK;
   }
 
   /** Funds the team may still move this round (the base cap + 后勤调度). */
@@ -311,6 +335,10 @@ export class MatchEconomy {
         lent: [...r.lent], answered: r.answers.size, targets: r.targets.length,
       })),
       requestLeft: Math.max(0, this.econRequestsPerRound(ps) - (this.econRound.byPlayer.get(ps.playerId) || 0)),
+      // 主动存入（业主 2026-10-30）：本回合还能不能存（1 点资金，每人每回合 1 次）——面板按它决定按钮死活
+      canDeposit: this.phase === PHASE.PREP && !ps.ready && Math.floor(Number(ps.funds) || 0) >= 1
+        && !this.econDepositedBy.has(ps.playerId),
+      deposited: this.econDepositedBy.has(ps.playerId),
       // the teammates who refused this player this round (被拒后可换人再借): the client drops them from the picker, so
       // the 已拒绝 refusal never has to be shown as an error (user report 2026-10-08). ⚠ 这里的元素必须是 **playerId**
       // —— econBar.js 用 `refused.has(p.playerId)` 过滤，发名字会把被拒的人重新放回选择器。

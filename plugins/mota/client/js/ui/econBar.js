@@ -110,6 +110,9 @@ export function econBarModel({ priv, pub } = {}) {
       };
     })(),
     canPropose: mine.canPropose !== false,
+    // 主动存入（业主 2026-10-30）：每人每回合 1 点资金进团队储备。能否存由服务端算
+    // （PREP + 未 ready + 资金 ≥1 + 本回合没存过），这里只做展示与按钮死活。
+    deposit: mine.canDeposit === undefined ? null : { can: mine.canDeposit === true, done: mine.deposited === true },
     // 救济 (DESIGN §28, user decision 2026-10-09): the weakest teammate may draw one fund out of the reserve. The
     // server decides who may take (m.private.econ.relief.eligible) — the strip only renders the button on that flag, and
     // `teamLeft` is the public per-round allowance, shown so the pot's limit is visible.

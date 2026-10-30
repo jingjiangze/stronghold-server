@@ -67,6 +67,8 @@ export class MatchIntents {
       case 'g.econ.vote': return this.econVote(ps, msg.id, msg.approve);
       // 救援 (DESIGN §29, 促融共竞): the settle window's rescue — see MatchRevival.reviveConsent
       case 'g.revive': return this.reviveConsent(ps, msg.playerId, { round: msg.round });
+      // 主动存入（业主 2026-10-30）：把本回合 1 点资金放进团队储备，每人每回合最多 1 次
+      case 'g.econ.deposit': return this.econDeposit(ps);
       // 救济 (DESIGN §28): the weakest teammate takes one fund out of the reserve — see MatchEconomy.econRelief
       case 'g.econ.relief': return this.econRelief(ps);
       // 赏金加时 (业主 2026-10-18): 花钱买时间 —— see MatchEconomy.econBuyTime
