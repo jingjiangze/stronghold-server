@@ -184,6 +184,10 @@ export class MatchPlatform {
     if (!ps || ps.isBot || this.disposed) return;
     this.guard(() => {
       ps.connected = false;
+      // 业主 2026-10-30「掉线后托管」：临时断线的人由 AI 接管这一席，别让整桌等他到超时。
+      // 必须同时 kickBot —— 只置标志不会驱动任何行为（bot 的入口是 botControlled，见 player/basics.js）。
+      // onReconnect 里成对地清掉（否则玩家回来仍被 AI 接管、和手动操作互相打架）。
+      if (ps.alive && !ps.left) { ps.autoplay = true; this.kickBot(ps); }
       // A disconnected human's silence is never consent to a new setup.
       this.cancelSetupVote();
       // a paused solo battle resumes (the server takes the field over; nobody is left to resume it)
@@ -201,6 +205,8 @@ export class MatchPlatform {
     this.guard(() => {
       const was = ps.connected;
       ps.connected = true;
+      // 掉线托管是临时的：人回来了就交还控制权（与 onDisconnect 的置位成对，缺这一半会「回来还被 AI 接管」）
+      if (ps.autoplay) { ps.autoplay = false; this.markPublic(); }
       this._resync(ps);
       if (!was) this.markPublic();
     });

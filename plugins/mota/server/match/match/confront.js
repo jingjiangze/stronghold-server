@@ -662,6 +662,10 @@ export class MatchConfront {
    * @param {object[]} picks the placement, in insertion order
    */
   confrontBountyAt(killed, picks) {
+    // 业主 2026-10-30「对抗里面的赏金清除」：对抗模式（两档都算）不再发赏金 —— 这里是唯一真源，
+    // 置 0 之后 views 下发的 coins、挂到投放怪身上的 bounty、坎诺特提现全部归零。
+    // 协同狩猎走的是另一条路径（applyCoopHunt），不受影响。
+    if (this.isVersus) return 0;
     const list = picks || [];
     const n = list.length;
     if (!n) return 0;

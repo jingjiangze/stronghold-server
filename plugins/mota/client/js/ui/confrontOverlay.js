@@ -71,7 +71,6 @@ function clashRowBody(gd, players, r) {
       <span class="confclash__p confseat num">${pNoOf(foe)}</span>
     </span>
     <span class="confclash__count num">${t('共 {count} 只', { count: picks.length })}</span>
-    <span class="confclash__coin num">${t('赏金 +{n}', { n: r.sub.coins || 0 })}</span>
   </div>`;
 }
 
@@ -411,9 +410,9 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   if (stage === 'roster') {
     if (conf.roster && conf.roster.coop) return coopRosterPanel(gd, pub, conf, players);
     const until = Number(conf.roster && conf.roster.until) || Number(pub && pub.deadline) || 0;
-    return html`<${RosterPanel} title=${t('悬赏名单')} micro=${'BOUNTY LIST // ' + t('悬赏名单')} tone="gold"
+    return html`<${RosterPanel} title=${t('投放名单')} micro=${'SORTIE LIST // ' + t('投放名单')} tone="gold"
       testid="confront-roster" rows=${clashRows(gd, pub, conf, myTeam)} until=${until}
-      note=${t('击杀对面派来的猎物，赏金归己方')} />`;
+      note=${t('对面投放的怪物，清掉它们')} />`;
   }
 
   return html`<div class="spov confov" role="dialog" aria-label=${t('狩猎期')}>
@@ -559,6 +558,6 @@ export function ConfrontClash({ pub }) {
   const myTeam = me ? me.team : null;
   const rows = clashRows(gd, pub, conf, myTeam);
   if (!rows.length) return null;
-  return html`<${RosterPanel} title=${t('悬赏名单')} micro=${'BOUNTY LIST // ' + t('悬赏名单')} tone="gold"
-    className="rospov--clash" testid="confront-clash" rows=${rows} note=${t('击杀对面派来的猎物，赏金归己方')} />`;
+  return html`<${RosterPanel} title=${t('投放名单')} micro=${'SORTIE LIST // ' + t('投放名单')} tone="gold"
+    className="rospov--clash" testid="confront-clash" rows=${rows} note=${t('对面投放的怪物，清掉它们')} />`;
 }

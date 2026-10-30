@@ -7,11 +7,16 @@
   "_interface_note": "C 方案（2026-10-22）：/cdn/v1/** 动态清单走容器代理，从这棵数据集的 cdn/v1/ 子树取（带 MODELSCOPE_API_TOKEN 会话）。清单文件是 json/js/bin，走浏览器 302 私有数据集读不了，所以由容器代理转发字节。asset-jump.js 的 jump.interface 与 static.js 的接线都读这一条。",
   "interfaceBase": "https://www.modelscope.cn/datasets/jingjiangze/Stronghold-Protocol-Assets/resolve/master",
   "order": [
+    "speedcdn",
     "modelscope",
     "ghfast-assets",
     "jsdelivr-assets"
   ],
   "sources": [
+    {
+      "id": "speedcdn",
+      "base": "https://speedcdn.jiangjiangze.icu"
+    },
     {
       "id": "modelscope",
       "base": "https://www.modelscope.cn/datasets/jingjiangze/Stronghold-Protocol-Assets/resolve/master/releases/v1-trial",
