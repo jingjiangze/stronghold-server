@@ -7509,6 +7509,33 @@
     "leftoverFundsKeptByBands": [
       "band_cannot"
     ],
+    "rogueTeam": {
+      "enabled": true,
+      "transfer": {
+        "maxPerRequest": 1,
+        "requestsPerRound": 2,
+        "teamCapPerRound": 4,
+        "ttlSec": 30,
+        "repayInterest": 0
+      },
+      "reserve": {
+        "perfectReward": 1,
+        "fullDefenceReward": 1,
+        "perfectRewardCapPerRound": 1
+      },
+      "relief": {
+        "enabled": false
+      },
+      "projects": {
+        "teamIncome": {
+          "costs": [
+            3,
+            5,
+            7
+          ]
+        }
+      }
+    },
     "chessPrice": {
       "1": {
         "normal": 2,
