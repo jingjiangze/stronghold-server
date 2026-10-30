@@ -229,7 +229,7 @@
 //     练度 and 自选 (keyed by charId) are checked again against the version's data (seatSettings); a setting checked for
 //     another content keeps only the ids whose operator (charId) is the same in both data sets.
 
-import { aiTakeover, resetAiTakeover, reconcileAiTakeover } from './aiTakeover.js';
+import { aiTakeover, resetAiTakeover, reconcileAiTakeover, maybeRandomAiTakeover } from './aiTakeover.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { DIFFICULTIES, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks, charPotentialChanges, checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
@@ -2044,10 +2044,16 @@ export class Lobby {
     let seed = 0;
     try { seed = this.seedFn() >>> 0; } catch { seed = randomInt(2 ** 32); }
     const modded = room.modded;
+    // 随机交接是每局一次的（server/aiTakeover.js）：新对局把上一次的落点清掉。
+    room.aiRandomRound = null; room.aiRandomFired = false;
     try {
       const opts = {
         // 插件的 Match opts（例如对抗的分边人数）——引擎字段在前，插件只能补自己认识的键
         ...(this.ext?.options?.(room) || {}),
+        // 观战接管 AI 的随机回合 (server/aiTakeover.js maybeRandomAiTakeover)：PREP 每次开始报一次本回合号
+        onPrepStart: (r) => {
+          try { maybeRandomAiTakeover(this, room, r); } catch (e) { this.log.error('[lobby] random AI handover failed', e); }
+        },
         roomCode: room.code,
         mode: room.mode,
         difficulty: room.difficulty,

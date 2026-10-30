@@ -18,6 +18,8 @@ export class MatchPrep {
 
   enterPrep() {
     this.phase = PHASE.PREP;
+    // 观战接管的随机回合 (server/lobby.js opts.onPrepStart)：PREP 开始时报一次，失败绝不能拖垮本回合。
+    try { this.onPrepStart?.(this.round); } catch (e) { this.reportError?.('onPrepStart', e); }
     this.sp = null;
     const prep = this.prepPlayers();
     for (const ps of prep) {

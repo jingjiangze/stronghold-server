@@ -59,6 +59,8 @@ export class MatchBoss {
         BOSS_HIT_STEPS.forEach((s, i) => { if (share >= s) reached = Math.max(reached, i + 1); });
         if (reached > done) {
           hitSteps.set(pid, reached);
+          // 抢播报 (2026-10-31): 一阈值一条，计数器跟着播报走，结算时随 stats 下发。
+          ps.stats.bossBroadcasts++;
           this.tickerFor('BOSS_HIT', [ps.name], { playerId: pid, param: String(BOSS_HIT_STEPS[reached - 1]) });
         }
       },
