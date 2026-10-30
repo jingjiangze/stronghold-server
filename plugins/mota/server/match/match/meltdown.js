@@ -560,7 +560,9 @@ export class MatchMeltdown {
 
   /** 给每名存活玩家发一份 3 选 1（独立抽，不与他人共享）。 */
   relicOffer() {
-    if (!String(this.modeId || '').startsWith('mode_xie_')) return;
+    // 协同共竞与肉鸽都有藏品节奏（业主 2026-10-30「肉鸽并入协同」）。这里以前只认 `mode_xie_` 前缀，
+    // 而肉鸽的 modeId 是 `mode_multi_*` ⇒ 肉鸽**一件藏品都发不出来**（`relicDraftRound` 每 2 回合返 true 也白搭）。
+    if (!String(this.modeId || '').startsWith('mode_xie_') && this.isRogue !== true) return;
     const pool = this.relicPool();
     if (!pool.length) return;
     const round = Number(this.round) || 1;

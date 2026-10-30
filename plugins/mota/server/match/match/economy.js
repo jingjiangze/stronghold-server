@@ -646,13 +646,22 @@ export class MatchEconomy {
     // 业主 2026-10-17：升级要广播给全队，并且弹窗里要写清「这一级现在是什么效果」。
     // 效果数字取 teamProjectRead（与客户端长按备注、面板读数同一来源，不另造一套说法）。
     const n = this.teamProjectRead(project, lv);
-    const text = project === 'storehouse'
-      ? msg('应急仓储 已升至 Lv{lv}：休整结束时最多保留 {n} 资金到下一回合', { lv, n })
-      : project === 'logistics'
-        ? msg('后勤调度 已升至 Lv{lv}：全队每回合可调拨上限 +{n}', { lv, n })
-        : msg('联合采购 已升至 Lv{lv}：每回合开始多 {n} 次免费刷新', { lv, n: n || lv });
+    const text = this.projectUpgradeText(project, lv, n);
     for (const p of this.players.values()) this.toast(p, 'info', text);
     return OK;
+  }
+
+  /**
+   * 升级广播的那句话。**别再落回「联合采购」那条老文案** —— 现行三个项目是商店等级 / 协同资金获取 / 装备造价，
+   * 老的 `storehouse` / `logistics` / `联合采购` 已不在配置里（只在老消息里兼容）。
+   */
+  projectUpgradeText(project, lv, n) {
+    if (project === 'shopLevel') return msg('商店等级 已升至 Lv{lv}：商店等级上限 +1', { lv });
+    if (project === 'teamIncome') return msg('协同资金获取 已升至 Lv{lv}：团队储备每回合收入上限 +1', { lv });
+    if (project === 'equipCost') return msg('装备造价 已升至 Lv{lv}：装备价格 -1（最低 2）', { lv });
+    if (project === 'storehouse') return msg('应急仓储 已升至 Lv{lv}：休整结束时最多保留 {n} 资金到下一回合', { lv, n });
+    if (project === 'logistics') return msg('后勤调度 已升至 Lv{lv}：全队每回合可调拨上限 +{n}', { lv, n });
+    return msg('联合采购 已升至 Lv{lv}：每回合开始多 {n} 次免费刷新', { lv, n: n || lv });
   }
 
   /**
@@ -714,11 +723,7 @@ export class MatchEconomy {
       // 旧提案路径（已不再产生，仅兼容在飞的消息）：与直购一样广播给全队并带效果
       const lv = v.level + 1;
       const n = this.teamProjectRead(v.project, lv);
-      const text = v.project === 'storehouse'
-        ? msg('应急仓储 已升至 Lv{lv}：休整结束时最多保留 {n} 资金到下一回合', { lv, n })
-        : v.project === 'logistics'
-          ? msg('后勤调度 已升至 Lv{lv}：全队每回合可调拨上限 +{n}', { lv, n })
-          : msg('联合采购 已升至 Lv{lv}：每回合开始多 {n} 次免费刷新', { lv, n: n || lv });
+      const text = this.projectUpgradeText(v.project, lv, n);
       for (const p of this.players.values()) this.toast(p, 'info', text);
     }
     for (const p of voters) this.markPrivate(p);

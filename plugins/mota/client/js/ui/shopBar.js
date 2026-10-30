@@ -343,15 +343,13 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
   const reliefHold = longPress(reliefNote);
   return html`<div class="econbar" role="group" aria-label=${t('协同经济')}>
     <span class="econbar__res econbar__mine" data-testid="reserves"
-      title=${t('储备 = 个人储备 / 团队储备。个人储备买装备（熔毁商店）；团队储备升级后勤项目、告急救济与救援')}>
-      <b class="num" data-testid="personal-reserve">${econ.personalReserve || 0}</b>
-      <span class="econbar__micro">/</span>
+      title=${t('团队储备：防守奖励与主动存入攒起来的全队共用资金，用来买商店升级、借款垫付、告急救济与救援')}>
       <b class="num" data-testid="team-reserve">${econ.reserve || 0}</b>
-      <span class="econbar__micro">${t('个人 / 团队储备')}</span>
+      <span class="econbar__micro">${t('团队储备')}</span>
     </span>
     ${onOpenShop
       ? html`<button type="button" class="econbar__res econbar__shop" data-testid="open-melt-shop"
-          title=${t('熔毁商店：卖装备，四栏各限购一件，可用个人储备付款或换成敌人属性代价')}
+          title=${t('熔毁商店：卖装备，四栏各限购一件，可用团队储备或本回合资金付款，或换成敌人属性代价')}
           onClick=${() => { onOpenShop(); }}>
           <${CoinGlyph} class="econbar__coin" /><span class="econbar__micro">${t('商店')}</span>
         </button>`

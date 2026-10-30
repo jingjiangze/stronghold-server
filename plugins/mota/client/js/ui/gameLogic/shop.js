@@ -182,11 +182,10 @@ export function readyFundsPrompt(priv, { ready = true, keptBands = null, autopla
   if (!(funds > 0)) return null;
   const kept = Array.isArray(keptBands) ? keptBands : ['band_cannot'];
   if (typeof priv.bandId === 'string' && kept.includes(priv.bandId)) return null;
-  // 协同共竞 (2026-10-17 业主：没花钱点准备要提示「这笔钱会进协同资金」): the prep end converts what is left, but only up to
-  // 三层资金（业主 2026-10-26 / 2026-10-27 定稿）：协同房的结余不再「清零」，也不再有「归个人 / 归团队」两档——
-  // 恒按比例转入个人储备（买装备）与团队储备（后勤/救济/救援）。具体比例由设施等级决定，这里不承诺数字。
+  // 协同共竞 (2026-10-17 业主：没花钱点准备要提示) — 2026-10-30 定稿：结余一律**清零**（坎诺特阵营除外），
+  // 个人储备下线后不再有「按比例转入」；协同房唯一多出来的是「可以主动存 1 点到团队储备」。
   const text = econ
-    ? t('还有 {funds} 资金未使用。休整结束时这笔钱会按比例转入你的个人储备与团队储备，不会清零。确定准备就绪吗？', { funds })
+    ? t('还有 {funds} 资金未使用。休整结束时这笔钱会直接清零（坎诺特阵营除外）——想留给全队，就先存 1 点到团队储备。确定准备就绪吗？', { funds })
     : t('还有 {funds} 资金未使用。休整期结束时，本回合的剩余资金将清零。确定准备就绪吗？', { funds });
   return { title: t('剩余资金'), micro: 'FUNDS LEFT', okText: t('准备就绪'), cancelText: t('继续整备'), text };
 }
