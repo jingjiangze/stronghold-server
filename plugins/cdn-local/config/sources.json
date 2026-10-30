@@ -2,12 +2,11 @@
   "_comment": "边缘层的分流表。容器的 /assets/** 与 /fonts/** 按这里的顺序 302 出去，字节从不落在容器上。顺序即用户口径（2026-10-21）：**魔搭数据集 → 其他镜像（ghfast-assets、gitcdn-own）→ R2 兜底**。openi 不进 order（浏览器 CORS 不可用，仅 ?sp_source=openi 点名）。",
   "_order_note": "这是静态顺序，不是实时测速：容器在 ModelScope 机房，玩家在全国各地，容器量出来的链路速度不代表玩家的。真正按玩家网络选最快是客户端 pick.js 的事，两者分工。客户端可用 ?sp_source=<id> 覆盖这里的顺序。",
   "_order_basis": "顺序按直连实测（本机 --noproxy，非代理）：小文件 TTFB modelscope 0.21s / r2 0.66s；855 KB 大文件 modelscope 0.26s(3.3 MB/s) / r2 1.9s(0.4 MB/s)。",
-  "_order_reason": "2026-10-24 用户指令：R2 退出访问面（域名已解绑，仅保留为上传中转）、gitcdn-own 删除（Worker 吃爆免费档 100k/池）。order = modelscope → ghfast-assets → jsdelivr-assets；openi 仍只作 ?sp_source= 显式通道。",
+  "_order_reason": "2026-10-24 用户指令：R2 退出访问面（域名已解绑，仅保留为上传中转）、gitcdn-own 删除（Worker 吃爆免费档 100k/池）。order = modelscope → ghfast-assets → jsdelivr-assets；openi 仍只作 ?sp_source= 显式通道。（2026-10-30：曾把 speedcdn 插到首位，浏览器链变成 盒子302→speedcdn→ms.show，WAF 把并发下载字节全掐成 (network)；已摘出 order，speedcdn 条目保留 —— 等它自己成为字节源再放回。）",
   "schemaVersion": 1,
   "_interface_note": "C 方案（2026-10-22）：/cdn/v1/** 动态清单走容器代理，从这棵数据集的 cdn/v1/ 子树取（带 MODELSCOPE_API_TOKEN 会话）。清单文件是 json/js/bin，走浏览器 302 私有数据集读不了，所以由容器代理转发字节。asset-jump.js 的 jump.interface 与 static.js 的接线都读这一条。",
   "interfaceBase": "https://www.modelscope.cn/datasets/jingjiangze/Stronghold-Protocol-Assets/resolve/master",
   "order": [
-    "speedcdn",
     "modelscope",
     "ghfast-assets",
     "jsdelivr-assets"
