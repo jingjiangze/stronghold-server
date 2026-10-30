@@ -70,6 +70,8 @@ export function isProcessEntry(metaUrl) {
  */
 export function printBanner(srv) {
   console.log(`\n  卫戍协议：盟约 · Stronghold Protocol: Alliance v${APP_VERSION}`);
+  // 蓝绿（业主 2026-10-30）：日志里一眼看出这是哪一色 —— 3000=蓝(stronghold.service)、3001=绿(@green)
+  console.log(`  实例:     ${srv.port}（蓝绿的一色；切流在 /etc/nginx/stronghold-upstream.conf）`);
   if (DEV_BUILD) console.log('  ! 开发版（dev 分支）：不稳定，请勿用于公开服务器 · development build — unstable, not for public servers');
   console.log(`  Local:   ${srv.url}`);
   if (srv.host === '0.0.0.0' || srv.host === '::') {
