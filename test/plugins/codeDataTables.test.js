@@ -32,11 +32,13 @@ test('code.data 能整份顶替任意 data/<name>.json（不只 config）', t =>
 
 test('code.data 里不是 data/<name>.json 的路径静默跳过（不抛错、不建表）', t => {
   const f = fixture(t);
-  f.put('weird', { code: { data: ['assets/foo.png', 'data/sub/x.json', 'data/noext'] } },
-    { 'assets/foo.png': 'x', 'data/sub/x.json': { a: 1 }, 'data/noext': { b: 1 } });
+  // ⚠️ 这里**不能**放 `assets/*.png`：`class: content` 的 parts 不允许 assets 文件，
+  // 插件会先被类闸拦成 `PLUGIN_UNKNOWN`，测的就不是 `code.data` 的路径过滤了（第一版踩过）。
+  f.put('weird', { code: { data: ['data/sub/x.json', 'data/noext', 'noop', 'data/'] } },
+    { 'data/sub/x.json': { a: 1 }, 'data/noext': { b: 1 }, 'noop.txt': 'x' });
   const s = build(f, ['weird']);
-  assert.deepEqual(s.problems, []);
-  assert.equal(s.data.foo, undefined);
-  assert.equal(s.data.sub, undefined);
-  assert.equal(s.data.noext, undefined);
+  assert.deepEqual(s.problems, [], '非法路径不该让插件装载失败');
+  assert.equal(s.data.sub, undefined, 'data/sub/x.json 不是 data/<name>.json');
+  assert.equal(s.data.noext, undefined, '缺 .json 后缀的不是表');
+  assert.equal(s.data.noop, undefined, '不在 data/ 下的不是表');
 });
