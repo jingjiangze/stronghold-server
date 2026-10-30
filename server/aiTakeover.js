@@ -34,6 +34,10 @@ export function transferAiSeat(lobby, room, applicantId, botId) {
   Object.assign(seat, { isBot: false, connected: true, left: false, ready: false, name: session.name });
   m.loneHuman = m.order.filter(p => !p.isBot && !p.left).length === 1;
   ps.aiTakeoverRound = m.round;
+  // The seat keeps the bot's playerId (the session above took it over), so remember who actually played it: the result
+  // row carries this as `ownerId` (plugins/mota/server/match/results.js) and the client keys the record to it
+  // (public/js/ui/stats.js), so the match counts for the human and not for the `ai_…` seat.
+  ps.aiTakeoverFrom = applicantId; seat.aiTakeoverFrom = applicantId;
   session.aiTakeoverFrom = applicantId; m.markPublic(); ps.dirty();
   resetStateDelta(conn.ws);
   lobby.network.onHelloMsg(conn, { t: 'hello', version: PROTOCOL_VERSION, delta: stateDeltaVersion(conn.ws), name: session.name, token: session.token }, lobby.now());

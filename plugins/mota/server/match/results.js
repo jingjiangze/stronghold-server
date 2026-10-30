@@ -113,6 +113,8 @@ export function buildResult(m, outcome) {
       seat: ps.seat,
       name: ps.name,
       isBot: ps.isBot,
+      // 观战接管 AI (server/aiTakeover.js): the seat answers to the bot's playerId; `ownerId` is the human who took it
+      ...(typeof ps.aiTakeoverFrom === 'string' ? { ownerId: ps.aiTakeoverFrom } : {}),
       left: ps.left,
       alive: ps.alive,
       victory: cleared,
