@@ -538,8 +538,7 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
 function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficulty, onClose, matchmaking, brief, privateRoom, onPrivate,
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
   testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
-  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null,
-  rogue = false, onRogue = null }) {
+  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -649,9 +648,6 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
           </div>` : roomMode !== 'solo' ? html`<div class="proto-opts">
             ${roomMode !== 'solo' && CAN_PRIVATE ? html`<label class="proto-private" title=${t('不在公开大厅显示，仅通过房间码或邀请加入')}>
               <input type="checkbox" checked=${privateRoom} onChange=${(e) => onPrivate(e.currentTarget.checked)} /><span>${t('私密房间')}</span></label>` : null}
-            ${roomMode === 'coop' && modeVariant !== 'xie' ? html`<label class="proto-private" data-testid="create-rogue"
-              title=${t('肉鸽规则：开局与之后每 2 回合各抽一次藏品三选一（每人本局最多 3 件），每回合随机词缀、事件期出随机事件、每回合换战场；同时开启协同团队储备（防守奖励 + 主动存入）。')}>
-              <input type="checkbox" checked=${rogue} onChange=${(e) => onRogue && onRogue(e.currentTarget.checked)} /><span>${t('肉鸽规则（藏品）')}</span></label>` : null}
             ${roomMode === 'coop' && CAN_QUEUE ? html`<${Button} variant="secondary" size="md" icon="refresh" loading=${busy === 'queue'} disabled=${!online || maint?.active || isSearching}
               onClick=${onQueue}>${t('快速匹配')}<//>` : null}
           </div>` : null}
@@ -678,7 +674,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
  * at the bottom left. Esc or ‹ returns to the hub.
  */
 function AllianceSelect({ onClose, code, onCode, codeOk, recent, online, maint, busy, onCreate, onJoin, onSpectate, onBrowse, onSearch, recruiting = 0, difficulty,
-  testMode = false, asTest = false, onTest = null }) {
+  testMode = false, asTest = false, onTest = null, rogue = false, onRogue = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -708,6 +704,9 @@ function AllianceSelect({ onClose, code, onCode, codeOk, recent, online, maint, 
         ${testMode ? html`<label class="proto-private ally-test" data-testid="create-test"
           title=${t('不计入战绩。房间会标明「测试」，只有房主能使用测试指令。')}>
           <input type="checkbox" checked=${asTest} onChange=${(e) => onTest?.(e.currentTarget.checked)} /><span>${t('测试房间')}</span></label>` : null}
+        <label class="proto-private ally-test" data-testid="create-rogue"
+          title=${t('肉鸽规则：开局与之后每 2 回合各抽一次藏品三选一（每人本局最多 3 件），每回合随机词缀、事件期出随机事件、每回合换战场；同时开启协同团队储备（防守奖励 + 主动存入）。')}>
+          <input type="checkbox" checked=${rogue} onChange=${(e) => onRogue && onRogue(e.currentTarget.checked)} /><span>${t('肉鸽规则（藏品）')}</span></label>
         <div class="ally-links">
           ${CAN_QUEUE ? html`<button type="button" class="ally-pill" onClick=${onSearch}><${Icon} name="search" />${t('搜寻队友')}</button>` : null}
           ${CAN_LIST ? html`<button type="button" class="ally-pill ally-pill--invite" onClick=${onBrowse}>${t('模拟邀约')}${recruiting ? html`<b class="num">${recruiting}</b>` : null}<span class="ally-pill__mark" aria-hidden="true"></span></button>` : null}
@@ -1172,13 +1171,12 @@ export function LobbyScreen() {
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
       versusTeam=${versusTeam} onVersusTeam=${setVersusTeam}
       versusRule=${versusRule} onVersusRule=${setVersusRule} versusAlt=${versusAlt} onVersusAlt=${setVersusAlt}
-      rogue=${rogueRules} onRogue=${setRogueRules}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 
     ${allyOpen ? html`<${AllianceSelect} onClose=${() => setAllyOpen(false)} code=${code} onCode=${(v) => setCode(normalizeCode(v))} codeOk=${codeOk}
       recent=${recent} online=${online} maint=${maint} busy=${busy} difficulty=${difficulty} recruiting=${recruitingRooms(rooms).length}
-      testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
+      testMode=${testMode} asTest=${asTest} onTest=${setAsTest} rogue=${rogueRules} onRogue=${setRogueRules}
       onCreate=${create} onJoin=${() => join()} onSpectate=${() => spectate()} onBrowse=${() => setModalOpen(true)} onSearch=${openSearch} />` : null}
 
     <${HubDialog} open=${joinOpen} micro="JOIN WITH ALLIANCE KEY" title=${t('密钥加入')} onClose=${() => setJoinOpen(false)}>
