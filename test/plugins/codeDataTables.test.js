@@ -30,15 +30,16 @@ test('code.data 能整份顶替任意 data/<name>.json（不只 config）', t =>
   assert.deepEqual(s.data.notes, doc, '非 config 的表也要整份顶替进来');
 });
 
-test('code.data 里不是 data/<name>.json 的路径静默跳过（不抛错、不建表）', t => {
+test('code.data 指向不存在的文件时不炸：插件照装，那张表不出现在内容集里', t => {
   const f = fixture(t);
-  // ⚠️ 这里**不能**放 `assets/*.png`：`class: content` 的 parts 不允许 assets 文件，
-  // 插件会先被类闸拦成 `PLUGIN_UNKNOWN`，测的就不是 `code.data` 的路径过滤了（第一版踩过）。
-  f.put('weird', { code: { data: ['data/sub/x.json', 'data/noext', 'noop', 'data/'] } },
-    { 'data/sub/x.json': { a: 1 }, 'data/noext': { b: 1 }, 'noop.txt': 'x' });
-  const s = build(f, ['weird']);
-  assert.deepEqual(s.problems, [], '非法路径不该让插件装载失败');
-  assert.equal(s.data.sub, undefined, 'data/sub/x.json 不是 data/<name>.json');
-  assert.equal(s.data.noext, undefined, '缺 .json 后缀的不是表');
-  assert.equal(s.data.noop, undefined, '不在 data/ 下的不是表');
+  // 声明了却没放文件：`existsSync` 那道守卫负责跳过（否则 `JSON.parse(readFileSync(...))` 直接抛）。
+  f.put('ghost', { code: { data: ['data/ghost.json'] } }, {});
+  const s = build(f, ['ghost']);
+  assert.deepEqual(s.problems, [], '缺文件不该让整包装载失败');
+  assert.equal(s.data.ghost, undefined, '不存在的表不能被凭空创建');
 });
+
+// 说明：`code.data` 里写**不是** `data/<name>.json` 的路径（例如 `assets/x.png`、`noop`）时，
+// 插件会先在**注册层**被判 `PLUGIN_UNKNOWN`（整个插件不成立），根本走不到这里那道过滤。
+// 这与本仓「声明了却不生效比拒绝更糟」的口径一致 —— 所以这里不为「静默跳过」写用例，
+// 免得把「被拒」误写成「被忽略」。
