@@ -107,7 +107,7 @@ function statusRows(registry, pluginsDir, inboxPath) {
  * @param {{ root: string, pluginsDir: string, dataDir: string, registry?: any, vanilla?: object|null, log?: any,
  *   inboxDir?: string, autoInbox?: boolean, fetch?: typeof fetch, platform?: { status: () => any } | null }} opts
  */
-export function createMods({ root, pluginsDir, dataDir, registry = null, vanilla = null, log = console, inboxDir = null, autoInbox = true, fetch: fetchImpl = null, platform = null }) {
+export function createMods({ root, pluginsDir, dataDir, registry = null, vanilla = null, log = console, inboxDir = null, autoInbox = true, fetch: fetchImpl = null, platform = null, lobby = null }) {
   const { key } = loadStudioKey(pluginsDir, { log });
   const inboxPath = path.resolve(inboxDir || path.join(root, 'mod-inbox'));
   const allow = readDownloadAllow(pluginsDir);
@@ -242,6 +242,11 @@ export function createMods({ root, pluginsDir, dataDir, registry = null, vanilla
           return;
         }
         sendJson(req, res, 200, { ok: true, id, on, default: next, rooms: policy.rooms || 'host' });
+        // 业主 2026-10-30「通过 mod 管理器加载」：改完默认插件集后，让**在线房间**也跟上 ——
+        // 纯外观房间就地重应用（refreshPlugins），含玩法插件的房间只能通知房主（换 cs 必须重载）。
+        // 必须在响应之后做，且失败不能影响这次开关的结果。
+        try { registry?.rescan?.(); } catch { /* 扫描失败不影响已写入的开关 */ }
+        try { lobby?.pluginsReloaded?.([id]); } catch (e) { try { log.warn?.(`[mods] live rooms not notified: ${e && e.message}`); } catch { /* log must never throw */ } }
         return;
       }
 

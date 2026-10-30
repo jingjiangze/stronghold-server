@@ -251,7 +251,8 @@ export async function startServer(opts = {}) {
   // 模组管理器（server/mods/）：/mod 页面与投递目录。导入走插件系统自己的 forgeImport / installPluginBytes ——
   // 只有一条装载链，没有第二条。opts.mods === false 或 SP_MODS=off 关闭。
   const mods = opts.mods === false || String(process.env.SP_MODS || '').toLowerCase() === 'off' ? null : createMods({
-    root: ROOT, pluginsDir, dataDir, registry: packs, log, fetch: opts.fetch,
+    // lobby：/mod 开关后让在线房间也跟上（server/lobby.js 的 pluginsReloaded）
+    root: ROOT, pluginsDir, dataDir, registry: packs, log, fetch: opts.fetch, lobby,
     vanilla: (() => { try { return packs.vanillaAssets?.() || null; } catch { return null; } })(),
   });
   const trustedRuntime = await createTrustedRuntime({registry:packs,log});

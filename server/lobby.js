@@ -654,6 +654,22 @@ export class Lobby {
   }
 
   /**
+   * `/mod` 改了插件（启用/禁用、上传、抓取）之后：在线房间能热重应用的就地重应用，不能的告知房主。
+   *
+   * 能热应用的只有「纯外观房间」（`refreshPlugins` 的判据）；含玩法插件的房间换的是 `cs`，所有人要重新加载内容，
+   * 只能让房主在面板里确认（`tellPluginsChanged`）—— 这是内容集机制的硬约束，不是这里的选择。
+   * @param {string[]} ids the plugin ids that changed on disk
+   */
+  pluginsReloaded(ids = []) {
+    for (const room of this.rooms.values()) {
+      if (room.disposed) continue;
+      if (this.refreshPlugins(room)) continue;
+      room.pluginsChanged = [...new Set([...(room.pluginsChanged || []), ...ids])];
+      if (!room.match) this.tellPluginsChanged(room);
+    }
+  }
+
+  /**
    * Apply a room's plugins again as they are on disk now (header "The room's plugins": the plugin studio's rooms) — the
    * plugins its host chose (not the 「自动」 ones), resolved again (resolveContent); the room's content becomes the new set,
    * held in its place, and every member hears it. Allowed during a match: a cosmetic set never changes a battle (the `cs`
