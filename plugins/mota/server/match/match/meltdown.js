@@ -55,18 +55,29 @@ function meltFundsPrice(card) {
 }
 
 /**
- * 扣款（业主 2026-10-26 三层资金）：装备从**个人储备**买，不动每回合资金。
- * 余额不足返回 false（调用方已先判过，这里只兜底）。
+ * 扣款（业主 2026-10-30「其他人买装备等优先消耗团队储备」）：**先扣团队储备，不够再扣本回合资金**。
+ * 个人储备这一层已下线（economy.js 的 econSplitLeftover 不再往它写），所以这里完全不读它。
+ * 余额不足返回 false（调用方已先判过，这里只兜底，并回滚已扣的团队池）。
  */
 function es_safe_spend(ps, price) {
-  const have = Math.max(0, Math.floor(Number(ps.reserve) || 0));
-  if (have < price) return false;
-  ps.reserve = have - price;
+  const m = ps && ps.match;
+  let left = Math.max(0, Math.floor(Number(price) || 0));
+  if (!left) return true;
+  const team = m ? Math.max(0, Math.floor(Number(m.teamReserve) || 0)) : 0;
+  const fromTeam = Math.min(team, left);
+  if (fromTeam > 0) { m.teamReserve = team - fromTeam; left -= fromTeam; }
+  if (left <= 0) return true;
+  const funds = Math.max(0, Math.floor(Number(ps.funds) || 0));
+  if (funds < left) { if (fromTeam > 0) m.teamReserve = team; return false; }
+  ps.funds = funds - left;
   return true;
 }
 
-/** 这一页能拿钱买装备的余额 = 个人储备。 */
-function es_spendable(ps) { return Math.max(0, Math.floor(Number(ps.reserve) || 0)); }
+/** 这一页能拿钱买装备的余额 = 团队储备 + 本回合资金。 */
+function es_spendable(ps) {
+  const m = ps && ps.match;
+  return Math.max(0, Math.floor(Number(m && m.teamReserve) || 0)) + Math.max(0, Math.floor(Number(ps && ps.funds) || 0));
+}
 
 /** 0..n-1 洗牌（用调用方给的 rng，保证可复现） */
 function shuffled(list, rng) {

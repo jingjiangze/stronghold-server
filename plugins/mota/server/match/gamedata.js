@@ -70,13 +70,12 @@ export const DEFAULTS = Object.freeze({
   //                           face count; shares follow the rolls, the remainder goes to the highest roll, the total
   //                           never exceeds that income). Both default off: every existing mode keeps its behaviour.
   teamEconomy: {
-    transfer: { maxPerRequest: 5, requestsPerRound: 1, teamCapPerRound: 8, ttlSec: 30, repayInterest: 0 },
-    deathDividend: { enabled: false, dice: 6 },
-    // coverInterest: the PvE interest a lender earns by holding teammates' leaked enemies (兜底). The rate is
-    // min(capPct, floor(100 × 兜底 kills / the match's planned enemy total)) percent of a repaid principal, accrued
-    // fractionally per lender and paid in whole funds; the first nine rounds cannot fill it, because they can only
-    // spawn ~52% of the match's enemies at all (calibrated 2026-10-07: 125 of 240 in 标准). Off by default.
-    coverInterest: { enabled: false, capPct: 100, lagPremium: 1 },
+    // 业主 2026-10-30「只保留团队储备」：借款额度收紧（队友只是兜底）、利息归零。
+    transfer: { maxPerRequest: 1, requestsPerRound: 2, teamCapPerRound: 4, ttlSec: 30, repayInterest: 0 },
+    // deathDividend 与 coverInterest（兜底利率）已按业主要求删除 —— 两者本来就是无调用者的死码，
+    // 2026-10-30 起连配置也不再提供。
+    // reserve：团队储备的常规收入（防守奖励），数值调低：两档并成 1，每回合最多 1。
+    reserve: { perfectReward: 1, fullDefenceReward: 1, perfectRewardCapPerRound: 1 },
     // botLend: the bot teammate's willingness to answer a borrow request — a seeded roll instead of the flat rule. The
     // chance is basePct, plus a share of weakPct when the borrower's board trails the team's median (the under-developed
     // teammate this mode is meant to carry), plus solventPct when they are safe to repay (units on the board and LP at
@@ -667,17 +666,19 @@ export class GameData {
         ttlSec: pi(tr.ttlSec, d.transfer.ttlSec),
         repayInterest: nn(tr.repayInterest, d.transfer.repayInterest),
       },
+      // 2026-10-30 业主决定删除「阵亡分红」与「兜底利率」两个机制：结构保留（economy.js 仍会读这几个字段，
+      // 直接删键会让还款路径 TypeError），但 enabled **恒为 false** —— 老配置里写着 true 也打不开。
       deathDividend: (() => {
         const dd = obj(src.deathDividend);
-        return { enabled: dd.enabled === true, dice: Math.max(2, Math.min(100, pi(dd.dice, d.deathDividend.dice))) };
+        return { enabled: false, dice: Math.max(2, Math.min(100, pi(dd.dice, 6))) };
       })(),
       coverInterest: (() => {
         const ci = obj(src.coverInterest);
         return {
-          enabled: ci.enabled === true,
-          capPct: Math.max(0, Math.min(100, nn(ci.capPct, d.coverInterest.capPct))),
+          enabled: false,
+          capPct: Math.max(0, Math.min(100, nn(ci.capPct, 100))),
           // 兜底率分红: what a debt owed by a borrower who was behind the team's median earns on top (1 = off)
-          lagPremium: Math.max(1, Math.min(4, pi(ci.lagPremium, d.coverInterest.lagPremium))),
+          lagPremium: Math.max(1, Math.min(4, pi(ci.lagPremium, 1))),
         };
       })(),
       botAsk: (() => {

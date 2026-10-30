@@ -10,7 +10,8 @@
 // while it is off. State lives on the Match: `econRequests`, `econRound`, `econDebts`, `econCover*`, `teamReserve`,
 // `teamProjects` (personal funds stay on PlayerState).
 
-import { splitLeftoverShares } from './pureShares.js';
+// 2026-10-30：个人储备下线后 econSplitLeftover 不再按比例分流，splitLeftoverShares 暂无读者
+// （pureShares.js 与 test/match/coop-three-layer-funds.test.js 保留，供将来恢复分层时复用）。
 import { PHASE, ERR } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
@@ -791,41 +792,23 @@ export class MatchEconomy {
   econSplitLeftover(ps) {
     if (!ps) return;
     const keepAll = this.gd.leftoverKeptBands.includes(ps.bandId);
-    if (!this.teamEcon || this.teamEcon.borrowOnly) {
-      if (!keepAll) ps.funds = 0;
-      return;
-    }
-    if (keepAll) return; // 坎诺特阵营：整额留在每回合资金里
-    const left = Math.max(0, Math.floor(Number(ps.funds) || 0));
+    // 业主 2026-10-30「只保留团队储备」：回合末没花完的钱**不再**分流到个人储备/团队储备，直接清零。
+    //   · 个人储备这一层整体下线（仓储/后勤两个项目随之失效），`ps.reserve` 归零；
+    //   · 团队储备只由「防守奖励 + 主动存入（每回合最多 1）」获得，不再从结余里来；
+    //   · 坎诺特阵营（leftoverKeptBands）是唯一例外 —— 业主明确要求保留这个整额保留。
+    if (keepAll) return;
     ps.funds = 0;
-    if (left <= 0) return;
-    const storeLv = Number(this.teamProjects.storehouse) || 0;
-    const logiLv = Number(this.teamProjects.logistics) || 0;
-    const personalRate = 1 + (this.teamProjectRead('storehouse', storeLv) || 0) / 100;
-    const teamRate = 1 + (this.teamProjectRead('logistics', logiLv) || 0) / 100;
-    const reserveNow = Math.max(0, Math.floor(Number(ps.reserve) || 0));
-    // 纯逻辑在 pureShares.js：守恒（余数归个人）· 顺序无关 · 个人储备 >= 团队储备。
-    // 实现与测试 import 同一份代码，避免「测试复刻版和实现漂移」。
-    const { personal, team } = splitLeftoverShares({
-      left, reserveNow, teamReserve: this.teamReserve, personalRate, teamRate,
-    });
-    ps.reserve = reserveNow + personal;
-    this.teamReserve += team;
+    if (Number(ps.reserve) !== 0) ps.reserve = 0;
     ps.dirty();
     this.markPublic();
   }
 
-  /** 最弱存活玩家的个人储备（团队池上限，用来守住 ps.reserve >= teamReserve）。没人时 Infinity。 */
+  /**
+   * 已下线（业主 2026-10-30「只保留团队储备」）：个人储备不再存在，这条「最弱玩家个人储备」的钳制失去意义。
+   * 保留方法签名只为不改动调用方的历史引用；它恒返回 Infinity（= 不钳制）。
+   */
   minPersonalReserve() {
-    let m = Infinity;
-    for (const pid of this.order) {
-      const ps = this.players.get(pid);
-      // 救援窗口里的席位（alive=false、pendingDeath=true）也要算：否则团队池可以在他躺着的这段时间
-      // 长到超过他的个人储备，救回来那一刻 `个人储备 >= 团队储备` 立刻失败（复审计 2026-10-27）。
-      if (!ps || (!ps.alive && !ps.pendingDeath)) continue;
-      m = Math.min(m, Math.max(0, Math.floor(Number(ps.reserve) || 0)));
-    }
-    return Number.isFinite(m) ? m : Infinity;
+    return Infinity;
   }
 
   /** Prep end: leftover funds convert into the team reserve, capped (design §28). 坎诺特 bands keep everything. */
@@ -853,8 +836,9 @@ export class MatchEconomy {
     const left = cfg.perfectRewardCapPerRound - this.econRound.perfectGranted;
     const n = Math.min(amount, Math.max(0, left));
     if (!(n > 0)) return 0;
-    // 复审计 2026-10-27：团队池增长不得越过「最弱玩家的个人储备」，否则 ps.reserve >= teamReserve 不成立
-    this.teamReserve = Math.min(this.teamReserve + n, this.minPersonalReserve());
+    // 业主 2026-10-30：个人储备下线后，「团队池增长不得超过最弱玩家个人储备」这条钳制随之取消
+    // （否则团队池会被 0 钳住、永远长不起来）。团队储备每回合的收入上限改由 perfectRewardCapPerRound 单独把关。
+    this.teamReserve += n;
     this.econRound.perfectGranted += n;
     this.markPublic();
     const text = full ? msg('全员都防住了：协同资金 +{n}', { n }) : msg('联防没漏：协同资金 +{n}', { n });

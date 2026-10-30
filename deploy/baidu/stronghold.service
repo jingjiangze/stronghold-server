@@ -14,6 +14,12 @@ Environment=PORT=3000
 # 只绑 loopback：对外统一走 nginx（:80）。勿改回 0.0.0.0，否则绕过反代
 Environment=HOST=127.0.0.1
 Environment=SP_PLUGIN_SCRIPTS=trusted-force
+# 计算面精简（2026-10-30 审计：空闲 CPU 0.1–0.4% 单核，唯一有感的周期开销是 cdn-local 的两个探针）：
+#   SP_PROBE=0                    关掉「每 5 分钟 8 个 GET、单文件可达 1MiB、20s 超时」的镜像测速。
+#                                 容器视角的测速本来就不代表玩家网络；源顺序由 sources.json 静态决定。
+#   SP_ASSET_HEALTH_INTERVAL_MS   健康探针从 60s 拉到 10min（保留死源跳过能力，日志噪声降一个量级）。
+Environment=SP_PROBE=0
+Environment=SP_ASSET_HEALTH_INTERVAL_MS=600000
 # 给 V8 堆设上限：实测常驻 RSS 约 230MB，1536MB 足够；
 # 不设的话 V8 会自动往 ~1/2 物理内存长，和后续的 QQ 机器人抢内存
 Environment=NODE_OPTIONS=--max-old-space-size=1536
