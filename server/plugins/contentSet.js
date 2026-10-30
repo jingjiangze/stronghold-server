@@ -317,15 +317,26 @@ function composeContentSet({ registry, ids = [], checkDataOnly = false }) {
     match: [...codeRoots].reverse().find((r) => r.match)?.match || null,
     client: [...new Set(codeRoots.flatMap((r) => r.client))],
     data: [...new Set(codeRoots.flatMap((r) => r.data))] } : null;
-  // 无损插件：code.data 里的整份配置原样成为该内容集的 config（与 delta 线把合并结果放进树里等价）。
+  // 无损插件：`code.data` 里声明的**任何** `data/<name>.json` 都整份顶替同名数据表。
+  //
+  // 2026-10-30 之前这里只认死 `data/config.json`，其它一律跳过 —— 于是「整份替换 data/assets.json」
+  // 这类真实需求（线上包 `nlc-skins`：国服素材清单 7969 条）在引擎层**无路可走**，
+  // 只能以一个 `content: ["skins","assets"]` 的假声明存在、装载期被拒。
+  // 泛化后 `config` 的行为逐字节不变（它就是一张叫 config 的表），新增的只是「别的表也能这么换」。
+  //
+  // 只认 `data/<name>.json` 这一种形态（与下面把表写回 `data/${name}.json` 的循环对称）：
+  // 别的路径（`assets/foo.png`、`data/sub/x.json`）在这里没有语义，静默跳过。
   if (code) {
-    // 多根：最后一个带 data/config.json 的根胜出（后加载者覆盖）。
+    // 多根：后加载者覆盖同路径（与 `client` / `match` 的既有口径一致，这里不能再排一次序）。
     for (const r of codeRoots) {
-      if (!r.data.includes('data/config.json')) continue;
-      const cfgPath = path.join(r.root, 'data/config.json');
-      if (!fs.existsSync(cfgPath)) continue;
-      if (data === base.data || Object.isFrozen(data)) data = clone(data);
-      data.config = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      for (const rel of r.data) {
+        const mm = /^data\/([A-Za-z0-9_-]+)\.json$/.exec(String(rel));
+        if (!mm) continue;
+        const tablePath = path.join(r.root, rel);
+        if (!fs.existsSync(tablePath)) continue;
+        if (data === base.data || Object.isFrozen(data)) data = clone(data);
+        data[mm[1]] = JSON.parse(fs.readFileSync(tablePath, 'utf8'));
+      }
     }
   }
   const bodies = new Map(base.files), files = {}, hashes = {};
