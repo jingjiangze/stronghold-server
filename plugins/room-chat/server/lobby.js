@@ -1,8 +1,8 @@
 // plugins/room-chat/server/lobby.js — 同盟通讯（房间聊天）与「随机地图」开关的 lobby 级实现。
 //
 // 挂载面：manifest 2 的 `code.lobby`（server/plugins/lobbyModules.js）—— 2026-10-23 新增的 lobby 级插件钩子。
-// 它提供：C2S 处理（room.chat / room.chat.history / room.setRandomStage）、room.state 字段（randomStage）、
-// Match opts（randomStage）、房间事件（joined/resync 补发历史、disposed 清理）。
+// 它提供：C2S 处理（room.chat / room.chat.history）、房间事件（joined/resync 补发历史、disposed 清理）。
+// 2026-10-30「插件拆细」：随机地图开关已拆到独立插件 `random-stage`（只用 code.lobby，不碰对局引擎）。
 //
 // 边界与原来写在宿主里时一致：消息只活在房间内存（环形缓冲）；旁观者收得到、说不了；文本按码点截断。
 import { ERR, ROOM_CODE_LEN } from '../../../shared/constants.js';
@@ -19,7 +19,6 @@ const CHAT_LIMITS = Object.freeze({
   perSec: 2, burst: 6, // 每会话令牌桶（chat 与 history 共用）
 });
 const isStr = (v, max = 64) => typeof v === 'string' && v.length <= max;
-const isBool = (v) => typeof v === 'boolean';
 const optional = (check) => (v) => v === undefined || check(v);
 const chatEmoteId = (v) => typeof v === 'string' && v.length <= 64 && /^[A-Za-z0-9_]+$/.test(v);
 const chatStickerFile = (v) => typeof v === 'string' && v.length <= 80 && /^[A-Za-z0-9._-]+$/.test(v);
@@ -31,7 +30,6 @@ const CHAT_PROTOCOL = {
     sticker: optional(chatStickerFile),
   },
   'room.chat.history': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
-  'room.setRandomStage': { randomStage: isBool },
 };
 
 const OK = Object.freeze({ ok: true });
@@ -104,32 +102,11 @@ export function setup(api) {
     return OK;
   });
 
-  // 随机地图开关（房主，开局前）：开 = 每回合换图；关 = 开局随机一张，只在 boss 关刷新一次。
-  api.on('room.setRandomStage', (session, msg, ctx, lobby) => {
-    const room = lobby.roomOf(session);
-    if (!room) return fail(ERR.NOT_IN_ROOM);
-    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
-    if (room.match) return fail(ERR.ROOM_STARTED);
-    const next = msg.randomStage === true;
-    if (room.randomStage === next) return OK;
-    room.randomStage = next;
-    lobby.broadcastState(room);
-    return OK;
-  });
-
   // ---- 房间字段 ----
   api.roomInit((room) => {
     if (!Array.isArray(room.chat)) room.chat = [];
     if (!Number.isInteger(room.chatSeq)) room.chatSeq = 0;
-    // 2026-10-30 业主口径：**默认关**（整局同一张图），开才每回合换图。
-    if (room.randomStage === undefined) room.randomStage = false;
   });
-
-  // room.state：只在**开**时带 randomStage（默认关闭 ⇒ 默认房间字节不变）
-  api.roomState((room) => (room.randomStage === true ? { randomStage: true } : null));
-
-  // Match opts：只有开时才带（默认房间的 match opts 不长出新字段）
-  api.matchOptions((room) => (room.randomStage === true ? { randomStage: true } : {}));
 
   // ---- 房间事件 ----
   api.onRoom('joined', (room, session) => { sendHistory(room, session); });
