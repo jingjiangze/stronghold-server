@@ -53,13 +53,77 @@ counts() {
 }
 
 # 健康判据：healthz ok:true + plugins 数量正常(>=8，实测 11) + 首屏 JS 可取
+# 传端口时检查该端口（蓝绿要用它对「待上线的那一色」做体检），缺省 3000。
 health_ok() {
-  local s p
-  s=$(curl -sf -m 15 "http://127.0.0.1:$PORT/healthz" || true)
+  local port="${1:-$PORT}" s p
+  s=$(curl -sf -m 15 "http://127.0.0.1:$port/healthz" || true)
   printf '%s' "$s" | grep -q '"ok":true' || return 1
   p=$(printf '%s' "$s" | grep -o '"plugins":[0-9]*' | head -1 | cut -d: -f2)
   [ "${p:-0}" -ge 8 ] || return 1
-  curl -sf -m 15 -o /dev/null "http://127.0.0.1:$PORT/js/screens/lobby.js"
+  curl -sf -m 15 -o /dev/null "http://127.0.0.1:$port/js/screens/lobby.js"
+}
+
+# 该端口上「有多少活动」= humans + rooms + matches（0 表示可以安全停掉这一色）
+counts_at() {
+  local s n=0 v
+  s=$(curl -sf -m 8 "http://127.0.0.1:$1/healthz" || true)
+  for k in humans rooms matches; do
+    v=$(printf '%s' "$s" | grep -o "\"$k\":[0-9]*" | head -1 | cut -d: -f2)
+    n=$((n + ${v:-0}))
+  done
+  printf '%s' "$n"
+}
+
+# 蓝绿热更新（业主 2026-10-30「热更新换端口」）：
+#   ① 在**空闲的那一色**上起新版 → ② 体检通过 → ③ 原子改写 nginx 上游并 reload →
+#   ④ 旧一色继续服务在线玩家与进行中对局，等它自己排空（humans+rooms+matches 归零）再停。
+# 任何一步失败都 return 1，调用方退回「直接重启」；旧实例始终在线服务，宁可这次不更新。
+# 开关是文件 /etc/stronghold-bluegreen（存在即启用），不放进 unit —— 改它不需要重启任何东西。
+UPSTREAM_CONF=/etc/nginx/stronghold-upstream.conf
+bg_swap() {
+  local act idle idleunit wait left
+  act=$(sed -n 's/^server 127\.0\.0\.1:\([0-9]\+\).*/\1/p' "$UPSTREAM_CONF" 2>/dev/null | head -1)
+  [ -n "$act" ] || { say "     读不到当前上游（$UPSTREAM_CONF）"; return 1; }
+  if [ "$act" = "3000" ]; then idle=3001; idleunit="stronghold@green"; else idle=3000; idleunit="$SERVICE"; fi
+  say "5a. 蓝绿：当前上游 $act → 在 $idle 上起新版（$idleunit）"
+  # 上一轮若没排空，这一色可能还在跑旧代码：restart 保证拿到新代码（会终结它残留的房间，日志里会记数量）
+  systemctl restart "$idleunit" >/dev/null 2>&1 || { say "     启动 $idleunit 失败"; return 1; }
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 5; health_ok "$idle" && break; done
+  if ! health_ok "$idle"; then
+    say "     新一色体检不过 → 停掉它，旧实例继续服务"
+    systemctl stop "$idleunit" >/dev/null 2>&1
+    return 1
+  fi
+  say "5b. 新一色健康（$idle）→ 切上游"
+  local tmp="$UPSTREAM_CONF.tmp.$$"
+  printf 'server 127.0.0.1:%s;\n' "$idle" > "$tmp" || return 1
+  mv -f "$tmp" "$UPSTREAM_CONF" || return 1
+  if ! nginx -t >/dev/null 2>&1; then
+    printf 'server 127.0.0.1:%s;\n' "$act" > "$UPSTREAM_CONF"
+    systemctl stop "$idleunit" >/dev/null 2>&1
+    say "     nginx -t 失败 → 上游回滚到 $act，新版已停"
+    return 1
+  fi
+  systemctl reload nginx
+  say "5c. 已切流到 $idle（在线玩家与进行中的对局都留在旧实例 $act，不受影响）"
+  wait=0
+  while [ "$wait" -lt "${SP_DRAIN_MAX:-1800}" ]; do
+    left=$(counts_at "$act")
+    [ "$left" = "0" ] && break
+    [ $((wait % 300)) -eq 0 ] && [ "$wait" -gt 0 ] && say "     旧实例还有 $left 处活动，已等 ${wait}s（上限 ${SP_DRAIN_MAX:-1800}s）"
+    sleep 15
+    wait=$((wait + 15))
+  done
+  left=$(counts_at "$act")
+  if [ "$left" = "0" ]; then
+    [ "$act" = "3000" ] && systemctl stop "$SERVICE" >/dev/null 2>&1 || systemctl stop stronghold@green >/dev/null 2>&1
+    say "5d. 旧实例已排空并停止（$act）"
+  else
+    say "WARN: 旧实例仍有 $left 处活动，本次先留着（下次部署再收）"
+  fi
+  say "PASS: 已应用 $(git log -1 --format='%h %s')"
+  return 0
 }
 
 say "0. 当前 $(git log -1 --format='%h %s')"
@@ -102,13 +166,16 @@ git reset --hard FETCH_HEAD
 
 # --- 配置类产物落 /etc（与是否重启进程无关） ---
 UNIT_CHANGED=0
-for u in stronghold.service stronghold-sync.service stronghold-sync.timer; do
-  if printf '%s\n' "$CHANGED" | grep -q "^deploy/baidu/$u\$" && [ -f "$APP_DIR/deploy/baidu/$u" ]; then
+for u in stronghold.service stronghold-sync.service stronghold-sync.timer 'stronghold@.service'; do
+  if { printf '%s\n' "$CHANGED" | grep -q "^deploy/baidu/$u\$" || [ ! -f "/etc/systemd/system/$u" ]; } && [ -f "$APP_DIR/deploy/baidu/$u" ]; then
     install -m 0644 "$APP_DIR/deploy/baidu/$u" "/etc/systemd/system/$u"
     UNIT_CHANGED=1
     say "3a. 已更新 /etc/systemd/system/$u"
   fi
 done
+# 蓝绿绿实例的端口文件（只在缺的时候放，避免覆盖现场手调的值）
+mkdir -p "$APP_DIR/deploy/baidu/instances"
+[ -f "$APP_DIR/deploy/baidu/instances/green.env" ] || printf 'PORT=3001\n' > "$APP_DIR/deploy/baidu/instances/green.env"
 [ "$UNIT_CHANGED" = 1 ] && systemctl daemon-reload
 # daemon-reload 会重算 timer，但显式重启一次才确定拿到新的 OnCalendar（改了频率就该立刻生效）
 if [ "$UNIT_CHANGED" = 1 ] && printf '%s\n' "$CHANGED" | grep -q '^deploy/baidu/stronghold-sync\.timer$'; then
@@ -116,6 +183,11 @@ if [ "$UNIT_CHANGED" = 1 ] && printf '%s\n' "$CHANGED" | grep -q '^deploy/baidu/
 fi
 
 if printf '%s\n' "$CHANGED" | grep -q '^deploy/baidu/nginx/' && command -v nginx >/dev/null 2>&1; then
+  # 上游地址先落盘：新站点配置 include 它，缺了 nginx -t 必失败（会把整站打挂）
+  if [ ! -f "$UPSTREAM_CONF" ]; then
+    printf 'server 127.0.0.1:%s;\n' "$PORT" > "$UPSTREAM_CONF"
+    say "3a. 已建立上游文件 $UPSTREAM_CONF（→ $PORT）"
+  fi
   install -m 0644 "$APP_DIR/deploy/baidu/nginx/stronghold.conf" /etc/nginx/conf.d/stronghold.conf
   if nginx -t >/dev/null 2>&1; then systemctl reload nginx; say "3a. 已更新并重载 nginx 站点配置"
   else say "WARN: nginx -t 失败，已写入但未重载"; fi
@@ -134,6 +206,13 @@ if [ -f package-lock.json ] && { [ ! -f node_modules/.package-lock.json ] || ! c
 fi
 mkdir -p "$APP_DIR/data/.cache" "$APP_DIR/plugins/_incoming" "$APP_DIR/plugins/_replaced" "$APP_DIR/mods"
 chown -R stronghold:stronghold "$APP_DIR"
+
+# 蓝绿热更新：/etc/stronghold-bluegreen 存在即启用（改它不需要重启任何东西）。
+# 失败退回下面的直接重启路径 —— 旧实例全程在线，最坏就是「这次没更新」。
+if [ -f /etc/stronghold-bluegreen ] && command -v nginx >/dev/null 2>&1; then
+  if bg_swap; then exit 0; fi
+  say "WARN: 蓝绿未完成 → 退回直接重启（旧实例仍在服务）"
+fi
 
 say "5. 重启 $SERVICE"
 systemctl restart $SERVICE

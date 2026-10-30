@@ -1,0 +1,32 @@
+[Unit]
+# 蓝绿部署的第二个实例（业主 2026-10-30「热更新换端口」）。
+#   stronghold@green → /opt/stronghold/deploy/baidu/instances/green.env（PORT=3001）
+# 主力实例仍是 stronghold.service（PORT=3000，见 stronghold.service）；切换流程在 sync.sh 的 bg_swap。
+Description=Stronghold Protocol server (instance %i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stronghold
+Group=stronghold
+WorkingDirectory=/opt/stronghold
+# 每个实例自己的 PORT/HOST 等（green.env 只有一行 PORT=3001）
+EnvironmentFile=-/opt/stronghold/deploy/baidu/instances/%i.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=SP_PLUGIN_SCRIPTS=trusted-force
+# 计算面精简（与 stronghold.service 同口径，见那里的注释）
+Environment=SP_PROBE=0
+Environment=SP_ASSET_HEALTH_INTERVAL_MS=600000
+Environment=NODE_OPTIONS=--max-old-space-size=1536
+ExecStart=/usr/local/node-v22.11.0/bin/node server/index.js
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stronghold-%i
+
+[Install]
+WantedBy=multi-user.target
