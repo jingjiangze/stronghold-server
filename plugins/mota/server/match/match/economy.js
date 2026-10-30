@@ -14,6 +14,8 @@
 // （pureShares.js 与 test/match/coop-three-layer-funds.test.js 保留，供将来恢复分层时复用）。
 import { PHASE, ERR } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
+// 借钱优先取团队储备：纯分配逻辑（池子先垫多少、还剩多少问队友）
+import { splitPoolFill } from './poolFill.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
 import { buildNormalWave, buildBossWave } from '../waves.js';
 import { botEconRespond } from '../bot.js';
@@ -483,6 +485,26 @@ export class MatchEconomy {
     // 额度先判（原口径）：额度用完就报 budget，而不是笼统的「你还有一条在途」——两者同时成立时以前者为准
     if ((this.econRound.byPlayer.get(ps.playerId) || 0) >= this.econRequestsPerRound(ps)) return fail(ERR.ALREADY, 'budget');
     for (const req of this.econRequests.values()) if (req.from === ps.playerId) return fail(ERR.ALREADY, 'pending');
+    // 业主 2026-10-30「借钱优先取团队储备」：先由池子垫（团队自己的钱，**不产生债务**），池子不够的部分才问队友。
+    // 池子垫付同样计入本回合的团队资金流动额度 —— 否则一个人可以反复请求把池子抽干（teamTransferCap 就是为此设的）。
+    const capLeft = Math.max(0, this.teamTransferCap() - this.econRound.spent);
+    const { fromPool, remaining } = splitPoolFill({ amount, teamReserve: this.teamReserve, capLeft });
+    if (fromPool > 0) {
+      this.teamReserve -= fromPool;
+      ps.funds = Math.floor(Number(ps.funds) || 0) + fromPool;
+      this.econRound.spent += fromPool;
+      ps.dirty();
+      this.markPrivate(ps);
+      this.markPublic();
+    }
+    if (remaining === 0) {
+      // 池子一个人就够：不建借款单、不占「每人每回合借款次数」、也不惊动队友。
+      for (const p of this.players.values()) {
+        this.toast(p, 'info', msg('{name} 从协同资金取出 +{n}', { name: ps.name || '队友', n: fromPool }));
+      }
+      return OK;
+    }
+    amount = remaining;
     if (this.econRound.spent + amount > this.teamTransferCap()) return fail(ERR.BAD_TARGET, 'team cap');
     // 被拒过的人这一回合不再问（被拒后可换人再借, user decision 2026-10-08）；已 ready 的人类不能应答，也不问。
     const denied = this.econDeniedBy.get(ps.playerId) || new Set();
