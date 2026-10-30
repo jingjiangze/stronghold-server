@@ -353,7 +353,9 @@ export class Match {
     /** window sequence (diagnostics and messages) */
     this.offerSeq = 0;
     this.gd = new GameData(this.data, this.modeId);
-    // 肉鸽模式：让 GameData 关掉团队经济（协同资金/团队储备那套不适用）
+    // 肉鸽模式：告诉 GameData 这是肉鸽局，好让它取 `economy.rogueTeam` 那份团队经济配置
+    // （2026-10-30 业主「肉鸽不作为新玩法了，还是加到协同里面」；见 gamedata.js 的 get teamEconomy）。
+    // 没有 `economy.rogueTeam` 时仍返回 null，行为与改动前一致。
     try { this.gd.matchIsRogue = this.isRogue; } catch { /* frozen gd */ }
     if (!this.difficulty) this.difficulty = this.gd.difficulty;
     this.isSolo = this.mode === 'solo' || this.gd.isSolo;

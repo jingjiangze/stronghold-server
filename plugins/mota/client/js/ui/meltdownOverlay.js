@@ -123,7 +123,7 @@ function cardBody(c, ctx = null) {
       <div class="melt__cost-l">${COST_LABEL[c.cost ? c.cost.type : 'dmg'] || ''}</div>
     </div>
     ${ctx && ctx.pay === 'funds' ? html`<div class="melt__cost melt__cost--funds">
-      <div class="melt__cost-k">${t('个人储备')}</div>
+      <div class="melt__cost-k">${t('储备 + 资金')}</div>
       <div class="melt__cost-v">${ctx.price}<small>${t(' 块')}</small></div>
       <div class="melt__cost-l">${ctx.funds >= ctx.price ? t('余额充足') : t('资金不足')}</div>
     </div>` : null}
@@ -188,8 +188,8 @@ export function MeltdownLegacy({ view, onPick = () => {}, onClose = () => {} }) 
         <div class="melt__hint">
           <label class="melt__pay"><input type="checkbox" checked=${pay === 'funds'}
             onChange=${(e) => setPay(e.currentTarget.checked ? 'funds' : 'debuff')} />
-            ${t('用个人储备购买（不叠代价）')}</label>
-          <span class="melt__funds">${t('个人储备')} <b>${funds}</b></span>
+            ${t('用资金购买（不叠代价）')}</label>
+          <span class="melt__funds">${t('储备 + 资金')} <b>${funds}</b></span>
         </div>
         <div class="melt__count">${t('已签')} <b>${sold}</b> / ${cards.length}</div>
       </div>
@@ -267,8 +267,8 @@ export function MeltdownOverlay({ view, onBuy = () => {}, onBuyRelic = () => {},
           ${hasRelics ? html`<button type="button" role="tab" aria-selected=${board === 'relic' ? 'true' : 'false'}
             class=${`mshop__btab${board === 'relic' ? ' is-on' : ''}`} onClick=${() => goBoard('relic')}>${t('藏品')}</button>` : null}
         </nav>
-        <div class="mshop__wallet" title=${t('个人储备：回合末结余按比例转入，用来买装备')}>
-          <b class="num">${cat.funds}</b><span>${t('个人储备')}</span>
+        <div class="mshop__wallet" title=${t('储备 + 资金：先扣团队储备，不够再扣你本回合手里的钱')}>
+          <b class="num">${cat.funds}</b><span>${t('储备 + 资金')}</span>
         </div>
         <button type="button" class="mshop__close" onClick=${() => onClose()}><span aria-hidden="true">×</span>${t('关闭商店')}</button>
       </header>

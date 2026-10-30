@@ -72,15 +72,9 @@ export function collectViolations(m, { limit = 25 } = {}) {
   // either while the rule set is off, and never a request that outlived its prep.
   if (m.teamEcon) {
     if (!Number.isInteger(m.teamReserve) || m.teamReserve < 0) fail(`team reserve ${m.teamReserve}`);
-    // 三层资金（业主 2026-10-26 / 复审计 2026-10-27）：个人储备必须非负，且每个活着的玩家
-    // 的个人储备都要 >= 团队储备 —— 只校验 teamReserve 非负会让这个不变量被静默破坏。
-    for (const pid of m.order) {
-      const ps = m.players.get(pid);
-      if (!ps || !ps.alive) continue;
-      const r = ps.reserve;
-      if (!(Number.isInteger(r) && r >= 0)) fail(`personal reserve ${r} of ${pid}`);
-      if (r < m.teamReserve) fail(`personal reserve ${r} < team reserve ${m.teamReserve} (${pid})`);
-    }
+    // 个人储备这一层已于 2026-10-30 下线（业主「只保留团队储备」）：回合末 `econSplitLeftover` 会把 `ps.reserve`
+    // 强制归零，于是旧三层资金的不变量「每个活人的个人储备 >= 团队储备」在新模型下**恒假** —— 只要团队池里有
+    // 一分钱就会误报。这条检查已删；团队储备本身的非负仍由上面那行守着。
     const outs = new Map();
     for (const req of m.econRequests.values()) {
       if (m.phase !== PHASE.PREP) fail(`request ${req.id} outside PREP (${m.phase})`);

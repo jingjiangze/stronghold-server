@@ -90,7 +90,8 @@ export const DEFAULTS = Object.freeze({
     // "broke and nothing affordable" ask stays.
     botAsk: { enabled: false, basePct: 8, brokePct: 40, keyPct: 60, maxPct: 50, keyMaxPct: 80 },
     // 复审计 2026-10-27：convertPerPlayerMax 在改三层资金后已无读者（econSplitLeftover 不再用它），删除
-    reserve: { perfectReward: 1, fullDefenceReward: 2, perfectRewardCapPerRound: 2 },
+    // （同一处曾遗留一份旧的 reserve 字面量 `1 / 2 / 2`，与上面第 78 行的 `1 / 1 / 1` 重复定义 ——
+    //   对象字面量重复键后者生效，会把业主 2026-10-30 调低的数值悄悄改回 2/2。已删，只留上面那份。）
     // relief (DESIGN §27, user decision 2026-10-09): the weakest player may take funds straight out of the team reserve
     // — itself, not on anyone's behalf, and one fund at a time (`amount`). Only a player at or below `lpThreshold` that
     // is (tied for) the team's lowest LP may take, capped `perPlayerPerRound` per player and `teamPerRound` for the
@@ -638,8 +639,13 @@ export class GameData {
     const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
     const mode = obj(this.mode.teamEconomy);
     const conf = obj(this.economy.team);
-    const src = Object.keys(mode).length ? mode : conf;
-    if (src.enabled !== true || this.isSolo || this.matchIsRogue === true) return null;
+    // 肉鸽并入协同（业主 2026-10-30「肉鸽不作为新玩法了，还是加到协同里面」）：肉鸽房的 `modeId` 是
+    // `mode_rogue_*`，config 的 `modes` 里没有这一条 ⇒ `this.mode` 为空、取不到 `teamEconomy`，以前是靠下面
+    // 那道 `matchIsRogue` 闸门把它显式关掉的。现在换成给肉鸽单独一份 `economy.rogueTeam`：它没有熔毁商店
+    // （`meltdown` 只对 `mode_xie_*` 开放），所以那份配置只列 `teamIncome` 一个项目。缺这条配置时仍返回 null。
+    const rogue = obj(this.economy.rogueTeam);
+    const src = Object.keys(mode).length ? mode : (this.matchIsRogue === true ? rogue : conf);
+    if (src.enabled !== true || this.isSolo) return null;
     const d = DEFAULTS.teamEconomy;
     const nn = (v, dflt) => (Number.isInteger(v) && v >= 0 ? v : dflt);
     const pi = (v, dflt) => (Number.isInteger(v) && v > 0 ? v : dflt);

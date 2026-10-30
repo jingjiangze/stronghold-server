@@ -130,13 +130,8 @@ const MODE_CARDS = [
   },
   {
     id: 'xie', name: N_('协同共竞'), badge: 'NEW', en: 'JOINT OP', icon: 'dice',
-    desc: N_('两人共竞：可以互相借调资金、用协同资金买后勤项目与加时，倒下的队友还能被救回来。资金分三层——每回合资金、个人储备（买装备）、团队储备（升设施 / 救济 / 救援）。'),
-    points: [N_('1–2 名博士 · 可带 AI 队友'), N_('三层资金：每回合 / 个人储备 / 团队储备 · 借贷与救援')],
-  },
-  {
-    id: 'rogue', name: N_('肉鸽模拟'), badge: 'NEW', en: 'ROGUELIKE', icon: 'dice',
-    desc: N_('肉鸽玩法：每 2 回合抽一次藏品三选一，藏品永久改变这一局——敌人更凶，你也更强。没有协同资金与后勤项目，全靠藏品滚起来。'),
-    points: [N_('可带 AI 队友 · 每 2 回合一次藏品三选一'), N_('每人本局最多 3 件藏品 · 无协同资金')],
+    desc: N_('两人共竞：全队共用一个团队储备——防守奖励和主动存入把钱攒起来，用它买商店升级、借给队友救急、给快死的人发救济，倒下的队友还能被救回来。'),
+    points: [N_('1–2 名博士 · 可带 AI 队友'), N_('团队储备：商店升级 / 借贷 / 救济 / 救援')],
   },
 ];
 
@@ -543,7 +538,8 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
 function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficulty, onClose, matchmaking, brief, privateRoom, onPrivate,
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
   testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
-  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null }) {
+  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null,
+  rogue = false, onRogue = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -640,7 +636,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
       </section>
       <section class="proto-side">
         ${modeVariant === 'xie' ? html`<div class="proto-versus proto-versus--info">
-          <span class="proto-versus__note">${t('协同资金在局内分三层：每回合资金在休整结束时按比例转入个人储备（买装备）与团队储备（后勤项目 / 告急救济 / 救援）。个人储备始终不少于团队储备。')}</span>
+          <span class="proto-versus__note">${t('团队储备：全队共用一个池子。防守奖励与主动存入攒钱，用来买商店升级（商店等级 / 协同资金获取 / 装备造价）、借款垫付、告急救济与救援。回合末没花完的钱直接清零。')}</span>
         </div>` : null}
         <div class="proto-list" role="radiogroup" aria-label=${t('模拟难度')}>
           ${DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
@@ -653,6 +649,9 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
           </div>` : roomMode !== 'solo' ? html`<div class="proto-opts">
             ${roomMode !== 'solo' && CAN_PRIVATE ? html`<label class="proto-private" title=${t('不在公开大厅显示，仅通过房间码或邀请加入')}>
               <input type="checkbox" checked=${privateRoom} onChange=${(e) => onPrivate(e.currentTarget.checked)} /><span>${t('私密房间')}</span></label>` : null}
+            ${roomMode === 'coop' && modeVariant !== 'xie' ? html`<label class="proto-private" data-testid="create-rogue"
+              title=${t('肉鸽规则：开局与之后每 2 回合各抽一次藏品三选一（每人本局最多 3 件），每回合随机词缀、事件期出随机事件、每回合换战场；同时开启协同团队储备（防守奖励 + 主动存入）。')}>
+              <input type="checkbox" checked=${rogue} onChange=${(e) => onRogue && onRogue(e.currentTarget.checked)} /><span>${t('肉鸽规则（藏品）')}</span></label>` : null}
             ${roomMode === 'coop' && CAN_QUEUE ? html`<${Button} variant="secondary" size="md" icon="refresh" loading=${busy === 'queue'} disabled=${!online || maint?.active || isSearching}
               onClick=${onQueue}>${t('快速匹配')}<//>` : null}
           </div>` : null}
@@ -899,6 +898,9 @@ export function LobbyScreen() {
   const [asTest, setAsTest] = useState(false);
   const testMode = useStore((s) => s.testMode === true);
   const [privateRoom, setPrivateRoom] = useState(false);
+  // 肉鸽规则（业主 2026-10-30「肉鸽不作为新玩法了，还是加到协同里面」）：不再是独立模式卡，
+  // 改成同盟模拟建房时的一个开关 —— 勾上就带藏品节奏 + 随机事件/词缀，并且拿到协同团队储备。
+  const [rogueRules, setRogueRules] = useState(false);
   const [busy, setBusy] = useState(null);
   const [recent] = useState(recentRooms);
   const marks = loadPref('recentTestRooms', []);
@@ -1000,7 +1002,7 @@ export function LobbyScreen() {
     const res = await net.request('room.create', {
       mode: roomMode, difficulty,
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
-      ...(simulation === 'rogue' ? { variant: 'rogue' } : {}),
+      ...(simulation === 'coop' && rogueRules ? { variant: 'rogue' } : {}),
       ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
         versusAlt: versusRule === 'confront' ? versusAlt !== false : true } : {}),
       ...(testMode && asTest ? { test: true } : {}),
@@ -1170,6 +1172,7 @@ export function LobbyScreen() {
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
       versusTeam=${versusTeam} onVersusTeam=${setVersusTeam}
       versusRule=${versusRule} onVersusRule=${setVersusRule} versusAlt=${versusAlt} onVersusAlt=${setVersusAlt}
+      rogue=${rogueRules} onRogue=${setRogueRules}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 
