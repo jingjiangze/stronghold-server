@@ -96,8 +96,11 @@ test('during a battle a spectator may watch any field at once; one added mid-bat
   h.sched.advance(500);
   const first = h.lastTo(S, 'b.start');
   assert.deepEqual([first.fieldId, first.watch, first.authoritative], ['n:p_0', true, false], 'auto-observes the first field');
-  // a fighting player may not look elsewhere — a spectator (like an eliminated player) may
-  assert.equal(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }).error, ERR.WRONG_PHASE);
+  // 实时观战（业主 2026-10-25）：普通战斗进行中，活着的玩家**可以**切去队友的普通战场（本地 replica，自己的战斗继续）；
+  // 只有异组的 boss / hidden 战场仍然拒绝（见 `_watchClient`）。这里原来断言的 `WRONG_PHASE` 是那条旧规则留下的，
+  // 服务端放开之后它就一直红着（与肉鸽合并无关）。
+  assert.deepEqual(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true }, 'a fighting player may watch a teammate');
+  m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_0' }); // 收回自己那块，下面的断言只关心旁观席
   assert.deepEqual(m.handle(S, { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
   const st = h.lastTo(S, 'b.start');
   assert.deepEqual([st.fieldId, st.watch, st.authoritative], ['n:p_1', true, false]);
