@@ -55,6 +55,9 @@ function contentSets(lobby) {
 export function healthReport({ startedAt, network, registry, lobby, content = null, traffic, assetIndex, views, trusted, versions = null, versionHosts = null }, withTraffic = false) {
   const report = {
     ok: true, version: PROTOCOL_VERSION, app: APP_VERSION, uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+    // 蓝绿部署（业主 2026-10-30）：这一份进程监听的端口。切流用 /etc/nginx/stronghold-upstream.conf，
+    // 肉眼看「现在由哪一色在服务」就看这个字段（3000 = 蓝即 stronghold.service，3001 = 绿即 @green）。
+    port: Number(process.env.PORT) || 3000,
     // the runtime the server is serving right now (public/js/ui/buildGuard.js): a page whose own build is
     // older than this reloads itself, so a deploy reaches clients that never reload
     build: buildTag(),
