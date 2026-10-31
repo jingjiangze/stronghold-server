@@ -1,37 +1,37 @@
 // server/accounts/store.js — 极简账号库 (业主 2026-11-01)：QQ 号当登录名、头像走 QQ 头像 API（不存图）、
-// 密码自己设、游客可绑定；服务端只存「口令哈希 + 名片/昵称样式 + 布阵数据用量」这几项，别的都不留。
+// 密码自己设、游客可绑定；服务端只存「口令哈希 + 名片/昵称样式 + 布阵数据用量」。
 //
-// 存储纪律（「尽可能少存」）：
-//   * 一个 append-only 的 JSONL（`data/accounts.jsonl`），每行一条 upsert，加载时后写覆盖先写；
-//     行数超过 2× 账号数时压缩一次（重写到 `.tmp` 再 rename）。
-//   * 不用数据库：这台 2C4G 的盒子不该多一个常驻 DB 进程，账号量级是「几十到几千」。
-//   * 会话令牌是**无状态** HMAC（`<qq>.<exp>.<sig>`），密钥落在 `data/.account-secret`（32 字节，0600）——
-//     服务端不为登录态存任何东西，重启也不掉线。
+// 存储（业主 2026-11-01 追加：用 SQLite）：Node 内置 `node:sqlite`（22.11 需要 `--experimental-sqlite`，
+// 生产在 systemd 的 NODE_OPTIONS 里给；Node 24 直接可用）。**拿不到该模块时退回 append-only JSONL**，
+// 保证 CI（node 22 无 flag）与任何老运行时都能跑，接口完全一致。
 //
-// 字段：qq（登录名，5–12 位数字）/ hash（scrypt）/ created / updated / profile{name,nameStyle,card} / lineupBytes。
+// 容量（业主：20G 是**全服务器**的布阵数据容量，不是每账号）：`addLineupBytes` 按**全表总和**判定，
+// 到顶即拒；`view()` 同时给出本单位与全服用量。
+//
+// 会话令牌是**无状态** HMAC（`<qq>.<exp>.<sig>`，密钥 `data/.account-secret` 0600）⇒ 服务端不为登录态
+// 存任何东西，重启不掉线；客户端「默认保留登录」只需把令牌存进 localStorage（客户端侧决定）。
 
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 
-/** 每个账号的布阵数据容量（业主：20G 是布阵数据的容量）。 */
+/** 全服布阵数据容量：业主口径 20G（不是每账号）。 */
 export const DEFAULT_LINEUP_QUOTA_BYTES = 20 * 1024 ** 3;
 
 const SCRYPT = Object.freeze({ N: 16384, r: 8, p: 1, keylen: 32 });
 const QQ_RE = /^[1-9][0-9]{4,11}$/;
-const PROFILE_MAX = 1024; // 名片/昵称样式这类展示记录的总字节上限
+const PROFILE_MAX = 1024; // 名片 / 昵称样式这类展示记录的总字节上限
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000;
 
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 
-/** `$scrypt$N$r$p$salt$key` — the only form the store ever writes. */
 function hashPassword(password) {
   const salt = crypto.randomBytes(16);
   const key = crypto.scryptSync(String(password), salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p });
   return `$scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString('hex')}$${key.toString('hex')}`;
 }
 
-/** Constant-time check against a stored hash. */
 function checkPassword(password, stored) {
   try {
     const parts = String(stored || '').split('$');
@@ -43,28 +43,32 @@ function checkPassword(password, stored) {
   } catch { return false; }
 }
 
-/** A QQ number is the login name; anything else is rejected before it reaches the file. */
 export function normalizeQq(qq) {
   const s = String(qq ?? '').trim();
   return QQ_RE.test(s) ? s : null;
 }
 
-/** Passwords: 6–64 chars, no leading/trailing-space surprises. */
 export function normalizePassword(pw) {
   const s = typeof pw === 'string' ? pw : '';
   return s.length >= 6 && s.length <= 64 && s.trim() === s ? s : null;
 }
 
+/** node:sqlite when the runtime has it (22.5+ with --experimental-sqlite, 24+ by default), else null. */
+function loadSqlite() {
+  try {
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+    return DatabaseSync || null;
+  } catch { return null; }
+}
+
 /**
- * Open (or create) the account store.
  * @param {{ dataDir: string, log?: object, quotaBytes?: number, now?: () => number }} o
  */
 export function openAccounts({ dataDir, log = console, quotaBytes = Number(process.env.SP_ACCOUNT_LINEUP_QUOTA_BYTES) || DEFAULT_LINEUP_QUOTA_BYTES, now = Date.now }) {
-  const file = path.join(dataDir, 'accounts.jsonl');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const DatabaseSync = loadSqlite();
+  const backend = DatabaseSync ? 'sqlite' : 'jsonl';
   const secretFile = path.join(dataDir, '.account-secret');
-  /** @type {Map<string, any>} qq → account (no hash in memory lists; hash kept here for login) */
-  const byQq = new Map();
-  let lines = 0;
 
   const secret = (() => {
     try {
@@ -72,115 +76,160 @@ export function openAccounts({ dataDir, log = console, quotaBytes = Number(proce
       if (raw.length >= 32) return raw.subarray(0, 32);
     } catch { /* first boot */ }
     const made = crypto.randomBytes(32);
-    try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(secretFile, made, { mode: 0o600 }); } catch (e) { log.warn?.('[accounts] cannot persist the token secret', e?.message); }
+    try { fs.writeFileSync(secretFile, made, { mode: 0o600 }); } catch (e) { log.warn?.('[accounts] cannot persist the token secret', e?.message); }
     return made;
   })();
 
-  function apply(row) {
-    if (!row || typeof row.qq !== 'string') return;
-    const prev = byQq.get(row.qq);
-    byQq.set(row.qq, { ...(prev || {}), ...row });
+  // ---- backend: SQLite -----------------------------------------------------------------------------------------
+  let db = null;
+  if (backend === 'sqlite') {
+    db = new DatabaseSync(path.join(dataDir, 'accounts.db'));
+    db.exec(`CREATE TABLE IF NOT EXISTS accounts (
+      qq TEXT PRIMARY KEY,
+      hash TEXT NOT NULL,
+      created INTEGER NOT NULL,
+      updated INTEGER NOT NULL,
+      player_id TEXT,
+      profile TEXT NOT NULL DEFAULT '{}',
+      lineup_bytes INTEGER NOT NULL DEFAULT 0
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS accounts_updated ON accounts(updated)');
   }
 
-  try {
-    const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-    for (const line of text.split('\n')) {
-      if (!line.trim()) continue;
+  /** The JSONL fallback keeps the exact same shapes (map + append). */
+  const jsonlFile = path.join(dataDir, 'accounts.jsonl');
+  let jsonl = null;
+  if (!db) {
+    jsonl = new Map();
+    let lines = 0;
+    try {
+      const text = fs.existsSync(jsonlFile) ? fs.readFileSync(jsonlFile, 'utf8') : '';
+      for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+        lines++;
+        try { const row = JSON.parse(line); const prev = jsonl.get(row.qq); jsonl.set(row.qq, { ...(prev || {}), ...row }); } catch { /* skip */ }
+      }
+    } catch (e) { log.warn?.('[accounts] cannot read the jsonl store', e?.message); }
+    jsonl._lines = () => lines;
+    jsonl._append = (row) => {
+      fs.appendFileSync(jsonlFile, `${JSON.stringify(row)}\n`, 'utf8');
       lines++;
-      try { apply(JSON.parse(line)); } catch { log.warn?.('[accounts] skipping a malformed line'); }
-    }
-  } catch (e) { log.warn?.('[accounts] cannot read the store', e?.message); }
-
-  function append(row) {
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.appendFileSync(file, `${JSON.stringify(row)}\n`, 'utf8');
-    lines++;
-    // Compaction: one rewrite once the journal is twice the live set (cheap at this scale, keeps the file honest).
-    if (lines > byQq.size * 2 + 32) {
-      const tmp = `${file}.tmp`;
-      const body = [...byQq.values()].map((a) => JSON.stringify(a)).join('\n');
-      fs.writeFileSync(tmp, body ? `${body}\n` : '', 'utf8');
-      fs.renameSync(tmp, file);
-      lines = byQq.size;
-    }
+      if (lines > jsonl.size * 2 + 32) {
+        const tmp = `${jsonlFile}.tmp`;
+        const body = [...jsonl.values()].map((a) => JSON.stringify(a)).join('\n');
+        fs.writeFileSync(tmp, body ? `${body}\n` : '', 'utf8');
+        fs.renameSync(tmp, jsonlFile);
+        lines = jsonl.size;
+      }
+    };
   }
+
+  const rowOf = (qq) => {
+    if (db) {
+      const r = db.prepare('SELECT qq, hash, created, updated, player_id, profile, lineup_bytes FROM accounts WHERE qq = ?').get(qq);
+      return r ? { qq: r.qq, hash: r.hash, created: r.created, updated: r.updated, playerId: r.player_id, profile: JSON.parse(r.profile || '{}'), lineupBytes: r.lineup_bytes } : null;
+    }
+    return jsonl.get(qq) || null;
+  };
+
+  const upsert = (row) => {
+    const a = rowOf(row.qq) || { profile: {}, lineupBytes: 0 };
+    const next = {
+      qq: row.qq,
+      hash: row.hash ?? a.hash,
+      created: a.created ?? row.created ?? now(),
+      updated: now(),
+      playerId: row.playerId ?? a.playerId ?? null,
+      profile: row.profile ?? a.profile ?? {},
+      lineupBytes: row.lineupBytes ?? a.lineupBytes ?? 0,
+    };
+    if (db) {
+      db.prepare(`INSERT INTO accounts (qq, hash, created, updated, player_id, profile, lineup_bytes) VALUES (?,?,?,?,?,?,?)
+        ON CONFLICT(qq) DO UPDATE SET hash=excluded.hash, updated=excluded.updated, player_id=excluded.player_id,
+          profile=excluded.profile, lineup_bytes=excluded.lineup_bytes`)
+        .run(next.qq, next.hash, next.created, next.updated, next.playerId, JSON.stringify(next.profile), next.lineupBytes);
+    } else {
+      jsonl.set(next.qq, next);
+      jsonl._append(next);
+    }
+    return next;
+  };
+
+  const totalBytes = () => {
+    if (db) return Number(db.prepare('SELECT COALESCE(SUM(lineup_bytes),0) AS n FROM accounts').get().n) || 0;
+    let n = 0;
+    for (const a of jsonl.values()) n += Number(a.lineupBytes) || 0;
+    return n;
+  };
 
   const publicView = (a) => a && ({
     qq: a.qq,
-    // 头像不存：客户端直接用 QQ 头像 API（q1.qlogo.cn）；这里只给 URL，换号/换图都不用动存储。
+    // 头像不存：客户端直接用 QQ 头像 API；换号/换图都不用动存储。
     avatar: `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(a.qq)}&s=100`,
     name: a.profile?.name || '',
     nameStyle: a.profile?.nameStyle || null,
     card: a.profile?.card || null,
     created: a.created || null,
-    lineup: { used: Number(a.lineupBytes) || 0, quota: quotaBytes },
+    lineup: { used: Number(a.lineupBytes) || 0, total: totalBytes(), quota: quotaBytes },
   });
 
   function sign(qq) {
     const exp = now() + TOKEN_TTL_MS;
     const payload = `${qq}.${exp}`;
-    const sig = b64u(crypto.createHmac('sha256', secret).update(payload).digest());
-    return `${payload}.${sig}`;
+    return `${payload}.${b64u(crypto.createHmac('sha256', secret).update(payload).digest())}`;
   }
 
-  /** @returns {string|null} the qq a token belongs to, or null for a bad/expired one. */
   function verifyToken(token) {
     const parts = String(token || '').split('.');
     if (parts.length !== 3) return null;
     const [qq, exp, sig] = parts;
-    if (!byQq.has(qq) || !Number.isFinite(Number(exp)) || Number(exp) < now()) return null;
+    if (!rowOf(qq) || !Number.isFinite(Number(exp)) || Number(exp) < now()) return null;
     const want = b64u(crypto.createHmac('sha256', secret).update(`${qq}.${exp}`).digest());
     return want.length === sig.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(sig)) ? qq : null;
   }
 
   return {
-    file,
+    backend,
+    file: db ? path.join(dataDir, 'accounts.db') : jsonlFile,
     quotaBytes,
-    size: () => byQq.size,
-    get: (qq) => byQq.get(String(qq)) || null,
-    view: (qq) => publicView(byQq.get(String(qq))),
-    list: () => [...byQq.values()].map(publicView),
+    totalBytes,
+    size: () => (db ? Number(db.prepare('SELECT COUNT(*) AS n FROM accounts').get().n) || 0 : jsonl.size),
+    get: rowOf,
+    view: (qq) => publicView(rowOf(String(qq))),
+    list: () => (db
+      ? db.prepare('SELECT qq FROM accounts ORDER BY updated DESC').all().map((r) => publicView(rowOf(r.qq)))
+      : [...jsonl.keys()].map((qq) => publicView(jsonl.get(qq)))),
     verifyToken,
 
-    /** Create an account. @returns {{ok:true, token:string, account:object}|{error:string}} */
     register(qq, password) {
       const id = normalizeQq(qq), pw = normalizePassword(password);
       if (!id) return { error: 'BAD_QQ' };
       if (!pw) return { error: 'BAD_PASSWORD' };
-      if (byQq.has(id)) return { error: 'EXISTS' };
-      const row = { qq: id, hash: hashPassword(pw), created: now(), updated: now(), profile: {}, lineupBytes: 0 };
-      apply(row); append(row);
+      if (rowOf(id)) return { error: 'EXISTS' };
+      const row = upsert({ qq: id, hash: hashPassword(pw), profile: {}, lineupBytes: 0 });
       return { ok: true, token: sign(id), account: publicView(row) };
     },
 
-    /** @returns {{ok:true, token:string, account:object}|{error:string}} */
     login(qq, password) {
       const id = normalizeQq(qq);
-      const a = id ? byQq.get(id) : null;
+      const a = id ? rowOf(id) : null;
       if (!a || !checkPassword(password, a.hash)) return { error: 'BAD_CREDENTIALS' };
       return { ok: true, token: sign(id), account: publicView(a) };
     },
 
-    /** 游客绑定：既有账号就校验密码后绑定 playerId；没有就建号。 @returns {{ok:true,...}|{error:string}} */
+    /** 游客绑定：既有账号要校验密码；没有就建号。 */
     bind(qq, password, playerId) {
       const id = normalizeQq(qq), pw = normalizePassword(password);
       if (!id) return { error: 'BAD_QQ' };
       if (!pw) return { error: 'BAD_PASSWORD' };
-      const a = byQq.get(id);
-      if (a) {
-        if (!checkPassword(pw, a.hash)) return { error: 'BAD_CREDENTIALS' };
-        const row = { qq: id, playerId: String(playerId || ''), updated: now() };
-        apply(row); append(row);
-        return { ok: true, token: sign(id), account: publicView(byQq.get(id)) };
-      }
-      const row = { qq: id, hash: hashPassword(pw), created: now(), updated: now(), playerId: String(playerId || ''), profile: {}, lineupBytes: 0 };
-      apply(row); append(row);
+      const a = rowOf(id);
+      if (a && !checkPassword(pw, a.hash)) return { error: 'BAD_CREDENTIALS' };
+      const row = a ? upsert({ qq: id, playerId: String(playerId || '') }) : upsert({ qq: id, hash: hashPassword(pw), playerId: String(playerId || '') });
       return { ok: true, token: sign(id), account: publicView(row) };
     },
 
-    /** 名片 / 昵称样式这类展示记录（总字节上限，超了整条拒绝）。 @returns {{ok:true,account:object}|{error:string}} */
     setProfile(qq, patch) {
-      const a = byQq.get(String(qq));
+      const a = rowOf(String(qq));
       if (!a) return { error: 'NOT_FOUND' };
       const next = { ...(a.profile || {}) };
       for (const k of ['name', 'nameStyle', 'card']) {
@@ -191,40 +240,36 @@ export function openAccounts({ dataDir, log = console, quotaBytes = Number(proce
         next[k] = typeof v === 'object' ? v : String(v);
       }
       if (Buffer.byteLength(JSON.stringify(next)) > PROFILE_MAX) return { error: 'TOO_LARGE' };
-      const row = { qq: a.qq, profile: next, updated: now() };
-      apply(row); append(row);
-      return { ok: true, account: publicView(byQq.get(a.qq)) };
+      return { ok: true, account: publicView(upsert({ qq: a.qq, profile: next })) };
     },
 
-    /** 布阵数据用量（20G 额度按账号算）：只接受非负整数，超额度直接拒。 @returns {{ok:true,used:number}|{error:string}} */
+    /** 布阵数据用量：**全服** 20G 判定（业主口径），到顶即拒。 */
     addLineupBytes(qq, bytes) {
-      const a = byQq.get(String(qq));
+      const a = rowOf(String(qq));
       if (!a) return { error: 'NOT_FOUND' };
       const n = Math.max(0, Math.floor(Number(bytes) || 0));
-      const used = (Number(a.lineupBytes) || 0) + n;
-      if (used > quotaBytes) return { error: 'QUOTA' };
-      const row = { qq: a.qq, lineupBytes: used, updated: now() };
-      apply(row); append(row);
-      return { ok: true, used, quota: quotaBytes };
+      if (totalBytes() + n > quotaBytes) return { error: 'QUOTA' };
+      const row = upsert({ qq: a.qq, lineupBytes: (Number(a.lineupBytes) || 0) + n });
+      return { ok: true, used: row.lineupBytes, total: totalBytes(), quota: quotaBytes };
     },
 
-    /** 管理后台：重设密码 / 调额度（额度为 null 表示回到默认）。 */
     adminPatch(qq, { password = null, lineupQuotaBytes = null } = {}) {
-      const a = byQq.get(String(qq));
+      const a = rowOf(String(qq));
       if (!a) return { error: 'NOT_FOUND' };
-      const row = { qq: a.qq, updated: now() };
+      const patch = { qq: a.qq };
       if (password != null) {
         const pw = normalizePassword(password);
         if (!pw) return { error: 'BAD_PASSWORD' };
-        row.hash = hashPassword(pw);
+        patch.hash = hashPassword(pw);
       }
       if (lineupQuotaBytes != null) {
         const n = Math.floor(Number(lineupQuotaBytes));
         if (!Number.isFinite(n) || n < 0) return { error: 'BAD_QUOTA' };
-        row.quotaOverride = n;
+        patch.lineupBytes = n; // 管理口径：直接把该账号的占用改成这个数
       }
-      apply(row); append(row);
-      return { ok: true, account: publicView(byQq.get(a.qq)) };
+      return { ok: true, account: publicView(upsert(patch)) };
     },
+
+    close() { try { db?.close(); } catch { /* already closed */ } },
   };
 }

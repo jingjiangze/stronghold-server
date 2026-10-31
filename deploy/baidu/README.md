@@ -169,14 +169,15 @@ systemctl disable --now stronghold
 ## 账号 / 公告 / 管理后台（2026-11-01）
 
 - 代码：`server/accounts/{store,api}.js`；路由在 `/api/*`（`server/http/routes.js` 在 GET-only 规则之前分发）。
-- 数据：`data/accounts.jsonl`（append-only，每行一条 upsert，超过 2× 账号数时压缩一次）、`data/.account-secret`
-  （令牌 HMAC 密钥，0600）、`data/announcements.json`（后台写、玩家读）。三者都在 `.gitignore` 里，
-  `git reset --hard` 不会碰它们。
+- 存储：**SQLite（`node:sqlite`）** `data/accounts.db`；运行时拿不到该模块时自动退回 `data/accounts.jsonl`（CI 的
+  Node 22 无 flag 即走这条）。令牌 HMAC 密钥在 `data/.account-secret`（0600）；公告在 `data/announcements.json`。
+  四者都在 `.gitignore` 里，`git reset --hard` 不会碰它们。
+- **Node 22 必须开 flag**：两个 unit 的 `NODE_OPTIONS` 已带 `--experimental-sqlite`（Node 24 起默认可用，可去掉）。
 - 账号就是 **QQ 号**：只存 `scrypt` 口令哈希 + 名片/昵称样式 + 布阵数据用量；**头像不存**，客户端直接用
   `https://q1.qlogo.cn/g?b=qq&nk=<qq>&s=100`。
 - 环境变量：
-  - `SP_ADMIN_KEY=<口令>` —— 打开 `/api/admin/*`（列账号 / 改密 / 调额度 / 写公告）。**不设则整段 404**。
-  - `SP_ACCOUNT_LINEUP_QUOTA_BYTES` —— 每账号布阵数据容量，默认 `20GiB`。
+  - `SP_ADMIN_KEY=<口令>` —— 打开 `/api/admin/*`（列账号 / 改密 / 调占用 / 写公告）。**不设则整段 404**。
+  - `SP_ACCOUNT_LINEUP_QUOTA_BYTES` —— **全服**布阵数据容量，默认 `20GiB`（业主口径：全服务器总量，不是每账号）。
   - `SP_ACCOUNTS=off` —— 整体关闭（等同 `startServer({ accounts: false })`）。
 
 ## 已知坑

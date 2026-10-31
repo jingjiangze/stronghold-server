@@ -22,7 +22,8 @@ Environment=SP_PROBE=0
 Environment=SP_ASSET_HEALTH_INTERVAL_MS=600000
 # 给 V8 堆设上限：实测常驻 RSS 约 230MB，1536MB 足够；
 # 不设的话 V8 会自动往 ~1/2 物理内存长，和后续的 QQ 机器人抢内存
-Environment=NODE_OPTIONS=--max-old-space-size=1536
+# node:sqlite（账号库）在 Node 22 需要显式开启；Node 24 起默认可用
+Environment=NODE_OPTIONS=--max-old-space-size=1536 --experimental-sqlite
 ExecStart=/usr/local/node-v22.11.0/bin/node server/index.js
 Restart=always
 RestartSec=3

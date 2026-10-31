@@ -25,10 +25,11 @@ test('store: 建号 / 登录 / 令牌可校验，重开文件后仍在', () => {
   const b = openAccounts({ dataDir: dir, log: { warn() {}, info() {}, error() {} } });
   assert.equal(b.size(), 1);
   assert.equal(b.login('12345678', 'hunter2!').ok, true);
-  // 密码不落明文
-  const raw = fs.readFileSync(path.join(dir, 'accounts.jsonl'), 'utf8');
-  assert.equal(raw.includes('hunter2!'), false);
-  assert.match(raw, /\$scrypt\$/);
+  // 密码不落明文（SQLite 或 JSONL 后端都一样：整目录扫一遍）
+  const blob = fs.readdirSync(dir).map((f) => { try { return fs.readFileSync(path.join(dir, f)).toString('latin1'); } catch { return ''; } }).join('');
+  assert.equal(blob.includes('hunter2!'), false);
+  assert.match(blob, /\$scrypt\$/);
+  assert.ok(['sqlite', 'jsonl'].includes(a.backend));
 });
 
 test('store: 令牌被篡改或过期后失效', () => {

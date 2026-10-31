@@ -72,3 +72,7 @@ data/accounts.jsonl.tmp
 data/.account-secret
 # 公告：管理后台写、玩家读（内容由后台维护，不入仓库）
 data/announcements.json
+# SQLite 账号库（node:sqlite）
+data/accounts.db
+data/accounts.db-wal
+data/accounts.db-shm
