@@ -102,6 +102,12 @@ test('http: /api 注册登录、公告读写、管理端点无钥匙时不存在
   r = await fetch(`${base}/api/admin/accounts`, { headers: { 'x-admin-key': 'wrong' } });
   assert.equal(r.status, 403);
 
+  // 管理后台页面（P3）：配了钥匙就能拿到 HTML，且引用同源 /js/admin.js
+  r = await fetch(`${base}/admin`);
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type') || '', /text\/html/);
+  assert.match(await r.text(), /\/js\/admin\.js/);
+
   // 公告：管理写、公开读
   r = await post('/api/admin/announcements', { items: [{ id: 'a1', title: '维护公告', body: '今晚 23:00 停服', date: '2026-11-01', level: 'info' }] }, { 'x-admin-key': 'test-admin-key' });
   assert.equal(r.status, 200);

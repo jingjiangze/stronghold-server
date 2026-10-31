@@ -15,6 +15,16 @@
 | 客户端 | `public/js/net.js:99-105` 按 `location.protocol` 选 `ws/wss` | 上 HTTPS 后 WSS **自动生效**，客户端零改动 |
 | 蓝绿探活 | `health_ok` 走 `http://127.0.0.1:<port>/healthz` | 内网探活，**不受** HTTPS 影响 |
 
+## 一·五、本次选定（业主 2026-11-01）
+
+域名：**superbigcup.jiangjiangze.icu**。
+
+实测（本机、绕开 Clash 时）：
+- `http://superbigcup.jiangjiangze.icu/` → **200**（CF 橙云转发到源站 80）。
+- 该名字当前解析到 Cloudflare（104.21.87.130 / 172.67.143.94），即**已经在 CF 后面**。
+- 因此若接受 CF 代理，HTTPS 由 CF 边缘终结，盒子上**不需要证书**；代价是 WS 空闲约 100s 断、国内延迟不可控（见方案 B）。
+- 若要「直连 + 自签证书」（方案 A），需把该记录改成**灰云 A → 120.48.56.189** 再走 acme.sh。
+
 ## 二、方案对比
 
 | | A. 子域名直连 + Let's Encrypt | B. 保持 Cloudflare 橙云 | C. 纯 IP 证书 |

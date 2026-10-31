@@ -37,6 +37,7 @@ import './ui/compat.js';
 import { render } from '../vendor/preact.module.js';
 import { useErrorBoundary } from '../vendor/hooks.module.js';
 import { html, UiHosts, Button, MicroLabel, closeAllDialogs } from './ui/components.js';
+import { AccountDock } from './ui/account.js';
 import { ConnectionBanner } from './ui/connBanner.js';
 import { ToastHost, toast, toastError, describeError } from './ui/toasts.js';
 import { net, identity, NetError } from './net.js';
@@ -486,7 +487,8 @@ async function boot() {
   const langReady = initLang().catch((err) => console.warn('[app] language setup failed', err));
   await Promise.all([waitForFonts(1200), connectWhenReady, langReady]);
   const root = document.getElementById('app');
-  render(html`<${App} />`, root);
+  // 账号 / 公告入口（P2）：核心 ui/account.js（插件不覆盖它，运行时回退到 public/js/ui/account.js）
+  render(html`<${App} /><${AccountDock} />`, root);
 
   const splash = document.getElementById('boot');
   if (splash) {
