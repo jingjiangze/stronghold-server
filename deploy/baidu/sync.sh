@@ -33,7 +33,7 @@ OLD=$(git rev-parse HEAD)
 # healthz 拿不到（服务已挂）→ 按"不忙"处理：服务挂了更要尽快修。
 busy() {
   local s k v
-  s=$(curl -sf -m 10 "http://127.0.0.1:$PORT/healthz" || true)
+  s=$(curl -sf -m 10 "http://127.0.0.1:$(active_port)/healthz" || true)
   [ -n "$s" ] || return 1
   for k in humans rooms matches; do
     v=$(printf '%s' "$s" | grep -o "\"$k\":[0-9]*" | head -1 | cut -d: -f2)
@@ -45,7 +45,7 @@ busy() {
 # 计数快照，只用于日志：DEFER 时要能一眼看出是哪个字段挡的
 counts() {
   local s out=""
-  s=$(curl -sf -m 10 "http://127.0.0.1:$PORT/healthz" || true)
+  s=$(curl -sf -m 10 "http://127.0.0.1:$(active_port)/healthz" || true)
   for k in humans rooms matches sessions; do
     out="$out $k=$(printf '%s' "$s" | grep -o "\"$k\":[0-9]*" | head -1 | cut -d: -f2)"
   done
@@ -165,10 +165,18 @@ RUNTIME=$(printf '%s\n' "$CHANGED" | grep -v -e '^deploy/baidu/' -e '^\.github/'
 NEED_RESTART=0
 [ -n "$RUNTIME" ] && NEED_RESTART=1
 
-if [ "$NEED_RESTART" = 1 ] && busy; then
+# 蓝绿可用时不 DEFER：bg_swap 是「先在空闲那一色起新版 → 体检 → 切流 → 旧实例排空后才停」，
+# 在线玩家与进行中的对局始终留在旧实例上，根本不需要为了「有人在线」把整轮部署推掉。
+# （2026-10-31 业主：部署不是有热切吗，哪个端口没人用就先部署到那里。）
+BLUEGREEN=0
+[ -f /etc/stronghold-bluegreen ] && command -v nginx >/dev/null 2>&1 && BLUEGREEN=1
+if [ "$NEED_RESTART" = 1 ] && [ "$BLUEGREEN" = 0 ] && busy; then
   # 把四个计数都印出来：没有数字时只能靠猜是哪个字段挡的（2026-10-30 排查就卡在这里）
-  say "3. DEFER: 有人在线（$(counts)），保留 $(git rev-parse --short "$OLD")，本轮不应用"
+  say "3. DEFER: 有人在线（$(counts)）且蓝绿不可用，保留 $(git rev-parse --short "$OLD")，本轮不应用"
   exit 0
+fi
+if [ "$NEED_RESTART" = 1 ] && [ "$BLUEGREEN" = 1 ] && busy; then
+  say "3. 有人在线（$(counts)）但蓝绿可用 → 照常部署到空闲一色（在线玩家与对局留在旧实例）"
 fi
 
 say "3. 应用 $(git rev-parse --short "$NEW")（$([ "$NEED_RESTART" = 1 ] && echo 需重启 || echo 无需重启)）"
