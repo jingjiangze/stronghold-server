@@ -115,8 +115,10 @@ export async function aiTakeover(lobby, session, msg) {
   const room = lobby.roomOf(session), m = room?.match;
   if (room && reconcileAiTakeover(lobby, room)) lobby.broadcastState(room);
   const st = await matchState(m);
+  // 2026-11-01 P1（审计 P3-12）：手动接管与随机路径同一 3–9 回合窗口 —— 头注释本来就写着「接管只在这几个回合的
+  // PREP 里成立」，但手动入口一直没查窗口（常量对主路径形同死代码）。
   if (!room || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION
-    || !st || st.phase !== 'PREP' || st.ended || st.disposed || st.frozen) return fail('AI handover requires preparation in a coop match');
+    || !st || st.phase !== 'PREP' || st.ended || st.disposed || st.frozen || !inWindow(st)) return fail('AI handover requires preparation in a coop match (rounds 3–9)');
   let votes = pending.get(room); if (!votes) pending.set(room, votes = new Map());
   const sync = () => { snapshot(room, votes); lobby.broadcastState(room); };
   if (msg.t === 'room.aiRequest') {

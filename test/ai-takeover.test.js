@@ -11,7 +11,7 @@ async function fixture(t,testRoom=false,enabled=true){
   if(enabled)assert.equal((await host.request({t:'room.setAiTakeover',on:true})).t,'ok');
   const mate=await player('Mate');await mate.request({t:'room.join',code:room.code,testAck:true});await mate.request({t:'room.ready',ready:true});
   for(let i=0;i<2;i++)await host.request({t:'room.addBot'});assert.equal((await host.request({t:'room.start'})).t,'ok');
-  const m=room.match;m.startRound(1);m.phase='PREP';m.setDeadline(0);for(const p of m.order)p._botPrepToken=(p._botPrepToken||0)+1;
+  const m=room.match;m.startRound(3);m.phase='PREP';m.setDeadline(0);for(const p of m.order)p._botPrepToken=(p._botPrepToken||0)+1; // 窗口 3–9（2026-11-01）
   const late=await player('Late');if(testRoom)assert.equal((await late.request({t:'room.spectate',code:room.code})).t,'error','test-room admission requires acknowledgement');assert.equal((await late.request({t:'room.spectate',code:room.code,testAck:true})).t,'ok');return {srv,room,m,host,mate,late,player};
 }
 test('spectator AI handover needs a strict majority and retains inventory, identity and reconnect token',async t=>{
@@ -81,24 +81,25 @@ test('handover keeps seat results distinct from personal achievements and preser
   await late.request({t:'room.aiRequest',botId:bot.playerId});const vote=room.aiTakeoverVotes[0];
   await host.request({t:'room.aiVote',voteId:vote.id,approve:true});late.clearInbox();
   await mate.request({t:'room.aiVote',voteId:vote.id,approve:true});await late.waitFor('welcome',w=>w.playerId===bot.playerId);
-  assert.equal(m.pool,stock);assert.equal(m.spectators.has(oldId),false);assert.equal(bot.aiTakeoverRound,1);
+  assert.equal(m.pool,stock);assert.equal(m.spectators.has(oldId),false);assert.equal(bot.aiTakeoverRound,3);
   assert.equal(srv.network.conns.get(srv.registry.byToken(token).ws).session.playerId,bot.playerId);
-  assert.equal(bot.privateView().aiTakeoverRound,1);assert.equal(bot.stats.kills,123);
+  assert.equal(bot.privateView().aiTakeoverRound,3);assert.equal(bot.stats.kills,123);
   const {buildResult}=await import('../server/match/results.js');
   const result=buildResult(m,{victory:true,hiddenReached:true,hiddenCleared:true,reason:'hidden_cleared'});
   const row=result.players.find(p=>p.playerId===bot.playerId);
-  assert.equal(row.name,'Late');assert.equal(row.stats.kills,123);assert.equal(row.aiTakeoverRound,1);
+  assert.equal(row.name,'Late');assert.equal(row.stats.kills,123);assert.equal(row.aiTakeoverRound,3);
   assert.equal(row.title,null);assert.equal(row.trophies,0);assert.equal(row.reward,0);
   const {buildRecord,buildQuitRecord,compactRecord,countsTowardStats,recordToResult,normalizeRecord}=await import('../public/js/ui/stats.js');
   const rec=normalizeRecord(buildRecord(result,{myId:bot.playerId,roomMode:'coop',now:1}));
   assert.equal(countsTowardStats(rec),false);assert.equal(countsTowardStats(normalizeRecord(compactRecord(rec))),false);
-  const quit=buildQuitRecord({me:{playerId:bot.playerId},room:{mode:'coop'},match:{public:m.publicView()}},{live:{active:true,startedAt:0,sawStart:true,aliveRound:1},now:10});assert.equal(quit.players[0].aiTakeoverRound,1);assert.equal(countsTowardStats(quit),false);
-  assert.equal(recordToResult(rec).players.find(p=>p.playerId===bot.playerId).aiTakeoverRound,1);
+  const quit=buildQuitRecord({me:{playerId:bot.playerId},room:{mode:'coop'},match:{public:m.publicView()}},{live:{active:true,startedAt:0,sawStart:true,aliveRound:1},now:10});assert.equal(quit.players[0].aiTakeoverRound,3);assert.equal(countsTowardStats(quit),false);
+  // 2026-11-01: core results 现在也带 ownerId ⇒ buildRecord 把 self 行的 playerId 重键为接管者（oldId）
+  assert.equal(recordToResult(rec).players.find(p=>p.playerId===oldId).aiTakeoverRound,3);
   const hostRec=buildRecord(result,{myId:host.id,roomMode:'coop',now:1});assert.equal(countsTowardStats(hostRec),true);
   const foreign=await player('Stranger');assert.notEqual(foreign.id,bot.playerId);
   await late.terminate();const resumed=await player('Late',token);assert.equal(resumed.id,bot.playerId);
   m.finish({victory:false,reason:'test'});const replay=await resumed.waitFor('m.result');
-  assert.equal(replay.playerId,bot.playerId);assert.equal(replay.players.find(p=>p.playerId===bot.playerId).aiTakeoverRound,1);
+  assert.equal(replay.playerId,bot.playerId);assert.equal(replay.players.find(p=>p.playerId===bot.playerId).aiTakeoverRound,3);
   await resumed.terminate();const again=await player('Late',token);assert.equal(again.id,bot.playerId);
   const replayed=await again.waitFor('m.result');assert.equal(replayed.playerId,bot.playerId);
 });
@@ -238,4 +239,14 @@ test('随机交接：到点自动替在线观战者向一个 AI 席发起请求�
   assert.equal(room.aiRandomFired, true);
   // 同一局不再发第二次
   assert.equal(await maybeRandomAiTakeover(srv.lobby, room, 3), false);
+});
+
+test('窗口外（R1 / R10）的手动接管请求被拒；R3 放行（2026-11-01：手动与随机同一 3–9 窗口）', async t => {
+  const { m, late } = await fixture(t), bot = m.order[2];
+  m.round = 1; m.phase = 'PREP';
+  assert.equal((await late.request({ t: 'room.aiRequest', botId: bot.playerId })).t, 'error', 'R1 在窗口外');
+  m.round = 10;
+  assert.equal((await late.request({ t: 'room.aiRequest', botId: bot.playerId })).t, 'error', 'R10 在窗口外');
+  m.round = 3;
+  assert.equal((await late.request({ t: 'room.aiRequest', botId: bot.playerId })).t, 'ok', 'R3 在窗口内');
 });
