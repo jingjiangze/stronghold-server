@@ -525,6 +525,8 @@ export const C2S = {
 
   // Remake-only spectator handover: host opt-in before play, default off (§35.100).
   'room.setAiTakeover': { on: isBool },
+  // 随机交接 (3–9 回合，2026-10-31): needs room.setAiTakeover on first
+  'room.setAiRandom': { on: isBool },
   'room.aiRequest': { botId: isId },
   'room.aiVote': { voteId: (v) => typeof v === 'string' && v.length <= 16, approve: isBool },
   'room.addBot': {},

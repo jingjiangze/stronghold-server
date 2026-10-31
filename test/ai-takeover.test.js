@@ -200,3 +200,42 @@ test('takeover refuses historical (non-default) versions even with an enabled ro
     assert.equal((await late.request({ t: 'room.aiRequest', botId: m.order[2].playerId })).t, 'error');
   } finally { room.version = oldVersion; }
 });
+
+test('随机交接开关：默认关、要先开接管、仅房主、关接管时一起清掉', async t => {
+  const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
+  const clients = [];
+  t.after(async () => { for (const c of clients) await c.terminate().catch(() => {}); await srv.close(); });
+  const url = srv.url.replace('http', 'ws') + '/ws';
+  const host = await TestClient.connect(url); clients.push(host); await host.hello('Host');
+  const mate = await TestClient.connect(url); clients.push(mate); await mate.hello('Mate');
+  await host.request({ t: 'room.create', mode: 'coop', difficulty: 'NORMAL' });
+  const room = [...srv.lobby.rooms.values()][0];
+  await mate.request({ t: 'room.join', code: room.code });
+  assert.equal(room.aiRandomHandover, false);
+  assert.equal(Object.hasOwn(room.toState(), 'aiRandomHandover'), false);
+  assert.equal((await mate.request({ t: 'room.setAiRandom', on: true })).code, 'NOT_HOST');
+  // 接管关着时不能开随机交接
+  assert.equal((await host.request({ t: 'room.setAiRandom', on: true })).code, 'BAD_TARGET');
+  assert.equal((await host.request({ t: 'room.setAiTakeover', on: true })).t, 'ok');
+  assert.equal((await host.request({ t: 'room.setAiRandom', on: true })).t, 'ok');
+  assert.equal(room.toState().aiRandomHandover, true);
+  // 关掉接管 ⇒ 随机交接一起关
+  assert.equal((await host.request({ t: 'room.setAiTakeover', on: false })).t, 'ok');
+  assert.equal(room.aiRandomHandover, false);
+});
+
+test('随机交接：到点自动替在线观战者向一个 AI 席发起请求（每局一次）', async t => {
+  const { srv, room, m, late } = await fixture(t);
+  const { maybeRandomAiTakeover } = await import('../server/aiTakeover.js');
+  room.aiRandomHandover = true;
+  m.round = 3; // 窗口 3–9
+  room.aiRandomRound = 3; room.aiRandomFired = false;
+  const opened = await maybeRandomAiTakeover(srv.lobby, room, 3);
+  assert.equal(opened, true);
+  assert.equal(room.aiTakeoverVotes.length, 1);
+  const vote = room.aiTakeoverVotes[0];
+  assert.equal(vote.applicantId, late.id);
+  assert.equal(room.aiRandomFired, true);
+  // 同一局不再发第二次
+  assert.equal(await maybeRandomAiTakeover(srv.lobby, room, 3), false);
+});
