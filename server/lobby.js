@@ -401,6 +401,11 @@ export class Room {
     // [ASSUMED] Remake cooperation option, approved 2026-10-24; host opt-in before the match.
     this.aiTakeoverEnabled = false;
     /**
+     * 随机交接 (room.setAiRandom, 2026-10-31; needs aiTakeoverEnabled): the match picks one round in 3–9 and opens a
+     * handover request for an online spectator by itself (server/aiTakeover.js maybeRandomAiTakeover). Host opt-in.
+     */
+    this.aiRandomHandover = false;
+    /**
      * 「不限时」 (room.setSoloUnlimited, DESIGN §35.23.10; a timed solo only, off by default): the match is built with
      * opts.soloUnlimited. room.state omits the key unless this is true.
      */
@@ -481,6 +486,7 @@ export class Room {
     return {
       t: 'room.state',
       ...(this.aiTakeoverEnabled ? { aiTakeoverEnabled: true, aiTakeoverVotes: this.aiTakeoverVotes || [] } : {}),
+      ...(this.aiRandomHandover ? { aiRandomHandover: true } : {}),
       code: this.code,
       hostId: this.hostId,
       mode: this.mode,
@@ -844,6 +850,7 @@ export class Lobby {
       case 'room.setAiPicksLast': return this.setAiPicksLast(session, msg);
       case 'room.setSoloUnlimited': return this.setSoloUnlimited(session, msg);
       case 'room.setAiTakeover': return this.setAiTakeover(session, msg);
+      case 'room.setAiRandom': return this.setAiRandom(session, msg);
       case 'room.aiRequest':
       case 'room.aiVote': return aiTakeover(this, session, msg);
       case 'room.addBot': return this.addBot(session);
@@ -1155,12 +1162,31 @@ export class Lobby {
     if (!room) return fail(ERR.NOT_IN_ROOM);
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
-      if (room.mode === 'solo' || (on && room.version !== DEFAULT_VERSION)) return fail(ERR.BAD_TARGET);
+    if (room.mode === 'solo' || (on && room.version !== DEFAULT_VERSION)) return fail(ERR.BAD_TARGET);
     if (room.aiTakeoverEnabled !== on) {
       this.dropReplay(room, session.playerId);
       room.aiTakeoverEnabled = on;
+      // 随机交接是接管的加强项：关掉接管就一起关（否则开关会留在一个不可能生效的房间里）
+      if (!on) room.aiRandomHandover = false;
       resetAiTakeover(room);
       for (const seat of room.seats) if (seat && !seat.isBot && seat.playerId !== room.hostId) seat.ready = false;
+      this.broadcastState(room);
+    }
+    return OK;
+  }
+
+  /** room.setAiRandom { on } (host, before the match): 3–9 回合随机交接，需要相接管的开关已打开。 */
+  setAiRandom(session, { on }) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
+    if (room.match) return fail(ERR.ROOM_STARTED);
+    if (room.mode === 'solo' || (on && room.version !== DEFAULT_VERSION)) return fail(ERR.BAD_TARGET);
+    if (on && room.aiTakeoverEnabled !== true) return fail(ERR.BAD_TARGET, 'enable AI handover first');
+    if (room.aiRandomHandover !== on) {
+      this.dropReplay(room, session.playerId);
+      room.aiRandomHandover = on;
+      room.aiRandomRound = null; room.aiRandomFired = false;
       this.broadcastState(room);
     }
     return OK;

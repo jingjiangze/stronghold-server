@@ -166,6 +166,15 @@ export function aiTakeoverOption(room, myId) {
 }
 
 /**
+ * 随机交接 (2026-10-31): only once the handover switch is on (the server refuses it otherwise). Host-editable before
+ * the match; everybody else sees it read-only.
+ */
+export function aiRandomOption(room, myId) {
+  if (!room || room.aiTakeoverEnabled !== true || room.mode === 'solo' || roomVersion(room) !== DEFAULT_VERSION) return null;
+  return { on: room.aiRandomHandover === true, editable: room.hostId != null && room.hostId === myId && !room.inMatch };
+}
+
+/**
  * The solo room option 「不限时」 (DESIGN §35.23.10; room.setSoloUnlimited). null unless the room is solo AND `timed`
  * is exactly true (a version whose solo is timed, and whose data is on screen). Off when room.state omits the key.
  * The host switches it; everybody else sees it read-only.
@@ -389,7 +398,7 @@ function AiLastToggle({ option, busy, onToggle }) {
 function AiTakeoverToggle({ option, busy, onToggle }) {
   if (!option) return null;
   return html`<div class="ailast">
-    <${Tooltip} text=${t('默认关闭。开启后，观战者可在休整期经同房间真人投票接替 AI；继承记录不计个人统计或奖励。')}>
+    <${Tooltip} text=${t('默认关闭。开启后，观战者可在休整期经同房间真人投票接替 AI；继承的记录计入接替者的个人统计与奖励。')}>
       <button type="button" role="switch" aria-checked=${option.on ? 'true' : 'false'} data-testid="room-ai-takeover"
           class=${`dpick__opt ailast__opt${option.on ? ' is-active' : ''}`} disabled=${!option.editable || !!busy}
           onClick=${() => option.editable && onToggle(!option.on)}>
@@ -401,10 +410,26 @@ function AiTakeoverToggle({ option, busy, onToggle }) {
 }
 
 /**
+ * 随机交接 (3–9 回合) — the switch under 允许观战者接替 AI; hidden unless that one is on.
+ */
+function AiRandomToggle({ option, busy, onToggle }) {
+  if (!option) return null;
+  return html`<div class="ailast">
+    <${Tooltip} text=${t('默认关闭。开启后，本局会在第 3–9 回合里随机挑一回合，自动替一名在线观战者向一个 AI 席位发起接管申请，仍需队友投票；每局最多一次。')}>
+      <button type="button" role="switch" aria-checked=${option.on ? 'true' : 'false'} data-testid="room-ai-random"
+          class=${`dpick__opt ailast__opt${option.on ? ' is-active' : ''}`} disabled=${!option.editable || !!busy}
+          onClick=${() => option.editable && onToggle(!option.on)}>
+        <${Icon} name="check" class=${option.on ? 'is-on' : ''} />${t('随机接管（3–9 回合）')}
+      </button>
+    <//>
+    ${option.editable ? null : html`<span class="t-dim">${t('由创建者设置')}</span>`}
+  </div>`;
+}
+
+/**
  * ⚙ of the bottom pill (co-op): 同盟设置 — the 模拟难度 (opens 选择模拟协议: the host's 确认, the others' read-only view)
  * and the 「AI 队友最后选择」 switch. Closes on a click outside it or Esc.
- */
-function RoomOptions({ option, takeoverOption, onAiTakeover, soloOption = null, room, isHost, busy, onAiLast, onSoloUnlimited, onDifficulty, onClose, version = null }) {
+ */function RoomOptions({ option, takeoverOption, onAiTakeover, aiRandomOption = null, onAiRandom, soloOption = null, room, isHost, busy, onAiLast, onSoloUnlimited, onDifficulty, onClose, version = null }) {
   const info = difficultyInfo(room.mode, room.difficulty);
   const title = soloOption ? t('模拟设置') : t('同盟设置');
   useEffect(() => {
@@ -436,6 +461,7 @@ function RoomOptions({ option, takeoverOption, onAiTakeover, soloOption = null, 
       ${version.editable ? null : html`<span class="t-dim">${t('由创建者发起')}</span>`}
     </div>` : null}
     <${AiTakeoverToggle} option=${takeoverOption} busy=${busy} onToggle=${onAiTakeover} />
+    <${AiRandomToggle} option=${aiRandomOption} busy=${busy} onToggle=${onAiRandom} />
     ${soloOption
       ? html`<${SoloUnlimitedToggle} option=${soloOption} busy=${busy} onToggle=${onSoloUnlimited} />`
       : html`<${AiLastToggle} option=${option} busy=${busy} onToggle=${onAiLast} />`}
@@ -559,6 +585,7 @@ export function RoomScreen() {
   };
   const setDifficulty = (difficulty) => run('diff', () => net.request('room.setDifficulty', { difficulty }));
   const setAiTakeover = (on) => run('aihandover', () => net.request('room.setAiTakeover', { on }));
+  const setAiRandom = (on) => run('airandom', () => net.request('room.setAiRandom', { on }));
   const setAiLast = (on) => run('ailast', () => net.request('room.setAiPicksLast', { on }));
   // the room is the authority; the lobby card reads the same pref the next time this browser creates a solo room
   const setSoloUnlimited = async (on) => {
@@ -744,7 +771,7 @@ export function RoomScreen() {
             disabled=${versionCtl.disabled} onClick=${versionCtl.onOpen} aria-label=${t('游戏版本：{name}', { name: versionLabel(curVersion) })}><${Icon} name="book" /><span class="rs-pill__vername">${versionLabel(curVersion)}</span></button><//>` : null}
           ${aiLast || soloOpt ? html`<button type="button" class=${`rs-pill__gear${opts ? ' is-on' : ''}`} onClick=${() => setOpts((v) => !v)} title=${aiLast ? t('同盟设置') : t('模拟设置')} aria-label=${aiLast ? t('同盟设置') : t('模拟设置')}
             aria-expanded=${opts ? 'true' : 'false'}><${GearGlyph} /></button>` : null}
-          ${opts && (aiLast || soloOpt) ? html`<${RoomOptions} takeoverOption=${aiTakeoverOption(room, me.playerId)} onAiTakeover=${setAiTakeover} option=${aiLast} soloOption=${soloOpt} room=${room} isHost=${facts.isHost} busy=${busy} onAiLast=${setAiLast}
+          ${opts && (aiLast || soloOpt) ? html`<${RoomOptions} takeoverOption=${aiTakeoverOption(room, me.playerId)} onAiTakeover=${setAiTakeover} aiRandomOption=${aiRandomOption(room, me.playerId)} onAiRandom=${setAiRandom} option=${aiLast} soloOption=${soloOpt} room=${room} isHost=${facts.isHost} busy=${busy} onAiLast=${setAiLast}
             onSoloUnlimited=${setSoloUnlimited} onDifficulty=${openProto} onClose=${() => setOpts(false)} version=${versionCtl} />` : null}
         </div>
       </div>

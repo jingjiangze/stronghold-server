@@ -532,6 +532,8 @@ export const C2S = {
   // - state.resync：public/js/net.js:551 requestResync —— 断线重连后的状态补帧，**这份缺失等于重连永远不同步**
   // - room.setAiTakeover / room.aiRequest / room.aiVote：观战席接管 AI 席位（server/lobby.js 均有 handler）
   'room.setAiTakeover': { on: isBool },
+  // 随机交接（3–9 回合）：要先把 room.setAiTakeover 打开
+  'room.setAiRandom': { on: isBool },
   'room.aiRequest': { botId: isId },
   'room.aiVote': { voteId: (v) => typeof v === 'string' && v.length <= 16, approve: isBool },
   'room.card': { charId: (v) => v === '' || isCharId(v) },
