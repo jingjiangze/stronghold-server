@@ -2055,6 +2055,10 @@ export class Lobby {
         difficulty: room.difficulty,
         // a plugin mode the host chose (header "Gameplay plugins"), else the official mode of the difficulty
         modeId: (this.ext?.options?.(room) || {}).modeId || room.content?.modeId || modeIdFor(room.mode, room.difficulty),
+        // 房间变体（协同共竞 'xie' / 肉鸽 'rogue' / 无限火力 blitz…）。**必须透传给 Match**：引擎侧
+        // `Match.roomVariant` 靠它判 `isRogue`。以前只把变体存进 `room.variant` 并广播给客户端，却没进 opts
+        // ⇒ `isRogue` 恒 false，肉鸽的藏品节奏 / 随机事件 / 随机词缀 / 每回合换图**全部静默失效**（2026-10-31 修）。
+        ...(typeof room.variant === 'string' && room.variant ? { variant: room.variant } : {}),
         // 「AI 队友最后选择」 (GitHub #338): fixed for the match
         aiPicksLast: room.mode !== 'solo' && room.aiPicksLast === true,
         seats,
