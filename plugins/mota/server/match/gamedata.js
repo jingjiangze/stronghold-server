@@ -71,7 +71,7 @@ export const DEFAULTS = Object.freeze({
   //                           never exceeds that income). Both default off: every existing mode keeps its behaviour.
   teamEconomy: {
     // 业主 2026-10-30「只保留团队储备」：借款额度收紧（队友只是兜底）、利息归零。
-    transfer: { maxPerRequest: 1, requestsPerRound: 2, teamCapPerRound: 4, ttlSec: 30, repayInterest: 0 },
+    transfer: { maxPerRequest: 1, requestsPerRound: 2, teamCapPerRound: 4, ttlSec: 30, repayInterest: 0, poolFillBehindOnly: true },
     // deathDividend 与 coverInterest（兜底利率）已按业主要求删除 —— 两者本来就是无调用者的死码，
     // 2026-10-30 起连配置也不再提供。
     // reserve：团队储备的常规收入（防守奖励），数值调低：两档并成 1，每回合最多 1。
@@ -666,12 +666,16 @@ export class GameData {
       // 协同共竞 (DESIGN §29): borrowing only — the team reserve, its conversion, the perfect rewards and the
       // projects stay off; the request/transfer layer is the whole rule set.
       borrowOnly: src.borrowOnly === true,
+      // 2026-11-01 P1：债务账本独立开关（默认开）——利息两档恒 0/false 时账本以前永不写入，
+      // 还钱/催钱链路全死；`debtLedger: false` 可显式关回。
+      debtLedger: src.debtLedger !== false,
       transfer: {
         maxPerRequest: pi(tr.maxPerRequest, d.transfer.maxPerRequest),
         requestsPerRound: pi(tr.requestsPerRound, d.transfer.requestsPerRound),
         teamCapPerRound: pi(tr.teamCapPerRound, d.transfer.teamCapPerRound),
         ttlSec: pi(tr.ttlSec, d.transfer.ttlSec),
         repayInterest: nn(tr.repayInterest, d.transfer.repayInterest),
+        poolFillBehindOnly: tr.poolFillBehindOnly !== false,
       },
       // 2026-10-30 业主决定删除「阵亡分红」与「兜底利率」两个机制：结构保留（economy.js 仍会读这几个字段，
       // 直接删键会让还款路径 TypeError），但 enabled **恒为 false** —— 老配置里写着 true 也打不开。
@@ -710,7 +714,9 @@ export class GameData {
         const lo = ms(bl.delayMsMin, d.botLend.delayMsMin);
         return {
           enabled: bl.enabled === true,
-          basePct: Math.min(maxPct, pct(bl.basePct, d.botLend.basePct)),
+          // 2026-11-01 P1：basePct 不再预钳到 maxPct（叠加项与最终上限的钳制在 econBotLendChance 里），
+          // 否则配置里 basePct 75 / maxPct 50 会让 basePct 永远失真成 50。
+          basePct: pct(bl.basePct, d.botLend.basePct),
           weakPct: pct(bl.weakPct, d.botLend.weakPct),
           solventPct: pct(bl.solventPct, d.botLend.solventPct),
           coverPct: pct(bl.coverPct, d.botLend.coverPct),

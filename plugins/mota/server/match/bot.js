@@ -1450,6 +1450,8 @@ export function* botPrepBeginSteps(m, ps, { delegate = false } = {}) {
   maybeFreeze(m, ps);
   // 协同经济：缺口要在花完钱之后才看得见，这里才开口借（botEconMaybeRequest 自带每回合一次防重；非 teamEcon 模式是 no-op）
   botEconMaybeRequest(m, ps);
+  // 协同经济：余粮存 1 点进团队储备（既有约束：每人每回合 1 次；非 teamEcon / borrowOnly 是 no-op）
+  botEconMaybeDeposit(m, ps);
   yield;
   // 3. placement, 4. items, placement again (item carriers gain value; rehearsed when the match allows it)
   yield* arrangeSteps(m, ps);
@@ -2114,4 +2116,14 @@ export function botEconMaybeRequest(m, ps, { retry = false } = {}) {
   const need = gap > 0 ? gap : Math.max(1, 4 - ps.funds);
   const amount = Math.min(m.teamEcon.transfer.maxPerRequest, Math.max(1, need));
   return !!m.econRequest(ps, null, amount)?.ok;
+}
+
+/**
+ * 协同经济 P1（2026-11-01）：有余粮的 bot 主动存 1 点进团队储备。存量上限（每人每回合 1 次）、
+ * 阶段与 ready 门都由 `econDeposit` 自己把关，这里只判「是否真的有余粮」。
+ */
+export function botEconMaybeDeposit(m, ps) {
+  if (!m.teamEcon || m.teamEcon.borrowOnly || !ps.alive || ps.ready) return false;
+  if (Math.floor(Number(ps.funds) || 0) <= fundsReserve(m, ps) + 1) return false; // 留下自己的购物钱
+  return !!m.econDeposit(ps)?.ok;
 }
