@@ -451,7 +451,7 @@ function HubTile({ icon, label, en, onClick, children }) {
  * 娱乐模式（业主 2026-10-31「其他模式聚合为大厅里的一个按钮」）：把协同共竞 / 赏金 / 对战(控怪) / 肉鸽
  * 收进一个入口；弹窗占视口 80%，2×2 网格，选哪格就走对应的建房弹窗。
  */
-function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null }) {
+function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null, onSpectateRoom = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -493,8 +493,12 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
           style="padding:0 .7rem .7rem;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center">
         <span>${t('公开房间：')}</span>
         ${lobbyStats.rooms.slice(0, 8).map((r) => html`<button key=${r.code} type="button" class="code-chip num"
-            title=${t('{code} · {humans} 人 · {mode}', { code: r.code, humans: r.humans, mode: r.mode })}
-            disabled=${!onJoinRoom || r.inMatch === true} onClick=${() => onJoinRoom && onJoinRoom(r.code)}>${r.code}${r.inMatch ? ' · 对局中' : ''}</button>`)}
+            data-testid=${r.inMatch ? `lobby-room-${r.code}-infiltrate` : `lobby-room-${r.code}`}
+            title=${r.inMatch
+              ? t('{code} · 对局进行中 · 潜入：以观战身份进入并申请接管一个 AI 席位', { code: r.code })
+              : t('{code} · {humans} 人 · {mode}', { code: r.code, humans: r.humans, mode: r.mode })}
+            disabled=${r.inMatch ? !onSpectateRoom : !onJoinRoom}
+            onClick=${() => (r.inMatch ? onSpectateRoom && onSpectateRoom(r.code) : onJoinRoom && onJoinRoom(r.code))}>${r.code}${r.inMatch ? ` · ${t('对局中')} · ${t('潜入')}` : ''}</button>`)}
       </div>` : null}
     </div>
   </div>`;
@@ -1263,7 +1267,8 @@ export function LobbyScreen() {
       onCreate=${create} onJoin=${() => join()} onSpectate=${() => spectate()} onBrowse=${() => setModalOpen(true)} onSearch=${openSearch} />` : null}
 
     ${funOpen ? html`<${FunSelect} onClose=${() => setFunOpen(false)} busy=${busy} onPick=${pickFun}
-      lobbyStats=${lobbyStats} onJoinRoom=${(c) => { setFunOpen(false); join(c); }} />` : null}
+      lobbyStats=${lobbyStats} onJoinRoom=${(c) => { setFunOpen(false); join(c); }}
+      onSpectateRoom=${(c) => { setFunOpen(false); spectate(c); }} />` : null}
 
     <${HubDialog} open=${joinOpen} micro="JOIN WITH ALLIANCE KEY" title=${t('密钥加入')} onClose=${() => setJoinOpen(false)}>
       <div class="join-row">
