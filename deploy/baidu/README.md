@@ -176,7 +176,7 @@ systemctl disable --now stronghold
 - 账号就是 **QQ 号**：只存 `scrypt` 口令哈希 + 名片/昵称样式 + 布阵数据用量；**头像不存**，客户端直接用
   `https://q1.qlogo.cn/g?b=qq&nk=<qq>&s=100`。
 - 环境变量：
-  - `SP_ADMIN_KEY=<口令>` —— 打开 `/api/admin/*`（列账号 / 改密 / 调占用 / 写公告）。**不设则整段 404**。
+  - `SP_ADMIN_KEY` —— **放在 `/etc/stronghold-admin.env`（0600，不入库）**，unit 用 `EnvironmentFile=-` 读它；用来打开 `/admin` 与 `/api/admin/*`（列账号 / 改密 / 调占用 / 写公告）。**不设则整段 404**。
   - `SP_ACCOUNT_LINEUP_QUOTA_BYTES` —— **全服**布阵数据容量，默认 `20GiB`（业主口径：全服务器总量，不是每账号）。
   - `SP_ACCOUNTS=off` —— 整体关闭（等同 `startServer({ accounts: false })`）。
 
