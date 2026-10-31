@@ -248,7 +248,7 @@ export class MatchPlatform {
       // 掉线托管是临时的：人回来了就交还控制权（与 onDisconnect 的置位成对，缺这一半会「回来还被 AI 接管」）
       if (ps.autoplay) { ps.autoplay = false; this.markPublic(); }
       this._resync(ps);
-      if (!was) this.markPublic();
+      if (!was) { this.markPublic(); this.markMembershipChanged(); }
     });
   }
 
@@ -270,35 +270,6 @@ export class MatchPlatform {
       this.markPrivate(ps);
     });
     return res;
-  }
-
-  onDisconnect(playerId) {
-    const ps = this.players.get(playerId);
-    if (!ps || ps.isBot || this.disposed) return;
-    this.guard(() => {
-      ps.connected = false;
-      // A disconnected human's silence is never consent to a new setup.
-      this.cancelSetupVote();
-      // a paused solo battle resumes (the server takes the field over; nobody is left to resume it)
-      this._resume();
-      if (this.clientCombat) this._authorityLost(ps, 'disconnect');
-// a rehearsal this host was running falls back to the server (DESIGN §14; a no-op without tasks)
-      this._rehearsalHostChanged();
-      this.markPublic();
-    });
-  }
-
-  onReconnect(playerId) {
-    const ps = this.players.get(playerId);
-    if (!ps || ps.isBot || ps.left || this.disposed) return;
-    this.guard(() => {
-      const was = ps.connected;
-      ps.connected = true;
-      this._resync(ps);
-      // a returning member's own state is freshly full, but the ROOM's baseline has to stay one every client shares:
-      // the next frame is full for everybody, which costs one frame per reconnect and no per-client bookkeeping
-      if (!was) this.markMembershipChanged();
-    });
   }
 
   /**

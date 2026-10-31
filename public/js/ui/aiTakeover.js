@@ -1,18 +1,34 @@
-import { useState } from '../../vendor/hooks.module.js';
+import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Button, Modal } from './components.js';
 import { useStore } from '../store.js';
 import { net } from '../net.js';
 import { toastError } from './toasts.js';
 import { DEFAULT_VERSION, roomVersion } from '../versions.js';
 import { t } from '../../../shared/i18n.js';
+
+/**
+ * 「潜入」= 以观战身份进到**进行中的对局**里，接管一个 AI 席位（AI 协作）。
+ * 机制在 server/aiTakeover.js：观战者 `room.aiRequest` → 同房在线真人过半 `room.aiVote` → 休整期换席。
+ * 这里只负责入口与投票面板。
+ */
 export function AiTakeoverPanel() {
   const room = useStore(s => s.room), pub = useStore(s => s.match.public), myId = useStore(s => s.me.playerId);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
+  const autoOpened = useRef(false);
+  // 潜进入口：钩子不能写在下面的早退之后，所以先算出这两个判据（room 可能还没到，用可选链）
+  const spectator = !!room && room.spectators?.some(s => s.playerId === myId);
+  const bots = (pub?.players || []).filter(p => p.isBot && p.alive && !p.left);
+  // 以观战身份进来、且此刻有可接的 AI 席、正在休整期 ⇒ 自动展开一次面板（之后由玩家自己开关）。
+  useEffect(() => {
+    if (autoOpened.current || !spectator || !bots.length || pub?.phase !== 'PREP') return;
+    if (room && room.aiTakeoverEnabled === true && roomVersion(room) === DEFAULT_VERSION && room.mode !== 'solo') {
+      autoOpened.current = true;
+      setOpen(true);
+    }
+  }, [spectator, bots.length, pub?.phase, room]);
   if (!room || room.aiTakeoverEnabled !== true || room.mode === 'solo' || roomVersion(room) !== DEFAULT_VERSION) return null;
   const run = async (kind, body) => { if (busy) return; setBusy(true); try { await net.request(kind, body); } catch (e) { toastError(e); } finally { setBusy(false); } };
-  const spectator = room.spectators?.some(s => s.playerId === myId);
   const requests = room.aiTakeoverVotes || [], votes = requests;
-  const bots = (pub?.players || []).filter(p => p.isBot && p.alive && !p.left);
   const name = id => (pub?.players || []).find(p => p.playerId === id)?.name || id;
   return html`<button type="button" class="btn ai-participation-entry" onClick=${() => setOpen(true)}>${t('AI 协作')}${votes.length ? ` (${votes.length})` : ''}</button>
     <${Modal} open=${open} onClose=${() => setOpen(false)} title=${t('AI 协作')} width="min(800px,92vw)" actions=${html`<${Button} onClick=${() => setOpen(false)}>${t('关闭')}<//>`}>
