@@ -20,6 +20,8 @@ Environment=SP_PLUGIN_SCRIPTS=trusted-force
 Environment=SP_PROBE=0
 Environment=SP_ASSET_HEALTH_INTERVAL_MS=600000
 # node:sqlite（账号库）在 Node 22 需要显式开启；Node 24 起默认可用
+# 管理后台口令（/admin 与 /api/admin/*）：放在不入库的 env 文件里
+EnvironmentFile=-/etc/stronghold-admin.env
 Environment=NODE_OPTIONS=--max-old-space-size=1536 --experimental-sqlite
 ExecStart=/usr/local/node-v22.11.0/bin/node server/index.js
 Restart=always
