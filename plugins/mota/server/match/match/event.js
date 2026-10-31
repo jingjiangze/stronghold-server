@@ -395,13 +395,16 @@ export class MatchEvent {
   }
 
   /**
-   * The AI's target: the available target with the highest eventEvFor (self ×2 included); a tie takes the earlier key of
+   * The AI's target: the available target with the highest eventEvFor (self ×2 included), priced at the REAL sequence
+   * row — the same clamp the draw uses (2026-10-31: it used to always price with the E2 odds, which only happens to be
+   * right for the second event); a tie takes the earlier key of
    * EVENT_TARGETS (self / mate / oppA / oppB). Null when nothing is left (impossible with 3 events / 4 targets).
    */
   botEventTarget(ps) {
+    const seq = Math.max(1, Math.min(EVENT_SEQUENCE.length, this.eventIndex));
     let best = null;
     for (const key of this.eventAvailableTargets(ps)) {
-      const ev = eventEvFor(key);
+      const ev = eventEvFor(key, seq);
       if (!best || ev > best.ev + 1e-9) best = { key, ev };
     }
     return best ? best.key : null;
