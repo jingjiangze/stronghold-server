@@ -584,7 +584,13 @@ export function RoomScreen() {
     if (ok) run(`kick${seat}`, () => net.request('room.kick', { seat, playerId }));
   };
   const setDifficulty = (difficulty) => run('diff', () => net.request('room.setDifficulty', { difficulty }));
-  const setAiTakeover = (on) => run('aihandover', () => net.request('room.setAiTakeover', { on }));
+  // 潜入需要一个「可接的 AI 席」，而 coop 房默认不填 AI ⇒ 开启「AI 协作」时若一个 AI 席都没有，自动补一个。
+  const setAiTakeover = (on) => run('aihandover', async () => {
+    await net.request('room.setAiTakeover', { on });
+    if (!on) return;
+    const hasBot = (room.seats || []).some((s) => s && s.isBot && !s.left);
+    if (!hasBot) await net.request('room.addBot', {});
+  });
   const setAiRandom = (on) => run('airandom', () => net.request('room.setAiRandom', { on }));
   const setAiLast = (on) => run('ailast', () => net.request('room.setAiPicksLast', { on }));
   // the room is the authority; the lobby card reads the same pref the next time this browser creates a solo room

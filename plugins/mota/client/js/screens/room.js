@@ -716,7 +716,13 @@ export function RoomScreen() {
   const setAiLast = (on) => run('ailast', () => net.request('room.setAiPicksLast', { on }));
   // 观战接管 AI / 随机接管 (2026-10-31): 本文件是插件里的 room 屏（顶替核心那份），接管开关原先只存在于核心副本
   // ⇒ 线上房主根本看不到。两个开关必须在这里，核心那边的改动才可能生效。
-  const setAiTakeover = (on) => run('aihandover', () => net.request('room.setAiTakeover', { on }));
+  // 潜入需要一个「可接的 AI 席」，而 coop 房默认不填 AI ⇒ 开启「AI 协作」时若一个 AI 席都没有，自动补一个。
+  const setAiTakeover = (on) => run('aihandover', async () => {
+    await net.request('room.setAiTakeover', { on });
+    if (!on) return;
+    const hasBot = (room.seats || []).some((s) => s && s.isBot && !s.left);
+    if (!hasBot) await net.request('room.addBot', {});
+  });
   const setAiRandom = (on) => run('airandom', () => net.request('room.setAiRandom', { on }));
   // 随机地图（random-stage 插件提供 C2S）：房主、开局前
   const setRandomStage = (on) => run('rstage', () => net.request('room.setRandomStage', { randomStage: on }));
