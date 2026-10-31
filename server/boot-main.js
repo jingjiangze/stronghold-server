@@ -70,6 +70,8 @@ import { MIME, COMPRESSIBLE, acceptsGzip, pickEncoding, parseRange } from './htt
 import { BUILD_INPUTS, computeBuildTag, buildTag, resetBuildTag } from './http/buildTag.js';
 import { createRequestHandler } from './http/routes.js';
 import { createMods } from './mods/index.js';
+import { openAccounts } from './accounts/store.js';
+import { createAccountsApi } from './accounts/api.js';
 import { createTrafficCounter } from './http/traffic.js';
 import { createAssetIndex } from './http/assetIndex.js';
 import { createManifestViews } from './http/assetViews.js';
@@ -257,13 +259,18 @@ export async function startServer(opts = {}) {
   });
   const trustedRuntime = await createTrustedRuntime({registry:packs,log});
   lobby.trustedRuntime = trustedRuntime;
+  // 账号 / 公告 / 管理后台（server/accounts/，业主 2026-11-01）：QQ 号当账号、头像走 QQ 头像 API、只存名片与
+  // 布阵数据用量。opts.accounts === false 或 SP_ACCOUNTS=off 关闭；公告走 /api/announcements（管理后台写文件）。
+  const accounts = opts.accounts === false || String(process.env.SP_ACCOUNTS || '').toLowerCase() === 'off' ? null : createAccountsApi({
+    store: openAccounts({ dataDir, log }), dataDir, registry, log,
+  });
   const startedAt = Date.now();
   // The tag is per process (see buildTag): read the browser runtime once, here, not on every /healthz.
   resetBuildTag();
   buildTag(ROOT, { servedVersionDirs: versions.servedDirs() });
 
   const traffic = createTrafficCounter();
-  const server = http.createServer(createRequestHandler({ serveStatic, csp: process.env.SP_CSP === 'off' ? null : siteCsp(publicDir, cspExtra), health: { startedAt, network, registry, lobby, content, traffic, assetIndex, views, trusted:trustedRuntime?.health, versions, versionHosts }, log, trustProxy: network.opts.trustProxy, studio, mods, trustedRuntime }));
+  const server = http.createServer(createRequestHandler({ serveStatic, csp: process.env.SP_CSP === 'off' ? null : siteCsp(publicDir, cspExtra), health: { startedAt, network, registry, lobby, content, traffic, assetIndex, views, trusted:trustedRuntime?.health, versions, versionHosts }, log, trustProxy: network.opts.trustProxy, studio, mods, accounts, trustedRuntime }));
   server.on('clientError', answerClientError);
   const wss = attachWebSocket(server, { network, log, traffic });
 

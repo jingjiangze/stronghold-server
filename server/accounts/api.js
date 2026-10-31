@@ -1,0 +1,176 @@
+// server/accounts/api.js — the account HTTP surface (业主 2026-11-01)。
+//
+// 为什么是 REST 而不是塞进 WS：账号是「进游戏之前 / 与游戏无关」的事，走 `/api/*` 才能被管理后台、脚本和
+// 将来的独立前端共用；游戏实时协议 `/ws` 一个字不动。
+//
+// 端点：
+//   POST /api/auth/register {qq,password}      建号（QQ 号即登录名）
+//   POST /api/auth/login    {qq,password}      登录 → 无状态令牌
+//   POST /api/auth/bind     {qq,password}      **游客绑定**：Authorization: Bearer <现在的 WS 令牌>
+//   GET  /api/account/me                       当前账号（头像 URL 由 QQ 头像 API 现拼，不存图）
+//   POST /api/account/profile {name,nameStyle,card}  名片 / 昵称样式
+//   GET  /api/announcements                    公告（管理后台写、玩家读）
+//   /api/admin/*                               X-Admin-Key 口令；没配钥匙时整段回 404（不暴露存在）
+//
+// 存储上限：请求体 8 KiB；公告 64 KiB；名片 1 KiB（store.js 里再卡）。失败一律 JSON，不抛。
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { sendError, sendJson } from '../http/common.js';
+
+const BODY_MAX = 8 * 1024;
+const ANNOUNCE_MAX = 64 * 1024;
+
+/** Read a JSON body with a hard cap (the route only accepts POST). */
+function readJson(req) {
+  return new Promise((resolve) => {
+    let size = 0, dead = false;
+    const chunks = [];
+    req.on('data', (c) => {
+      if (dead) return;
+      size += c.length;
+      if (size > BODY_MAX) { dead = true; resolve(null); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      if (dead) return;
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { resolve(null); }
+    });
+    req.on('error', () => resolve(null));
+  });
+}
+
+const bearer = (req) => {
+  const h = String(req.headers?.authorization || '');
+  return h.toLowerCase().startsWith('bearer ') ? h.slice(7).trim() : '';
+};
+
+/**
+ * @param {{ store: ReturnType<typeof import('./store.js').openAccounts>, dataDir: string,
+ *   registry?: { byToken: (t: string) => any }, log?: object, adminKey?: string | null }} o
+ *   registry: the WebSocket session registry — 游客绑定用它把「现在的 WS 令牌」换成 playerId。
+ *   adminKey: SP_ADMIN_KEY；null/空 ⇒ 管理端点整段 404。
+ */
+export function createAccountsApi({ store, dataDir, registry = null, log = console, adminKey = process.env.SP_ADMIN_KEY || null }) {
+  const annFile = path.join(dataDir, 'announcements.json');
+
+  const readAnnouncements = () => {
+    try {
+      const raw = fs.readFileSync(annFile, 'utf8');
+      const body = JSON.parse(raw);
+      return Array.isArray(body?.items) ? { items: body.items } : { items: [] };
+    } catch { return { items: [] }; }
+  };
+
+  const sameKey = (given) => {
+    const a = Buffer.from(String(given || ''));
+    const b = Buffer.from(String(adminKey || ''));
+    return a.length === b.length && a.length > 0 && a.length === b.length && a.equals(b);
+  };
+
+  function accountFor(req, res) {
+    const qq = store.verifyToken(bearer(req));
+    if (!qq) { sendJson(req, res, 401, { ok: false, error: 'UNAUTHORIZED' }); return null; }
+    return qq;
+  }
+
+  return {
+    handles: (rawPath) => rawPath === '/api' || rawPath.startsWith('/api/'),
+
+    async handle(req, res, rawPath, query = '') {
+      const post = req.method === 'POST';
+      const isAdmin = rawPath.startsWith('/api/admin/');
+
+      // 管理端点：没配钥匙就当作不存在（不告诉扫描者「这里有个后台」）
+      if (isAdmin) {
+        if (!adminKey) { sendError(req, res, 404, '未找到 · Not found'); return; }
+        if (!sameKey(req.headers['x-admin-key'])) { sendJson(req, res, 403, { ok: false, error: 'FORBIDDEN' }); return; }
+      }
+
+      if (rawPath === '/api/announcements' && (req.method === 'GET' || req.method === 'HEAD')) {
+        sendJson(req, res, 200, { ok: true, ...readAnnouncements() });
+        return;
+      }
+
+      if (rawPath === '/api/auth/register' && post) {
+        const body = await readJson(req);
+        if (!body) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
+        const r = store.register(body.qq, body.password);
+        sendJson(req, res, r.ok ? 200 : r.error === 'EXISTS' ? 409 : 400, r.ok ? { ok: true, token: r.token, account: r.account } : { ok: false, error: r.error });
+        return;
+      }
+
+      if (rawPath === '/api/auth/login' && post) {
+        const body = await readJson(req);
+        if (!body) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
+        const r = store.login(body.qq, body.password);
+        sendJson(req, res, r.ok ? 200 : 401, r.ok ? { ok: true, token: r.token, account: r.account } : { ok: false, error: r.error });
+        return;
+      }
+
+      // 游客绑定：Bearer = 浏览器当前的 WS 令牌（sp.token），用 registry 换成 playerId 后挂到 QQ 账号上。
+      if (rawPath === '/api/auth/bind' && post) {
+        const body = await readJson(req);
+        if (!body) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
+        const wsToken = bearer(req);
+        const session = wsToken && registry ? registry.byToken(wsToken) : null;
+        if (!session) { sendJson(req, res, 401, { ok: false, error: 'NO_GUEST_SESSION' }); return; }
+        const r = store.bind(body.qq, body.password, session.playerId);
+        sendJson(req, res, r.ok ? 200 : r.error === 'BAD_CREDENTIALS' ? 401 : 400, r.ok ? { ok: true, token: r.token, account: r.account } : { ok: false, error: r.error });
+        return;
+      }
+
+      if (rawPath === '/api/account/me' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const qq = accountFor(req, res);
+        if (!qq) return;
+        sendJson(req, res, 200, { ok: true, account: store.view(qq) });
+        return;
+      }
+
+      if (rawPath === '/api/account/profile' && post) {
+        const qq = accountFor(req, res);
+        if (!qq) return;
+        const body = await readJson(req);
+        if (!body) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
+        const r = store.setProfile(qq, body);
+        sendJson(req, res, r.ok ? 200 : r.error === 'NOT_FOUND' ? 404 : 400, r.ok ? { ok: true, account: r.account } : { ok: false, error: r.error });
+        return;
+      }
+
+      if (rawPath === '/api/admin/accounts' && (req.method === 'GET' || req.method === 'HEAD')) {
+        sendJson(req, res, 200, { ok: true, accounts: store.list(), quotaBytes: store.quotaBytes });
+        return;
+      }
+
+      if (rawPath === '/api/admin/account' && post) {
+        const body = await readJson(req);
+        if (!body) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
+        const r = store.adminPatch(body.qq, body);
+        sendJson(req, res, r.ok ? 200 : r.error === 'NOT_FOUND' ? 404 : 400, r.ok ? { ok: true, account: r.account } : { ok: false, error: r.error });
+        return;
+      }
+
+      if (rawPath === '/api/admin/announcements') {
+        if (req.method === 'GET' || req.method === 'HEAD') { sendJson(req, res, 200, { ok: true, ...readAnnouncements() }); return; }
+        if (post) {
+          const body = await readJson(req);
+          const items = Array.isArray(body?.items) ? body.items.slice(0, 50) : null;
+          if (!items) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
+          const text = JSON.stringify({ items }, null, 2);
+          if (Buffer.byteLength(text) > ANNOUNCE_MAX) { sendJson(req, res, 413, { ok: false, error: 'TOO_LARGE' }); return; }
+          try {
+            fs.mkdirSync(dataDir, { recursive: true });
+            const tmp = `${annFile}.tmp`;
+            fs.writeFileSync(tmp, `${text}\n`, 'utf8');
+            fs.renameSync(tmp, annFile);
+            log.info?.(`[accounts] announcements written (${items.length})`);
+          } catch (e) { log.error?.('[accounts] cannot write announcements', e); sendJson(req, res, 500, { ok: false, error: 'WRITE_FAILED' }); return; }
+          sendJson(req, res, 200, { ok: true, items });
+          return;
+        }
+      }
+
+      sendJson(req, res, 404, { ok: false, error: 'NOT_FOUND' });
+    },
+  };
+}
