@@ -1,15 +1,17 @@
 // server/accounts/store.js — 极简账号库 (业主 2026-11-01)：QQ 号当登录名、头像走 QQ 头像 API（不存图）、
 // 密码自己设、游客可绑定；服务端只存「口令哈希 + 名片/昵称样式 + 布阵数据用量」。
 //
-// 存储（业主 2026-11-01 追加：用 SQLite）：Node 内置 `node:sqlite`（22.11 需要 `--experimental-sqlite`，
-// 生产在 systemd 的 NODE_OPTIONS 里给；Node 24 直接可用）。**拿不到该模块时退回 append-only JSONL**，
-// 保证 CI（node 22 无 flag）与任何老运行时都能跑，接口完全一致。
+// 存储（业主 2026-11-01 追加：用 SQLite）：Node 内置 `node:sqlite`（22.11 需 `--experimental-sqlite`，生产在
+// systemd 的 NODE_OPTIONS 里给；Node 24 起默认可用）。**拿不到该模块时退回 append-only JSONL**，接口完全一致
+// （CI 的 Node 22 无 flag 就走这条）；`SP_ACCOUNTS_BACKEND=jsonl` 可强制走回退（测试用）。
 //
-// 容量（业主：20G 是**全服务器**的布阵数据容量，不是每账号）：`addLineupBytes` 按**全表总和**判定，
-// 到顶即拒；`view()` 同时给出本单位与全服用量。
+// **一切懒初始化**：没人用账号功能时 boot 不写任何文件——Windows 上并行测试进程抢同一个 data/ 路径会 EBUSY/EPERM，
+// 这条曾把两个测试分片一起打红（2026-11-01）。
 //
-// 会话令牌是**无状态** HMAC（`<qq>.<exp>.<sig>`，密钥 `data/.account-secret` 0600）⇒ 服务端不为登录态
-// 存任何东西，重启不掉线；客户端「默认保留登录」只需把令牌存进 localStorage（客户端侧决定）。
+// 容量（业主：20G 是**全服务器**的布阵数据容量，不是每账号）：`addLineupBytes` 按全表总和判定，到顶即拒。
+//
+// 会话令牌是**无状态** HMAC（`<qq>.<exp>.<sig>`，密钥 `data/.account-secret` 0600）⇒ 服务端不为登录态存任何
+// 东西，重启不掉线；客户端「默认保留登录」只是把令牌存进 localStorage（客户端侧决定）。
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,75 +67,66 @@ function loadSqlite() {
  * @param {{ dataDir: string, log?: object, quotaBytes?: number, now?: () => number }} o
  */
 export function openAccounts({ dataDir, log = console, quotaBytes = Number(process.env.SP_ACCOUNT_LINEUP_QUOTA_BYTES) || DEFAULT_LINEUP_QUOTA_BYTES, now = Date.now }) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  const forceJsonl = String(process.env.SP_ACCOUNTS_BACKEND || '').toLowerCase() === 'jsonl';
-  const DatabaseSync = forceJsonl ? null : loadSqlite();
-  const backend = DatabaseSync ? 'sqlite' : 'jsonl';
+  const sqliteFile = path.join(dataDir, 'accounts.db');
+  const jsonlFile = path.join(dataDir, 'accounts.jsonl');
   const secretFile = path.join(dataDir, '.account-secret');
 
-  const secret = (() => {
+  /** @type {{ mode: 'sqlite'|'jsonl', db: any, rows: Map<string, any>, secret: Buffer } | null} */
+  let st = null;
+
+  const forceJsonl = String(process.env.SP_ACCOUNTS_BACKEND || '').toLowerCase() === 'jsonl';
+  const DatabaseSync = forceJsonl ? null : loadSqlite();
+
+  /** 懒初始化：第一处真正用到账号数据时才建目录/密钥/表。 */
+  function ensure() {
+    if (st) return st;
+    fs.mkdirSync(dataDir, { recursive: true });
+    let secret = null;
     try {
       const raw = fs.readFileSync(secretFile);
-      if (raw.length >= 32) return raw.subarray(0, 32);
-    } catch { /* first boot */ }
-    const made = crypto.randomBytes(32);
-    try { fs.writeFileSync(secretFile, made, { mode: 0o600 }); } catch (e) { log.warn?.('[accounts] cannot persist the token secret', e?.message); }
-    return made;
-  })();
-
-  // ---- backend: SQLite -----------------------------------------------------------------------------------------
-  let db = null;
-  if (backend === 'sqlite') {
-    db = new DatabaseSync(path.join(dataDir, 'accounts.db'));
-    db.exec(`CREATE TABLE IF NOT EXISTS accounts (
-      qq TEXT PRIMARY KEY,
-      hash TEXT NOT NULL,
-      created INTEGER NOT NULL,
-      updated INTEGER NOT NULL,
-      player_id TEXT,
-      profile TEXT NOT NULL DEFAULT '{}',
-      lineup_bytes INTEGER NOT NULL DEFAULT 0
-    )`);
-    db.exec('CREATE INDEX IF NOT EXISTS accounts_updated ON accounts(updated)');
-  }
-
-  /** The JSONL fallback keeps the exact same shapes (map + append). */
-  const jsonlFile = path.join(dataDir, 'accounts.jsonl');
-  let jsonl = null;
-  if (!db) {
-    jsonl = new Map();
-    let lines = 0;
+      if (raw.length >= 32) secret = raw.subarray(0, 32);
+    } catch { /* first use */ }
+    if (!secret) {
+      secret = crypto.randomBytes(32);
+      try { fs.writeFileSync(secretFile, secret, { mode: 0o600 }); } catch (e) { log.warn?.('[accounts] cannot persist the token secret', e?.message); }
+    }
+    if (DatabaseSync) {
+      const db = new DatabaseSync(sqliteFile);
+      db.exec(`CREATE TABLE IF NOT EXISTS accounts (
+        qq TEXT PRIMARY KEY,
+        hash TEXT NOT NULL,
+        created INTEGER NOT NULL,
+        updated INTEGER NOT NULL,
+        player_id TEXT,
+        profile TEXT NOT NULL DEFAULT '{}',
+        lineup_bytes INTEGER NOT NULL DEFAULT 0
+      )`);
+      st = { mode: 'sqlite', db, rows: null, secret };
+      return st;
+    }
+    const rows = new Map();
     try {
       const text = fs.existsSync(jsonlFile) ? fs.readFileSync(jsonlFile, 'utf8') : '';
       for (const line of text.split('\n')) {
         if (!line.trim()) continue;
-        lines++;
-        try { const row = JSON.parse(line); const prev = jsonl.get(row.qq); jsonl.set(row.qq, { ...(prev || {}), ...row }); } catch { /* skip */ }
+        try { const row = JSON.parse(line); rows.set(row.qq, { ...(rows.get(row.qq) || {}), ...row }); } catch { /* skip */ }
       }
     } catch (e) { log.warn?.('[accounts] cannot read the jsonl store', e?.message); }
-    jsonl._lines = () => lines;
-    jsonl._append = (row) => {
-      fs.appendFileSync(jsonlFile, `${JSON.stringify(row)}\n`, 'utf8');
-      lines++;
-      if (lines > jsonl.size * 2 + 32) {
-        const tmp = `${jsonlFile}.tmp`;
-        const body = [...jsonl.values()].map((a) => JSON.stringify(a)).join('\n');
-        fs.writeFileSync(tmp, body ? `${body}\n` : '', 'utf8');
-        fs.renameSync(tmp, jsonlFile);
-        lines = jsonl.size;
-      }
-    };
+    st = { mode: 'jsonl', db: null, rows, secret };
+    return st;
   }
 
   const rowOf = (qq) => {
-    if (db) {
-      const r = db.prepare('SELECT qq, hash, created, updated, player_id, profile, lineup_bytes FROM accounts WHERE qq = ?').get(qq);
+    const s = ensure();
+    if (s.mode === 'sqlite') {
+      const r = s.db.prepare('SELECT qq, hash, created, updated, player_id, profile, lineup_bytes FROM accounts WHERE qq = ?').get(qq);
       return r ? { qq: r.qq, hash: r.hash, created: r.created, updated: r.updated, playerId: r.player_id, profile: JSON.parse(r.profile || '{}'), lineupBytes: r.lineup_bytes } : null;
     }
-    return jsonl.get(qq) || null;
+    return s.rows.get(qq) || null;
   };
 
   const upsert = (row) => {
+    const s = ensure();
     const a = rowOf(row.qq) || { profile: {}, lineupBytes: 0 };
     const next = {
       qq: row.qq,
@@ -144,22 +137,23 @@ export function openAccounts({ dataDir, log = console, quotaBytes = Number(proce
       profile: row.profile ?? a.profile ?? {},
       lineupBytes: row.lineupBytes ?? a.lineupBytes ?? 0,
     };
-    if (db) {
-      db.prepare(`INSERT INTO accounts (qq, hash, created, updated, player_id, profile, lineup_bytes) VALUES (?,?,?,?,?,?,?)
+    if (s.mode === 'sqlite') {
+      s.db.prepare(`INSERT INTO accounts (qq, hash, created, updated, player_id, profile, lineup_bytes) VALUES (?,?,?,?,?,?,?)
         ON CONFLICT(qq) DO UPDATE SET hash=excluded.hash, updated=excluded.updated, player_id=excluded.player_id,
           profile=excluded.profile, lineup_bytes=excluded.lineup_bytes`)
         .run(next.qq, next.hash, next.created, next.updated, next.playerId, JSON.stringify(next.profile), next.lineupBytes);
     } else {
-      jsonl.set(next.qq, next);
-      jsonl._append(next);
+      s.rows.set(next.qq, next);
+      fs.appendFileSync(jsonlFile, `${JSON.stringify(next)}\n`, 'utf8');
     }
     return next;
   };
 
   const totalBytes = () => {
-    if (db) return Number(db.prepare('SELECT COALESCE(SUM(lineup_bytes),0) AS n FROM accounts').get().n) || 0;
+    const s = ensure();
+    if (s.mode === 'sqlite') return Number(s.db.prepare('SELECT COALESCE(SUM(lineup_bytes),0) AS n FROM accounts').get().n) || 0;
     let n = 0;
-    for (const a of jsonl.values()) n += Number(a.lineupBytes) || 0;
+    for (const a of s.rows.values()) n += Number(a.lineupBytes) || 0;
     return n;
   };
 
@@ -175,31 +169,36 @@ export function openAccounts({ dataDir, log = console, quotaBytes = Number(proce
   });
 
   function sign(qq) {
+    const s = ensure();
     const exp = now() + TOKEN_TTL_MS;
     const payload = `${qq}.${exp}`;
-    return `${payload}.${b64u(crypto.createHmac('sha256', secret).update(payload).digest())}`;
+    return `${payload}.${b64u(crypto.createHmac('sha256', s.secret).update(payload).digest())}`;
   }
 
   function verifyToken(token) {
     const parts = String(token || '').split('.');
     if (parts.length !== 3) return null;
     const [qq, exp, sig] = parts;
-    if (!rowOf(qq) || !Number.isFinite(Number(exp)) || Number(exp) < now()) return null;
-    const want = b64u(crypto.createHmac('sha256', secret).update(`${qq}.${exp}`).digest());
+    if (!Number.isFinite(Number(exp)) || Number(exp) < now() || !rowOf(qq)) return null;
+    const s = ensure();
+    const want = b64u(crypto.createHmac('sha256', s.secret).update(`${qq}.${exp}`).digest());
     return want.length === sig.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(sig)) ? qq : null;
   }
 
   return {
-    backend,
-    file: db ? path.join(dataDir, 'accounts.db') : jsonlFile,
+    get backend() { return ensure().mode; },
+    get file() { return ensure().mode === 'sqlite' ? sqliteFile : jsonlFile; },
     quotaBytes,
     totalBytes,
-    size: () => (db ? Number(db.prepare('SELECT COUNT(*) AS n FROM accounts').get().n) || 0 : jsonl.size),
+    size() { const s = ensure(); return s.mode === 'sqlite' ? Number(s.db.prepare('SELECT COUNT(*) AS n FROM accounts').get().n) || 0 : s.rows.size; },
     get: rowOf,
     view: (qq) => publicView(rowOf(String(qq))),
-    list: () => (db
-      ? db.prepare('SELECT qq FROM accounts ORDER BY updated DESC').all().map((r) => publicView(rowOf(r.qq)))
-      : [...jsonl.keys()].map((qq) => publicView(jsonl.get(qq)))),
+    list() {
+      const s = ensure();
+      return s.mode === 'sqlite'
+        ? s.db.prepare('SELECT qq FROM accounts ORDER BY updated DESC').all().map((r) => publicView(rowOf(r.qq)))
+        : [...s.rows.keys()].map((qq) => publicView(s.rows.get(qq)));
+    },
     verifyToken,
 
     register(qq, password) {
@@ -225,7 +224,9 @@ export function openAccounts({ dataDir, log = console, quotaBytes = Number(proce
       if (!pw) return { error: 'BAD_PASSWORD' };
       const a = rowOf(id);
       if (a && !checkPassword(pw, a.hash)) return { error: 'BAD_CREDENTIALS' };
-      const row = a ? upsert({ qq: id, playerId: String(playerId || '') }) : upsert({ qq: id, hash: hashPassword(pw), playerId: String(playerId || '') });
+      const row = a
+        ? upsert({ qq: id, playerId: String(playerId || '') })
+        : upsert({ qq: id, hash: hashPassword(pw), playerId: String(playerId || '') });
       return { ok: true, token: sign(id), account: publicView(row) };
     },
 
@@ -271,6 +272,6 @@ export function openAccounts({ dataDir, log = console, quotaBytes = Number(proce
       return { ok: true, account: publicView(upsert(patch)) };
     },
 
-    close() { try { db?.close(); } catch { /* already closed */ } },
+    close() { try { st?.db?.close(); } catch { /* already closed */ } },
   };
 }
