@@ -1155,7 +1155,7 @@ export class Lobby {
     if (!room) return fail(ERR.NOT_IN_ROOM);
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
-    if (room.mode === 'solo' || (on && (room.modded || room.version !== DEFAULT_VERSION))) return fail(ERR.BAD_TARGET);
+      if (room.mode === 'solo' || (on && room.version !== DEFAULT_VERSION)) return fail(ERR.BAD_TARGET);
     if (room.aiTakeoverEnabled !== on) {
       this.dropReplay(room, session.playerId);
       room.aiTakeoverEnabled = on;
@@ -2173,7 +2173,9 @@ export class Lobby {
     // 所以房间能看到的「回合钟」只有它自己的 m.public 帧——每回合的 PREP 帧到了就试一次（内部有窗口与一次性判定）。
     if (msg.t === 'm.public' && msg.phase === 'PREP' && msg.round !== room._aiRandomSeen) {
       room._aiRandomSeen = msg.round;
-      try { maybeRandomAiTakeover(this, room, msg.round); } catch (e) { this.log.error('[lobby] random AI handover failed', e); }
+      // 插件对局的 Match 在 worker 里，问状态要走 RPC ⇒ 这一步是异步的；帧广播不能等它，失败只记日志。
+      const pendingRandom = (() => { try { return maybeRandomAiTakeover(this, room, msg.round); } catch (e) { this.log.error('[lobby] random AI handover failed', e); return null; } })();
+      if (pendingRandom && typeof pendingRandom.then === 'function') pendingRandom.catch((e) => this.log.error('[lobby] random AI handover failed', e));
     }
     const data = this.broadcastRoom(room, msg, encoded);
     if (data == null) return;

@@ -159,9 +159,9 @@ export function aiLastOption(room, myId) {
   return { on: room.aiPicksLast === true, editable: room.hostId != null && room.hostId === myId };
 }
 
-/** Spectator handover is available only in original default-version co-op rooms, with a host opt-in. */
+/** Spectator handover is available in default-version co-op rooms (plugin content included), with a host opt-in. */
 export function aiTakeoverOption(room, myId) {
-  if (!room || room.mode === 'solo' || roomVersion(room) !== DEFAULT_VERSION || room.content?.vanilla === false) return null;
+  if (!room || room.mode === 'solo' || roomVersion(room) !== DEFAULT_VERSION) return null;
   return { on: room.aiTakeoverEnabled === true, editable: room.hostId != null && room.hostId === myId && !room.inMatch };
 }
 

@@ -58,6 +58,46 @@ export function mergeLoadoutEntries(current, incoming) {
 }
 
 export class MatchPlatform {
+  /**
+   * 观战接管 AI (server/aiTakeover.js) — worker 侧对端，读一半：一个插件对局跑在 match host 里时，lobby 手里只有
+   * MatchProxy（没有 players/phase/round），投票流程要的状态只能从这里问。JSON 安全，随 `call` 的 reply 回去。
+   */
+  takeoverSeatState() {
+    return {
+      phase: this.phase,
+      round: this.round,
+      ended: !!this.ended,
+      disposed: !!this.disposed,
+      bots: this.order.filter((ps) => ps.isBot && !ps.left && ps.alive)
+        .map((ps) => ({ playerId: ps.playerId, name: ps.name, seat: ps.seat })),
+    };
+  }
+
+  /**
+   * 观战接管 AI — worker 侧对端，写一半：把一个 bot 席位交给一名真人。只动 Match（session/registry 的改绑在
+   * lobby 侧做，server/aiTakeover.js transferAiSeat）。
+   * @param {string} botId @param {string} applicantId @param {string} name
+   * @returns {{ ok: true } | { error: string }}
+   */
+  takeoverSeat(botId, applicantId, name) {
+    if (this.ended || this.disposed) return { error: 'ended' };
+    if (this.phase !== PHASE.PREP) return { error: 'phase' };
+    const ps = this.players.get(botId);
+    if (!ps || !ps.isBot || ps.left || !ps.alive) return { error: 'unavailable' };
+    this.cancelSeatRehearsal(botId);
+    ps._botPrepToken = (ps._botPrepToken || 0) + 1;
+    Object.assign(ps, {
+      isBot: false, autoplay: false, connected: true, ready: false,
+      name: typeof name === 'string' && name ? name : ps.name,
+    });
+    this.loneHuman = this.order.filter((p) => !p.isBot && !p.left).length === 1;
+    ps.aiTakeoverRound = this.round;
+    ps.aiTakeoverFrom = applicantId;
+    this.markPublic();
+    ps.dirty();
+    return { ok: true };
+  }
+
   start() {
     if (this.disposed || this.ended || this.phase !== PHASE.LOBBY) return;
     this.guard(() => {
