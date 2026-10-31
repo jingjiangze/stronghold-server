@@ -277,6 +277,15 @@ function wireNet() {
     if (err && BENIGN_PUSH.has(err.code)) { recordError('request', err, 'unhandled push (quiet)'); return; }
     toastError(err);
   });
+  // 大厅快照（人数 / 房间数 / 公开房间列表）。
+  // ⚠️ 线上 `/js/main.js` 是**这份插件副本**（overlay 顶替核心 public/js/main.js），所以处理函数必须放在这里，
+  // 放核心那份等于没写（2026-11-01：真机 counts 恒 0、房间列表永不渲染就是这么来的）。
+  net.on('lobby.state', (m) => store.set({ lobbyStats: {
+    online: Number(m && m.online) || 0,
+    roomsCount: Number(m && m.rooms) || 0,
+    matchesCount: Number(m && m.matches) || 0,
+    rooms: Array.isArray(m && m.list) ? m.list : [],
+  } }));
   net.on('room.state', onRoomState);
   // 断线重建：服务端每回合把这一局交给我们保管；它重启后（房间还在、对局没了）会来要回去。
   net.on('b.snapshot', (msg) => { const p = payload(msg); if (p && p.snapshot && typeof p.snapshot === 'object') { matchSnapshot = p.snapshot; try { globalThis.__spSnapshot = matchSnapshot; } catch { /* debug hook */ } } });
