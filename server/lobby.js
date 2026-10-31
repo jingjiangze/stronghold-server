@@ -730,6 +730,33 @@ export class Lobby {
     return { rooms: this.rooms.size, matches, humans, bots, spectators };
   }
 
+  /**
+   * 大厅快照（业主 2026-10-31：「当前人数显示不准确，房间也是」「根本没做大厅公开机制」）：
+   * 在线人数 + 房间/对局数 + **公开房间列表**（私密房不进列表；列表最多 50 条）。
+   * 口径与 `/healthz` 的 stats 同源，前端不再把「连接状态」当人数。
+   */
+  lobbySnapshot() {
+    const st = this.stats();
+    const list = [];
+    for (const r of this.rooms.values()) {
+      if (r.disposed || r.private === true) continue;
+      const humans = r.seats.filter((s) => s && !s.left && !s.isBot).length;
+      list.push({
+        code: r.code, mode: r.mode, difficulty: r.difficulty, variant: r.variant || null,
+        humans, seats: r.seats.filter(Boolean).length, inMatch: !!r.match, test: r.test === true,
+      });
+    }
+    // 等人多的、没开局排前面（可直接加的那种）
+    list.sort((a, b) => (Number(a.inMatch) - Number(b.inMatch)) || (b.humans - a.humans) || a.code.localeCompare(b.code));
+    return { t: 'lobby.state', online: st.humans + st.spectators, humans: st.humans, bots: st.bots, spectators: st.spectators, rooms: st.rooms, matches: st.matches, list: list.slice(0, 50) };
+  }
+
+  /** C2S `room.list`：把大厅快照直接回给请求者（客户端进大厅后轮询它）。 */
+  sendLobbySnapshot(session) {
+    try { sendSession(session, this.lobbySnapshot()); } catch { /* 尽力而为 */ }
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------------------------------------------
   // net.js handler interface
   // ---------------------------------------------------------------------------------------------------
@@ -845,6 +872,7 @@ export class Lobby {
       case 'room.create': return this.create(session, msg);
       case 'room.join': return this.join(session, msg);
       case 'room.leave': return this.leave(session);
+      case 'room.list': return this.sendLobbySnapshot(session);
       case 'room.ready': return this.ready(session, msg);
       case 'room.setDifficulty': return this.setDifficulty(session, msg);
       case 'room.setAiPicksLast': return this.setAiPicksLast(session, msg);

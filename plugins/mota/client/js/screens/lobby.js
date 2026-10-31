@@ -447,6 +447,47 @@ function HubTile({ icon, label, en, onClick, children }) {
 }
 
 /** Shared frame of the hub's two dialogs (the start sheet, 密钥加入). */
+/**
+ * 娱乐模式（业主 2026-10-31「其他模式聚合为大厅里的一个按钮」）：把协同共竞 / 赏金 / 对战(控怪) / 肉鸽
+ * 收进一个入口；弹窗占视口 80%，2×2 网格，选哪格就走对应的建房弹窗。
+ */
+function FunSelect({ onClose, onPick, busy }) {
+  const [leaving, leave] = useLeave(onClose);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
+    addEventListener('keydown', onKey);
+    document.body.classList.add('hub-dialog-open');
+    return () => { removeEventListener('keydown', onKey); document.body.classList.remove('hub-dialog-open'); };
+  }, []);
+  const cells = [
+    { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', acc: '#e8b25c',
+      desc: t('两人共竞：团队储备、三项商店升级、借贷、救济与救援。') },
+    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', acc: '#5cc9e8',
+      desc: t('2V2 攻防：官方出怪为主，你替换其中一部分，靠自家怪被击杀拿赏金；建房时可选倍速。') },
+    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', acc: '#e2653d',
+      desc: t('出怪、路线、时机全部由你决定；守方遇到的怪约为官方的 1.5 倍。') },
+    { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', acc: '#9d7cf0',
+      desc: t('开局与每 2 回合各抽一次藏品三选一，外加随机词缀、随机事件与每回合换图。') },
+  ];
+  return html`<div class=${`modal${leaving ? ' is-leaving' : ''}`} role="presentation"
+      onMouseDown=${(e) => { if (e.target === e.currentTarget) leave(); }}>
+    <div class="modal__box" role="dialog" aria-modal="true" aria-label=${t('娱乐模式')}
+      style="width:80vw;height:80vh;max-width:none;max-height:none;display:flex;flex-direction:column">
+      <header class="modal__head">
+        <h2 class="modal__title">${t('娱乐模式')}</h2>
+        <button type="button" class="modal__close" onClick=${leave} aria-label=${t('关闭')}>×</button>
+      </header>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:.6rem;padding:.6rem;flex:1;min-height:0">
+        ${cells.map((c) => html`<button key=${c.id} type="button" class="ally-card" data-testid=${`fun-${c.id}`}
+            disabled=${!!busy} style=${`--acc:${c.acc}`} onClick=${() => onPick(c.id)}>
+          <span class="ally-card__bar"><span class="ally-card__icon"><${Icon} name="dice" /></span>${c.name}<small>${c.en}</small></span>
+          <span class="ally-card__note" style="padding:.4rem .7rem;opacity:.85">${c.desc}</span>
+        </button>`)}
+      </div>
+    </div>
+  </div>`;
+}
+
 function HubDialog({ open, micro, title, onClose, wide = false, children }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -888,6 +929,15 @@ export function LobbyScreen() {
   const conn = useStore((s) => s.connection, shallowEqual);
   // 'announcements' is optional (404 is normal when no board is configured): useData settles on 'missing' too.
   useData('config', 'announcements');
+  // 大厅人数/房间数：`room.list` 回一条 `lobby.state`（public/js/main.js 已写进 store.lobbyStats），
+  // 大厅一进来就开始轮询，10 秒一次、后台不轮询。
+  useEffect(() => {
+    let alive = true;
+    const ask = () => { if (alive && !document.hidden) net.request('room.list').catch(() => {}); };
+    ask();
+    const id = setInterval(ask, 10000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
   const [simulation, setSimulation] = useState(lobbySimulationPreference);
   // 对抗模式：2V2（teamSize 2，4 席）/ 4V4（teamSize 4，8 席）
   const [versusTeam, setVersusTeam] = useState(2);
@@ -909,6 +959,8 @@ export function LobbyScreen() {
   // 肉鸽规则（业主 2026-10-30「肉鸽不作为新玩法了，还是加到协同里面」）：不再是独立模式卡，
   // 改成同盟模拟建房时的一个开关 —— 勾上就带藏品节奏 + 随机事件/词缀，并且拿到协同团队储备。
   const [rogueRules, setRogueRules] = useState(false);
+  // 娱乐模式弹窗（协同 / 赏金 / 对战·控怪 / 肉鸽 四格）
+  const [funOpen, setFunOpen] = useState(false);
   const [busy, setBusy] = useState(null);
   const [recent] = useState(recentRooms);
   const marks = loadPref('recentTestRooms', []);
@@ -1102,6 +1154,15 @@ export function LobbyScreen() {
     else { setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); }
   };
   const openSearch = () => { pickMode('coop'); setSheetChained(allyOpen); setAllyOpen(false); setSheetPurpose('search'); setSheetOpen(true); };
+  // 娱乐模式的四格 → 各自打开对应的建房流程
+  const pickFun = (id) => {
+    setFunOpen(false);
+    if (id === 'xie') { pickMode('xie'); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
+    if (id === 'rogue') { pickMode('coop'); setRogueRules(true); setAllyOpen(true); return; }
+    pickMode('versus');
+    setVersusRule(id === 'confront' ? 'confront' : 'bounty');
+    setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true);
+  };
   const modeCard = MODE_CARDS.find((c) => c.id === simulation) || MODE_CARDS[0];
 
   return html`<div class="screen lobby-screen lobby-hub" data-hub-theme=${backdropTheme(bg)}>
@@ -1167,8 +1228,7 @@ export function LobbyScreen() {
         <div class="hub-entries__row">
           <${HubEntry} group=${{ icon: 'user', label: t('独立模拟') }} name=${t('独立模拟')} en="SOLO" icon="user" onClick=${() => openMode('solo')} />
           <${HubEntry} group=${{ icon: 'users', label: t('同盟模拟') }} name=${t('同盟模拟')} en="ALLIANCE" icon="users" count=${matchmakingCounts?.total} onClick=${() => openMode('coop')} />
-          <${HubEntry} name=${t('协同共竞')} en="JOINT OP" icon="dice" badge="NEW" tone="gold" onClick=${() => openMode('xie')} />
-          <${HubEntry} name=${t('对抗')} en="VERSUS" icon="sword" badge="NEW" tone="bright" onClick=${() => openMode('versus')} />
+          <${HubEntry} name=${t('娱乐模式')} en="ARCADE" icon="dice" badge="NEW" tone="gold" onClick=${() => setFunOpen(true)} />
           ${CAN_QUEUE ? html`<${HubEntry} name=${t('搜寻队友')} en="FIND ALLIES" icon="search" tone="bright" onClick=${openSearch} />` : null}
         </div>
       </section>
@@ -1189,6 +1249,8 @@ export function LobbyScreen() {
       recent=${recent} online=${online} maint=${maint} busy=${busy} difficulty=${difficulty} recruiting=${recruitingRooms(rooms).length}
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest} rogue=${rogueRules} onRogue=${setRogueRules}
       onCreate=${create} onJoin=${() => join()} onSpectate=${() => spectate()} onBrowse=${() => setModalOpen(true)} onSearch=${openSearch} />` : null}
+
+    ${funOpen ? html`<${FunSelect} onClose=${() => setFunOpen(false)} busy=${busy} onPick=${pickFun} />` : null}
 
     <${HubDialog} open=${joinOpen} micro="JOIN WITH ALLIANCE KEY" title=${t('密钥加入')} onClose=${() => setJoinOpen(false)}>
       <div class="join-row">

@@ -261,6 +261,14 @@ function wireNet() {
   });
   net.on('replaced', () => toast(t('该身份已在其他页面登录，本页已断开'), 'warn', { ttl: 6000 }));
   net.on('unhandledError', (err) => toastError(err));
+  // 大厅快照（在线人数 / 房间数 / 公开房间列表）：业主 2026-10-31「人数和房间都不准、没有公开机制」。
+  // 以前 store.lobbyStats 从没被任何消息写过 ⇒ 大厅永远显示 online:1 / roomsCount:0。
+  net.on('lobby.state', (m) => store.set({ lobbyStats: {
+    online: Number(m && m.online) || 0,
+    roomsCount: Number(m && m.rooms) || 0,
+    matchesCount: Number(m && m.matches) || 0,
+    rooms: Array.isArray(m && m.list) ? m.list : [],
+  } }));
   net.on('room.state', onRoomState);
   net.on('room.closed', (msg) => {
     backToLobby();

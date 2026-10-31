@@ -405,6 +405,22 @@ function AiRandomToggle({ option, busy, onToggle }) {
   </div>`;
 }
 
+/** 随机地图（业主 2026-10-31）：搬到房间页，所有模式都能开。
+ *  关 = 整局固定一张图；开 = 协同共竞 / 肉鸽每回合换图，其它模式在 boss 关换图。 */
+function RandomStageToggle({ room, host, busy, onToggle }) {
+  const on = room.randomStage === true;
+  return html`<div class="ailast">
+    <${Tooltip} text=${t('默认关闭（整局固定一张战场）。开启后：协同共竞与肉鸽每回合抽一张新图，其它模式在 boss 关换图。房主开局前可随时切换。')}>
+      <button type="button" role="switch" aria-checked=${on ? 'true' : 'false'} data-testid="room-random-stage"
+          class=${`dpick__opt ailast__opt${on ? ' is-active' : ''}`} disabled=${!host || !!busy}
+          onClick=${() => host && onToggle(!on)}>
+        <${Icon} name="check" class=${on ? 'is-on' : ''} />${t('随机地图')}
+      </button>
+    <//>
+    ${host ? null : html`<span class="t-dim">${t('由创建者设置')}</span>`}
+  </div>`;
+}
+
 /** mm:ss of a duration in seconds. */
 const clock = (s) => `${String(Math.floor(Math.max(0, s) / 60)).padStart(2, '0')}:${String(Math.floor(Math.max(0, s)) % 60).padStart(2, '0')}`;
 
@@ -435,7 +451,7 @@ function RoomProtocol({ room, variant, onClose, onPick, busy, leaving = false })
 }
 
 /** ⚙ of the bottom pill: 私密房间, 人数上限 (with the 10-seat constants), AI 队友最后选择, 无限火力 branch. */
-function RoomOptions({ room, facts, myId, busy, online, variant, onPrivate, onSeatCap, onAiLast, onAiTakeover, onAiRandom, onVariant, onClose, leaving = false }) {
+function RoomOptions({ room, facts, myId, busy, online, variant, onPrivate, onSeatCap, onAiLast, onAiTakeover, onAiRandom, onRandomStage, onVariant, onClose, leaving = false }) {
   const coop = room.mode !== 'solo';
   const host = facts.isHost;
   useEffect(() => {
@@ -452,6 +468,7 @@ function RoomOptions({ room, facts, myId, busy, online, variant, onPrivate, onSe
     <${AiLastToggle} option=${aiLastOption(room, myId)} busy=${busy} onToggle=${onAiLast} />
     <${AiTakeoverToggle} option=${aiTakeoverOption(room, myId)} busy=${busy} onToggle=${onAiTakeover} />
     <${AiRandomToggle} option=${aiRandomOption(room, myId)} busy=${busy} onToggle=${onAiRandom} />
+    <${RandomStageToggle} room=${room} host=${host} busy=${busy} onToggle=${onRandomStage} />
     ${room.random === true ? html`<div class="rs-opt rs-opt--variant"><span>${t('模式分支')}</span>
       <div class="dpick" role="radiogroup" aria-label=${t('模式分支')}>
         ${[['blitz', t('快速突袭 {totalRounds} 回合', { totalRounds: RANDOM_MODE.totalRounds })], ['endurance', t('持久鏖战 {totalRounds} 回合', { totalRounds: RANDOM_MODE.endurance.totalRounds })], ['marathon', t('最长时赛 {totalRounds} 回合', { totalRounds: RANDOM_MODE.marathon.totalRounds })]].map(([v, label]) => html`
@@ -701,6 +718,8 @@ export function RoomScreen() {
   // ⇒ 线上房主根本看不到。两个开关必须在这里，核心那边的改动才可能生效。
   const setAiTakeover = (on) => run('aihandover', () => net.request('room.setAiTakeover', { on }));
   const setAiRandom = (on) => run('airandom', () => net.request('room.setAiRandom', { on }));
+  // 随机地图（random-stage 插件提供 C2S）：房主、开局前
+  const setRandomStage = (on) => run('rstage', () => net.request('room.setRandomStage', { randomStage: on }));
   // spectator seats: the host frees one; a spectator takes a free player seat with room.join of this room
   const removeSpectator = (playerId) => run(`rs${playerId}`, () => net.request('room.removeSpectator', { playerId }));
   const sit = () => run('sit', () => net.request('room.join', roomMods.buildJoinPayload(room.code)));
@@ -866,7 +885,7 @@ export function RoomScreen() {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" fill-rule="evenodd" /></svg>
           </button>
           ${optsShown ? html`<${RoomOptions} room=${room} facts=${facts} myId=${me.playerId} busy=${busy} online=${online} variant=${variant}
-            onPrivate=${setPrivate} onSeatCap=${setSeatCap} onAiLast=${setAiLast} onAiTakeover=${setAiTakeover} onAiRandom=${setAiRandom} onVariant=${setVariant} onClose=${() => setOpts(false)} leaving=${optsLeaving} />` : null}
+            onPrivate=${setPrivate} onSeatCap=${setSeatCap} onAiLast=${setAiLast} onAiTakeover=${setAiTakeover} onAiRandom=${setAiRandom} onRandomStage=${setRandomStage} onVariant=${setVariant} onClose=${() => setOpts(false)} leaving=${optsLeaving} />` : null}
         </div>
       </div>
       <div class="rs-foot__right">
