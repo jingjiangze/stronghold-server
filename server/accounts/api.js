@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { sendError, sendJson } from '../http/common.js';
+import { ADMIN_HTML } from './adminPage.js';
 
 const BODY_MAX = 8 * 1024;
 const ANNOUNCE_MAX = 64 * 1024;
@@ -76,11 +77,21 @@ export function createAccountsApi({ store, dataDir, registry = null, log = conso
   }
 
   return {
-    handles: (rawPath) => rawPath === '/api' || rawPath.startsWith('/api/'),
+    handles: (rawPath) => rawPath === '/api' || rawPath.startsWith('/api/') || rawPath === '/admin' || rawPath === '/admin/',
 
     async handle(req, res, rawPath, query = '') {
       const post = req.method === 'POST';
       const isAdmin = rawPath.startsWith('/api/admin/');
+
+      // 管理后台页面（P3）：没配钥匙时与 /api/admin/* 一样当作不存在
+      if (rawPath === '/admin' || rawPath === '/admin/') {
+        if (!adminKey) { sendError(req, res, 404, '未找到 · Not found'); return; }
+        res.statusCode = 200;
+        res.setHeader('content-type', 'text/html; charset=utf-8');
+        res.setHeader('cache-control', 'no-store');
+        res.end(ADMIN_HTML);
+        return;
+      }
 
       // 管理端点：没配钥匙就当作不存在（不告诉扫描者「这里有个后台」）
       if (isAdmin) {
