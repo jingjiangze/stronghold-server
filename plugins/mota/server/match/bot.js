@@ -1448,6 +1448,8 @@ export function* botPrepBeginSteps(m, ps, { delegate = false } = {}) {
   takeOffers(m, ps);
   levelUp(m, ps, { spare: true });
   maybeFreeze(m, ps);
+  // 协同经济：缺口要在花完钱之后才看得见，这里才开口借（botEconMaybeRequest 自带每回合一次防重；非 teamEcon 模式是 no-op）
+  botEconMaybeRequest(m, ps);
   yield;
   // 3. placement, 4. items, placement again (item carriers gain value; rehearsed when the match allows it)
   yield* arrangeSteps(m, ps);
@@ -2027,6 +2029,24 @@ function resolveTemp(m, ps) {
 }
 
 // ===== 协同共竞 bot 经济（从 coop 分支重锚定；调用点在 MatchEconomy mixin）=====
+
+/**
+ * The cheapest thing on this bot's shop board it could still pay for right now (0 when nothing fits). The lending
+ * decision spends it: approving a request that would eat that price means skipping its own buy, so the chance is
+ * scaled down by tightFactorPct. Same affordability rule as botEconMaybeRequest's `affordable` check.
+ * (2026-10-31: botEconRespond used to reference this by name without a definition anywhere — every lending decision
+ * in the modes where botLend is on threw a ReferenceError swallowed by the later() guard, so bots never lent.)
+ */
+function cheapestAffordable(ps) {
+  let best = 0;
+  for (const s of ps.shop.slots) {
+    if (!s || s.sold) continue;
+    const price = ps.priceOf(s);
+    if (price > 0 && price <= ps.funds && (best === 0 || price < best)) best = price;
+  }
+  return best;
+}
+
 export function botEconRespond(m, ps, id = null) {
   if (!m.teamEcon) return false;
   const inbox0 = m.econPrivateFor(ps)?.requestIn;
