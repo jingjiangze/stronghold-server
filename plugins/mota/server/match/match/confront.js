@@ -44,6 +44,7 @@ import { sanitizeBotPickList } from './pureShares.js';
 import { PHASE, ERR, GEO, VERSUS_CONFRONT, COOP_HUNT, merchantRateFor, merchantCapFor } from '../../../shared/constants.js';
 import { confrontTraitGrade } from './confrontTraits.js';
 import { gateOf, roundMods, previewInfo } from '../waves.js';
+import { fillConfrontPicks } from './confrontFill.js';
 import { Grid } from '../../sim/grid.js';
 import { compileRoute } from '../../sim/ai.js';
 import { MOVE_SCALE } from '../../sim/constants.js';
@@ -603,9 +604,11 @@ export class MatchConfront {
     const countFloor = this.confrontCountFloor();
     // 「赏金」档：份额预算与只数下限取大
     if (!this.isConfrontRule()) return Math.max(byShare, countFloor);
-    // 「对抗」档：攻方就是这一波怪的全部来源，每名攻方分到「官方波次价值 ÷ 攻方人数」，再用池内中位怪托底
-    // 控怪档的预算与「0.9 官方出怪量」同源：官方波次价值 × 0.9 ÷ 攻方人数
-    const base = this.confrontPurePlacement()
+    // 「对抗」档：攻方就是这一波怪的全部来源，每名攻方分到「官方波次价值 × 1.5 ÷ 攻方人数」。
+    // 2026-11-01 P1（审计 D1）：**不再**依赖 `confrontPurePlacement()`（它看「是否已有人提交」，草稿也计入）
+    // —— 否则同回合预算可跳 7.5 倍：第一个提交的 bot 拿 byShare、后面的拿 1.5×base，还留了「先存草稿解锁大预算」的套利。
+    // 预算按 模式+回合+攻方人数 判定，与谁先提交无关；波次构造那条 purePlacement 语义不变。
+    const base = this.isConfrontRule()
       ? Math.round((this.confrontWaveValue() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize())
       : byShare;
     // 下限取两者较大：① 老口径「至少放得下 N 只中位怪」；② 只数下限「按中位价买得下 90% 官方只数（按攻方摊）」。
@@ -1055,12 +1058,25 @@ export class MatchConfront {
       for (const pid of oppIds) if (best == null || loads.get(pid) < loads.get(best)) best = pid;
       return best;
     };
+    /** 2026-11-01 P1：目标按对手剩余 LP 升序（打薄弱处）；同分按本队已攻击次数（leastAttacked）。 */
+    const weakestOf = (list) => {
+      const loads = new Map(oppIds.map((pid) => [pid, 0]));
+      for (const t of takenBy(team)) if (loads.has(t)) loads.set(t, loads.get(t) + 1);
+      let best = null;
+      for (const pid of list) {
+        if (best == null) { best = pid; continue; }
+        const la = Number(this.players.get(pid)?.lp) || 0;
+        const lb = Number(this.players.get(best)?.lp) || 0;
+        if (la < lb || (la === lb && loads.get(pid) < loads.get(best))) best = pid;
+      }
+      return best;
+    };
     const pickFor = (playerId) => {
       if (this.confrontTargets.has(playerId)) return;
       const free = oppIds.filter((pid) => !takenBy(team).includes(pid));
       const chosen = typeof want === 'string' && playerId === ps.playerId && free.includes(want)
         ? want
-        : (free[0] ?? leastAttacked());
+        : (free.length ? weakestOf(free) : leastAttacked());
       if (chosen) this.confrontTargets.set(playerId, chosen);
     };
     pickFor(ps.playerId);
@@ -1194,43 +1210,53 @@ export class MatchConfront {
     return { sub: { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi, position: pos, picks: out, bosses: outB, total: out.length, ratio: this.confrontRatio(), budget: this.confrontBudget(), seat: ps.seat } };
   }
 
-  /** An AI player's submission, and the one a player who never submits gets at the window's end: fill the budget from
-   *  its group, **cheapest fitting monster first** (2026-10-27: the owner's rule is 「出怪量接近官方、只要 90%」, and the
-   *  old most-expensive-first walk bought one or two monsters out of a big budget), then walk the other types in price
-   *  order to reach the count cap (`confrontPlaceCap`). The 事件期 boss 格 stays EMPTY here
-   *  ([ASSUMED], user 2026-10-21: bots / 托管 never pick bosses — the auto-fill keeps its deterministic picks). */
+  /** An AI player's submission, and the one a player who never submits gets at the window's end.
+   *  控怪档（2026-11-01 P1，业主「1.5 倍 = 只数 + 价值」）：双目标填充 —— 只数目标 = 官方只数×1.5÷攻方人数、
+   *  价值目标 = 预算全额，每步挑最接近「剩余预算/剩余只数」的负担得起的怪（`fillConfrontPicks` 纯函数）。
+   *  赏金档保持旧口径（便宜优先 + 跨类型补齐；那一档语义是替换一小部分，不是 1.5× 配额）。
+   *  事件期 boss 格（2026-11-01 P1）：开放时按金币降序取到 `confrontBossCap()` 只 —— 原「AI 恒空」的 [ASSUMED] 作废。 */
   botConfront(ps) {
     if (this.attackingTeam != null && this.teamIdOf(ps) !== this.attackingTeam) return;
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster' || this.confrontSubs.has(ps.playerId)) return;
     const groups = this.confrontGroups();
     const budget = this.confrontBudget();
-    // 2026-10-27：业主口径是「控怪的出怪量接近官方、只要官方的 90%」，旧实现按**最贵优先**填预算，
-    // 预算一大就只买一两只 —— 线上实测 budget=3061、官方波次 7 只，bot 只放了 1 只。
-    // 改为「便宜优先 + 跨类型补齐」：先吃第一组（AI 偏好特异），数量不够 cap 再从其余类型按价格升序补。
     const cap = this.confrontPlaceCap();
-    const ordered = groups.map((g, i) => ({ i, rows: (g.rows || []).slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key))) }));
+    const rows = [];
+    groups.forEach((g, gi) => (g.rows || []).forEach((r) => rows.push({ key: r.key, value: r.value, gi })));
     const picks = [];
-    let left = budget;
-    let gi = 0;
-    const take = (rows, i) => {
-      // 2026-10-31 业主：「去掉每种怪最多一只」。旧实现只单趟扫 rows ⇒ 同一 enemyKey 只能放一次，
-      // 只数被锁死在「可选怪种数」上（预算常常只花掉三分之一）。改成反复扫到没有进展为止：
-      // 每一轮把还买得起的都放一遍，直到预算不够或到 cap。`confrontValue` 最小 1 ⇒ 必然收敛。
-      let progressed = true;
-      while (progressed && picks.length < cap) {
-        progressed = false;
-        for (const r of rows) {
-          if (picks.length >= cap) return;
-          if (r.value > left) continue;
-          if (!picks.length) gi = i;
-          left -= r.value;
-          picks.push({ enemyKey: r.key, gate: picks.length % 2 ? 'upper' : 'lower' });
-          progressed = true;
+    if (this.isConfrontRule()) {
+      const unitsTarget = Math.max(1, Math.round((this.confrontWaveCount() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize()));
+      const filled = fillConfrontPicks({ rows, budget, unitsTarget, cap });
+      filled.forEach((f, i) => picks.push({ enemyKey: f.enemyKey, gate: i % 2 ? 'upper' : 'lower' }));
+    } else {
+      // 赏金档：旧实现原样保留（便宜优先 + 反复扫到没有进展为止，去掉「每种怪最多一只」）
+      const ordered = groups.map((g, i) => ({ i, rows: (g.rows || []).slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key))) }));
+      let left = budget;
+      const take = (list) => {
+        let progressed = true;
+        while (progressed && picks.length < cap) {
+          progressed = false;
+          for (const r of list) {
+            if (picks.length >= cap) return;
+            if (r.value > left) continue;
+            left -= r.value;
+            picks.push({ enemyKey: r.key, gate: picks.length % 2 ? 'upper' : 'lower' });
+            progressed = true;
+          }
         }
-      }
-    };
-    if (ordered.length) take(ordered[0].rows, 0);
-    if (picks.length < cap) for (let i = 1; i < ordered.length; i++) take(ordered[i].rows, i);
+      };
+      if (ordered.length) take(ordered[0].rows);
+      if (picks.length < cap) for (let i = 1; i < ordered.length; i++) take(ordered[i].rows);
+    }
+    const firstKey = picks.length ? picks[0].enemyKey : null;
+    const gi = firstKey == null ? 0 : (rows.find((r) => r.key === firstKey)?.gi ?? 0);
+    // 事件期 boss 格：按金币降序取到 cap（不占预算、不计 maxPicks —— 校验器与 _confrontBossSpawns 都是这么定的）
+    const bosses = [];
+    if (this.confrontBossOpen()) {
+      const pool = this.confrontBossPool().slice()
+        .sort((a, b) => (Number(b.coin) - Number(a.coin)) || String(a.key).localeCompare(String(b.key)));
+      for (const r of pool.slice(0, this.confrontBossCap())) bosses.push({ enemyKey: r.key, gate: bosses.length % 2 ? 'upper' : 'lower' });
+    }
     // 业主 2026-10-26：AI 也要「操作怪物」—— 不再只丢默认路线，按怪物移动方式挑可用路线并错开投放时刻。
     // 插件可用 `server.modules.matchClass()` 包装 Match 覆写 `_botConfrontPlan` 做更强的决策（不碰引擎）。
     // 复审计 2026-10-27：bot 路径原先直接写库、绕过 _confrontMember 的全部校验
@@ -1238,7 +1264,7 @@ export class MatchConfront {
     // 复审计 2026-10-27：即使一条都买不起也必须写 sub —— `maybeFinishConfront` 要求「人人有 sub」，
     // 否则阶段要空等满 prepTime（65s）才由 deadline 收尾。
     const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
-    this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses: [], total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
+    this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses, total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
     this.markPublic();
   }
 
@@ -1252,16 +1278,23 @@ export class MatchConfront {
     void ps; void position;
     const list = Array.isArray(picks) ? picks : [];
     if (!list.length) return list;
-    const routes = (this._confrontRoutes().routes || []).length;
+    const { routes: tplRoutes, leader } = this._confrontRoutes();
+    const routeCount = (tplRoutes || []).length;
     const tl = Math.max(1, Number(this.wave && this.wave.timeLimit) || 60);
     const out = [];
     let slot = 0;
     for (const p of list) {
-      // 只挑「这条路线这只怪走得通」的（confrontRouteMetrics 会按 WALK/FLY 与可达性返回 null）
+      // 2026-11-01 P1（审计 D6）：路线必须同时满足「这只怪走得通」与「门的朝向一致」——
+      // applyConfront 直接信 routeIndex，旧过滤只查 WALK/FLY 会导致「下路怪走上路」。
+      // gate 匹配的候选优先；一个都没有就省略 routeIndex，让权威 confrontRouteFor 按门+移动方式挑。
+      const gate = p.gate === 'upper' ? 'upper' : 'lower';
       const compat = [];
-      for (let i = 0; i < routes; i++) {
+      for (let i = 0; i < routeCount; i++) {
         const m = this.confrontRouteMetrics(i, p.enemyKey);
-        if (m) compat.push({ i, travel: Number(m.travel) || 0 });
+        if (!m) continue;
+        const rt = tplRoutes[i];
+        const gateOk = !rt || !Array.isArray(rt.start) || typeof gateOf !== 'function' || gateOf(rt.start, leader) === gate;
+        if (gateOk) compat.push({ i, travel: Number(m.travel) || 0 });
       }
       const pick = compat.length ? compat[slot++ % compat.length] : null;
       const travel = pick ? pick.travel : 0;

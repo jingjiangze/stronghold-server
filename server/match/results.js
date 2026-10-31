@@ -114,6 +114,9 @@ export function buildResult(m, outcome) {
       name: ps.name,
       isBot: ps.isBot,
       ...(Number.isInteger(ps.aiTakeoverRound) ? { aiTakeoverRound: ps.aiTakeoverRound } : {}),
+      // 观战接管 AI (server/aiTakeover.js, 2026-11-01)：seat 保留 bot 的 playerId，`ownerId` 才是接管它的真人
+      // （与 plugins/mota 的 results.js 对齐 —— core 以前缺这一键，core 路径接管者的战绩会记到 ai_* 席位）
+      ...(typeof ps.aiTakeoverFrom === 'string' ? { ownerId: ps.aiTakeoverFrom } : {}),
       left: ps.left,
       alive: ps.alive,
       victory: cleared,

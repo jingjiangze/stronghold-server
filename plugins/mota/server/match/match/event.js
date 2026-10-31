@@ -26,7 +26,7 @@
 
 import {
   PHASE, ERR, EVENT_TARGETS, EVENT_TARGETS_ALL, eventTargetsFor, EVENT_SELF_MUL, EVENT_PICK_SECONDS, EVENT_CARDS,
-  EVENT_SEQUENCE, EVENT_FOE_CARDS, EVENT_FOE_ELITES, EVENT_ROSTER_MS, EVENT_DURATION_ROUNDS, COOP_HUNT,
+  EVENT_SEQUENCE, EVENT_FOE_CARDS, EVENT_FOE_ELITES, EVENT_ROSTER_MS, EVENT_DURATION_ROUNDS, EVENT_FINAL_ROUND, COOP_HUNT,
 } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
 
@@ -146,9 +146,9 @@ export function eventFoeEv(sequence = 2) {
   return (odds.favor * eventFoeMeanEv('favor') + odds.mid * eventFoeMeanEv('mid') + odds.unfavor * eventFoeMeanEv('unfavor')) / 100;
 }
 
-/** The mean AI value of a type's entries (0 when the type is empty — impossible today). */
-function meanEv(kind) {
-  const pool = EVENT_CARDS.filter((c) => c.kind === kind);
+/** The mean AI value of a type's entries (0 when the type is empty — impossible today). `used` 排除已抽走的词条（2026-11-01 P1）。 */
+function meanEv(kind, used = null) {
+  const pool = EVENT_CARDS.filter((c) => c.kind === kind && !(used && used.has(c.id)));
   if (!pool.length) return 0;
   return pool.reduce((n, c) => n + (Number(c.ev) || 0), 0) / pool.length;
 }
@@ -158,13 +158,21 @@ function meanEv(kind) {
  * self = +EV × EVENT_SELF_MUL, mate = +EV, an opponent = −EV (a benefit to the opponent is a loss for us).
  * @param {string} target target key
  * @param {number} [sequence] 1-based event order (default 2)
+ * @param {{ roundsLeft?: number, used?: Set<string>, opponentMul?: number }} [opts]
+ *   2026-11-01 P1（审计 I2/I3/I5）：roundsLeft = 词条在本局的剩余生效回合（EVENT_DURATION_ROUNDS 满值折现，
+ *   E3 在 R13 只剩 1 回合）；used = 已抽走的词条 id（均值只在剩余池上算）；opponentMul = 对手威胁系数
+ *   （由调用方按对手 LP 份额算 —— 打强对手的收益/送弱对手的代价按威胁放大，两对手不再等权）。
  */
-export function eventEvFor(target, sequence = 2) {
+export function eventEvFor(target, sequence = 2, opts = {}) {
   const odds = eventOddsFor(target, sequence);
-  const raw = (odds.down * meanEv('down') + odds.mid * meanEv('mid') + odds.up * meanEv('up')) / 100;
+  const used = opts.used instanceof Set ? opts.used : null;
+  const raw0 = (odds.down * meanEv('down', used) + odds.mid * meanEv('mid', used) + odds.up * meanEv('up', used)) / 100;
+  const rounds = Number.isFinite(opts.roundsLeft) ? Math.max(0, Math.min(EVENT_DURATION_ROUNDS, opts.roundsLeft)) : EVENT_DURATION_ROUNDS;
+  const raw = raw0 * (rounds / EVENT_DURATION_ROUNDS);
+  const oppMul = Number.isFinite(opts.opponentMul) && opts.opponentMul > 0 ? Math.max(0.5, Math.min(2, opts.opponentMul)) : 1;
   if (target === 'self') return raw * EVENT_SELF_MUL;
   if (target === 'mate') return raw;
-  return -raw;
+  return -raw * oppMul;
 }
 
 /** A multiplier after the target's magnitude: the BONUS doubles (`1 + (m − 1) × mag`), not the total. */
@@ -397,14 +405,26 @@ export class MatchEvent {
   /**
    * The AI's target: the available target with the highest eventEvFor (self ×2 included), priced at the REAL sequence
    * row — the same clamp the draw uses (2026-10-31: it used to always price with the E2 odds, which only happens to be
-   * right for the second event); a tie takes the earlier key of
-   * EVENT_TARGETS (self / mate / oppA / oppB). Null when nothing is left (impossible with 3 events / 4 targets).
+   * right for the second event). 2026-11-01 P1（审计 I2/I3/I5）：再折现剩余生效回合（E3 在 R13 只剩 1 回合）、
+   * 只在剩余牌池上取均值、并按对手 LP 份额给对手目标加权（打强对手收益更大、送弱对手代价更小）。
+   * 平局仍取较早的 key（self / mate / oppA / oppB）；没有可选项时返回 null（3 事件 / 4 目标下不会发生）。
    */
   botEventTarget(ps) {
     const seq = Math.max(1, Math.min(EVENT_SEQUENCE.length, this.eventIndex));
+    const roundsLeft = Math.max(0, EVENT_FINAL_ROUND - this.round + 1);
+    const used = new Set([...(this.eventUsedAlly || []), ...(Array.isArray(ps.eventCards) ? ps.eventCards : [])]);
+    const oppMulOf = (key) => {
+      if (key !== 'oppA' && key !== 'oppB') return 1;
+      const map = this.eventTargetMap(ps);
+      const t = map[key];
+      if (!t) return 1;
+      const opps = [map.oppA, map.oppB].filter((v) => v && v.alive && !v.left);
+      const avg = opps.reduce((n, v) => n + (Number(v.lp) || 0), 0) / Math.max(1, opps.length);
+      return avg > 0 ? Math.max(0.5, Math.min(2, (Number(t.lp) || 0) / avg)) : 1;
+    };
     let best = null;
     for (const key of this.eventAvailableTargets(ps)) {
-      const ev = eventEvFor(key, seq);
+      const ev = eventEvFor(key, seq, { roundsLeft, used, opponentMul: oppMulOf(key) });
       if (!best || ev > best.ev + 1e-9) best = { key, ev };
     }
     return best ? best.key : null;
