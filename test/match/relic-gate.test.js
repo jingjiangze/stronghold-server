@@ -13,32 +13,40 @@ const RELICS = JSON.parse(fs.readFileSync(new URL('../../plugins/relics-87/data/
 /** 一个只够 `relicOffer` 跑起来的最小 self（`this`）。 */
 function fakeMatch({ modeId, isRogue, round = 1, relics = RELICS, owned = [] }) {
   const ps = { playerId: 'p_0', alive: true, relics: owned.slice(), relicOffer: null, relicOfferCards: null };
+  const timers = [];
   const self = {
     modeId, isRogue, round, seed: 20261030,
     gd: { raw: { relics } },
     alivePlayers: () => [ps],
     relicPool: MatchMeltdown.prototype.relicPool,
     relicDraftRound: MatchMeltdown.prototype.relicDraftRound,
-    markPrivate() {}, markPublic() {}, later() { return null; }, reportError() {},
+    markPrivate() {}, markPublic() {}, reportError() {},
+    later(ms, fn) { timers.push({ ms, fn }); return timers.length; },
   };
   MatchMeltdown.prototype.relicOffer.call(self);
-  return ps;
+  return { ps, timers };
 }
 
 test('肉鸽房（mode_multi_* + isRogue）第 1 回合就发 3 选 1 —— 不再是死门', () => {
-  const ps = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, round: 1 });
+  const { ps } = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, round: 1 });
   assert.ok(Array.isArray(ps.relicOffer) && ps.relicOffer.length === 3, 'rogue R1 必须发到 3 张');
   assert.equal(ps.relicOfferCards.length, 3, '卡面数据一并带上');
   assert.equal(ps.relicOfferRound, 1);
 });
 
+test('自动选卡的兜底是 **20 秒**，不是 20 毫秒（`later()` 收毫秒）', () => {
+  const { timers } = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, round: 1 });
+  assert.equal(timers.length, 1, '只排一个兜底定时器');
+  assert.equal(timers[0].ms, 20000, '曾经写成 later(20, …) ⇒ 20ms 后自动取第一张，弹窗不可见');
+});
+
 test('普通合作模式（无 isRogue）一件都不发', () => {
-  const ps = fakeMatch({ modeId: 'mode_multi_normal', isRogue: false, round: 1 });
+  const { ps } = fakeMatch({ modeId: 'mode_multi_normal', isRogue: false, round: 1 });
   assert.equal(ps.relicOffer, null);
 });
 
 test('协同共竞（mode_xie_*）照旧发，节奏由 relicDraftRound 决定', () => {
-  const ps = fakeMatch({ modeId: 'mode_xie_normal', isRogue: false, round: 4 });
+  const { ps } = fakeMatch({ modeId: 'mode_xie_normal', isRogue: false, round: 4 });
   assert.equal(ps.relicOffer.length, 3);
 });
 
@@ -50,11 +58,11 @@ test('节奏：肉鸽 = R1 + 每 2 回合；协同 = R4 / R8 / R12', () => {
 });
 
 test('没有藏品数据时静默不发（不抛错）', () => {
-  const ps = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, relics: { relics: [] } });
+  const { ps } = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, relics: { relics: [] } });
   assert.equal(ps.relicOffer, null);
 });
 
 test('每人本局最多 3 件：已拿满就不再发', () => {
-  const ps = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, round: 2, owned: ['p40', 'p45', 'n06'] });
+  const { ps } = fakeMatch({ modeId: 'mode_multi_normal', isRogue: true, round: 2, owned: ['p40', 'p45', 'n06'] });
   assert.equal(ps.relicOffer, null);
 });

@@ -481,7 +481,8 @@ export class MatchMeltdown {
       try { this.markPrivate(ps); } catch (e) { this.reportError('rogue offer', e); }
     }
     try { this.markPublic(); } catch { /* best effort */ }
-    try { this._rogueTimer = this.later(20, () => this.rogueEventTimeout()); } catch { /* no scheduler */ }
+    // 同上：`later(20, …)` 是 20 毫秒不是 20 秒 —— 随机事件弹窗同样会瞬间自动选第一个（2026-10-31 修）。
+    try { this._rogueTimer = this.later(20 * 1000, () => this.rogueEventTimeout()); } catch { /* no scheduler */ }
   }
 
   rogueEventTimeout() {
@@ -594,8 +595,10 @@ export class MatchMeltdown {
     }
     try { this.markPublic(); } catch { /* best effort */ }
     // 超时兜底：不选就取第一张（与海克斯草案一致）
+    // ⚠️ `later()` 的单位是**毫秒**（infra.js 的 `later(ms, fn)`）。原来写 `later(20, …)` = 20 **毫秒**
+    // 后就自动取第一张 —— 弹窗几乎不可见也来不及点（2026-10-31 修成 20 秒）。
     try {
-      this._relicTimer = this.later(20, () => this.relicTimeout());
+      this._relicTimer = this.later(20 * 1000, () => this.relicTimeout());
     } catch { /* 无调度器时忽略 */ }
   }
 
