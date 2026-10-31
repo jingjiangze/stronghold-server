@@ -66,7 +66,8 @@ function loadSqlite() {
  */
 export function openAccounts({ dataDir, log = console, quotaBytes = Number(process.env.SP_ACCOUNT_LINEUP_QUOTA_BYTES) || DEFAULT_LINEUP_QUOTA_BYTES, now = Date.now }) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const DatabaseSync = loadSqlite();
+  const forceJsonl = String(process.env.SP_ACCOUNTS_BACKEND || '').toLowerCase() === 'jsonl';
+  const DatabaseSync = forceJsonl ? null : loadSqlite();
   const backend = DatabaseSync ? 'sqlite' : 'jsonl';
   const secretFile = path.join(dataDir, '.account-secret');
 

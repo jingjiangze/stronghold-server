@@ -1,4 +1,5 @@
 // server/accounts/api.js — the account HTTP surface (业主 2026-11-01)。
+// (i18n-ignore-file: the answers are JSON codes and the error pages are bilingual by design, 中文 · English — docs/I18N.md)
 //
 // 为什么是 REST 而不是塞进 WS：账号是「进游戏之前 / 与游戏无关」的事，走 `/api/*` 才能被管理后台、脚本和
 // 将来的独立前端共用；游戏实时协议 `/ws` 一个字不动。
