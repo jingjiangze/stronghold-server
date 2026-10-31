@@ -111,7 +111,7 @@ test('takeover is default off, only the host can opt in before play, and changin
   const botId = m.order[2].playerId;
   assert.equal((await late.request({ t: 'room.aiRequest', botId })).t, 'error');
   const { transferAiSeat } = await import('../server/aiTakeover.js');
-  assert.equal(transferAiSeat(srv.lobby, room, late.id, botId).error, 'BAD_TARGET');
+  assert.equal((await transferAiSeat(srv.lobby, room, late.id, botId)).error, 'BAD_TARGET');
   assert.equal((await host.request({ t: 'room.setAiTakeover', on: true })).code, 'ROOM_STARTED');
   m.finish({ victory: false, reason: 'test' });
   assert.equal((await mate.request({ t: 'room.setAiTakeover', on: true })).code, 'NOT_HOST');
@@ -149,15 +149,54 @@ test('handover preserves negotiated deltas and cancels only the inherited seat r
   assert.equal(m._rehearsalTasks.has('other'), true);
 });
 
-for (const kind of ['plugin', 'hosted', 'historical']) {
-  test(`takeover refuses ${kind} matches even with an enabled room flag`, async t => {
-    const { room, m, late } = await fixture(t);
-    const oldContent = room.content, oldVersion = room.version;
-    if (kind === 'plugin') room.content = { ...room.content, vanilla: false };
-    if (kind === 'hosted') m.hosted = true;
-    if (kind === 'historical') room.version = 'act1autochess';
-    try {
-      assert.equal((await late.request({ t: 'room.aiRequest', botId: m.order[2].playerId })).t, 'error');
-    } finally { room.content = oldContent; room.version = oldVersion; m.hosted = false; }
-  });
-}
+// 2026-10-31: 插件内容集（modded）与 match host 不再拒绝接管 —— 前者和普通房一样在本进程里做，后者走
+// takeoverSeatState / takeoverSeat 两个 worker RPC（MatchProxy）。历史版本仍然拒绝。
+test('takeover works in plugin-content (modded) matches — the lobby no longer refuses them', async t => {
+  const { room, m, host, mate, late } = await fixture(t);
+  const bot = m.order[2], oldContent = room.content;
+  room.content = { ...room.content, vanilla: false };
+  try {
+    assert.equal((await late.request({ t: 'room.aiRequest', botId: bot.playerId })).t, 'ok');
+    const vote = room.aiTakeoverVotes[0];
+    await host.request({ t: 'room.aiVote', voteId: vote.id, approve: true });
+    assert.equal((await mate.request({ t: 'room.aiVote', voteId: vote.id, approve: true })).t, 'ok');
+    assert.equal(bot.isBot, false);
+    assert.equal(room.seatOf(bot.playerId).isBot, false);
+  } finally { room.content = oldContent; }
+});
+
+test('takeover through a match host asks the worker (RPC) and rebinds the session in the lobby', async t => {
+  const { srv, room, m, host, mate, late } = await fixture(t);
+  const bot = m.order[2], calls = [];
+  m.hosted = true;
+  m.takeoverSeatState = async () => ({ phase: 'PREP', round: m.round, ended: false, disposed: false,
+    bots: [{ playerId: bot.playerId, name: bot.name, seat: bot.seat }] });
+  m.takeoverSeat = async (botId, applicantId, name) => {
+    calls.push(['takeoverSeat', botId, applicantId, name]);
+    Object.assign(bot, { isBot: false, autoplay: false, connected: true, ready: false, name });
+    bot.aiTakeoverRound = m.round; bot.aiTakeoverFrom = applicantId;
+    return { ok: true };
+  };
+  try {
+    assert.equal((await late.request({ t: 'room.aiRequest', botId: bot.playerId })).t, 'ok');
+    const vote = room.aiTakeoverVotes[0];
+    await host.request({ t: 'room.aiVote', voteId: vote.id, approve: true });
+    late.clearInbox();
+    assert.equal((await mate.request({ t: 'room.aiVote', voteId: vote.id, approve: true })).t, 'ok');
+    assert.deepEqual(calls.map(c => c[0]), ['takeoverSeat']);
+    assert.equal(calls[0][2], late.id);
+    await late.waitFor('welcome', w => w.playerId === bot.playerId);
+    assert.equal(bot.isBot, false);
+    assert.equal(srv.registry.byId(bot.playerId)?.name, 'Late');
+    assert.equal(room.spectatorOf(late.id), null);
+  } finally { m.hosted = false; delete m.takeoverSeatState; delete m.takeoverSeat; }
+});
+
+test('takeover refuses historical (non-default) versions even with an enabled room flag', async t => {
+  const { room, m, late } = await fixture(t);
+  const oldVersion = room.version;
+  room.version = 'act1autochess';
+  try {
+    assert.equal((await late.request({ t: 'room.aiRequest', botId: m.order[2].playerId })).t, 'error');
+  } finally { room.version = oldVersion; }
+});

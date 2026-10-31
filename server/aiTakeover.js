@@ -16,33 +16,64 @@ export function resetAiTakeover(room) {
 export function takeoverVoters(room) {
   const m = room.match;
   const seats = room.seats.filter(s => s && !s.isBot && !s.left && s.connected);
-  const ids = seats.filter(s => !m.players.get(s.playerId)?.autoplay).map(s => s.playerId);
+  // A hosted (plugin) match keeps its PlayerStates in the worker, so `autoplay` is not readable here: nobody is
+  // filtered out — a托管中的队友 still votes, exactly like an ordinary one.
+  const players = m?.players instanceof Map ? m.players : null;
+  const ids = seats.filter(s => !players || !players.get(s.playerId)?.autoplay).map(s => s.playerId);
   if (!ids.length && room.seatOf(room.hostId)?.connected) ids.push(room.hostId);
   return ids;
 }
-export function transferAiSeat(lobby, room, applicantId, botId) {
+
+/**
+ * The live state the vote flow needs, from whichever side owns the match: an in-process Match answers from itself,
+ * a match host's MatchProxy is asked over the takeover RPC (plugin matches run in a worker — the lobby has no
+ * players / phase / round there). @returns {Promise<{phase:string, round:number, ended:boolean, disposed:boolean,
+ *   frozen?:boolean, bots:{playerId:string,name:string,seat:number}[]}|null>}
+ */
+async function matchState(m) {
+  if (!m) return null;
+  if (m.hosted) {
+    const st = await m.takeoverSeatState();
+    return st && typeof st.phase === 'string' ? st : null;
+  }
+  return {
+    phase: m.phase, round: m.round, ended: !!m.ended, disposed: !!m.disposed, frozen: !!m.emergencyFrozen,
+    bots: [...(m.players?.values?.() || [])].filter(ps => ps.isBot && !ps.left && ps.alive)
+      .map(ps => ({ playerId: ps.playerId, name: ps.name, seat: ps.seat })),
+  };
+}
+
+export async function transferAiSeat(lobby, room, applicantId, botId) {
   const m = room.match, session = lobby.registry.byId(applicantId), spectator = room.spectatorOf(applicantId);
-  const ps = m?.players?.get(botId), seat = room.seatOf(botId);
+  const seat = room.seatOf(botId);
   if (room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION) return fail('AI handover is disabled');
-  if (!session?.connected || !session.ws || !spectator || !ps?.isBot || ps.left || !ps.alive || !seat || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen) return fail('AI handover unavailable');
-  if (room.modded || m.hosted) return fail('AI handover is unavailable in isolated plugin matches');
+  if (!session?.connected || !session.ws || !spectator || !seat || seat.isBot !== true || seat.left) return fail('AI handover unavailable');
   if (lobby.registry.byId(botId)) return fail('AI seat already has a session');
   const conn = lobby.network?.conns.get(session.ws);
   if (!conn || conn.closing) return fail('connection unavailable');
+  if (m?.hosted) {
+    // 插件对局的 Match/PlayerState 在 match host 的 worker 里：相位、回合、席位都那边判，变更也在那边做
+    const res = await m.takeoverSeat(botId, applicantId, session.name);
+    if (!res || res.ok !== true) return fail('AI handover unavailable');
+  } else {
+    const ps = m?.players?.get(botId);
+    if (!ps?.isBot || ps.left || !ps.alive || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen) return fail('AI handover unavailable');
+    m.cancelSeatRehearsal(botId);
+    ps._botPrepToken = (ps._botPrepToken || 0) + 1;
+    Object.assign(ps, { isBot: false, autoplay: false, connected: true, ready: false, name: session.name });
+    m.loneHuman = m.order.filter(p => !p.isBot && !p.left).length === 1;
+    ps.aiTakeoverRound = m.round;
+    // The seat keeps the bot's playerId (the session below takes it over), so remember who actually played it: the
+    // result row carries this as `ownerId` and the client keys the record to the human instead of the `ai_…` seat.
+    ps.aiTakeoverFrom = applicantId;
+    m.markPublic(); ps.dirty();
+  }
   lobby.removeMember(room, applicantId); lobby.clearResync(applicantId);
   lobby.registry.byPlayerId.delete(applicantId); session.playerId = botId; lobby.registry.byPlayerId.set(botId, session);
   session.roomCode = room.code; session.notice = null; session.pendingResult = null; session.resyncAt = -Infinity;
-  ps._botPrepToken = (ps._botPrepToken || 0) + 1;
-  m.cancelSeatRehearsal(botId);
-  Object.assign(ps, { isBot: false, autoplay: false, connected: true, ready: false, name: session.name });
   Object.assign(seat, { isBot: false, connected: true, left: false, ready: false, name: session.name });
-  m.loneHuman = m.order.filter(p => !p.isBot && !p.left).length === 1;
-  ps.aiTakeoverRound = m.round;
-  // The seat keeps the bot's playerId (the session above took it over), so remember who actually played it: the result
-  // row carries this as `ownerId` (plugins/mota/server/match/results.js) and the client keys the record to it
-  // (public/js/ui/stats.js), so the match counts for the human and not for the `ai_…` seat.
-  ps.aiTakeoverFrom = applicantId; seat.aiTakeoverFrom = applicantId;
-  session.aiTakeoverFrom = applicantId; m.markPublic(); ps.dirty();
+  seat.aiTakeoverFrom = applicantId;
+  session.aiTakeoverFrom = applicantId;
   resetStateDelta(conn.ws);
   lobby.network.onHelloMsg(conn, { t: 'hello', version: PROTOCOL_VERSION, delta: stateDeltaVersion(conn.ws), name: session.name, token: session.token }, lobby.now());
   lobby.broadcastState(room); return { ok: true };
@@ -61,14 +92,18 @@ export function reconcileAiTakeover(lobby, room) {
   const votes = pending.get(room);
   if (!votes?.size) return false;
   const m = room.match;
+  const hosted = m?.hosted === true;
   const eligible = m ? takeoverVoters(room) : [];
   let changed = false;
   for (const [id, v] of votes) {
-    const applicant = lobby.registry.byId(v.applicantId), bot = m?.players?.get(v.botId);
-    if (room.aiTakeoverEnabled !== true || room.modded || m?.hosted || room.version !== DEFAULT_VERSION
-      || m !== v.match || m.phase !== 'PREP' || m.round !== v.round || m.ended || m.disposed || m.emergencyFrozen
+    const applicant = lobby.registry.byId(v.applicantId), bot = hosted ? null : m?.players?.get(v.botId);
+    // Hosted (plugin) matches keep phase/round/players in the worker, so the detailed checks happen again inside the
+    // takeover RPC; here only what the lobby can see (identity, connection, electorate, expiry) can drop a vote.
+    if (room.aiTakeoverEnabled !== true || room.version !== DEFAULT_VERSION
+      || m !== v.match
+      || (hosted ? m.ended || m.disposed : m.phase !== 'PREP' || m.round !== v.round || m.ended || m.disposed || m.emergencyFrozen)
       || !room.spectatorOf(v.applicantId)?.connected || !applicant?.connected || applicant.roomCode !== room.code
-      || !bot?.isBot || !bot.alive || bot.left || Date.now() >= v.expiresAt
+      || (!hosted && (!bot?.isBot || !bot.alive || bot.left)) || Date.now() >= v.expiresAt
       || eligible.length !== v.eligible.length || eligible.some((id, i) => id !== v.eligible[i])) {
       drop(votes, id); changed = true;
     }
@@ -76,22 +111,24 @@ export function reconcileAiTakeover(lobby, room) {
   if (changed) snapshot(room, votes);
   return changed;
 }
-export function aiTakeover(lobby, session, msg) {
+export async function aiTakeover(lobby, session, msg) {
   const room = lobby.roomOf(session), m = room?.match;
   if (room && reconcileAiTakeover(lobby, room)) lobby.broadcastState(room);
-  if (!room || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION || !m || m.hosted || room.modded || m.phase !== 'PREP' || m.ended || m.disposed || m.emergencyFrozen) return fail('AI handover requires preparation in an original-content match');
+  const st = await matchState(m);
+  if (!room || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION
+    || !st || st.phase !== 'PREP' || st.ended || st.disposed || st.frozen) return fail('AI handover requires preparation in a coop match');
   let votes = pending.get(room); if (!votes) pending.set(room, votes = new Map());
   const sync = () => { snapshot(room, votes); lobby.broadcastState(room); };
   if (msg.t === 'room.aiRequest') {
-    const bot = m.players.get(msg.botId);
-    if (!room.spectatorOf(session.playerId) || !session.connected || !bot?.isBot || bot.left || !bot.alive) return fail('a spectator must select an active AI');
+    const bot = (st.bots || []).find((b) => b.playerId === msg.botId);
+    if (!room.spectatorOf(session.playerId) || !session.connected || !bot) return fail('a spectator must select an active AI');
     if ([...votes.values()].some(v => v.applicantId === session.playerId || v.botId === msg.botId)) return fail('request already pending');
     const eligible = takeoverVoters(room);
     if (!eligible.length) return fail('no online voter available');
     const id = String(room.aiTakeoverSeq = (room.aiTakeoverSeq || 0) + 1);
     // [ASSUMED] A 30-second vote expires without approval; the whole room elects by strict majority.
     const vote = { id, applicantId: session.playerId, applicantName: session.name, botId: msg.botId,
-      match: m, round: m.round, eligible, expiresAt: Date.now() + 30000, yes: new Set(), no: new Set() };
+      match: m, round: st.round, eligible, expiresAt: Date.now() + 30000, yes: new Set(), no: new Set() };
     votes.set(id, vote);
     vote.timer = setTimeout(() => { if (votes.get(id) === vote) { drop(votes, id); sync(); } }, 30000);
     vote.timer.unref?.(); sync(); return { ok: true };
@@ -105,7 +142,7 @@ export function aiTakeover(lobby, session, msg) {
   if (vote.no.size >= required) { drop(votes, vote.id); sync(); return { ok: true }; }
   if (vote.yes.size >= required) {
     drop(votes, vote.id);
-    const result = transferAiSeat(lobby, room, vote.applicantId, vote.botId); sync(); return result;
+    const result = await transferAiSeat(lobby, room, vote.applicantId, vote.botId); sync(); return result;
   }
   sync(); return { ok: true };
 }
@@ -117,17 +154,18 @@ export function aiTakeover(lobby, session, msg) {
  * Called from lobby `opts.onPrepStart` (the match reports every PREP start).
  * @returns {boolean} whether a request was opened
  */
-export function maybeRandomAiTakeover(lobby, room, round) {
+export async function maybeRandomAiTakeover(lobby, room, round) {
   const m = room?.match;
   if (!m || room.aiTakeoverEnabled !== true || room.aiRandomHandover !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION) return false;
-  if (room.modded || m.hosted || m.ended || m.disposed || m.emergencyFrozen) return false;
-  if (m.phase !== 'PREP' || round !== m.round || !inWindow(m) || room.aiRandomFired === true) return false;
+  if (room.aiRandomFired === true || !inWindow({ round })) return false;
+  const st = await matchState(m);
+  if (!st || st.phase !== 'PREP' || st.ended || st.disposed || st.frozen || st.round !== round) return false;
   const rng = seededRng(Number(m.seed) >>> 0, round);
   if (!Number.isInteger(room.aiRandomRound)) {
     room.aiRandomRound = AI_TAKEOVER_MIN_ROUND + (rng() % (AI_TAKEOVER_MAX_ROUND - AI_TAKEOVER_MIN_ROUND + 1));
   }
   if (room.aiRandomRound !== round) return false;
-  const bots = [...m.players.values()].filter((ps) => ps.isBot && !ps.left && ps.alive);
+  const bots = st.bots || [];
   const viewers = (room.spectators || []).filter((s) => s && s.connected && lobby.registry.byId(s.playerId)?.connected);
   if (!bots.length || !viewers.length) return false;
   const bot = bots[rng() % bots.length];
@@ -140,7 +178,7 @@ export function maybeRandomAiTakeover(lobby, room, round) {
   room.aiRandomFired = true;
   const id = String(room.aiTakeoverSeq = (room.aiTakeoverSeq || 0) + 1);
   const vote = { id, applicantId: viewer.playerId, applicantName: viewer.name, botId: bot.playerId,
-    match: m, round: m.round, eligible, expiresAt: Date.now() + 30000, yes: new Set(), no: new Set(), random: true };
+    match: m, round, eligible, expiresAt: Date.now() + 30000, yes: new Set(), no: new Set(), random: true };
   votes.set(id, vote);
   vote.timer = setTimeout(() => {
     if (votes.get(id) === vote) { drop(votes, id); snapshot(room, votes); lobby.broadcastState(room); }
