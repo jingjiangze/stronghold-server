@@ -32,7 +32,9 @@ export function setup(api) {
     if (!room || room.mode !== 'versus') return null;
     // 只走 versusRule（经 MatchProxy 的 wireOptions 白名单转发给子进程）。
     // 不走 modeId 前缀：实测 mode_confront_* 会让 GameData 找不到该模式，波次价值塌成 0。
-    return { teamSize: teamSizeOf(room), versusRule: ruleOf(room), versusAlt: room.versusAlt !== false };
+    return { teamSize: teamSizeOf(room), versusRule: ruleOf(room), versusAlt: room.versusAlt !== false,
+      // 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，控怪档不吃这一项（那边是 1.5× 官方固定口径）。
+      versusSpeed: room.versusSpeed === 1.5 || room.versusSpeed === 2 ? room.versusSpeed : 1 };
   });
 
   api.beforeStart((room, session, lobby) => {

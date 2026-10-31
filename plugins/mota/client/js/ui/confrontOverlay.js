@@ -207,11 +207,19 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
     const out = [];
     let left = budget;
     const cap = Math.max(1, Number(conf.maxPicks) || VERSUS_CONFRONT.maxPicks);
-    for (const r of rows.slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key)))) {
-      if (out.length >= cap) break;
-      if (r.value > left) continue;
-      left -= r.value;
-      out.push({ enemyKey: r.key, gate: out.length % 2 ? 'upper' : 'lower' });
+    const sorted = rows.slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key)));
+    // 2026-10-31 业主：「去掉每种怪最多一只」。旧实现单趟扫 ⇒ 同一 enemyKey 只放一次，只数被锁死在怪种数上。
+    // 改成反复扫到没有进展为止：每轮把还买得起的都放一遍，直到预算不够或到 cap（单价最小 1 ⇒ 必然收敛）。
+    let progressed = true;
+    while (progressed && out.length < cap) {
+      progressed = false;
+      for (const r of sorted) {
+        if (out.length >= cap) break;
+        if (r.value > left) continue;
+        left -= r.value;
+        out.push({ enemyKey: r.key, gate: out.length % 2 ? 'upper' : 'lower' });
+        progressed = true;
+      }
     }
     return out;
   };
@@ -367,13 +375,14 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const reuse = () => {
     if (submitted || busy || !lastSquad || !lastSquad.keys.length) return;
     const out = [];
-    const used = new Set();
+    const cap = Math.max(1, Number(conf.maxPicks) || VERSUS_CONFRONT.maxPicks);
     let left = budget;
+    // 上轮的种类按原顺序重放（现在允许重复 key —— 本局已放开「每种最多一只」，重放必须忠实）
     for (const key of lastSquad.keys) {
+      if (out.length >= cap) break;
       const rec = rowByKey.get(key);
-      if (!rec || used.has(key) || rec.value > left) continue;
+      if (!rec || rec.value > left) continue;
       left -= rec.value;
-      used.add(key);
       const j = out.length;
       out.push({
         enemyKey: key,
@@ -382,11 +391,18 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
         ...(lastSquad.times && Number.isFinite(lastSquad.times[j]) ? { time: lastSquad.times[j] } : {}),
       });
     }
-    for (const r of allRows) {
-      if (used.has(r.key) || r.value > left) continue;
-      left -= r.value;
-      used.add(r.key);
-      out.push({ enemyKey: r.key, gate: 'lower' });
+    // 余额：便宜优先**反复**补（同一只可重复），直到预算不够或到 cap
+    const sortedAll = allRows.slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key)));
+    let progressed = true;
+    while (progressed && out.length < cap) {
+      progressed = false;
+      for (const r of sortedAll) {
+        if (out.length >= cap) break;
+        if (r.value > left) continue;
+        left -= r.value;
+        out.push({ enemyKey: r.key, gate: 'lower' });
+        progressed = true;
+      }
     }
     if (!out.length) return;
     setGroup(groupOfKey(out[0].enemyKey));

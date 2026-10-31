@@ -376,7 +376,9 @@ const HUNT_RHYTHM = Object.freeze({
   positions: Object.freeze(['front', 'mid', 'back']),
   budgetMul: 2, rosterMs: CONFRONT_ROSTER_MS,
   traitShare: 0.3, traitStepScores: Object.freeze([0, 1, 2]),
-  bountyCaps: Object.freeze([1, 1, 2, 2]), finalHuntBounty: 25, killIncomeShare: 1, maxPicks: 64,
+  // maxPicks 64 → 80（业主 2026-10-31「控怪出怪量 = 官方 1.5 倍」）：R12/R13 官方 p90 约 50 只，
+  // 1.5 倍要 75–77 只，64 会把「1.5 倍」重新压回 1.25 倍。协议侧 picks 硬上限是 128，80 安全。
+  bountyCaps: Object.freeze([1, 1, 2, 2]), finalHuntBounty: 25, killIncomeShare: 1, maxPicks: 80,
   merchantRates: Object.freeze([0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 1]),
   merchantRoundCap: 4, merchantUncappedRound: 15,
 });

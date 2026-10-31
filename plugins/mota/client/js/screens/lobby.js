@@ -538,7 +538,8 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
 function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficulty, onClose, matchmaking, brief, privateRoom, onPrivate,
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
   testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
-  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null }) {
+  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null,
+  versusSpeed = 1, onVersusSpeed = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -622,6 +623,12 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                 <input type="checkbox" checked=${versusAlt !== false} disabled=${!!busy}
                   onChange=${(e) => onVersusAlt && onVersusAlt(e.currentTarget.checked)} />
                 <span>${t('每回合交换攻守')}</span></label>` : null}
+              ${versusRule === 'bounty' ? html`<label class="proto-team" title=${t('出怪倍速：这一回合守方遇到的敌人数量的倍数（以当前赏金档为 1×）')}>
+                <span>${t('倍速')}</span>
+                <select value=${String(versusSpeed)} disabled=${!!busy}
+                  onChange=${(e) => onVersusSpeed && onVersusSpeed(Number(e.currentTarget.value))}>
+                  ${[1, 1.5, 2].map((m) => html`<option key=${m} value=${String(m)}>${t('{m}× 出怪', { m })}</option>`)}
+                </select></label>` : null}
               <label class="proto-team" title=${t('每队人数：2 人一队 = 4 人房，10 人一队 = 20 人房')}>
                 <span>${t('人数')}</span>
                 <select value=${String(versusTeam)} disabled=${!!busy}
@@ -888,6 +895,8 @@ export function LobbyScreen() {
   const [versusRule, setVersusRule] = useState('bounty');
   // 纯对抗里可以关掉「每回合交换攻守」（业主 2026-10-26）；赏金档恒交替。
   const [versusAlt, setVersusAlt] = useState(true);
+  // 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，控怪档不吃这一项
+  const [versusSpeed, setVersusSpeed] = useState(1);
   const [difficulty, setDifficulty] = useState(() => preferredDifficulty(lobbySimulationPreference()));
   const [fpVariant, setFpVariant] = useState(firepowerVariantPreference);
   const roomMode = simulation === 'solo' ? 'solo' : simulation === 'versus' ? 'versus' : 'coop';
@@ -1003,7 +1012,8 @@ export function LobbyScreen() {
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
       ...(simulation === 'coop' && rogueRules ? { variant: 'rogue' } : {}),
       ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
-        versusAlt: versusRule === 'confront' ? versusAlt !== false : true } : {}),
+        versusAlt: versusRule === 'confront' ? versusAlt !== false : true,
+        versusSpeed: versusRule === 'bounty' ? versusSpeed : 1 } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });
     // 随机地图默认关（2026-10-30）：不再在建房时强开；要换图请在房间里用「随机地图」开关。
@@ -1171,6 +1181,7 @@ export function LobbyScreen() {
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
       versusTeam=${versusTeam} onVersusTeam=${setVersusTeam}
       versusRule=${versusRule} onVersusRule=${setVersusRule} versusAlt=${versusAlt} onVersusAlt=${setVersusAlt}
+      versusSpeed=${versusSpeed} onVersusSpeed=${setVersusSpeed}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 
