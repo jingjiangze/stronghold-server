@@ -1,3 +1,4 @@
+// (i18n-ignore-file: operator console text, not player UI — docs/I18N.md)
 // server/accounts/adminPage.js — 管理后台的 HTML 外壳（P3）。
 // 只出静态 HTML：脚本走同源 /js/admin.js（CSP `script-src 'self'` 不允许内联）；样式内联（style-src 允许 inline）。
 

@@ -1,3 +1,4 @@
+// (i18n-ignore-file: operator console text, not player UI — docs/I18N.md)
 // public/js/admin.js — 管理后台（P3）：纯前端、无构建、只打 /api/admin/*。
 // CSP 是 `script-src 'self'`（无 unsafe-inline），所以本文件必须独立加载，页面上不放内联 JS。
 
