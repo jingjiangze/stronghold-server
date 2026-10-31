@@ -60,6 +60,9 @@ export const DATA_FILES = Object.freeze({
   choices: 'choices.json',
   config: 'config.json',
   assets: 'assets.json',
+  // 公告不是玩法数据：**不能**放进 data/（那里的每个文件都进 `cs` 内容哈希，`G2` 门会拦），
+  // 所以真实文件在 public/announcements.json，这里用相对路径跳出 /data/ 前缀。
+  announcements: '../announcements.json',
   // 补位 stand-ins (DATA.md §18): the bodies the 干员持有 screen, the cards and the detail card compose (shared/standIn.js)
   backups: 'backups.json',
   // Optional art extracted from a local game client (DESIGN §13): { groups: { '<subdir>': { name: { path, w, h } } } }.
