@@ -451,7 +451,7 @@ function HubTile({ icon, label, en, onClick, children }) {
  * 娱乐模式（业主 2026-10-31「其他模式聚合为大厅里的一个按钮」）：把协同共竞 / 赏金 / 对战(控怪) / 肉鸽
  * 收进一个入口；弹窗占视口 80%，2×2 网格，选哪格就走对应的建房弹窗。
  */
-function FunSelect({ onClose, onPick, busy }) {
+function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -475,6 +475,11 @@ function FunSelect({ onClose, onPick, busy }) {
       style="width:80vw;height:80vh;max-width:none;max-height:none;display:flex;flex-direction:column">
       <header class="modal__head">
         <h2 class="modal__title">${t('娱乐模式')}</h2>
+        <span class="t-dim" data-testid="lobby-counts" style="margin-left:.6rem">
+          ${t('在线 {online} · 房间 {rooms} · 对局 {matches}', {
+            online: lobbyStats?.online ?? 0, rooms: lobbyStats?.roomsCount ?? 0, matches: lobbyStats?.matchesCount ?? 0,
+          })}
+        </span>
         <button type="button" class="modal__close" onClick=${leave} aria-label=${t('关闭')}>×</button>
       </header>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:.6rem;padding:.6rem;flex:1;min-height:0">
@@ -484,6 +489,13 @@ function FunSelect({ onClose, onPick, busy }) {
           <span class="ally-card__note" style="padding:.4rem .7rem;opacity:.85">${c.desc}</span>
         </button>`)}
       </div>
+      ${lobbyStats && Array.isArray(lobbyStats.rooms) && lobbyStats.rooms.length ? html`<div class="t-dim" data-testid="lobby-rooms"
+          style="padding:0 .7rem .7rem;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center">
+        <span>${t('公开房间：')}</span>
+        ${lobbyStats.rooms.slice(0, 8).map((r) => html`<button key=${r.code} type="button" class="code-chip num"
+            title=${t('{code} · {humans} 人 · {mode}', { code: r.code, humans: r.humans, mode: r.mode })}
+            disabled=${!onJoinRoom || r.inMatch === true} onClick=${() => onJoinRoom && onJoinRoom(r.code)}>${r.code}${r.inMatch ? ' · 对局中' : ''}</button>`)}
+      </div>` : null}
     </div>
   </div>`;
 }
@@ -1250,7 +1262,8 @@ export function LobbyScreen() {
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest} rogue=${rogueRules} onRogue=${setRogueRules}
       onCreate=${create} onJoin=${() => join()} onSpectate=${() => spectate()} onBrowse=${() => setModalOpen(true)} onSearch=${openSearch} />` : null}
 
-    ${funOpen ? html`<${FunSelect} onClose=${() => setFunOpen(false)} busy=${busy} onPick=${pickFun} />` : null}
+    ${funOpen ? html`<${FunSelect} onClose=${() => setFunOpen(false)} busy=${busy} onPick=${pickFun}
+      lobbyStats=${lobbyStats} onJoinRoom=${(c) => { setFunOpen(false); join(c); }} />` : null}
 
     <${HubDialog} open=${joinOpen} micro="JOIN WITH ALLIANCE KEY" title=${t('密钥加入')} onClose=${() => setJoinOpen(false)}>
       <div class="join-row">
