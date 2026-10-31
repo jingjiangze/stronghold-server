@@ -394,7 +394,7 @@ export function flushMatchLineups(m, outcome) {
 }
 
 /** 全服布阵数据的真实占用：库目录下所有 *.jsonl（排除 outbox 传输队列）之和；单文件布局再补上那一个文件。 */
-function globalLibraryBytes() {
+export function globalLibraryBytes() {
   const raw = String(process.env.SP_LINEUP_LIBRARY || '').trim();
   if (!raw) return 0;
   let total = 0;
@@ -411,13 +411,20 @@ function globalLibraryBytes() {
   return total;
 }
 
+/** 全服额度（字节）。 */
+export function lineupQuotaBytes() { return GLOBAL_MAX_BYTES; }
+/** 还能不能再写 extraBytes：appendLine 的拒绝判定就是它。 */
+export function lineupQuotaOk(extraBytes = 0) {
+  return !(globalLibraryBytes() + Math.max(0, Number(extraBytes) || 0) > GLOBAL_MAX_BYTES);
+}
+
 async function appendLine(modeId, difficulty, rec) {
   const lib = library(modeId, difficulty);
   if (!lib) return;
   if (lib.seen.has(rec.sig)) return; // no duplicate lines for a lineup we already know
   const line = JSON.stringify(rec) + '\n';
   // 全服额度：库文件总量 + 本行 超过 GLOBAL_MAX_BYTES 就拒绝写入（只记一次/小时，绝不抛进结算链）。
-  if (globalLibraryBytes() + Buffer.byteLength(line) > GLOBAL_MAX_BYTES) {
+  if (!lineupQuotaOk(Buffer.byteLength(line))) {
     const nowMs = Date.now();
     if (nowMs - quotaWarnedAt > 3600_000) {
       quotaWarnedAt = nowMs;
