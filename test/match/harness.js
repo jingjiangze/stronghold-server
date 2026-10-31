@@ -59,7 +59,10 @@ export function makeMatch(o = {}) {
     FakeBattle.reset();
     if (o.script) FakeBattle.script = o.script;
   }
-  h.m = new Match({
+  // the class under test: the core Match by default; a suite may pass the gameplay plugin's Match
+  // (e.g. plugins/mota's, which mixes in the mode-specific rules — the lobby's own MatchClass concept)
+  const MatchClass = o.matchClass ?? Match;
+  h.m = new MatchClass({
     roomCode: 'TEST', mode, difficulty, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
     send: (id, msg) => {
       for (const fn of h.onSend) fn(id, msg);
@@ -100,6 +103,8 @@ export function makeMatch(o = {}) {
     cs: o.cs,
     vs: o.vs,
     requireCs: o.requireCs,
+    // a plugin-defined modeId (e.g. the xie-room plugin's mode_xie_* mapping); omitted unless the test asks
+    ...(o.modeId ? { modeId: o.modeId } : {}),
     // a modded room's 自选 list (Match.diyKitted). Omitted unless the test passes one, so a vanilla harness match
     // still has no kitted key.
     ...(o.kitted !== undefined ? { kitted: o.kitted } : {}),

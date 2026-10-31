@@ -494,7 +494,12 @@ export class MatchEconomy {
     // 业主 2026-10-30「借钱优先取团队储备」：先由池子垫（团队自己的钱，**不产生债务**），池子不够的部分才问队友。
     // 池子垫付同样计入本回合的团队资金流动额度 —— 否则一个人可以反复请求把池子抽干（teamTransferCap 就是为此设的）。
     const capLeft = Math.max(0, this.teamTransferCap() - this.econRound.spent);
-    const { fromPool, remaining } = splitPoolFill({ amount, teamReserve: this.teamReserve, capLeft });
+    // 2026-11-01 P1（审计 findings §1.4-3）：池垫付只在借款人**落后于队伍中位数**时生效（救助语义），
+    // 其余请求走队友 —— 否则池子永远先把请求吃掉（amount=1 时 100% 短路），AI 出借永远看不到。
+    // `teamEconomy.transfer.poolFillBehindOnly: false` 恢复旧的全量垫付。
+    const poolBehindOnly = this.teamEcon.transfer.poolFillBehindOnly !== false;
+    const poolOk = !poolBehindOnly || this.econBorrowerBehind(ps.playerId) > 0;
+    const { fromPool, remaining } = splitPoolFill({ amount, teamReserve: poolOk ? this.teamReserve : 0, capLeft });
     if (fromPool > 0) {
       this.teamReserve -= fromPool;
       ps.funds = Math.floor(Number(ps.funds) || 0) + fromPool;
@@ -594,7 +599,10 @@ export class MatchEconomy {
     // keeps the ledger. `lag` is the 兜底率分红 snapshot: the borrower's board trailed the team's median when the loan
     // was made, so this debt earns the premium on repayment (the risk premium for carrying the under-developed).
     const interest = this.teamEcon.transfer.repayInterest;
-    if (interest > 0 || this.teamEcon.coverInterest.enabled) {
+    // 2026-11-01 P1（审计 findings §1.4-4）：债务账本独立开关（默认开）。以前只有「利息>0 或兜底利息开」
+    // 才记账，两者恒 0/false ⇒ 账本永不写入、还钱/催钱链路全死。`teamEconomy.debtLedger: false` 关回旧行为。
+    const ledger = this.teamEcon.debtLedger !== false;
+    if (ledger || interest > 0 || this.teamEcon.coverInterest.enabled) {
       const list = this.econDebts.get(sender.playerId) || [];
       list.push({ to: ps.playerId, amount: req.amount + interest, round: this.round, lag: this.econBorrowerBehind(sender.playerId) > 0 });
       this.econDebts.set(sender.playerId, list);
