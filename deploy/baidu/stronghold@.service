@@ -19,7 +19,8 @@ Environment=SP_PLUGIN_SCRIPTS=trusted-force
 # 计算面精简（与 stronghold.service 同口径，见那里的注释）
 Environment=SP_PROBE=0
 Environment=SP_ASSET_HEALTH_INTERVAL_MS=600000
-Environment=NODE_OPTIONS=--max-old-space-size=1536
+# node:sqlite（账号库）在 Node 22 需要显式开启；Node 24 起默认可用
+Environment=NODE_OPTIONS=--max-old-space-size=1536 --experimental-sqlite
 ExecStart=/usr/local/node-v22.11.0/bin/node server/index.js
 Restart=always
 RestartSec=3

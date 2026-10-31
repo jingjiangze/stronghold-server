@@ -93,7 +93,7 @@ const wantsTraffic = (query) => /(?:^|&)traffic(?:=(?:1|true|yes))?(?:&|$)/i.tes
  *   plugin studio (server/studio/index.js), or none
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log, trustProxy = 'auto', studio = null, mods = null, csp = null, trustedRuntime = null }) {
+export function createRequestHandler({ serveStatic, health, log, trustProxy = 'auto', studio = null, mods = null, accounts = null, csp = null, trustedRuntime = null }) {
   async function handleRequest(req, res) {
     const url = req.url || '/';
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
@@ -103,6 +103,8 @@ export function createRequestHandler({ serveStatic, health, log, trustProxy = 'a
     if (studio && studio.handles(parts.rawPath)) { await studio.handle(req, res, parts.rawPath, parts.query); return; }
     // 模组管理器（server/mods/）：/mod、/mod/status.json 与它的两个写操作 —— 必须在下面的 GET-only 规则之前
     if (mods && mods.handles(parts.rawPath)) { await mods.handle(req, res, parts.rawPath, parts.query); return; }
+    // 账号 / 公告 / 管理后台（server/accounts/）：/api/* 是 POST 入口，同样必须在 GET-only 规则之前
+    if (accounts && accounts.handles(parts.rawPath)) { await accounts.handle(req, res, parts.rawPath, parts.query); return; }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.setHeader('Allow', 'GET, HEAD');
       sendError(req, res, 405, '不支持的请求方法 · Method not allowed');
