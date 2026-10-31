@@ -183,6 +183,10 @@ test('startMatch forwards test only for a room created with the flag', (t) => {
 
 test('wireOptions and setHost stay silent unless the match was created as a test', () => {
   assert.deepEqual(wireOptions({ roomCode: 'ABCD', mode: 'solo', hostId: 'p', test: false }), { roomCode: 'ABCD', mode: 'solo' });
+  // 房间变体必须过白名单：modded 房（肉鸽/协同共竞）跑在子进程宿主里，名单漏了它 ⇒ 引擎侧 `Match.roomVariant`
+  // 恒 null、`isRogue` 恒 false ⇒ 肉鸽的藏品/事件/词缀/换图全部静默失效（2026-10-31 修）。
+  assert.equal(wireOptions({ roomCode: 'ABCD', mode: 'coop', variant: 'rogue' }).variant, 'rogue');
+  assert.equal(wireOptions({ roomCode: 'ABCD', mode: 'coop' }).variant, undefined, '没有变体的房间不加键');
   assert.deepEqual(
     wireOptions({ roomCode: 'ABCD', mode: 'solo', hostId: 'p', test: true }),
     { roomCode: 'ABCD', mode: 'solo', test: true, hostId: 'p' },
