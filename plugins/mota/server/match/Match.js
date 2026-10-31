@@ -307,6 +307,8 @@ export class Match {
     // 对抗规则档（玩家 2026-10-26）：'bounty' = 赏金（线上那套）/ 'confront' = 对抗（纯玩家出怪）
     // 「对抗」档两条判据都认：opts.versusRule（直连）或 modeId 前缀（子进程通道，isXie 同款）
     this.versusRule = this.isVersus && (opts.versusRule === 'confront' || /^mode_confront_/.test(String(opts.modeId || ''))) ? 'confront' : 'bounty';
+    /** 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，只放大「守方这一回合遇到的敌人数量」；控怪档恒 1。 */
+    this.versusSpeed = this.isVersus && (opts.versusSpeed === 1.5 || opts.versusSpeed === 2) ? opts.versusSpeed : 1;
     // 是否每回合交换攻守（业主 2026-10-26）：缺省 true；「纯对抗」里可以关掉 → 恒为首攻方进攻。
     this.versusAlt = this.isVersus ? opts.versusAlt !== false : null;
     // 协同资金没有「归属档」（业主 2026-10-27：团队 / 个人是同一笔结余在局内的两个去处，不是开局选项）。

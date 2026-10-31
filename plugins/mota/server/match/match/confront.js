@@ -64,8 +64,13 @@ import { OK, fail } from './common.js';
 /** 新价值公式的量纲除数（见 confrontValue）。 */
 export const CONFRONT_VALUE_DIV = 120;
 
-/** 控怪档的目标出怪量 = 官方只数的这个比例（业主 2026-10-26：接近官方但只有 90%）。 */
-export const CONFRONT_VOLUME_SHARE = 1;   // 业主 2026-10-27：每回合至少要能放出「官方同等只数」（原 0.9 永远少于官方）
+/**
+ * 控怪档的目标出怪量 = 官方只数的这个比例。
+ * 业主 2026-10-31：「控怪的出怪量调整为官方 1.5 倍」——旧值 1（与官方同等）实测仍偏少，因为
+ * 「每种怪最多一只」把只数锁死在可选怪种数上（见 `botConfront` 的 take 与客户端 plan，已一并去掉）。
+ * 赏金档不吃这个比例：它的倍率由玩家建房时选的 `versusSpeed` 决定（见 `confrontSpeedMul`）。
+ */
+export const CONFRONT_VOLUME_SHARE = 1.5;
 
 export function confrontValue(e, scale = null) {
   const s = (e && e.stats) || {};
@@ -551,9 +556,10 @@ export class MatchConfront {
    * 赏金档（非控怪）不适用：那一档本来就是「替换一小部分」，官方波次才是主体。
    */
   confrontCountFloor() {
-    // 两个档都保「只数」：业主 2026-10-27「至少每回合出的怪相当于官方能出的怪」。
-    // 不再按攻方人数摊 —— 每个攻方各自把怪投给自己的目标守方，按人均摊会让人数越多越放不满。
-    const need = Math.max(2, Math.ceil(this.confrontWaveCount() * CONFRONT_VOLUME_SHARE));
+    // 控怪档：官方只数 × CONFRONT_VOLUME_SHARE（业主 2026-10-31 定为 1.5 倍）；
+    // 赏金档：官方只数 × 1（那一档的倍率是玩家选的 versusSpeed，不叠在这里）。
+    const share = this.isConfrontRule() ? CONFRONT_VOLUME_SHARE : 1;
+    const need = Math.max(2, Math.ceil(this.confrontWaveCount() * share));
     const median = this.confrontPoolMedianValue();
     return Math.round(median * need);
   }
@@ -1207,12 +1213,20 @@ export class MatchConfront {
     let left = budget;
     let gi = 0;
     const take = (rows, i) => {
-      for (const r of rows) {
-        if (picks.length >= cap) return;
-        if (r.value > left) continue;
-        if (!picks.length) gi = i;
-        left -= r.value;
-        picks.push({ enemyKey: r.key, gate: picks.length % 2 ? 'upper' : 'lower' });
+      // 2026-10-31 业主：「去掉每种怪最多一只」。旧实现只单趟扫 rows ⇒ 同一 enemyKey 只能放一次，
+      // 只数被锁死在「可选怪种数」上（预算常常只花掉三分之一）。改成反复扫到没有进展为止：
+      // 每一轮把还买得起的都放一遍，直到预算不够或到 cap。`confrontValue` 最小 1 ⇒ 必然收敛。
+      let progressed = true;
+      while (progressed && picks.length < cap) {
+        progressed = false;
+        for (const r of rows) {
+          if (picks.length >= cap) return;
+          if (r.value > left) continue;
+          if (!picks.length) gi = i;
+          left -= r.value;
+          picks.push({ enemyKey: r.key, gate: picks.length % 2 ? 'upper' : 'lower' });
+          progressed = true;
+        }
       }
     };
     if (ordered.length) take(ordered[0].rows, 0);
@@ -1413,6 +1427,17 @@ export class MatchConfront {
    * @param {object} ps the TARGET player
    * @returns {object[]} the modified spawn list
    */
+  /**
+   * 赏金档倍速（业主 2026-10-31「赏金档可选倍速，玩家自己调整」）：把这一回合**官方波次**的每只 count 乘上倍数。
+   * 控怪档不吃它 —— 那一档是固定「官方 1.5 倍」口径（CONFRONT_VOLUME_SHARE），两条口径不叠加。
+   * 上限沿用单 action 的 50 只（waves.js MAX_ACTION_UNITS），避免一次刷出超规格的一坨。
+   */
+  applyVersusSpeed(spawns) {
+    const mul = this.isVersus && !this.isConfrontRule() ? (this.versusSpeed || 1) : 1;
+    if (mul === 1 || !Array.isArray(spawns)) return spawns;
+    return spawns.map((s) => ({ ...s, count: Math.max(1, Math.min(50, Math.round((Number(s && s.count) || 1) * mul))) }));
+  }
+
   applyConfront(spawns, sub, ps) {
     const bosses = sub && Array.isArray(sub.bosses) ? sub.bosses : [];
     const picks = sub && Array.isArray(sub.picks) ? sub.picks : [];
@@ -1422,9 +1447,13 @@ export class MatchConfront {
     if (!sub || !Array.isArray(spawns)) return spawns;
     const base = pure ? spawns.filter((s) => s && s.confrontPlaced === true) : spawns;
     if (!pure && (!spawns.length || (!picks.length && !bosses.length))) return spawns;
-    if (pure && !picks.length && !bosses.length) return base.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
+    // 空投放（业主口径见 confrontPurePlacement 的注释：「没人投放时保持官方波次，否则会出现空波次白送一回合」）：
+    // 原来 return base（pure 时 base = []）⇒ 只要有人交了空 picks，守方这一回合**一只怪都看不到**。
+    // 改回原样波次（shot: 官方波次 + 其他攻方已投的怪）。
+    if (pure && !picks.length && !bosses.length) return spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
     // a boss-only placement ([ASSUMED] user 2026-10-21): the free boss 格 replaces nothing — it only appends its bosses
-    if (!picks.length) return this._confrontBossSpawns(base.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined })), sub, ps);
+    // 同上：pure 下「只交了 boss」不该把官方波次也一起清掉。
+    if (!picks.length) return this._confrontBossSpawns((pure ? spawns : base).map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined })), sub, ps);
     const scale = this.confrontScale();
     // price the originals EXACTLY like confrontWaveValue prices the wave (confrontValueOf = stats + the graded 特性
     // score at this round's scale), so the value actually dropped / the wave value is the nominal share (5→15 %, 50 %

@@ -100,6 +100,8 @@ export class MatchCombat {
     // 2V2 事件期: the monster card + the 强力属性 subset apply to the round's NORMAL wave only (not the 狩猎期
     // placements, whose bounty stays untouched). Applied after withBounties so the host-action re-timing is untouched.
     spawns = this.foeWaveSpawns(spawns);
+    // 赏金档倍速（业主 2026-10-31）：只放大官方波次，且只在对战·赏金档生效；控怪档恒 1（那边是固定 1.5× 口径）。
+    if (typeof this.applyVersusSpeed === 'function') spawns = this.applyVersusSpeed(spawns);
     // 2V2 对抗期: every intervention aimed at this player replaces a share of this wave (confront.js; one per attacker).
     // 移植时漏了这一段 ⇒ 玩家派出的怪只记在 subs 里、从不进对手波次（「操控怪物」完全不生效）。
     // A preview (the bot rehearsal) must not move the match's rngConfront — applyConfront shuffles with it, and the real
