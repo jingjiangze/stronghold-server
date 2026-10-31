@@ -106,6 +106,7 @@ import { RogueEventOverlay, normalizeRogueOffer } from '../ui/rogueEventOverlay.
 import { MeltdownOverlay } from '../ui/meltdownOverlay.js';
 import { EventOverlay } from '../ui/eventOverlay.js';
 import { EffectsList } from '../ui/effectsList.js';
+import { AiTakeoverPanel } from '../ui/aiTakeover.js';
 import { CombatHud } from '../ui/combatHud.js';
 import { CombatMetricsPanel } from '../ui/combatMetrics.js';
 import { SettingsModal, settingsStore, useSettings } from '../ui/settings.js';
@@ -1821,6 +1822,7 @@ function MatchScreen() {
       <div class="ui-slot gm__ui-slot" data-ui-slot="hud.right" aria-label=${t('界面插件')} dangerouslySetInnerHTML=${{ __html: '' }}></div>
 
       <div class="gm__corner">
+        <${AiTakeoverPanel} />
         ${spectator ? null : html`<${EmoteWheel} open=${emoteOpen} onToggle=${setEmoteOpen} onSend=${(id) => actions.emote(id)} disabled=${conn.status !== 'online'} />`}
         ${showMetrics ? html`<button type="button" class="gm__gear gm__metrics" aria-label=${t('作战统计')} title=${t('作战统计')} aria-expanded=${metricsOpen}
           aria-controls="combat-metrics-panel" onKeyDown=${(e) => { if (e.key === ' ') e.stopPropagation(); }} onClick=${() => {

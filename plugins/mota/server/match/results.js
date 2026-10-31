@@ -113,6 +113,8 @@ export function buildResult(m, outcome) {
       seat: ps.seat,
       name: ps.name,
       isBot: ps.isBot,
+      // 观战接管 AI (server/aiTakeover.js): the seat answers to the bot's playerId; `ownerId` is the human who took it
+      ...(typeof ps.aiTakeoverFrom === 'string' ? { ownerId: ps.aiTakeoverFrom } : {}),
       left: ps.left,
       alive: ps.alive,
       victory: cleared,
@@ -127,7 +129,7 @@ export function buildResult(m, outcome) {
         dmgDealt: Math.round(ps.stats.dmgDealt), kills: ps.stats.kills, leaks: ps.stats.leaks, gold: ps.stats.gold,
         refreshes: ps.stats.refreshes, merges: ps.stats.merges, itemsEquipped: ps.stats.itemsEquipped,
         bossDamage: Math.round(ps.stats.bossDamage), activatedLayers: ps.activatedLayers(), lpLost: ps.stats.lpLost,
-        perfectRounds: ps.stats.perfectRounds,
+        perfectRounds: ps.stats.perfectRounds, bossBroadcasts: ps.stats.bossBroadcasts,
       },
       title: m.test === true ? null : titles.get(ps.playerId) ?? null,
       trophies: m.test === true ? 0 : trophiesFor(gd, roundsPassed, cleared && hiddenCleared),

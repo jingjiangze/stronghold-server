@@ -510,10 +510,18 @@ export function buildRecord(res, ctx = {}) {
   const myId = str(ctx.myId);
   const selfRow = r.players.find((p) => isObj(p) && p.playerId === myId);
   if (!selfRow) return null; // spectator / observer: not my match
+  // 观战接管 AI (server/aiTakeover.js): the seat keeps the bot's playerId — the session id was swapped to it — so the
+  // row names the person who actually played it in `ownerId`. Re-key our own row to it: selfId, the record id and every
+  // aggregate then follow the human, so the match counts for them and not for the `ai_…` seat.
+  const ownerId = selfRow.ownerId == null ? '' : str(selfRow.ownerId);
+  const selfId = ownerId || myId;
+  const players = ownerId
+    ? r.players.map((p) => (isObj(p) && p.playerId === myId ? { ...p, playerId: ownerId } : p))
+    : r.players;
   return normalizeRecord({
     v: STATS_VERSION,
     t: int(ctx.now, 0),
-    id: recordId(r, myId),
+    id: recordId(r, selfId),
     end: 'settled',
     victory: bool(r.victory),
     roundsPassed: int(r.roundsPassed, 0),
@@ -530,11 +538,11 @@ export function buildRecord(res, ctx = {}) {
     durationMs: num(r.durationMs),
     teamLp: num(r.teamLp),
     roomMode: roomModeOf(str(r.modeId), ctx.roomMode),
-    selfId: myId,
+    selfId,
     vs: vsOf(ctx.vs),
     content: contentOf(ctx.content),
     version: ctx.version ?? null,
-    players: r.players,
+    players,
   });
 }
 
@@ -796,7 +804,7 @@ export function exportStats(stats) {
 
 // ---- aggregation (what the page shows; records may hold more than any view uses) ------------------------------------
 
-const SELF_STATS = ['dmgDealt', 'kills', 'bossDamage', 'activatedLayers', 'merges', 'itemsEquipped', 'gold', 'perfectRounds', 'refreshes', 'leaks', 'lpLost'];
+const SELF_STATS = ['dmgDealt', 'kills', 'bossDamage', 'bossBroadcasts', 'activatedLayers', 'merges', 'itemsEquipped', 'gold', 'perfectRounds', 'refreshes', 'leaks', 'lpLost'];
 
 /**
  * The row that "is me" in a record: selfId, else the only human, else seat 0 — records written by

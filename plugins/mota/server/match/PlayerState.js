@@ -262,6 +262,9 @@ export class PlayerState {
     this.stats = {
       dmgDealt: 0, kills: 0, leaks: 0, gold: 0, refreshes: 0, merges: 0, itemMerges: 0, itemsEquipped: 0,
       bossDamage: 0, lpLost: 0, buys: 0, sells: 0, perfectRounds: 0, fundsGained: 0, healing: 0,
+      // 抢播报 (2026-10-31): BOSS_HIT 播报（敌方领袖伤害 20 / 50 / 80%），每名玩家每阈值每条记 1 次；结算带出，
+      // 客户端按累计次数解锁分段称号。
+      bossBroadcasts: 0,
       // per-defId battle totals (settle.js mergeUnits): defId → { dmg, kills, heal }. The remake's settle() accumulates
       // here; kept on the 0.3.0 base because that caller is shared with the line that has the MVP screen.
       unitStats: new Map(),
