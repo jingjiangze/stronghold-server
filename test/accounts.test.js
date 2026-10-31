@@ -130,3 +130,22 @@ test('http: 没配 SP_ADMIN_KEY 时管理端点整段 404', async (t) => {
   const r = await fetch(`${srv.url}/api/admin/accounts`);
   assert.equal(r.status, 404);
 });
+
+test('布阵库全服额度：按库目录 *.jsonl 总量判定（outbox 不计），超一字节即拒', async () => {
+  const dir = tmpDir();
+  const libDir = fs.mkdirSync(path.join(dir, 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(libDir, 'lineups_mode_multi_normal.jsonl'), 'x'.repeat(100), 'utf8');
+  fs.writeFileSync(path.join(libDir, 'outbox.jsonl'), 'y'.repeat(500), 'utf8'); // 传输队列，不计入
+  const prev = process.env.SP_LINEUP_LIBRARY;
+  process.env.SP_LINEUP_LIBRARY = libDir;
+  try {
+    const mod = await import(`../plugins/mota/server/lineupLibrary.js?quota=${Date.now()}`);
+    assert.equal(mod.globalLibraryBytes(), 100, 'only the lineups file counts');
+    const quota = mod.lineupQuotaBytes();
+    assert.equal(quota > 0, true);
+    assert.equal(mod.lineupQuotaOk(quota - 100), true, 'filling it exactly is allowed');
+    assert.equal(mod.lineupQuotaOk(quota - 99), false, 'one byte over is refused');
+  } finally {
+    if (prev === undefined) delete process.env.SP_LINEUP_LIBRARY; else process.env.SP_LINEUP_LIBRARY = prev;
+  }
+});
