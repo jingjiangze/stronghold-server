@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { MatchMeltdown, relicEffectApplied } from '../../plugins/mota/server/match/match/meltdown.js';
+import { rangeTileKeys } from '../../plugins/mota/server/match/player/round.js';
 
 const RELICS = JSON.parse(fs.readFileSync(new URL('../../plugins/relics-87/data/relics.json', import.meta.url), 'utf8'));
 
@@ -436,5 +437,88 @@ test('五条外围 rule：aspdPerNegative / hpPerTier4Buy / kingVessel / probe /
   for (const id of ['p10', 'p24', 'p27', 'n38', 'p41']) {
     const def = RELICS.relics.find((r) => r.id === id);
     assert.equal(relicEffectApplied(def.effect), true, `${id} 应算已实现`);
+  }
+});
+
+test('一次性道具两条 rule：consumableFree 按目录价退款 / consumableRefund 每回合最多 3 次', () => {
+  const ITEMS = {
+    freebie: { kind: 'consume_on_equip_x', itemType: 'EQUIP', price: 4 },
+    art: { kind: 'art', itemType: 'MAGIC', price: 2 },
+    normal: { kind: 'equip', itemType: 'EQUIP', price: 3 },
+  };
+  const mkSelf = (relics, round = 2) => {
+    const gained = [];
+    const funds = [];
+    const ps = {
+      playerId: 'p0', relics: relics.slice(), relicRuleState: {},
+      addFunds: (n) => funds.push(n),
+      acquireItem: (id) => gained.push(id),
+    };
+    const self = {
+      round, gd: { raw: { relics: RELICS, items: ITEMS }, itemPrice: (id) => (ITEMS[id] ? ITEMS[id].price : 2) },
+      players: new Map([[ps.playerId, ps]]),
+      relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+      relicIsConsumable: MatchMeltdown.prototype.relicIsConsumable,
+      relicRandomConsumableId: MatchMeltdown.prototype.relicRandomConsumableId,
+      relicConsumableUsed: MatchMeltdown.prototype.relicConsumableUsed,
+    };
+    return { self, ps, gained, funds };
+  };
+
+  // 判据与 items.js 的两个消耗点一致
+  const { self } = mkSelf([]);
+  assert.equal(self.relicIsConsumable(ITEMS.freebie), true);
+  assert.equal(self.relicIsConsumable(ITEMS.art), true);
+  assert.equal(self.relicIsConsumable(ITEMS.normal), false);
+  // 随机只从一次性道具里挑
+  for (let i = 0; i < 12; i++) {
+    const id = self.relicRandomConsumableId();
+    assert.ok(id === 'freebie' || id === 'art', `只该发一次性道具，实得 ${id}`);
+  }
+
+  // p44 果腹：用掉一次性道具后按目录价退款
+  const free = mkSelf(['p44']);
+  free.self.relicConsumableUsed(free.ps, 'freebie');
+  assert.deepEqual(free.funds, [4]);
+  assert.equal(free.gained.length, 0, '果腹不额外发道具');
+
+  // p43 复得之轮：用掉后发一件，每回合最多 3 次；换回合重新计
+  const ref = mkSelf(['p43'], 5);
+  for (let i = 0; i < 5; i++) ref.self.relicConsumableUsed(ref.ps, 'freebie');
+  assert.equal(ref.gained.length, 3, '每回合封顶 3 次');
+  ref.self.round = 6;
+  ref.self.relicConsumableUsed(ref.ps, 'freebie');
+  assert.equal(ref.gained.length, 4, '新回合重新计数');
+
+  // 两条都算已实装
+  for (const id of ['p43', 'p44']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
+
+test('迷彩类：camoRanged 只看远程 / camoAura 按覆盖人数叠攻，范围旋转与引擎一致', () => {
+  const mkSelf = (relics) => {
+    const ps = { playerId: 'p0', relics: relics.slice() };
+    return {
+      gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+      players: new Map([[ps.playerId, ps]]),
+      relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+      relicCamoRules: MatchMeltdown.prototype.relicCamoRules,
+    };
+  };
+  assert.equal(mkSelf([]).relicCamoRules(), null);
+  assert.deepEqual(mkSelf(['p14']).relicCamoRules(), { rangedAtk: 0.5, auraAtk: 0 });
+  assert.deepEqual(mkSelf(['p40']).relicCamoRules(), { rangedAtk: 0, auraAtk: 0.1 });
+  assert.deepEqual(mkSelf(['p14', 'p40']).relicCamoRules(), { rangedAtk: 0.5, auraAtk: 0.1 });
+
+  // 范围旋转：[[0,1]] = 面朝方向的「正前方一格」（与 sim/dir.js rotateOffset 同规则，row 0 在下）
+  assert.deepEqual([...rangeTileKeys([[0, 1]], 3, 3, 'RIGHT')], ['3,4']);
+  assert.deepEqual([...rangeTileKeys([[0, 1]], 3, 3, 'LEFT')], ['3,2']);
+  assert.deepEqual([...rangeTileKeys([[0, 1]], 3, 3, 'UP')], ['4,3']);
+  assert.deepEqual([...rangeTileKeys([[0, 1]], 3, 3, 'DOWN')], ['2,3']);
+  assert.equal(rangeTileKeys([[0, 1], ['x', 2]], 3, 3, 'RIGHT').size, 1, '脏格子被忽略');
+
+  for (const id of ['p14', 'p40']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });

@@ -9,6 +9,30 @@
 import { boardOrder, pieceDir } from '../board.js';
 import { computeBonds, bondSnapshot, activatedLayers, bondsWithGains } from '../bondsMeta.js';
 
+/**
+ * `rangeGrid`（面向 RIGHT 的相对格子）→ 该棋子实际覆盖到的 `"r,c"` 集合。
+ * 旋转规则与 `server/sim/dir.js` 的 `rotateOffset` 一致（RIGHT 原样 / UP (dc,−dr) / LEFT (−dr,−dc) / DOWN (−dc,dr)），
+ * 这里内联一份而不是反向 import 核心 sim —— 插件只依赖 battle-input 契约，不依赖引擎内部模块。
+ */
+export function rangeTileKeys(grid, r, c, dir) {
+  const out = new Set();
+  if (!Array.isArray(grid) || !Number.isInteger(r) || !Number.isInteger(c)) return out;
+  const rot = (dr, dc) => {
+    switch (dir) {
+      case 'UP': return [dc, 0 - dr];
+      case 'LEFT': return [0 - dr, 0 - dc];
+      case 'DOWN': return [0 - dc, dr];
+      default: return [dr, dc];
+    }
+  };
+  for (const cell of grid) {
+    if (!Array.isArray(cell) || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) continue;
+    const [ar, ac] = rot(cell[0], cell[1]);
+    out.add(`${r + ar},${c + ac}`);
+  }
+  return out;
+}
+
 export class PlayerRound {
   startRound(r) {
     this.round = { refreshes: 0, buys: 0, sells: 0, spent: 0, gainedChess: 0, arts: 0 };
@@ -177,7 +201,30 @@ export class PlayerRound {
     try {
       const am = this.m && typeof this.m.relicAllyMul === 'function' ? this.m.relicAllyMul(this) : null;
       const nb = this.m && typeof this.m.relicNeighborRules === 'function' ? this.m.relicNeighborRules() : null;
-      if (am || nb) {
+      const camo = this.m && typeof this.m.relicCamoRules === 'function' ? this.m.relicCamoRules() : null;
+      // camoAura（犬植浆）：每被**别的干员**的攻击范围覆盖一次，攻击 +auraAtk（可叠加）
+      let auraCount = null;
+      if (camo && camo.auraAtk > 0) {
+        auraCount = new Map();
+        const cover = new Map(); // uid → 覆盖到的 "r,c" 集合
+        for (const u of units) {
+          if (u.kind !== 'chess') continue;
+          const rec = this.gd && typeof this.gd.chess === 'function' ? this.gd.chess(u.chessId) : null;
+          const grid = rec && Array.isArray(rec.rangeGrid) ? rec.rangeGrid : null;
+          if (grid) cover.set(u.uid, rangeTileKeys(grid, u.row, u.col, u.dir));
+        }
+        for (const u of units) {
+          const set = cover.get(u.uid);
+          if (!set) continue;
+          let n = 0;
+          for (const other of units) {
+            if (other.uid === u.uid) continue;
+            if (set.has(`${other.row},${other.col}`)) n += 1;
+          }
+          auraCount.set(u.uid, n);
+        }
+      }
+      if (am || nb || camo) {
         const occ = new Set(boardOrder(this.board).map(({ r, c }) => `${r},${c}`));
         for (const u of units) {
           let n = 0;
@@ -212,7 +259,16 @@ export class PlayerRound {
               }
             }
           } catch { /* 取不到阶数就不削弱 */ }
-          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0)) * eliteMul.atkMul;
+          // 迷彩类（camoRanged / camoAura）：远程判定看棋子的 position，光环按「被几名干员的攻击范围覆盖」叠
+          let camoMul = 1;
+          if (camo) {
+            if (camo.rangedAtk > 0) {
+              const rec = this.gd && typeof this.gd.chess === 'function' ? this.gd.chess(u.chessId) : null;
+              if (rec && rec.position === 'RANGED') camoMul *= 1 + camo.rangedAtk;
+            }
+            if (camo.auraAtk > 0 && auraCount) camoMul *= 1 + camo.auraAtk * (auraCount.get(u.uid) || 0);
+          }
+          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0)) * eliteMul.atkMul * camoMul;
           const aspdAdd = (am && Number.isFinite(am.aspdAdd) ? am.aspdAdd : 0) + (nb ? nb.aspdPer * n : 0);
           const hpMul = (am && Number.isFinite(am.hpMul) ? am.hpMul : 1) * eliteMul.hpMul;
           const defMul = (am && Number.isFinite(am.defMul) ? am.defMul : 1) * eliteMul.defMul;
