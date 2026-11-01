@@ -63,7 +63,7 @@ function unmount(id) {
   const entry = mounted.get(id);
   if (!entry) return;
   mounted.delete(id);
-  try { entry.mod.unmount?.(entry.host); } catch (e) { log(id, 'unmount 抛错', e); }
+  try { entry.mod.unmount?.(entry.host); } catch (e) { log(id, 'unmount threw', e); }
   entry.host.remove();
 }
 
@@ -81,12 +81,12 @@ async function ensure() {
     slot.appendChild(host);
     try {
       const mod = await import(`/js/plugins/${id}/title.login.js`);
-      if (typeof mod.mount !== 'function') throw new Error('模块没有导出 mount()');
+      if (typeof mod.mount !== 'function') throw new Error('the module exports no mount()');
       await mod.mount(host);
       mounted.set(id, { mod, host });
     } catch (e) {
       host.remove();
-      log(`${id} 没挂上 ${SLOT}`, e);
+      log(`${id} did not mount into ${SLOT}`, e);
     }
   }
 }
