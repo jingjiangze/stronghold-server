@@ -380,3 +380,21 @@ test('atkPerBounty / dmgDealt（己方攻击）与 elite 每回合削弱', () =>
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('精锐目标类：eliteStatsPerElite / eliteAspdPerElite / eliteAtkPerMerge 参数与生效标记', () => {
+  const mkSelf = (relics) => ({ gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+    players: new Map([['p0', { playerId: 'p0', relics: relics.slice() }]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    relicEliteRules: MatchMeltdown.prototype.relicEliteRules });
+
+  assert.deepEqual(mkSelf(['p35']).relicEliteRules(),
+    { hp: 0.1, atk: 0.1, def: 0.1, aspdPer: 0, aspdMax: 0, mergePer: 0, mergeMax: 0 });
+  assert.deepEqual(mkSelf(['p32']).relicEliteRules(),
+    { hp: 0, atk: 0, def: 0, aspdPer: 10, aspdMax: 10, mergePer: 0, mergeMax: 0 });
+  assert.deepEqual(mkSelf(['p36']).relicEliteRules(),
+    { hp: 0, atk: 0, def: 0, aspdPer: 0, aspdMax: 0, mergePer: 0.4, mergeMax: 4 });
+  assert.equal(mkSelf([]).relicEliteRules(), null, '没有精锐类藏品时返回 null');
+  for (const id of ['p32', 'p35', 'p36']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});

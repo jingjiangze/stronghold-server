@@ -187,15 +187,37 @@ export class PlayerRound {
             }
           }
           // 精锐干员（4 阶以上）额外吃 eliteAtkPerRound / eliteHpPerRound 的每回合削弱
-          let eliteMul = { atkMul: 1, hpMul: 1 };
+          let eliteMul = { atkMul: 1, hpMul: 1, defMul: 1, aspdAdd: 0 };
           try {
             const tier = this.gd && typeof this.gd.tierOf === 'function' ? this.gd.tierOf(u.chessId) : 0;
-            if (Number(tier) >= 4 && this.m && typeof this.m.relicEliteRoundMul === 'function') eliteMul = this.m.relicEliteRoundMul();
+            if (Number(tier) >= 4) {
+              if (this.m && typeof this.m.relicEliteRoundMul === 'function') {
+                const rm2 = this.m.relicEliteRoundMul();
+                eliteMul.atkMul *= rm2.atkMul; eliteMul.hpMul *= rm2.hpMul;
+              }
+              // 精锐目标类：场上精锐数 / 合成层数
+              const er = this.m && typeof this.m.relicEliteRules === 'function' ? this.m.relicEliteRules() : null;
+              if (er) {
+                let elites = 0;
+                if (this.board && typeof this.board.values === 'function') {
+                  for (const piece of this.board.values()) {
+                    const t2 = this.gd && typeof this.gd.tierOf === 'function' ? this.gd.tierOf(piece && piece.id) : 0;
+                    if (Number(t2) >= 4) elites += 1;
+                  }
+                }
+                eliteMul.atkMul *= 1 + er.atk * elites + er.mergePer * Math.min(er.mergeMax, Number(this.relicEliteMerges) || 0);
+                eliteMul.hpMul *= 1 + er.hp * elites;
+                eliteMul.defMul *= 1 + er.def * elites;
+                eliteMul.aspdAdd += er.aspdPer * Math.min(er.aspdMax, elites);
+              }
+            }
           } catch { /* 取不到阶数就不削弱 */ }
           const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0)) * eliteMul.atkMul;
           const aspdAdd = (am && Number.isFinite(am.aspdAdd) ? am.aspdAdd : 0) + (nb ? nb.aspdPer * n : 0);
           const hpMul = (am && Number.isFinite(am.hpMul) ? am.hpMul : 1) * eliteMul.hpMul;
-          u.relicMods = { ...(am || {}), atkMul, hpMul, ...(aspdAdd ? { aspdAdd } : {}) };
+          const defMul = (am && Number.isFinite(am.defMul) ? am.defMul : 1) * eliteMul.defMul;
+          const aspdAdd2 = aspdAdd + eliteMul.aspdAdd;
+          u.relicMods = { ...(am || {}), atkMul, hpMul, ...(defMul !== 1 ? { defMul } : {}), ...(aspdAdd2 ? { aspdAdd: aspdAdd2 } : {}) };
         }
       }
     } catch { /* 尽力而为，绝不因为藏品坏了出不了兵 */ }
