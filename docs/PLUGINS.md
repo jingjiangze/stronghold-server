@@ -1318,7 +1318,14 @@ to show it. It is unofficial. It is not a member of a room's `plugins[]` and a r
 (`PLUGIN_BLOCKED`). It adds nothing to `cs` and it does add its own `vs` (§6).
 
 **Manifest.** `class: "ui"`, `scope` including `personal` (that is the only scope this class has), permission
-`ui.frame`, `entry.client` an `.html` path, `slots` any of `hud.right`, `result.tab`, `stats.tab`, `room.panel`.
+`ui.frame`, `entry.client` an `.html` path, `slots` any of `hud.right`, `result.tab`, `stats.tab`, `room.panel`,
+`title.login`.
+
+A ui plugin may instead contribute a **same-origin module**: no `entry.client`, just `code.client` listing the module
+paths (for example `js/plugins/<id>/title.login.js`), which the host at `public/js/ui/pluginSlots.js` imports and mounts
+into its slot (`export function mount(el)`, optional `unmount(el)`). A module needs the page context a sandbox frame
+cannot have (the site's own storage and API); it carries the same trust as any `code.client` overlay, so it is for the
+server owner's own plugins, not for a player switching interface plugins on.
 `description` is the 简介. The `.html`, `.js`, `.css` and `.png` files must sit in the directory of `entry.client`.
 Start from `plugins/_template/ui/` (a damage tally). A folder whose name starts with `_` is a template: the registry
 never loads it.
@@ -1880,9 +1887,9 @@ lacks). The table below is generated from it (`node tools/plugin.mjs errors --wr
 | The plugin is not listed (skipped); the start log and check say why | `PLUGIN_SKILL_SPEC` | A JSON SkillSpec is not right ({where}): {detail} | Follow the SkillSpec of docs/PLUGINS.md §10: kind and the known fields of mods; talentMods go with a JSON SkillSpec, never with kit.ref. |
 | The plugin is not listed (skipped); the start log and check say why | `PLUGIN_EFFECT_REF` | An effect reference is not right ({where}): {detail} | effectRef names an official item or tactic record; garrison effects and buff keys must be ones the game has. |
 | The plugin is not listed (skipped); the start log and check say why | `PLUGIN_I18N` | A translation file of the plugin is not right ({where}): {detail} | A translation file is { "version": 1, "lang": "en", "files": { … } } with lang matching its name; it replaces existing text only, never adds a field. |
-| The plugin is not listed (skipped); the start log and check say why | `PLUGIN_UI_SLOTS` | The "slots" of a ui plugin are not right: {detail} | "slots" is a list of hud.right, result.tab, stats.tab and room.panel, each at most once. |
+| The plugin is not listed (skipped); the start log and check say why | `PLUGIN_UI_SLOTS` | The "slots" of a ui plugin are not right: {detail} | "slots" is a list of hud.right, result.tab, stats.tab, room.panel and title.login, each at most once. |
 | The plugin works, with a note in the check | `PLUGIN_UI_NO_SLOT` | The ui plugin asks for no slot, so its page is never shown | List where it goes in "slots", for example ["hud.right"]. |
-| The ui plugin's page gets a refusal (ok: false, a rejected or a limit message) | `PLUGIN_SLOT` | The slot a ui plugin asked for was not granted: its manifest's "slots" does not list it, or another plugin holds it | List the slot in "slots" of plugin.json (hud.right, result.tab, stats.tab, room.panel). The protocol table grants one plugin at a time; when several ask for one slot, the match shows tabs to switch. |
+| The ui plugin's page gets a refusal (ok: false, a rejected or a limit message) | `PLUGIN_SLOT` | The slot a ui plugin asked for was not granted: its manifest's "slots" does not list it, or another plugin holds it | List the slot in "slots" of plugin.json (hud.right, result.tab, stats.tab, room.panel, title.login). The protocol table grants one plugin at a time; when several ask for one slot, the match shows tabs to switch. The protocol table grants one plugin at a time; when several ask for one slot, the match shows tabs to switch. |
 | The plugin works, with a note in the check | `PLUGIN_UI_SLOT_SHARED` | Several ui plugins ask for the same slot ({detail}). The match shows tabs and displays one at a time | This is not a failure: the player can switch within the slot. Give them different slots if each should be visible at once. |
 | The ui plugin's page gets a refusal (ok: false, a rejected or a limit message) | `PLUGIN_RATE` | The ui plugin sends messages too fast and was throttled | A plugin sends at most 20 messages a second (bursts of 40). Batch them, or send only when something changed. |
 | The ui plugin's page gets a refusal (ok: false, a rejected or a limit message) | `PLUGIN_STORAGE` | The ui plugin's storage request was refused: the key is not allowed or the space is used up | A key is 1–64 characters of letters, digits and . _ -; a value's JSON is at most 4096 bytes; a plugin keeps at most 32 keys and 32 KB. |

@@ -310,6 +310,7 @@ replacement. No route or frozen plugin grammar member is added; the stable surfa
 | `ui.slot.result.tab` | stable | 0.3.0 | `shared/plugins/manifest.js#UI_SLOT_IDS` |
 | `ui.slot.stats.tab` | stable | 0.3.0 | `shared/plugins/manifest.js#UI_SLOT_IDS` |
 | `ui.slot.room.panel` | stable | 0.3.0 | `shared/plugins/manifest.js#UI_SLOT_IDS` |
+| `ui.slot.title.login` | stable | 0.3.0 | `shared/plugins/manifest.js#UI_SLOT_IDS` |
 | `studio.route.GET /studio/api/info` | stable | 0.3.0 | `server/studio/index.js#STUDIO_ROUTES` |
 | `studio.route.GET /studio/api/trial-options` | stable | 0.3.0 | `server/studio/index.js#STUDIO_ROUTES` |
 | `studio.route.POST /studio/api/trial` | stable | 0.3.0 | `server/studio/index.js#STUDIO_ROUTES` |

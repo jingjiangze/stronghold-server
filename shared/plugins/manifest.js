@@ -207,10 +207,11 @@ export const isPackId = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9.
 export const isPluginId = (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9-]{1,31}$/.test(v);
 
 /**
- * The slots a ui plugin may ask the host for (DESIGN §32.8). [ASSUMED] these four. The protocol table grants one
+ * The slots a ui plugin may ask the host for (DESIGN §32.8). Five: four in-game panels plus `title.login` (the home
+ * screen's login card, mounted by public/js/ui/pluginSlots.js since a same-origin module is needed there). The table grants one
  * plugin per slot at a time; the match shows tabs when several ask for the same one (public/js/ui/pluginFrame.js).
  */
-export const UI_SLOT_IDS = Object.freeze(['hud.right', 'result.tab', 'stats.tab', 'room.panel']);
+export const UI_SLOT_IDS = Object.freeze(['hud.right', 'result.tab', 'stats.tab', 'room.panel', 'title.login']);
 
 /**
  * A path inside a pack or plugin folder ('ui.json', 'img/a.png'): relative, '/'-separated, no '.' / '..' / hidden /
@@ -759,7 +760,10 @@ export function readPluginManifest(raw, ctx) {
       const text = `"slots": ${short(m.slots)} — a ui plugin lists ${UI_SLOT_IDS.join(', ')} (one each)`;
       list.problem('PLUGIN_UI_SLOTS', text, { at: ['slots'], detail: text });
     } else slots = UI_SLOT_IDS.filter((s) => m.slots.includes(s));
-    if (!entry.client) list.problem('PLUGIN_ENTRY', '"entry.client" is required for a ui plugin (an .html file)', { at: ['entry', 'client'] });
+    // Two shapes: a sandboxed .html frame (entry.client, `ui.frame`) or a same-origin ES module listed in
+    // code.client and mounted by the host into this slot (public/js/ui/pluginSlots.js). One of them is required.
+    const moduleParts = m.code && typeof m.code === 'object' && Array.isArray(m.code.client) ? m.code.client.filter((x) => typeof x === 'string' && x) : [];
+    if (!entry.client && !moduleParts.length) list.problem('PLUGIN_ENTRY', '"entry.client" (.html frame) or a non-empty "code.client" module is required for a ui plugin', { at: ['entry', 'client'] });
   }
 
   // permissions: known, allowed for the class, one for every part and entry point
@@ -798,7 +802,8 @@ export function readPluginManifest(raw, ctx) {
   }
   // A declared switch is gameplay. An absent or empty rules object is not, so a plugin that names none stays empty.
   const rules = readDeclaredRules(m.rules, list, cls);
-  if (!isLang && !Object.keys(parts).length && !Object.keys(entry).length && !notices && !rules) list.warning('PLUGIN_EMPTY', `carries nothing a ${cls} plugin is made of`, { class: cls });
+  const uiModules = cls === 'ui' && m.code && typeof m.code === 'object' && Array.isArray(m.code.client) ? m.code.client.filter((x) => typeof x === 'string' && x).length : 0;
+  if (!isLang && !Object.keys(parts).length && !Object.keys(entry).length && !notices && !rules && !uiModules) list.warning('PLUGIN_EMPTY', `carries nothing a ${cls} plugin is made of`, { class: cls });
 
   const overrides = m.overrides ?? [];
   if (m.overrides !== undefined && (!['script','trusted'].includes(cls) || !Array.isArray(overrides) || overrides.length > 200 || new Set(overrides).size !== overrides.length || overrides.some(x => typeof x !== 'string' || !/^[A-Za-z0-9_:-]{1,128}$/.test(x)))) list.problem('PLUGIN_SCRIPT_OVERRIDE', 'overrides must list official kit ids', {at:['overrides']});

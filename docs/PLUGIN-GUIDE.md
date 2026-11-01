@@ -503,9 +503,9 @@ unequip（official／allow）；每项下面显示作用说明。选「继承」
 | 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_SKILL_SPEC` | JSON 技能规格写得不对（{where}）：{detail} | 按 docs/PLUGINS.md §10 的 SkillSpec 写：kind 和 mods 里的已知字段；talentMods 只能和 JSON 技能规格一起用，不能和 kit.ref 一起。 |
 | 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_EFFECT_REF` | 效果引用不对（{where}）：{detail} | effectRef 要指向一个官方的道具或策略记录；驻守效果和 buff 的键要用游戏里已有的。 |
 | 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_I18N` | 插件的翻译文件不对（{where}）：{detail} | 翻译文件写 { "version": 1, "lang": "en", "files": { … } }，lang 和文件名一致；只能替换已有的文字，不能新增字段。 |
-| 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_UI_SLOTS` | 界面插件的 "slots" 写得不对：{detail} | "slots" 是列表，从 hud.right、result.tab、stats.tab、room.panel 里选，每个最多写一次。 |
+| 插件没出现在列表里（被跳过）；启动日志和 check 写着原因 | `PLUGIN_UI_SLOTS` | 界面插件的 "slots" 写得不对：{detail} | "slots" 是列表，从 hud.right、result.tab、stats.tab、room.panel、title.login 里选，每个最多写一次。 |
 | 插件能用，但检查时有提示 | `PLUGIN_UI_NO_SLOT` | 界面插件没有要任何位置，页面不会显示出来 | 在 "slots" 里写上它要放的位置，例如 ["hud.right"]。 |
-| 界面插件的页面收到拒绝（ok: false、rejected 或 limit 消息） | `PLUGIN_SLOT` | 界面插件要的位置没有给它：清单的 "slots" 里没有这个位置，或者别的插件已经占了 | 在 plugin.json 的 "slots" 里写上这个位置（hud.right、result.tab、stats.tab、room.panel）。协议表同一时间只挂一个插件；同一个位置有多个时，对局里用标签切换。 |
+| 界面插件的页面收到拒绝（ok: false、rejected 或 limit 消息） | `PLUGIN_SLOT` | 界面插件要的位置没有给它：清单的 "slots" 里没有这个位置，或者别的插件已经占了 | 在 plugin.json 的 "slots" 里写上这个位置（hud.right、result.tab、stats.tab、room.panel、title.login）。协议表同一时间只挂一个插件；同一个位置有多个时，对局里用标签切换。协议表同一时间只挂一个插件；同一个位置有多个时，对局里用标签切换。 |
 | 插件能用，但检查时有提示 | `PLUGIN_UI_SLOT_SHARED` | 同一个位置有多个界面插件（{detail}）。对局里用标签切换，一次只显示一个 | 这不是错误：玩家可以在这个位置里切换。若要各自独立显示，把它们写成不同的 slots。 |
 | 界面插件的页面收到拒绝（ok: false、rejected 或 limit 消息） | `PLUGIN_RATE` | 界面插件发消息太快，被限流了 | 每个插件每秒最多 20 条（连发最多 40 条）。把要发的东西攒一攒再发，或者只在数据变了的时候发。 |
 | 界面插件的页面收到拒绝（ok: false、rejected 或 limit 消息） | `PLUGIN_STORAGE` | 界面插件的存储请求被拒绝：键名不合规，或者超出了容量 | 键名 1–64 个字符，只用字母、数字和 . _ -；一个值的 JSON 不超过 4096 字节；每个插件最多 32 个键、一共 32 KB。 |
