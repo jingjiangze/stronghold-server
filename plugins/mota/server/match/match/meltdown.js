@@ -99,9 +99,18 @@ function shuffled(list, rng) {
  * 返回 false 的藏品仍会进背包、仍显示在 HUD，但会标注「未实装」，避免玩家以为它已经生效。
  */
 export const RELIC_APPLIED_KEYS = Object.freeze(['enemy', 'enemyRank', 'immediate', 'deployCap', 'lpCap']);
+/** 已接进引擎的 rule id（语义逐条照 relics.json 的官方 desc，不要按字段名猜）。 */
+export const RELIC_APPLIED_RULES = Object.freeze([
+  'ussuri',        // 敌方 +35%，每回合 +10%，最低 35%（relicEnemyMul）
+  'leaderHalve',   // 敌方 +35%，领袖额外 +20%/+50%，≥4 盟约减半（relicEnemyMul + activeBondsOf）
+  'enemyDmgTaken', // 敌人受伤 −20% ⇒ 等效生命 +25%（hp 等价近似）
+  'enemyCount',    // 敌人数量 +50%（combat.js 的 spawn count，mul 是增量）
+]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
-  return RELIC_APPLIED_KEYS.some((k) => Object.hasOwn(effect, k));
+  if (RELIC_APPLIED_KEYS.some((k) => Object.hasOwn(effect, k))) return true;
+  const ru = effect.rule;
+  return !!(ru && typeof ru.id === 'string' && RELIC_APPLIED_RULES.includes(ru.id));
 }
 
 export class MatchMeltdown {
@@ -382,6 +391,37 @@ export class MatchMeltdown {
    * `deployCap` → ps.deployCapBonus；`lpCap` / `immediate.{funds,lp,items}` 在获得时立即结算。
    * 其余（ally / price / rule.*——57 条走 rule DSL）本局暂不生效，见交付说明。
    */
+  /**
+   * 收集「持有某条 rule 类藏品」的参数（同一件藏品只算一次）。语义一律以 `relics.json` 的**官方 desc** 为准，
+   * 不要按字段名猜方向 —— 例如 `enemyCount.mul = 0.5` 的 desc 是「敌人数量 **+50%**」（是增量不是倍率）。
+   * @param {string} ruleId @returns {object[]} 每件持有藏品的 rule 参数对象
+   */
+  relicRuleParams(ruleId) {
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    if (!defs.length) return [];
+    const byId = new Map(defs.map((r) => [r.id, r]));
+    const out = [];
+    const seen = new Set();
+    const players = this.players && typeof this.players.values === 'function' ? this.players.values() : [];
+    for (const ps of players) {
+      for (const id of (ps && Array.isArray(ps.relics) ? ps.relics : [])) {
+        if (seen.has(id)) continue;
+        const ru = (byId.get(id) || {}).effect && byId.get(id).effect.rule;
+        if (ru && ru.id === ruleId) { seen.add(id); out.push({ ...ru, ownerId: ps.playerId }); }
+      }
+    }
+    return out;
+  }
+
+  /** 某玩家的已激活盟约数（`ps.bonds[*].active`）。 */
+  activeBondsOf(playerId) {
+    const ps = this.players && typeof this.players.get === 'function' ? this.players.get(playerId) : null;
+    const bonds = ps && ps.bonds;
+    if (!bonds || typeof bonds !== 'object') return 0;
+    return Object.values(bonds).filter((b) => b && b.active === true).length;
+  }
+
   relicEnemyMul() {
     const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
     const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
@@ -420,6 +460,27 @@ export class MatchMeltdown {
         acc.hp += Number(b.hp) || 0;
         acc.atk += Number(b.atk) || 0;
       }
+    }
+    // ---- rule 类藏品的敌方修正（语义逐条取自 relics.json 的官方 desc）----
+    // ussuri：「敌方攻击/防御/生命 +35%，每进入新回合额外 +10%，完成悬赏和完美作战时 −5%（最低 35%）」
+    //   完成悬赏/完美作战的递减需要结算侧计数，暂未接入 ⇒ 按 0 次计（只会略高，不会低于 min 夹取）。
+    for (const ru of this.relicRuleParams('ussuri')) {
+      const step = Number(ru.step) || 0;
+      const min = Number(ru.min) || 0.35;
+      const v = Math.max(min, 0.35 + step * Math.max(0, (Number(this.round) || 1) - 1));
+      acc.hp += v; acc.atk += v;
+    }
+    // leaderHalve：「敌方 +35%，领袖额外攻击/防御 +20%、生命 +50%；激活 ≥4 盟约时领袖加成减半」
+    for (const ru of this.relicRuleParams('leaderHalve')) {
+      const need = Number(ru.bonds) || 4;
+      const half = this.activeBondsOf(ru.ownerId) >= need ? 0.5 : 1;
+      acc.hp += 0.35 + 0.5 * half;
+      acc.atk += 0.35 + 0.2 * half;
+    }
+    // enemyDmgTaken：「敌人受到的物理/法术伤害降低 20%」⇒ 等效生命 +25%（引擎没有独立受击乘区，用 hp 等价近似）
+    for (const ru of this.relicRuleParams('enemyDmgTaken')) {
+      const p = Math.max(Number(ru.phys) || 0, Number(ru.arts) || 0);
+      if (p > 0 && p < 1) acc.hp += 1 / (1 - p) - 1;
     }
     return acc;
   }

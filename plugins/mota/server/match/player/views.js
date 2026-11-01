@@ -163,7 +163,8 @@ export class PlayerViews {
         const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
         const idx = new Map(defs.map((d) => [d.id, d]));
         return list.map((id) => { const d = idx.get(id) || {}; return { id, name: String(d.name || id),
-          tier: String(d.tier || ''), kind: String(d.kind || ''), applied: relicEffectApplied(d.effect) }; });
+          tier: String(d.tier || ''), kind: String(d.kind || ''), applied: relicEffectApplied(d.effect),
+          icon: String(d.icon || ''), desc: String(d.desc || '') }; });
       })(),
       hexStats: typeof this.m.hexStatsView === 'function' ? this.m.hexStatsView(this) : null,
       hexGrade: this.hexGrade || null,

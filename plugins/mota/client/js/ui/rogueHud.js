@@ -33,7 +33,10 @@ export function RogueHud({ rogue, relicCards, disabled = false }) {
     ${open ? html`<div data-testid="rogue-hud-list" style="margin-top:.35rem;border-top:1px solid rgba(255,255,255,.12);padding-top:.3rem">
       ${cards.length
         ? html`<ul style="margin:0;padding-left:1rem">
-            ${cards.map((c) => html`<li key=${c.id} data-relic-id=${c.id} style=${c.kind === 'negative' ? 'color:#e28a6a' : ''}>
+            ${cards.map((c) => html`<li key=${c.id} data-relic-id=${c.id} title=${c.desc || ''}
+              style=${`display:flex;align-items:center;gap:.35rem;${c.kind === 'negative' ? 'color:#e28a6a' : ''}`}>
+              ${c.icon ? html`<img src=${c.icon} alt="" width="20" height="20" loading="lazy"
+                style="border-radius:4px;background:rgba(255,255,255,.08);object-fit:contain" />` : null}
               ${c.name}${c.tier ? html` <small style="opacity:.6">${c.tier}</small>` : null}
               ${c.applied === false ? html` <small data-relic-unapplied title=${t('这条藏品的效果还没接进引擎：本局只记录、不生效')}
                 style="opacity:.55;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:0 .2rem">${t('未实装')}</small>` : null}
