@@ -4,7 +4,16 @@
 // 数据：`m.private.rogueOffer = { round, eventId, name, desc, choices:[{id,label}] }`
 // 动作：`g.roguePick { choiceId }`
 
-import { html } from './components.js';
+import { html, Icon } from './components.js';
+
+/** 事件图标（与 components.js 的 ICONS 同名）；没有专门字形的用 dots 兜底。 */
+const EVENT_ICONS = {
+  ev_peddler: 'search',
+  ev_shrine: 'crown',
+  ev_wounded: 'user',
+  ev_gamble: 'dice',
+  ev_altar: 'eye',
+};
 import { t } from '../../../shared/i18n.js';
 
 export function normalizeRogueOffer(priv) {
@@ -18,7 +27,9 @@ export function RogueEventOverlay({ offer, busy = false, onPick }) {
     <div class="hxd__veil" aria-hidden="true"></div>
     <div class="hxd__inner">
       <span class="hxd__micro">ROGUE // <b>ENCOUNTER</b></span>
-      <h2 class="hxd__title" data-text=${offer.name}>${offer.name}</h2>
+      <h2 class="hxd__title" data-text=${offer.name}>
+        <${Icon} name=${EVENT_ICONS[offer.eventId] || 'dots'} class="rgv__icon" />${offer.name}
+      </h2>
       <div class="hxd__rule" aria-hidden="true"><i></i><span></span><i></i></div>
       <p class="hxd__sub">
         ${offer.round ? t('第 {r} 回合 · ', { r: offer.round }) : null}${offer.desc}
