@@ -1,14 +1,16 @@
-// public/js/ui/account.js — 账号面板（P2，业主 2026-11-01）。
+// public/js/ui/account.js — 账号入口（P2，业主 2026-11-01）。
 //
 // 口径：QQ 号就是账号、头像直接调 QQ 头像 API（不存图）、游客可绑定、密码自己设（**两次输入**）、
 // 登录默认保留（令牌存 localStorage）。公告来自服务端 /api/announcements（管理后台写）。
 //
-// 这个文件在核心 public/js 下；mota 插件的 main.js 用 `./ui/account.js` 引它时，运行时回退到这里
-// （插件只覆盖列出的文件，ui/account.js 不在其中）。
+// 2026-11-01 追加（业主）：「账号入口挂在首页，而不是悬浮窗」——入口组件 `AccountEntry` / `AnnouncementEntry`
+// 由首页（`plugins/mota/client/js/screens/title.js` 右上工具行）渲染；底部悬浮 dock 已撤掉。
+//
+// 这个文件在核心 public/js 下；插件里用 `../ui/account.js` 引它时，运行时回退到这里
+// （插件只覆盖 code.client 列出的文件，ui/account.js 不在其中）。
 
-import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
+import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html, Button, Modal } from './components.js';
-import { useStore } from '../store.js';
 import { t } from '../../../shared/i18n.js';
 
 const TOKEN_KEY = 'sp.accountToken';
@@ -36,8 +38,33 @@ const ERR = {
   UNAUTHORIZED: () => t('登录已过期，请重新登录'),
 };
 
-function AccountModal({ open, onClose, onChanged }) {
-  const me = useStore((s) => s.me);
+/** 一次性把入口需要的样式塞进 head（不依赖任何插件 CSS）。 */
+let styled = false;
+function ensureStyle() {
+  if (styled || typeof document === 'undefined') return;
+  styled = true;
+  if (document.getElementById('sp-acc-style')) return;
+  const st = document.createElement('style');
+  st.id = 'sp-acc-style';
+  st.textContent = `
+    .title-account{display:inline-flex;align-items:center;gap:6px}
+    .title-account__avatar{width:18px;height:18px;border-radius:50%;vertical-align:-4px}
+    .acc-head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+    .acc-avatar{border-radius:50%}
+    .acc-dim{color:#8b93a1;font-size:12px}
+    .acc-row{display:flex;gap:10px;align-items:center;margin:8px 0}
+    .acc-row span{width:84px;flex:none;color:#aab2c0}
+    .acc-row input{flex:1;padding:6px 8px;border-radius:6px;border:1px solid #2f3745;background:#0e1116;color:#e6e9ef;font:inherit}
+    .acc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+    .acc-err{color:#ff8a80;margin:8px 0 0}
+    .acc-ann{list-style:none;padding:0;margin:0}
+    .acc-ann li{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+    .acc-ann__t{font-weight:600;display:flex;justify-content:space-between;gap:10px}
+    .acc-ann__b{white-space:pre-wrap;color:#c8cdd6;margin-top:4px}`;
+  document.head.appendChild(st);
+}
+
+export function AccountModal({ open, onClose, onChanged }) {
   const [token, setToken] = useState(readToken);
   const [account, setAccount] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -53,7 +80,8 @@ function AccountModal({ open, onClose, onChanged }) {
     let live = true;
     call('/api/account/me', { token }).then((r) => {
       if (!live) return;
-      if (r.ok) { setAccount(r.account); setName(r.account.name || ''); setColor(r.account.nameStyle?.color || ''); } else { writeToken(''); setToken(''); }
+      if (r.ok) { setAccount(r.account); setName(r.account.name || ''); setColor(r.account.nameStyle?.color || ''); }
+      else { writeToken(''); setToken(''); }
     });
     return () => { live = false; };
   }, [open, token]);
@@ -63,12 +91,13 @@ function AccountModal({ open, onClose, onChanged }) {
     if (pw2 && pw !== pw2) { setErr(t('两次输入的密码不一致')); return; }
     setBusy(true);
     try {
-      // 填了确认密码 = 建号/绑定；只填密码 = 登录
+      // 填了确认密码 = 建号/绑定；只填密码 = 登录。bind 不依赖 WS 会话（服务端已放开）。
       const r = pw2
-        ? await call('/api/auth/bind', { method: 'POST', body: { qq, password: pw }, token: me?.token || '' })
+        ? await call('/api/auth/bind', { method: 'POST', body: { qq, password: pw } })
         : await call('/api/auth/login', { method: 'POST', body: { qq, password: pw } });
       if (!r.ok) { setErr((ERR[r.error] || (() => r.error || t('操作失败')))()); return; }
-      writeToken(r.token); setToken(r.token); setAccount(r.account); setName(r.account.name || ''); setColor(r.account.nameStyle?.color || '');
+      writeToken(r.token); setToken(r.token); setAccount(r.account);
+      setName(r.account.name || ''); setColor(r.account.nameStyle?.color || '');
       setPw(''); setPw2(''); onChanged?.(r.account);
     } finally { setBusy(false); }
   };
@@ -106,7 +135,7 @@ function AccountModal({ open, onClose, onChanged }) {
   <//>`;
 }
 
-function AnnouncementModal({ open, onClose }) {
+export function AnnouncementModal({ open, onClose }) {
   const [items, setItems] = useState(null);
   useEffect(() => {
     if (!open) return;
@@ -125,46 +154,29 @@ function AnnouncementModal({ open, onClose }) {
   <//>`;
 }
 
-/** 右下角常驻入口（账号 + 公告）。挂一次即可。 */
-export function AccountDock() {
-  const [accOpen, setAccOpen] = useState(false);
-  const [annOpen, setAnnOpen] = useState(false);
+/** 首页右上角的账号入口（登录后显示 QQ 头像 + 昵称）。 */
+export function AccountEntry() {
+  ensureStyle();
+  const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(null);
-  const [hasAnn, setHasAnn] = useState(false);
-
   useEffect(() => {
     const token = readToken();
-    if (token) call('/api/account/me', { token }).then((r) => { if (r.ok) setAccount(r.account); });
-    call('/api/announcements').then((r) => setHasAnn((r.items || []).length > 0)).catch(() => {});
-    // 极简样式：整块自包含，避免依赖插件 CSS
-    if (!document.getElementById('sp-acc-style')) {
-      const st = document.createElement('style');
-      st.id = 'sp-acc-style';
-      st.textContent = `.sp-acc{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;gap:8px;align-items:center}
-        .sp-acc button{font:inherit;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(20,24,32,.86);color:#e6e9ef;cursor:pointer}
-        .sp-acc img{width:26px;height:26px;border-radius:50%;vertical-align:-7px;margin-right:6px}
-        .acc-head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
-        .acc-avatar{border-radius:50%}
-        .acc-dim{color:#8b93a1;font-size:12px}
-        .acc-row{display:flex;gap:10px;align-items:center;margin:8px 0}
-        .acc-row span{width:84px;flex:none;color:#aab2c0}
-        .acc-row input{flex:1;padding:6px 8px;border-radius:6px;border:1px solid #2f3745;background:#0e1116;color:#e6e9ef;font:inherit}
-        .acc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-        .acc-err{color:#ff8a80;margin:8px 0 0}
-        .acc-ann{list-style:none;padding:0;margin:0}
-        .acc-ann li{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-        .acc-ann__t{font-weight:600;display:flex;justify-content:space-between;gap:10px}
-        .acc-ann__b{white-space:pre-wrap;color:#c8cdd6;margin-top:4px}`;
-      document.head.appendChild(st);
-    }
+    if (!token) return;
+    call('/api/account/me', { token }).then((r) => { if (r.ok) setAccount(r.account); });
   }, []);
+  return html`<${Button} variant="ghost" size="sm" icon="user" class="title-account" onClick=${() => setOpen(true)} title=${t('账号')}>
+      ${account ? html`<img class="title-account__avatar" src=${account.avatar} alt="" width="18" height="18" />${account.name || account.qq}` : t('账号')}
+    <//>
+    <${AccountModal} open=${open} onClose=${() => setOpen(false)} onChanged=${setAccount} />`;
+}
 
-  return html`<div class="sp-acc">
-    ${hasAnn ? html`<button type="button" onClick=${() => setAnnOpen(true)}>${t('公告')}</button>` : null}
-    <button type="button" onClick=${() => setAccOpen(true)}>
-      ${account ? html`<img src=${account.avatar} alt="" /><span>${account.name || account.qq}</span>` : t('账号')}
-    </button>
-    <${AccountModal} open=${accOpen} onClose=${() => setAccOpen(false)} onChanged=${setAccount} />
-    <${AnnouncementModal} open=${annOpen} onClose=${() => setAnnOpen(false)} />
-  </div>`;
+/** 首页的公告入口（没有公告时什么都不渲染）。 */
+export function AnnouncementEntry() {
+  ensureStyle();
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState(0);
+  useEffect(() => { call('/api/announcements').then((r) => setCount((r.items || []).length)).catch(() => {}); }, []);
+  if (!count) return null;
+  return html`<${Button} variant="ghost" size="sm" icon="info" class="title-announce" onClick=${() => setOpen(true)} title=${t('公告')}>${t('公告')}<//>
+    <${AnnouncementModal} open=${open} onClose=${() => setOpen(false)} />`;
 }
