@@ -659,8 +659,8 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                   title: t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金') },
                 { key: 'confront', code: 'C', acc: '#e2653d', name: t('控怪'), sub: t('出怪 · 路线 · 时机全可控'),
                   title: t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定') },
-                { key: 'ai', code: 'AI', acc: '#5cc9e8', name: t('AI 对抗'), sub: t('你控怪 · AI 布防'), locked: true,
-                  title: t('AI 对抗：你操作怪物、AI 布防（1–20 人，尚未开放）') },
+                { key: 'ai', code: 'AI', acc: '#5cc9e8', name: t('AI 对抗'), sub: t('你控怪 · AI 布防'), locked: false,
+                  title: t('AI 对抗：你操作怪物、AI 布防（1–20 人；你与队友坐 team0、AI 坐对面）') },
               ].map((r) => html`<button key=${r.key} type="button" role="radio" aria-checked=${versusRule === r.key ? 'true' : 'false'}
                 class=${`vsopt${versusRule === r.key ? ' is-on' : ''}`} style=${`--acc:${r.acc}`}
                 disabled=${!!busy || !!r.locked} title=${r.title}
@@ -675,11 +675,12 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                 ? t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金')
                 : versusRule === 'confront'
                   ? t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定')
-                  : t('AI 对抗：你操作怪物、AI 布防（1–20 人，尚未开放）')}</span>
+                  : t('AI 对抗：你操作怪物、AI 布防（1–20 人；你与队友坐 team0、AI 坐对面）')}</span>
               ${versusRule === 'confront' ? html`<label class="proto-versus__alt">
                 <input type="checkbox" checked=${versusAlt !== false} disabled=${!!busy}
                   onChange=${(e) => onVersusAlt && onVersusAlt(e.currentTarget.checked)} />
                 <span>${t('每回合交换攻守')}</span></label>` : null}
+              ${versusRule === 'ai' ? html`<span class="proto-dock__hint" style="opacity:.75">${t('固定攻守：你们恒为攻方、AI 恒为守方（不换边）')}</span>` : null}
               ${versusRule === 'bounty' ? html`<label class="proto-team" title=${t('出怪倍速：这一回合守方遇到的敌人数量的倍数（以当前赏金档为 1×）')}>
                 <span>${t('倍速')}</span>
                 <select value=${String(versusSpeed)} disabled=${!!busy}
@@ -1080,7 +1081,7 @@ export function LobbyScreen() {
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
       ...(simulation === 'coop' && rogueRules ? { variant: 'rogue' } : {}),
       ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
-        versusAlt: versusRule === 'confront' ? versusAlt !== false : true,
+        versusAlt: versusRule === 'ai' ? false : (versusRule === 'confront' ? versusAlt !== false : true),
         versusSpeed: versusRule === 'bounty' ? versusSpeed : 1 } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });
