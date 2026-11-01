@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { MatchMeltdown, relicEffectApplied } from '../../plugins/mota/server/match/match/meltdown.js';
+// 肉鸽的随机元素（不期而遇 / 词缀 / 紧急作战）2026-11-01 迁到独立插件 rogue，用它的 Mixin 原型来测
+import { Mixin as RogueMixin } from '../../plugins/rogue/server/match/RogueMixin.js';
 import { rangeTileKeys } from '../../plugins/mota/server/match/player/round.js';
 
 const RELICS = JSON.parse(fs.readFileSync(new URL('../../plugins/relics-87/data/relics.json', import.meta.url), 'utf8'));
@@ -24,9 +26,9 @@ function fakeMatch({ isRogue = true, round = 1, seed = 20261101, relics = [], mo
       relicEnemyMul: MatchMeltdown.prototype.relicEnemyMul,
       relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
       activeBondsOf: MatchMeltdown.prototype.activeBondsOf,
-      rogueEventRound: MatchMeltdown.prototype.rogueEventRound,
-      rogueRoundAffix: MatchMeltdown.prototype.rogueRoundAffix,
-      rogueEmergencyRound: MatchMeltdown.prototype.rogueEmergencyRound,
+      rogueEventRound: RogueMixin.prototype.rogueEventRound,
+      rogueRoundAffix: RogueMixin.prototype.rogueRoundAffix,
+      rogueEmergencyRound: RogueMixin.prototype.rogueEmergencyRound,
     },
   };
 }
@@ -41,19 +43,19 @@ test('藏品节奏：肉鸽 = 开局 + 每 2 回合；协同共竞 = R4/R8/R12',
 test('不期而遇：回合表是 R3 / R6 / R9', () => {
   // 注意：`rogueEventRound(r)` 本身只看回合（不判 isRogue），"只有肉鸽才有"这道门在 phases.js 的调用点
   // （`if (this.isRogue === true && ... rogueEventRound(r))`）—— 测试按实现如实断言，避免把调用点的门写进纯函数测试。
-  const at = (r) => MatchMeltdown.prototype.rogueEventRound.call({ isRogue: true }, r);
+  const at = (r) => RogueMixin.prototype.rogueEventRound.call({ isRogue: true }, r);
   assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(at),
     [false, false, true, false, false, true, false, false, true, false]);
 });
 
 test('紧急作战：只在 R5 / R9（肉鸽专属）', () => {
-  const at = (r, isRogue = true) => MatchMeltdown.prototype.rogueEmergencyRound.call({ isRogue }, r);
+  const at = (r, isRogue = true) => RogueMixin.prototype.rogueEmergencyRound.call({ isRogue }, r);
   assert.deepEqual([4, 5, 6, 8, 9, 10].map((r) => at(r)), [false, true, false, false, true, false]);
   assert.equal(at(5, false), false);
 });
 
 test('每回合词缀：确定性（同 seed 同回合恒定）、三档之一、协同/普通房没有', () => {
-  const aff = (round, seed = 7) => MatchMeltdown.prototype.rogueRoundAffix.call({ isRogue: true, seed }, round);
+  const aff = (round, seed = 7) => RogueMixin.prototype.rogueRoundAffix.call({ isRogue: true, seed }, round);
   const a1 = aff(4), a2 = aff(4);
   assert.deepEqual(a1, a2, '同 seed 同回合必须一致');
   for (const r of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
@@ -62,7 +64,7 @@ test('每回合词缀：确定性（同 seed 同回合恒定）、三档之一�
     assert.ok(Number.isFinite(a.mul) && a.mul > 0 && a.mul < 1, '倍率应是 0~1 的小数');
     assert.ok(typeof a.label === 'string' && a.label.length > 0);
   }
-  assert.equal(MatchMeltdown.prototype.rogueRoundAffix.call({ isRogue: false, seed: 7 }, 4), null);
+  assert.equal(RogueMixin.prototype.rogueRoundAffix.call({ isRogue: false, seed: 7 }, 4), null);
 });
 
 test('敌人修正聚合：词缀 + 紧急作战都进同一个 acc（幂等由 combat.js 的 relicApplied 保证）', () => {

@@ -23,7 +23,10 @@ export class MatchIntents {
       case 'g.meltBuy': return this.meltBuy(ps, msg.itemId);
       case 'g.meltBuyRelic': return this.meltBuyRelic(ps, msg.relicId);
       case 'g.relicPick': return this.relicPick(ps, msg.relicId);
-      case 'g.roguePick': return this.roguePick(ps, msg.choiceId);
+      case 'g.roguePick':
+        // 肉鸽的不期而遇由独立插件 `rogue` 提供（code.matchMixin）；插件停用时这条意图直接拒绝，不崩。
+        if (typeof this.roguePick !== 'function') return fail(ERR.BAD_TARGET, 'no rogue plugin');
+        return this.roguePick(ps, msg.choiceId);
       case 'g.meltClose': return this.meltClose(ps);
       case 'g.confront.withdraw': return this.withdrawBounty(ps, msg);
       case 'g.event.pick': return this.pickEvent(ps, msg.target);
