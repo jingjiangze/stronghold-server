@@ -460,37 +460,39 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
     return () => { removeEventListener('keydown', onKey); document.body.classList.remove('hub-dialog-open'); };
   }, []);
   const cells = [
-    { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', acc: '#e8b25c',
+    { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', acc: 'var(--gold)',
       desc: t('两人共竞：团队储备、三项商店升级、借贷、救济与救援。') },
-    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', acc: '#5cc9e8',
+    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', acc: 'var(--ice)',
       desc: t('2V2 攻防：官方出怪为主，你替换其中一部分，靠自家怪被击杀拿赏金；建房时可选倍速。') },
-    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', acc: '#e2653d',
+    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', acc: 'var(--orange)',
       desc: t('出怪、路线、时机全部由你决定；守方遇到的怪约为官方的 1.5 倍。') },
     { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', acc: '#9d7cf0',
       desc: t('开局与每 2 回合各抽一次藏品三选一，外加随机词缀、随机事件与每回合换图。') },
   ];
   return html`<div class=${`modal${leaving ? ' is-leaving' : ''}`} role="presentation"
       onMouseDown=${(e) => { if (e.target === e.currentTarget) leave(); }}>
-    <div class="modal__box" role="dialog" aria-modal="true" aria-label=${t('娱乐模式')}
-      style="width:80vw;height:80vh;max-width:none;max-height:none;display:flex;flex-direction:column">
+    <div class="modal__box fun-modal" role="dialog" aria-modal="true" aria-label=${t('娱乐模式')}>
+      <div class="modal__stripe" aria-hidden="true"></div>
       <header class="modal__head">
         <h2 class="modal__title">${t('娱乐模式')}</h2>
-        <span class="t-dim" data-testid="lobby-counts" style="margin-left:.6rem">
+        <span class="t-dim" data-testid="lobby-counts">
           ${t('在线 {online} · 房间 {rooms} · 对局 {matches}', {
             online: lobbyStats?.online ?? 0, rooms: lobbyStats?.roomsCount ?? 0, matches: lobbyStats?.matchesCount ?? 0,
           })}
         </span>
         <button type="button" class="modal__close" onClick=${leave} aria-label=${t('关闭')}>×</button>
       </header>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:.6rem;padding:.6rem;flex:1;min-height:0">
-        ${cells.map((c) => html`<button key=${c.id} type="button" class="ally-card" data-testid=${`fun-${c.id}`}
+      <div class="fun-grid">
+        ${cells.map((c) => html`<button key=${c.id} type="button" class="fun-card" data-testid=${`fun-${c.id}`}
             disabled=${!!busy} style=${`--acc:${c.acc}`} onClick=${() => onPick(c.id)}>
-          <span class="ally-card__bar"><span class="ally-card__icon"><${Icon} name="dice" /></span>${c.name}<small>${c.en}</small></span>
-          <span class="ally-card__note" style="padding:.4rem .7rem;opacity:.85">${c.desc}</span>
+          <span class="fun-card__en">${c.en}</span>
+          <span class="fun-card__name">${c.name}</span>
+          <span class="fun-card__desc">${c.desc}</span>
+          <span class="fun-card__corner" aria-hidden="true"></span>
         </button>`)}
       </div>
-      ${lobbyStats && Array.isArray(lobbyStats.rooms) && lobbyStats.rooms.length ? html`<div class="t-dim" data-testid="lobby-rooms"
-          style="padding:0 .7rem .7rem;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center">
+      ${lobbyStats && Array.isArray(lobbyStats.rooms) && lobbyStats.rooms.length ? html`<div class="t-dim fun-rooms"
+          data-testid="lobby-rooms">
         <span>${t('公开房间：')}</span>
         ${lobbyStats.rooms.slice(0, 8).map((r) => html`<button key=${r.code} type="button" class="code-chip num"
             data-testid=${r.inMatch ? `lobby-room-${r.code}-infiltrate` : `lobby-room-${r.code}`}
