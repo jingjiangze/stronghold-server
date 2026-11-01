@@ -452,6 +452,7 @@
 .modal__box {
   --bk-c: var(--mint-500);
   --mstripe: var(--mint-500);
+  position: relative;
   width: min(6.4rem, 94vw);
   max-height: 88vh;
   display: flex;
@@ -463,6 +464,24 @@
   box-shadow: 0 .3rem .9rem rgba(0, 0, 0, .65), 0 0 .4rem rgba(23, 249, 183, .06);
   animation: modal-in var(--t-slow) var(--ease-out);
 }
+/* 2026-11-01：关闭键原生化（此前无样式 ⇒ FunSelect 头部渲染成整条灰色横杠） */
+.modal__close {
+  position: absolute;
+  top: .16rem;
+  right: .16rem;
+  width: .3rem;
+  height: .3rem;
+  display: grid;
+  place-items: center;
+  font-size: .18rem;
+  line-height: 1;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, .25);
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+.modal__close:hover { color: var(--text-hi); border-color: var(--mint-400); }
 .modal__box--red { --bk-c: var(--red-premium); --mstripe: var(--red); }
 .modal__box--amber { --bk-c: var(--amber); --mstripe: var(--amber); }
 .modal__box--orange { --bk-c: var(--orange-hi); --mstripe: var(--orange); }
