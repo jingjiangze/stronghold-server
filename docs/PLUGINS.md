@@ -1318,7 +1318,14 @@ to show it. It is unofficial. It is not a member of a room's `plugins[]` and a r
 (`PLUGIN_BLOCKED`). It adds nothing to `cs` and it does add its own `vs` (§6).
 
 **Manifest.** `class: "ui"`, `scope` including `personal` (that is the only scope this class has), permission
-`ui.frame`, `entry.client` an `.html` path, `slots` any of `hud.right`, `result.tab`, `stats.tab`, `room.panel`.
+`ui.frame`, `entry.client` an `.html` path, `slots` any of `hud.right`, `result.tab`, `stats.tab`, `room.panel`,
+`title.login`.
+
+A ui plugin may instead contribute a **same-origin module**: no `entry.client`, just `code.client` listing the module
+paths (for example `js/plugins/<id>/title.login.js`), which the host at `public/js/ui/pluginSlots.js` imports and mounts
+into its slot (`export function mount(el)`, optional `unmount(el)`). A module needs the page context a sandbox frame
+cannot have (the site's own storage and API); it carries the same trust as any `code.client` overlay, so it is for the
+server owner's own plugins, not for a player switching interface plugins on.
 `description` is the 简介. The `.html`, `.js`, `.css` and `.png` files must sit in the directory of `entry.client`.
 Start from `plugins/_template/ui/` (a damage tally). A folder whose name starts with `_` is a template: the registry
 never loads it.
