@@ -53,6 +53,8 @@ export class MatchSettle {
       const loss = uniteRan && plan.leakers.includes(ps) ? Math.min(cap, survivors.get(ps.playerId) || 0) : Math.min(cap, counted);
       // 肉鸽 rule 藏品 homeCooked：本回合零损失 = 一场完美作战（计数用于 +10%/场）
       if (loss === 0) { ps.relicPerfectBattles = (Number(ps.relicPerfectBattles) || 0) + 1; }
+      // 肉鸽 rule 藏品 kingVessel：零损失**连续**回合数（上一回合没掉目标生命 ⇒ 下一战生命 +80%，连 3 回合 +200%）
+      ps.relicNoLossStreak = loss === 0 ? (Number(ps.relicNoLossStreak) || 0) + 1 : 0;
       if (this.uniteResultView) this.uniteResultView.losses[ps.playerId] = loss;
       // 对抗模式：扣的是**整队共享池**（队友的漏怪一起算），队员的 ps.lp 由 _syncVersusTeamLp 拆分回写。
       if (this.isVersus && this.teamLps) this._versusTeamLpLoss(this.teamIdOf(ps), loss);

@@ -132,6 +132,11 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'eliteStatsPerElite', // 场上每有一名精锐：精锐 生命/攻击/防御 +10%（per-unit，见 battleInput）
   'eliteAspdPerElite',  // 本场每有一名精锐：精锐 攻速 +10，最多 10 层（同上）
   'eliteAtkPerMerge',   // 每有一次 4 阶以上合成：精锐 攻击 +40%，最多 4 层（ps.relicEliteMerges）
+  'aspdPerNegative',  // 每个负面藏品：全队攻速 +35（relicAllyMul，数自己持有的 negative 藏品）
+  'hpPerTier4Buy',    // 每买一次 4 阶以上干员：全队最大生命 +5%，最多 10 层（ps.relicTier4Buys）
+  'kingVessel',       // 上一回合没掉目标生命：全队生命 +80%；连续 3 回合 +200%（ps.relicNoLossStreak）
+  'probe',            // 入手后下一休整期资金 −1；每过 2 回合敌方 攻/生 +10%（relicEnemyMul）
+  'recruitTopBond',   // 进新回合随机获得一名「当前盟约层数最高」的干员（+1 部署由 effect.deployCap）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -515,6 +520,13 @@ export class MatchMeltdown {
       const p = Math.max(Number(ru.phys) || 0, Number(ru.arts) || 0);
       if (p > 0 && p < 1) acc.hp += 1 / (1 - p) - 1;
     }
+    // probe（探测先锋）：「每过 2 个回合所有敌方单位的生命攻击力提升 10%」——按回合数每 `every` 回合加一档
+    for (const ru of this.relicRuleParams('probe')) {
+      const every = Math.max(1, Number(ru.every) || 2);
+      const step = Math.max(Number(ru.atk) || 0, Number(ru.hp) || 0);
+      const stacks = Math.floor(Math.max(0, (Number(this.round) || 1) - 1) / every);
+      if (step > 0 && stacks > 0) { acc.hp += step * stacks; acc.atk += step * stacks; }
+    }
     return acc;
   }
 
@@ -539,8 +551,20 @@ export class MatchMeltdown {
    *   完成悬赏额外 +1 次的规则未接（无悬赏完成计数）
    * 其余己方属性类（atkPerNeighbor/atkPerEquip/atkPerBenchItem/homeCooked/atkPerSpend/hpIfDp…）见覆盖清单，逐个待接。
    */
-  /**
-   * 精锐目标类藏品的参数（都对**精锐干员**生效，4 阶以上）：
+  /** 某个玩家持有的**负面藏品（kind === 'negative'）**数量——`aspdPerNegative`（刀光剑影）用它算攻速。 */
+  relicNegativeCount(ps) {
+    const ids = ps && Array.isArray(ps.relics) ? ps.relics : null;
+    if (!ids || !ids.length) return 0;
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    const neg = new Set(defs.filter((r) => r && r.kind === 'negative').map((r) => r.id));
+    if (!neg.size) return 0;
+    let n = 0;
+    for (const id of ids) if (neg.has(id)) n += 1;
+    return n;
+  }
+
+  /** 精锐目标类藏品的参数（都对**精锐干员**生效，4 阶以上）：
    * - `eliteStatsPerElite`（场上每有一名精锐：精锐 生命/攻击/防御 +10%）
    * - `eliteAspdPerElite`（本场每有一名精锐：精锐 攻速 +10，最多 10 层）
    * - `eliteAtkPerMerge`（每有一次 4 阶以上合成：精锐 攻击 +40%，最多 4 层；计数在 acquire.js）
@@ -668,6 +692,22 @@ export class MatchMeltdown {
       hp += 0.2 + per * perfect;
       atk += 0.2 + per * perfect;
     }
+    // aspdPerNegative「每拥有一个负面藏品，所有友方单位攻击速度 +35」——只数**自己**持有的 negative 藏品
+    const negatives = typeof this.relicNegativeCount === 'function' ? this.relicNegativeCount(ps) : 0;
+    for (const ru of this.relicRuleParams('aspdPerNegative')) aspdAdd += Math.max(0, Number(ru.per) || 0) * negatives;
+    // hpPerTier4Buy「每购买 4 阶以上干员时，所有友方干员最大生命 +5%（最多 10 层）」——计数在 economy.buy()
+    const tier4Buys = Math.max(0, Math.trunc(Number(ps.relicTier4Buys) || 0));
+    for (const ru of this.relicRuleParams('hpPerTier4Buy')) {
+      const per = Math.max(0, Number(ru.per) || 0);
+      const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 10;
+      hp += per * Math.min(max, tier4Buys);
+    }
+    // kingVessel「上一个回合没有损失目标生命时全队最大生命 +80%，连续 3 回合 +200%」——连胜计数在 settle()
+    if (this.relicRuleParams('kingVessel').length) {
+      const streak = Math.max(0, Math.trunc(Number(ps.relicNoLossStreak) || 0));
+      if (streak >= 3) hp += 2;
+      else if (streak >= 1) hp += 0.8;
+    }
     if (!atk && !hp && !def && !aspdAdd) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}) };
   }
@@ -763,7 +803,38 @@ export class MatchMeltdown {
         const inc = Math.max(0, Number(ru.income) || 0);
         if (inc > 0) { try { ps.addFunds(inc, { reason: 'relic-king-crystal' }); } catch { /* noop */ } }
       }
+      // probe（探测先锋）：「获得时下次休整期资金 −1」——只扣一次（`st.probePaid` 跨回合记账）
+      if (this.relicRuleParams('probe').length && !st.probePaid) {
+        st.probePaid = true;
+        try { ps.addFunds(-1, { reason: 'relic-probe' }); } catch { /* noop */ }
+      }
+      // recruitTopBond（似曾相识棋盒）：「进入下一回合时，随机获得一名当前盟约层数最高的干员」
+      // （+1 部署上限那半边来自 effect.deployCap，已在 relicGrantInstant 里生效）
+      if (this.relicRuleParams('recruitTopBond').length) {
+        try { this.relicRecruitTopBond(ps); } catch { /* 取不到候选就跳过 */ }
+      }
     }
+  }
+
+  /**
+   * 「当前盟约层数最高的干员」：取该玩家层数最高的**已激活**盟约 → 从该盟约的可见干员里随机一名发放。
+   * 复用 hex 抽卡已有的 `hexBondChess()` / `_hexPickChess()`（同实例方法，非 hex 模式下按 `typeof` 跳过）。
+   */
+  relicRecruitTopBond(ps) {
+    if (!ps || typeof ps.acquireChess !== 'function') return null;
+    let best = null;
+    for (const [id, st] of Object.entries(ps.bonds || {})) {
+      if (!st || !st.active) continue;
+      const layers = Number(st.layers ?? st.stacks ?? st.count ?? 0) || 0;
+      if (!best || layers > best.layers) best = { id, layers };
+    }
+    if (!best) return null;
+    const cands = typeof this.hexBondChess === 'function' ? this.hexBondChess(best.id) : null;
+    if (!Array.isArray(cands) || !cands.length) return null;
+    const id = typeof this._hexPickChess === 'function'
+      ? this._hexPickChess(cands, `relic-topbond:${ps.playerId}:${this.round}`)
+      : cands[Math.floor(Math.random() * cands.length)];
+    return id ? ps.acquireChess(id, { source: 'relic' }) : null;
   }
 
   relicGrantInstant(ps, def) {

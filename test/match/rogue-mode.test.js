@@ -398,3 +398,43 @@ test('精锐目标类：eliteStatsPerElite / eliteAspdPerElite / eliteAtkPerMerg
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('五条外围 rule：aspdPerNegative / hpPerTier4Buy / kingVessel / probe / recruitTopBond', () => {
+  const mkSelf = (ps, round = 1) => ({
+    gd: { raw: { relics: RELICS } }, round, isRogue: false,
+    players: new Map([[ps.playerId, ps]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    relicNegativeCount: MatchMeltdown.prototype.relicNegativeCount,
+    relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+    relicEnemyMul: MatchMeltdown.prototype.relicEnemyMul,
+  });
+  const base = (relics, extra = {}) => Object.assign({ playerId: 'p0', relics: relics.slice(), bonds: {} }, extra);
+
+  // p10 刀光剑影：每个负面藏品 +35 攻速（数自己持有的 negative 藏品）
+  const one = mkSelf(base(['p10', 'n03']));
+  assert.equal(one.relicNegativeCount(base(['p10', 'n03'])), 1);
+  assert.deepEqual(one.relicAllyMul(base(['p10', 'n03'])), { atkMul: 1, hpMul: 1, aspdAdd: 35 });
+  const two = base(['p10', 'n03', 'n04']);
+  assert.equal(mkSelf(two).relicAllyMul(two).aspdAdd, 70);
+
+  // p24 知识之桥：每买一次 4 阶以上干员 +5% 生命，封顶 10 层
+  assert.equal(mkSelf(base(['p24'], { relicTier4Buys: 4 })).relicAllyMul(base(['p24'], { relicTier4Buys: 4 })).hpMul, 1.2);
+  assert.equal(mkSelf(base(['p24'], { relicTier4Buys: 99 })).relicAllyMul(base(['p24'], { relicTier4Buys: 99 })).hpMul, 1.5, '最多 10 层');
+
+  // p27 魔王的祭器：上一回合没掉生命 +80%；连 3 回合 +200%
+  assert.equal(mkSelf(base(['p27'], { relicNoLossStreak: 0 })).relicAllyMul(base(['p27'], { relicNoLossStreak: 0 })), null);
+  assert.equal(mkSelf(base(['p27'], { relicNoLossStreak: 1 })).relicAllyMul(base(['p27'], { relicNoLossStreak: 1 })).hpMul, 1.8);
+  assert.equal(mkSelf(base(['p27'], { relicNoLossStreak: 3 })).relicAllyMul(base(['p27'], { relicNoLossStreak: 3 })).hpMul, 3);
+
+  // n38 探测先锋：每过 2 回合敌方 攻/生 +10%
+  const probe = base(['n38']);
+  assert.deepEqual(mkSelf(probe, 1).relicEnemyMul(), { hp: 0, atk: 0, speed: 0 });
+  const r5 = mkSelf(probe, 5).relicEnemyMul();
+  assert.ok(Math.abs(r5.hp - 0.2) < 1e-9 && Math.abs(r5.atk - 0.2) < 1e-9, `round5 应为 +20%：${JSON.stringify(r5)}`);
+
+  // 五条都算已实装；recruitTopBond 的 +1 部署来自 effect.deployCap（这里只验证 rule 被认账）
+  for (const id of ['p10', 'p24', 'p27', 'n38', 'p41']) {
+    const def = RELICS.relics.find((r) => r.id === id);
+    assert.equal(relicEffectApplied(def.effect), true, `${id} 应算已实现`);
+  }
+});

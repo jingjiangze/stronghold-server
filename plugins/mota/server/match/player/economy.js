@@ -212,6 +212,13 @@ export class PlayerEconomy {
     }
     this.stats.buys++;
     this.round.buys++;
+    // 肉鸽 rule 藏品 hpPerTier4Buy（知识之桥）：「每购买 4 阶以上干员，所有友方最大生命 +5%（最多 10 层）」
+    if (slot.kind === 'chess') {
+      try {
+        const tier = this.gd && typeof this.gd.tierOf === 'function' ? this.gd.tierOf(slot.id) : 0;
+        if (Number(tier) >= 4) this.relicTier4Buys = (Number(this.relicTier4Buys) || 0) + 1;
+      } catch { /* 取不到阶数就不计 */ }
+    }
     this.m.dispatch(this, 'onBuy', { piece, slot, price, kind: slot.kind });
     this._afterSpend(price, 'buy');
     this.recompute();
