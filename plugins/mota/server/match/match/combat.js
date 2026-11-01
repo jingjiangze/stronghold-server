@@ -102,6 +102,22 @@ export class MatchCombat {
     spawns = this.foeWaveSpawns(spawns);
     // 赏金档倍速（业主 2026-10-31）：只放大官方波次，且只在对战·赏金档生效；控怪档恒 1（那边是固定 1.5× 口径）。
     if (typeof this.applyVersusSpeed === 'function') spawns = this.applyVersusSpeed(spawns);
+    // rule 藏品：spawnHpChance（无度）「每个敌人有 p 概率生命 +extra」——逐 spawn 掷一次（用波次 rng，可复现）
+    if (typeof this.relicRuleParams === 'function' && Array.isArray(spawns)) {
+      const rolls = this.relicRuleParams('spawnHpChance');
+      if (rolls.length) {
+        const rng = this.rngWaves && typeof this.rngWaves === 'function' ? this.rngWaves : null;
+        for (const ru of rolls) {
+          const p = Math.max(0, Math.min(1, Number(ru.p) || 0));
+          const extra = Math.max(0, Number(ru.extra) || 0);
+          if (!(p > 0) || !(extra > 0)) continue;
+          spawns = spawns.map((sp) => {
+            const roll = rng ? rng() : Math.random();
+            return roll < p ? { ...sp, mods: { ...(sp.mods || {}), hpMul: (Number((sp.mods || {}).hpMul) || 1) * (1 + extra) } } : sp;
+          });
+        }
+      }
+    }
     // rule 藏品：`enemyCount.mul` 是**百分比增量**（desc：不赦「敌人数量 +50%」），按 spawn 的 count 等比放大
     if (typeof this.relicRuleParams === 'function' && Array.isArray(spawns)) {
       const cnt = this.relicRuleParams('enemyCount');

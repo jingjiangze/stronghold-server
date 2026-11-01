@@ -19,6 +19,8 @@ export class MatchSettle {
     this.phase = PHASE.SETTLE;
     // rule 藏品：每场战斗结束的资金奖励（至宝指环 postBattleFunds）
     try { if (typeof this.applyRelicPostBattle === 'function') this.applyRelicPostBattle(); } catch (e) { this.reportError?.('relic post battle', e); }
+    // rule 藏品：kingCrystal「战斗结束后使目标生命 −2（不会低于 1）」
+    try { if (typeof this.applyRelicLpDrain === 'function') this.applyRelicLpDrain('battle'); } catch (e) { this.reportError?.('relic lp drain', e); }
     this.runner = null;
     this._stopClientCombat();
     // the pending in-battle gains the views showed become persistent below (alive players) or lapse (DESIGN §20.15)
@@ -87,7 +89,16 @@ export class MatchSettle {
       ps.creditedKills += creditedKillsOf(r) + creditedKillsOf(up);
       // perfect-payout bounties (战术特训): own phase perfect
       for (const b of ps.bounties) if (b.card.payout === 'perfect' && counted === 0 && r.perfect !== false) coins += b.card.coin;
+      // rule 藏品：赏金倍率（bountyMul ×2 / loseAllFunds ×0.5 / postBountyMul ×1.5）—— 照 desc 连乘
+      if (coins > 0 && typeof this.relicBountyMul === 'function') {
+        const bm = this.relicBountyMul();
+        if (Number.isFinite(bm) && bm !== 1) coins = Math.max(0, Math.round(coins * bm));
+      }
       if (coins > 0) { ps.pendingFunds += coins; ps.stats.fundsGained += coins; }
+      // rule 藏品：完成悬赏（本回合拿到赏金）时的额外资金（choiceFunds「完成悬赏时资金额外 +8」）
+      if (coins > 0 && typeof this.applyRelicChoiceFunds === 'function') {
+        try { this.applyRelicChoiceFunds(ps); } catch { /* noop */ }
+      }
       for (const b of ps.bounties) b.roundsLeft--;
       ps.bounties = ps.bounties.filter((b) => b.roundsLeft > 0);
       // IN_BATTLE layer gains (normal battles only), at most the room left under BOND_LAYER_CAP (999, as the battle's

@@ -306,3 +306,43 @@ test('相邻类：relicNeighborRules 读出每相邻一人的加成（per-unit �
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('敌方/经济余项：赏金倍率连乘、干员价格折扣、LP 流失、部署上限 −3', () => {
+  const mkPs = (relics, extra = {}) => ({ playerId: 'p0', isBot: false, relics: relics.slice(),
+    lp: 10, funds: 10, deployCapBonus: 0, dirty() {}, addFunds(n) { this.funds += n; }, ...extra });
+  const mkSelf = (ps) => ({ gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+    players: new Map([[ps.playerId, ps]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    relicBountyMul: MatchMeltdown.prototype.relicBountyMul,
+    relicChessPriceDelta: MatchMeltdown.prototype.relicChessPriceDelta,
+    applyRelicLpDrain: MatchMeltdown.prototype.applyRelicLpDrain,
+    relicGrantInstant: MatchMeltdown.prototype.relicGrantInstant });
+
+  // 赏金倍率：n08 翻倍(×2) + p07 的 postBountyMul(×1.5) ⇒ 3
+  const both = mkPs(['n08', 'p07']);
+  assert.equal(mkSelf(both).relicBountyMul(), 3);
+  assert.equal(mkSelf(mkPs(['n34'])).relicBountyMul(), 0.5, '追忆仪：悬赏减半');
+  assert.equal(mkSelf(mkPs([])).relicBountyMul(), 1, '没有藏品时为 1');
+
+  // 干员价格折扣：kingCrystal −1
+  assert.equal(mkSelf(mkPs(['p21'])).relicChessPriceDelta(), -1);
+  assert.equal(mkSelf(mkPs([])).relicChessPriceDelta(), 0);
+
+  // 休整期 LP −1（最低 1）：lpDrainRest
+  const restPs = mkPs(['n06'], { lp: 3 });
+  mkSelf(restPs).applyRelicLpDrain('rest');
+  assert.equal(restPs.lp, 2, '进入休整期 −1');
+  restPs.lp = 1;
+  mkSelf(restPs).applyRelicLpDrain('rest');
+  assert.equal(restPs.lp, 1, '最低 1，不会归零');
+
+  // 战斗结束 LP −2：kingCrystal
+  const kingPs = mkPs(['p21'], { lp: 10 });
+  mkSelf(kingPs).applyRelicLpDrain('battle');
+  assert.equal(kingPs.lp, 8);
+
+  // bountyKillDeploy：初始部署 −3 由 effect.deployCap 生效（rule 分支不得重复扣，曾经的 −6 就是这个 bug）
+  const killPs = mkPs(['n09']);
+  mkSelf(killPs).relicGrantInstant(killPs, RELICS.relics.find((r) => r.id === 'n09'));
+  assert.equal(killPs.deployCapBonus, -3);
+});
