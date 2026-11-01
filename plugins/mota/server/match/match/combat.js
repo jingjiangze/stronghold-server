@@ -102,6 +102,12 @@ export class MatchCombat {
     spawns = this.foeWaveSpawns(spawns);
     // 赏金档倍速（业主 2026-10-31）：只放大官方波次，且只在对战·赏金档生效；控怪档恒 1（那边是固定 1.5× 口径）。
     if (typeof this.applyVersusSpeed === 'function') spawns = this.applyVersusSpeed(spawns);
+    // rule 藏品：`enemyCount.mul` 是**百分比增量**（desc：不赦「敌人数量 +50%」），按 spawn 的 count 等比放大
+    if (typeof this.relicRuleParams === 'function' && Array.isArray(spawns)) {
+      const cnt = this.relicRuleParams('enemyCount');
+      const add = cnt.reduce((n, r) => n + (Number(r.mul) || 0), 0);
+      if (add > 0) spawns = spawns.map((s) => ({ ...s, count: Math.max(1, Math.min(50, Math.round((Number(s.count) || 1) * (1 + add)))) }));
+    }
     // 2V2 对抗期: every intervention aimed at this player replaces a share of this wave (confront.js; one per attacker).
     // 移植时漏了这一段 ⇒ 玩家派出的怪只记在 subs 里、从不进对手波次（「操控怪物」完全不生效）。
     // A preview (the bot rehearsal) must not move the match's rngConfront — applyConfront shuffles with it, and the real

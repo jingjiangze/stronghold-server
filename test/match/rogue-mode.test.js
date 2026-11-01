@@ -21,6 +21,8 @@ function fakeMatch({ isRogue = true, round = 1, seed = 20261101, relics = [], mo
       relicPool: MatchMeltdown.prototype.relicPool,
       relicDraftRound: MatchMeltdown.prototype.relicDraftRound,
       relicEnemyMul: MatchMeltdown.prototype.relicEnemyMul,
+      relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+      activeBondsOf: MatchMeltdown.prototype.activeBondsOf,
       rogueEventRound: MatchMeltdown.prototype.rogueEventRound,
       rogueRoundAffix: MatchMeltdown.prototype.rogueRoundAffix,
       rogueEmergencyRound: MatchMeltdown.prototype.rogueEmergencyRound,
@@ -124,4 +126,33 @@ test('抽卡池只发「效果已接实现」的藏品（死牌不进三选一�
   const noLive = { gd: { raw: { relics: { relics: [{ id: 'x1', effect: { rule: { id: 'whatever' } } }] } } },
     relicPool: MatchMeltdown.prototype.relicPool, relicDraftPool: MatchMeltdown.prototype.relicDraftPool };
   assert.equal(noLive.relicDraftPool().length, 1, '没有已实现藏品时退回全池');
+});
+
+test('rule 类藏品：ussuri / leaderHalve / enemyDmgTaken / enemyCount 已接实现（语义照官方 desc）', () => {
+  const { self } = fakeMatch({ isRogue: false, relics: ['n04'] }); // n04 = 乌萨斯弯刀（ussuri）
+  const withUssuri = self.relicEnemyMul();
+  // desc：「敌方攻击/防御/生命 +35%，每进入新回合额外 +10%」—— fake 的 round=1 ⇒ 至少 +35%
+  assert.ok(withUssuri.hp >= 0.35 - 1e-9, `ussuri 至少要 +35%，实际 ${withUssuri.hp}`);
+  assert.ok(withUssuri.atk >= 0.35 - 1e-9);
+  // 第 3 回合应更高（+35% + 2×10%）
+  const r3 = fakeMatch({ isRogue: false, round: 3, relics: ['n04'] }).self.relicEnemyMul();
+  assert.ok(r3.hp > withUssuri.hp + 0.1, 'ussuri 每回合递增');
+
+  // enemyDmgTaken：敌人受伤 −20% ⇒ 等效生命 +25%（近似）
+  const dmg = fakeMatch({ isRogue: false, relics: ['n26'] }).self.relicEnemyMul();
+  assert.ok(Math.abs(dmg.hp - (1 / 0.8 - 1)) < 1e-9, `enemyDmgTaken 近似应为 +25%，实际 ${dmg.hp}`);
+
+  // 三条 rule 现在都算「已实现」⇒ 会进抽卡池
+  for (const id of ['n04', 'n05', 'n26', 'n35']) {
+    const def = RELICS.relics.find((r) => r.id === id);
+    assert.equal(relicEffectApplied(def.effect), true, `${id} 应算已实现`);
+  }
+});
+
+test('rule 收集器：同一件藏品只算一次、跨玩家去重', () => {
+  const raw = { gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+    players: new Map([['a', { playerId: 'a', relics: ['n04', 'n04'] }], ['b', { playerId: 'b', relics: ['n04'] }]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    activeBondsOf: MatchMeltdown.prototype.activeBondsOf };
+  assert.equal(raw.relicRuleParams('ussuri').length, 1, '同一件藏品只算一次');
 });
