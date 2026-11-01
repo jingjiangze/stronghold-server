@@ -500,6 +500,8 @@ export class MatchPhases {
     // 商店（第 3 回合）里的卡片仍通过 _hexApply 直接生效，与草案无关，所以这里整段不要。
     // 协同经济 (DESIGN §28): the ask budget and the team transfer total are **per round**, re-armed here
     if (this.teamEcon) this.econNewRound();
+    // rule 藏品的回合级经济（资金流失 / 国王水晶的休整期资金）—— 与团队经济无关，单独跑
+    try { if (typeof this.applyRelicRoundEconomy === 'function') this.applyRelicRoundEconomy(); } catch (e) { this.reportError?.('relic round economy', e); }
     // 方案 B (DESIGN §27): the loans of the last round are paid back out of the income just granted
     if (this.teamEcon) this.econSettleDebts(alive);
     // 助战 (shared/support.js): re-check what each player brought against the pool ONE more time at the first round's

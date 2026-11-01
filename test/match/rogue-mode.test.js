@@ -103,7 +103,8 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   assert.equal(relicEffectApplied({ immediate: { funds: 3 } }), true);
   assert.equal(relicEffectApplied({ deployCap: 1 }), true);
   assert.equal(relicEffectApplied({ lpCap: 2 }), true);
-  assert.equal(relicEffectApplied({ rule: { id: 'fundsDrain' } }), false, 'rule 类尚未接入');
+  assert.equal(relicEffectApplied({ rule: { id: 'neuralDps' } }), false, '战斗内机制类 rule 尚未接入');
+  assert.equal(relicEffectApplied({ rule: { id: 'fundsDrain' } }), true, '经济类 rule 已接入');
   assert.equal(relicEffectApplied({ ally: { atk: 0.1 } }), false, 'ally 类尚未接入');
   assert.equal(relicEffectApplied(null), false);
   // 数据侧盘点：87 条里「有已实现效果」的那批要够用，且 rule 类一律标未生效（诚实暴露给 HUD）
@@ -111,7 +112,7 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   const applied = relics.filter((r) => relicEffectApplied(r.effect)).length;
   const ruleInert = relics.filter((r) => { const e = r.effect || {}; return !!e.rule && !relicEffectApplied(e); }).length;
   assert.ok(applied >= 30, `有实现效果的藏品过少：${applied}/${relics.length}`);
-  assert.ok(ruleInert >= 40, `rule 类藏品应有 40+ 条被标为未实装：${ruleInert}`);
+  assert.ok(ruleInert >= 30, `rule 类藏品应仍有一批（≥30 条）未实装：${ruleInert}`);
   assert.equal(applied + relics.filter((r) => !relicEffectApplied(r.effect)).length, relics.length, '未生效 = 总数 - 已生效');
 });
 
@@ -155,4 +156,32 @@ test('rule 收集器：同一件藏品只算一次、跨玩家去重', () => {
     relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
     activeBondsOf: MatchMeltdown.prototype.activeBondsOf };
   assert.equal(raw.relicRuleParams('ussuri').length, 1, '同一件藏品只算一次');
+});
+
+test('rule 经济：fundsDrain 每回合 −1、最多 5 次；kingCrystal 休整期资金 +5；loseAllFunds 入手清零', () => {
+  const mkPs = (relics, funds = 10) => ({ playerId: 'p0', relics: relics.slice(), funds,
+    addFunds(n) { this.funds += n; }, dirty() {} });
+  const mkSelf = (ps) => ({ gd: { raw: { relics: RELICS } }, players: new Map([[ps.playerId, ps]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    applyRelicRoundEconomy: MatchMeltdown.prototype.applyRelicRoundEconomy,
+    relicGrantInstant: MatchMeltdown.prototype.relicGrantInstant });
+
+  const drainPs = mkPs(['n03'], 10);
+  const drainSelf = mkSelf(drainPs);
+  for (let i = 0; i < 8; i++) drainSelf.applyRelicRoundEconomy();
+  assert.equal(drainPs.funds, 5, '8 个回合也只失去 5 点（max=5）');
+
+  const kingPs = mkPs(['p21'], 0);
+  mkSelf(kingPs).applyRelicRoundEconomy();
+  assert.equal(kingPs.funds, 5, 'kingCrystal：休整期资金 +5');
+
+  const losePs = mkPs(['n34'], 12);
+  const loseSelf = mkSelf(losePs);
+  const def = RELICS.relics.find((r) => r.id === 'n34');
+  loseSelf.relicGrantInstant(losePs, def);
+  assert.equal(losePs.funds, 0, 'loseAllFunds：入手清空资金');
+
+  for (const id of ['n03', 'p21', 'n34']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
 });

@@ -105,6 +105,9 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'leaderHalve',   // 敌方 +35%，领袖额外 +20%/+50%，≥4 盟约减半（relicEnemyMul + activeBondsOf）
   'enemyDmgTaken', // 敌人受伤 −20% ⇒ 等效生命 +25%（hp 等价近似）
   'enemyCount',    // 敌人数量 +50%（combat.js 的 spawn count，mul 是增量）
+  'fundsDrain',    // 每回合失去 1 资金，最多 5（applyRelicRoundEconomy）
+  'kingCrystal',   // 休整期资金 +5（另两项 LP/价格待接，见清单）
+  'loseAllFunds',  // 入手清空资金（悬赏减半待赏金钩子）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -486,6 +489,32 @@ export class MatchMeltdown {
   }
 
   /** 获得藏品时结算「一次性」效果（资金 / 生命 / 装备 / 部署上限 / 生命上限）。 */
+  /**
+   * rule 藏品的**回合级经济**（每回合开始调用一次，语义照 relics.json 的官方 desc）：
+   * - `fundsDrain`（巫王旋角）：「每进入一个新回合后，失去 1 点初始资金（最多失去 5 点）」
+   * - `kingCrystal`（国王水晶）：休整期资金 +5
+   * 计数挂在 `ps.relicRuleState` 上，跨回合累积（不随回合清零）。
+   */
+  applyRelicRoundEconomy() {
+    if (!this.players || typeof this.players.values !== 'function') return;
+    const players = [...this.players.values()];
+    for (const ps of players) {
+      if (!ps || !Array.isArray(ps.relics) || !ps.relics.length) continue;
+      const st = (ps.relicRuleState ||= {});
+      for (const ru of this.relicRuleParams('fundsDrain')) {
+        const per = Math.max(0, Number(ru.perRound) || 0);
+        const max = Math.max(0, Number(ru.max) || 0);
+        const done = Number(st.fundsDrained) || 0;
+        const take = Math.min(per, Math.max(0, max - done));
+        if (take > 0) { st.fundsDrained = done + take; try { ps.addFunds(-take, { reason: 'relic-funds-drain' }); } catch { /* noop */ } }
+      }
+      for (const ru of this.relicRuleParams('kingCrystal')) {
+        const inc = Math.max(0, Number(ru.income) || 0);
+        if (inc > 0) { try { ps.addFunds(inc, { reason: 'relic-king-crystal' }); } catch { /* noop */ } }
+      }
+    }
+  }
+
   relicGrantInstant(ps, def) {
     const e = (def && def.effect) || {};
     const im = e.immediate && typeof e.immediate === 'object' ? e.immediate : null;
@@ -495,6 +524,8 @@ export class MatchMeltdown {
       if (Array.isArray(im.items)) for (const itemId of im.items) { try { ps.acquireItem(itemId, { source: 'relic' }); } catch { /* 池子/数据守卫 */ } }
     }
     if (Number.isFinite(e.deployCap) && e.deployCap) ps.deployCapBonus = (Number(ps.deployCapBonus) || 0) + Math.trunc(e.deployCap);
+    // rule：loseAllFunds（追忆仪）「获得时，本次休整期失去所有的资金」（悬赏减半那半边待赏金倍率钩子，见覆盖清单）
+    if (e.rule && e.rule.id === 'loseAllFunds') { try { ps.funds = 0; ps.dirty && ps.dirty(); } catch { /* noop */ } }
     if (Number.isFinite(e.lpCap) && e.lpCap) ps.lp = Math.max(1, (Number(ps.lp) || 0) + Math.trunc(e.lpCap));
   }
 
