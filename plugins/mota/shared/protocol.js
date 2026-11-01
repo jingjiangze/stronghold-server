@@ -535,6 +535,8 @@ export const C2S = {
   // 随机交接（3–9 回合）：要先把 room.setAiTakeover 打开
   'room.setAiRandom': { on: isBool },
   'room.aiRequest': { botId: isId },
+  // 潜入：直接接管一个 AI 席（无投票）
+  'room.aiTakeover': { botId: isId },
   'room.aiVote': { voteId: (v) => typeof v === 'string' && v.length <= 16, approve: isBool },
   'room.card': { charId: (v) => v === '' || isCharId(v) },
   'state.resync': {},

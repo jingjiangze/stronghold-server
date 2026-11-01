@@ -530,6 +530,8 @@ export const C2S = {
   // 随机交接 (3–9 回合，2026-10-31): needs room.setAiTakeover on first
   'room.setAiRandom': { on: isBool },
   'room.aiRequest': { botId: isId },
+  // 潜入：直接接管一个 AI 席（无投票）
+  'room.aiTakeover': { botId: isId },
   'room.aiVote': { voteId: (v) => typeof v === 'string' && v.length <= 16, approve: isBool },
   'room.addBot': {},
   'room.removeBot': { seat: (v) => isInt(v, 0, MAX_SEATS - 1) },

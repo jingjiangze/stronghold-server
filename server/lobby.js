@@ -229,7 +229,7 @@
 //     练度 and 自选 (keyed by charId) are checked again against the version's data (seatSettings); a setting checked for
 //     another content keeps only the ids whose operator (charId) is the same in both data sets.
 
-import { aiTakeover, resetAiTakeover, reconcileAiTakeover, maybeRandomAiTakeover } from './aiTakeover.js';
+import { aiTakeover, aiTakeoverDirect, resetAiTakeover, reconcileAiTakeover, maybeRandomAiTakeover } from './aiTakeover.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { DIFFICULTIES, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks, charPotentialChanges, checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
@@ -881,6 +881,7 @@ export class Lobby {
       case 'room.setAiRandom': return this.setAiRandom(session, msg);
       case 'room.aiRequest':
       case 'room.aiVote': return aiTakeover(this, session, msg);
+      case 'room.aiTakeover': return aiTakeoverDirect(this, session, msg);
       case 'room.addBot': return this.addBot(session);
       case 'room.removeBot': return this.removeBot(session, msg);
       case 'room.kick': return this.kick(session, msg);

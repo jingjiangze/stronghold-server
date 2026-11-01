@@ -111,6 +111,22 @@ export function reconcileAiTakeover(lobby, room) {
   if (changed) snapshot(room, votes);
   return changed;
 }
+/**
+ * 「潜入」直接接管（业主 2026-11-01：**无需申请接替**）：观战者选中一个活跃 AI 席就直接换席，不走投票。
+ * 门槛与投票路径一致（房主已开 `aiTakeoverEnabled`、coop、默认版本、本人是观战席、目标是活着的 AI、该席没有 session），
+ * 但**不要求**「3–9 回合窗口」——潜入是临时加入，限制在窗口里等于不让人玩；安全性由「房主开关 + 只在休整期」保证。
+ */
+export async function aiTakeoverDirect(lobby, session, msg) {
+  const room = lobby.roomOf(session), m = room?.match;
+  if (room && reconcileAiTakeover(lobby, room)) lobby.broadcastState(room);
+  const st = await matchState(m);
+  if (!room || room.aiTakeoverEnabled !== true || room.mode !== 'coop' || room.version !== DEFAULT_VERSION
+    || !st || st.phase !== 'PREP' || st.ended || st.disposed || st.frozen) return fail('AI handover requires preparation in a coop match');
+  const bot = (st.bots || []).find((b) => b.playerId === msg.botId);
+  if (!room.spectatorOf(session.playerId) || !session.connected || !bot) return fail('a spectator must select an active AI');
+  return transferAiSeat(lobby, room, session.playerId, msg.botId);
+}
+
 export async function aiTakeover(lobby, session, msg) {
   const room = lobby.roomOf(session), m = room?.match;
   if (room && reconcileAiTakeover(lobby, room)) lobby.broadcastState(room);

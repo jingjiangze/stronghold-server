@@ -32,9 +32,9 @@ export function AiTakeoverPanel() {
   const name = id => (pub?.players || []).find(p => p.playerId === id)?.name || id;
   return html`<button type="button" class="btn ai-participation-entry" onClick=${() => setOpen(true)}>${t('AI 协作')}${votes.length ? ` (${votes.length})` : ''}</button>
     <${Modal} open=${open} onClose=${() => setOpen(false)} title=${t('AI 协作')} width="min(800px,92vw)" actions=${html`<${Button} onClick=${() => setOpen(false)}>${t('关闭')}<//>`}>
-      <p>${t('观战者申请接替AI，同房间在线且未托管的真人过半同意后在休整期加入；无合格队友时由在线房主决定。')}</p>
+      <p>${t('潜入：休整期里选中一个 AI 席位即可直接接管，不需要申请或投票。房主需先开启「AI 协作」。')}</p>
       <p>${t('申请在退出、断线、投票资格或阶段变化时取消。接替后的席位数据含 AI 此前表现，计入你的个人统计与奖励。')}</p>
-      ${spectator ? html`<div class="ai-requests">${bots.map(p => html`<${Button} disabled=${busy || pub.phase !== 'PREP' || requests.some(v => v.botId === p.playerId || v.applicantId === myId)} onClick=${() => run('room.aiRequest', { botId: p.playerId })}>${t('申请接替')} P${p.seat + 1} · ${p.name}<//>`)}</div>` : null}
+      ${spectator ? html`<div class="ai-requests">${bots.map(p => html`<${Button} disabled=${busy || pub.phase !== 'PREP'} onClick=${() => run('room.aiTakeover', { botId: p.playerId })}>${t('直接接管')} P${p.seat + 1} · ${p.name}<//>`)}</div>` : null}
       ${requests.map(v => html`<div class="ai-vote"><strong>${v.applicantName} → ${name(v.botId)}</strong><span>${v.yes.filter(id => v.eligible.includes(id)).length}/${Math.floor(v.eligible.length / 2) + 1}</span>
         ${v.eligible.includes(myId) ? html`<${Button} disabled=${busy || pub?.phase !== 'PREP'} onClick=${() => run('room.aiVote', { voteId: v.id, approve: true })}>${t('同意')}<//><${Button} disabled=${busy} onClick=${() => run('room.aiVote', { voteId: v.id, approve: false })}>${t('不同意')}<//>` : null}</div>`)}
       ${!votes.length ? html`<p>${t('暂无投票')}</p>` : null}
