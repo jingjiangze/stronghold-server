@@ -346,3 +346,37 @@ test('敌方/经济余项：赏金倍率连乘、干员价格折扣、LP 流失�
   mkSelf(killPs).relicGrantInstant(killPs, RELICS.relics.find((r) => r.id === 'n09'));
   assert.equal(killPs.deployCapBonus, -3);
 });
+
+test('atkPerBounty / dmgDealt（己方攻击）与 elite 每回合削弱', () => {
+  const mkPs = (relics, extra = {}) => ({ playerId: 'p0', relics: relics.slice(), bonds: {},
+    board: new Map(), temp: [], hand: [], totalSpent: 0, ...extra });
+  const mkSelf = (ps, round = 1) => ({ gd: { raw: { relics: RELICS } }, round, isRogue: false,
+    players: new Map([[ps.playerId, ps]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    activeBondsOf: MatchMeltdown.prototype.activeBondsOf,
+    relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+    relicEliteRoundMul: MatchMeltdown.prototype.relicEliteRoundMul });
+
+  // atkPerBounty：base 20% + 每次完成 20%（3 次 ⇒ 1 + 0.2 + 0.6 = 1.8）
+  const b = mkPs(['p39'], { relicBountiesDone: 3 });
+  assert.ok(Math.abs(mkSelf(b).relicAllyMul(b).atkMul - 1.8) < 1e-9);
+  // 封顶 10 层：完成 30 次也只 +200% ⇒ 1 + 0.2 + 2.0 = 3.2
+  const b30 = mkPs(['p39'], { relicBountiesDone: 30 });
+  assert.ok(Math.abs(mkSelf(b30).relicAllyMul(b30).atkMul - 3.2) < 1e-9, '最高 +200%');
+
+  // dmgDealt：造成伤害 +50% ⇒ 用攻击 ×1.5 近似
+  const d = mkPs(['p23']);
+  assert.ok(Math.abs(mkSelf(d).relicAllyMul(d).atkMul - 1.5) < 1e-9);
+
+  // eliteAtkPerRound：第 3 回合精锐攻击 ×0.8；第 20 回合封在 ×0.5
+  const e1 = mkPs(['n36']);
+  assert.ok(Math.abs(mkSelf(e1, 3).relicEliteRoundMul().atkMul - 0.8) < 1e-9);
+  assert.ok(Math.abs(mkSelf(e1, 20).relicEliteRoundMul().atkMul - 0.5) < 1e-9, '最多 −50%');
+  // 没有该藏品时不削弱
+  const none = mkPs([]);
+  assert.deepEqual(mkSelf(none, 9).relicEliteRoundMul(), { atkMul: 1, hpMul: 1 });
+
+  for (const id of ['p39', 'p23', 'n36', 'n41']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});

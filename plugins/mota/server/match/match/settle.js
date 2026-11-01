@@ -95,6 +95,8 @@ export class MatchSettle {
         if (Number.isFinite(bm) && bm !== 1) coins = Math.max(0, Math.round(coins * bm));
       }
       if (coins > 0) { ps.pendingFunds += coins; ps.stats.fundsGained += coins; }
+      // rule 藏品：完成悬赏计数（atkPerBounty 每完成一次永久 +20%）
+      if (coins > 0) { ps.relicBountiesDone = (Number(ps.relicBountiesDone) || 0) + 1; }
       // rule 藏品：完成悬赏（本回合拿到赏金）时的额外资金（choiceFunds「完成悬赏时资金额外 +8」）
       if (coins > 0 && typeof this.applyRelicChoiceFunds === 'function') {
         try { this.applyRelicChoiceFunds(ps); } catch { /* noop */ }

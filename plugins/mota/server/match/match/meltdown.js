@@ -125,6 +125,10 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'lpDrainRest',   // 进入休整期 LP −1，最低 1（applyRelicLpDrain；低血时 SP 回复 −20% 那半句未接）
   'bountyKillDeploy', // 初始部署 −3 已由 effect.deployCap 生效（别再扣一次）；「每击杀赏金目标 +1」待击杀计数
   'spawnHpChance', // 每个敌人按概率生命 +extra（combat.js 逐 spawn 用波次 rng 掷一次）
+  'atkPerBounty',  // 攻击 +20%，每次完成悬赏再 +20%（ps.relicBountiesDone，封顶 10 层）
+  'dmgDealt',      // 「造成伤害 +50%」⇒ 用己方攻击 ×1.5 近似（无独立伤害乘区）
+  'eliteAtkPerRound', // 精锐干员每回合攻击 −10%，最多 −50%（per-unit，见 battleInput）
+  'eliteHpPerRound',  // 精锐干员每回合生命 −10%，最多 −50%（同上）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -532,6 +536,26 @@ export class MatchMeltdown {
    *   完成悬赏额外 +1 次的规则未接（无悬赏完成计数）
    * 其余己方属性类（atkPerNeighbor/atkPerEquip/atkPerBenchItem/homeCooked/atkPerSpend/hpIfDp…）见覆盖清单，逐个待接。
    */
+  /**
+   * 精锐干员（4 阶以上）每回合被削弱的倍率（`eliteAtkPerRound` / `eliteHpPerRound`，desc 的负向那半句）：
+   * 「我方精锐干员攻击力/生命每回合 −10%，最多 −50%」。返回 { atkMul, hpMul }（≤1）。
+   */
+  relicEliteRoundMul() {
+    const round = Math.max(0, (Number(this.round) || 1) - 1);
+    const acc = { atkMul: 1, hpMul: 1 };
+    for (const ru of this.relicRuleParams('eliteAtkPerRound')) {
+      const per = Math.abs(Number(ru.per) || 0);
+      const max = Math.abs(Number.isFinite(Number(ru.max)) ? Number(ru.max) : 0.5);
+      if (per > 0) acc.atkMul = Math.max(1 - max, 1 - per * round);
+    }
+    for (const ru of this.relicRuleParams('eliteHpPerRound')) {
+      const per = Math.abs(Number(ru.per) || 0);
+      const max = Math.abs(Number.isFinite(Number(ru.max)) ? Number(ru.max) : 0.5);
+      if (per > 0) acc.hpMul = Math.max(1 - max, 1 - per * round);
+    }
+    return acc;
+  }
+
   /** 相邻类藏品的「每相邻一人」参数（`atkPerNeighbor` / `aspdPerNeighbor`）—— 需要 per-unit 计算，见 battleInput。 */
   relicNeighborRules() {
     let atkPer = 0, aspdPer = 0;
@@ -577,6 +601,20 @@ export class MatchMeltdown {
       const per = Math.max(0, Number(ru.per) || 0);
       const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 1.5;
       atk += Math.min(max, per * benchItems);
+    }
+    // atkPerBounty「我方干员攻击 +20%，每完成一次悬赏永久额外 +20%（最高 +200%）」
+    const bounties = Math.max(0, Math.trunc(Number(ps.relicBountiesDone) || 0));
+    for (const ru of this.relicRuleParams('atkPerBounty')) {
+      const base = Math.max(0, Number(ru.base) || 0);
+      const per = Math.max(0, Number(ru.per) || 0);
+      const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 10;
+      atk += base + per * Math.min(max, bounties);
+    }
+    // dmgDealt「对敌人造成的物理与法术伤害提升 50%」—— 引擎没有独立「造成伤害」乘区，
+    // 用**己方攻击力 ×(1+p)** 近似（p 取 phys/arts 的较大者），注释写明是近似。
+    for (const ru of this.relicRuleParams('dmgDealt')) {
+      const p2 = Math.max(Number(ru.phys) || 0, Number(ru.arts) || 0);
+      if (p2 > 0) atk += p2;
     }
     // 消费类（desc 都是「每花费 N 点资金 → +X」）：
     //   atkPerSpend「每花 5 资金，所有干员攻击 +5%」
