@@ -168,6 +168,8 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const [group, setGroup] = useState(null);
   const [picks, setPicks] = useState([]); // [{ enemyKey, gate, routeIndex?, time? }]
   const [position, setPosition] = useState('mid');
+  // 事件期 boss 格（2026-11-01 P1）：独立于预算/只数上限的投放，击杀直接给金币；服务端视图 conf.bosses 给池与上限
+  const [bosses, setBosses] = useState([]); // [{ enemyKey, gate }]
   // 路线按**种类**生效（业主 2026-10-26：不同种类可以不同路线，同一只不单独设）：改一行的路线 = 同 enemyKey 的
   // 所有已放置怪一起改；时刻仍逐只可调（那是投放节奏，不是路线）。
   const patchPick = (i, patch) => setPicks((arr) => {
@@ -177,7 +179,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
     }
     return arr.map((p, k) => (k === i ? { ...p, ...patch } : p));
   });
-  useEffect(() => { setGroup(null); setPicks([]); setPosition('mid'); }, [conf && conf.round]);
+  useEffect(() => { setGroup(null); setPicks([]); setPosition('mid'); setBosses([]); }, [conf && conf.round]);
   if (!conf || !conf.active) return null;
   const m = gd.m;
   const groups = Array.isArray(conf.groups) ? conf.groups : [];
@@ -356,9 +358,9 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const drafted = !!mine && !submitted;
   const foesPicked = mates.every((p) => targets[p.playerId]);
   /**
-   * 自动选择: fill the budget the way the AI does — most expensive monster that still fits, walking the types in order
-   * (特异 first) and each type by value. It may mix types. The player tweaks from there — and a player who never submits
-   * gets exactly this at the window's end (server confront.js botConfront / finishConfront).
+   * 自动选择: fill the budget the way the AI does — the server bot fills by the remaining budget per remaining unit
+   * (confrontFill.js, 2026-11-01), the panel's convenience plan walks types in order by value and mixes them; the
+   * player tweaks from there — and a player who never submits gets the server's own fill at the window's end.
    */
   const autoPick = () => {
     if (submitted || busy) return;
@@ -418,7 +420,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
       times: picks.map((p) => p.time),
       position,
     };
-    onConfirm(group, position, picks, commit);
+    onConfirm(group, position, picks, commit, bosses);
   };
 
   // 悬赏名单 / 投放公示 (the server's roster hold): the submissions are final, the battles have not started. The pick /
@@ -512,7 +514,7 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
         </section>
         <section class="confov__placed">
           <h3 class="confov__h">${t('已放置（出怪顺序）')} <span class="num">${picks.length} · ${spent}/${budget}</span></h3>
-          <p class="confov__tip t-dim">${t('点一下换门 · 长按拖动排序（默认下路）')}</p>
+          <p class="confov__tip t-dim">${t('点一下换门 · 长按拖动排序（默认下路） · 路线越长占预算越多（长度×2）')}</p>
           ${picks.length ? html`<ol class="confov__list" onPointerMove=${listMove} onPointerUp=${listUp} onPointerCancel=${listUp} onPointerLeave=${listUp}>
             ${picks.map((p, i) => {
               const rec = rowByKey.get(p.enemyKey) || { key: p.enemyKey, name: p.enemyKey, value: 0 };
@@ -544,6 +546,20 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
             ${POSITIONS.map(([id, label]) => html`<button key=${id} type="button" class=${cx('confpos__opt', position === id && 'is-on')}
               disabled=${submitted} onClick=${() => setPosition(id)}>${t(label)}<span class="confpos__pct num">${id === 'front' ? '25%' : id === 'mid' ? '50%' : '75%'}</span></button>`)}
           </div>
+          ${conf.bosses && conf.bosses.open ? html`<div class="confboss">
+            <h3 class="confov__h">${t('事件期 boss 格（击杀给金，不占预算）')}<span class="num t-dim"> ${bosses.length}/${conf.bosses.cap}</span></h3>
+            <div class="confov__chips">
+              ${(conf.bosses.pool || []).map((b) => {
+                const on = bosses.some((x) => x.enemyKey === b.key);
+                const full = !on && bosses.length >= Math.max(0, Number(conf.bosses.cap) || 0);
+                return html`<button key=${b.key} type="button" class=${cx('confpos__opt', on && 'is-on')} disabled=${submitted || full}
+                  title=${t('击杀 +{n} 金币 · 上限 {c} 只', { n: b.coin, c: conf.bosses.cap })}
+                  onClick=${() => setBosses(on ? bosses.filter((x) => x.enemyKey !== b.key) : [...bosses, { enemyKey: b.key, gate: bosses.length % 2 ? 'upper' : 'lower' }])}>
+                  ${enemyName(gd, b.key, b.name)}<span class="num"> +${b.coin}</span></button>`;
+              })}
+            </div>
+            <p class="confov__hint t-dim">${t('事件期 boss 格：独立于预算与只数上限，击杀直接给金币')}</p>
+          </div>` : null}
         </section>
       </div>` : html`<p class="confov__hint t-dim">${t('先选择上面的一个怪物组')}</p>`}
       `}
