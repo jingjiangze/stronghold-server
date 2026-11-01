@@ -202,6 +202,20 @@ export class PlayerRound {
       const am = this.m && typeof this.m.relicAllyMul === 'function' ? this.m.relicAllyMul(this) : null;
       const nb = this.m && typeof this.m.relicNeighborRules === 'function' ? this.m.relicNeighborRules() : null;
       const camo = this.m && typeof this.m.relicCamoRules === 'function' ? this.m.relicCamoRules() : null;
+      // stunOnDeploy（“未尽的生命”）：按 seed+回合确定性地挑出 N 名干员，让他们部署即晕眩
+      const stunRule = this.m && typeof this.m.relicStunRule === 'function' ? this.m.relicStunRule(this) : null;
+      let stunUids = null;
+      if (stunRule && stunRule.count > 0) {
+        const pool = units.filter((x) => x.kind === 'chess').map((x) => x.uid);
+        if (pool.length) {
+          // 小 LCG：同 seed+回合 ⇒ 同一批倒霉蛋（复盘/双端一致，不用 Math.random）
+          let st = ((Number(this.m.seed) || 1) ^ (Number(this.m.round) || 1) * 2654435761) >>> 0;
+          const next = () => { st = (Math.imul(st, 1664525) + 1013904223) >>> 0; return st / 4294967296; };
+          const pick = pool.slice();
+          for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
+          stunUids = new Set(pick.slice(0, Math.min(stunRule.count, pick.length)));
+        }
+      }
       // survivor（生还者合约）：只强化**场上攻击力最高**的那一名干员
       const surv = this.m && typeof this.m.relicSurvivorRule === 'function' ? this.m.relicSurvivorRule(this) : null;
       let survUid = null;
@@ -236,7 +250,7 @@ export class PlayerRound {
           auraCount.set(u.uid, n);
         }
       }
-      if (am || nb || camo || surv) {
+      if (am || nb || camo || surv || stunRule) {
         const occ = new Set(boardOrder(this.board).map(({ r, c }) => `${r},${c}`));
         for (const u of units) {
           let n = 0;
@@ -288,7 +302,9 @@ export class PlayerRound {
           const hpMul = (am && Number.isFinite(am.hpMul) ? am.hpMul : 1) * eliteMul.hpMul;
           const defMul = (am && Number.isFinite(am.defMul) ? am.defMul : 1) * eliteMul.defMul * survMul;
           const aspdAdd2 = aspdAdd + eliteMul.aspdAdd;
-          u.relicMods = { ...(am || {}), atkMul, hpMul, ...(defMul !== 1 ? { defMul } : {}), ...(aspdAdd2 ? { aspdAdd: aspdAdd2 } : {}) };
+          const stun = stunUids && stunUids.has(u.uid) ? stunRule.dur : 0;
+          u.relicMods = { ...(am || {}), atkMul, hpMul, ...(defMul !== 1 ? { defMul } : {}), ...(aspdAdd2 ? { aspdAdd: aspdAdd2 } : {}),
+            ...(stun ? { stunOnDeploy: stun } : {}) };
         }
       }
     } catch { /* 尽力而为，绝不因为藏品坏了出不了兵 */ }

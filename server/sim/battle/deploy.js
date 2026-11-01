@@ -92,6 +92,10 @@ export class BattleDeploy {
         if (u.skill.sp < target) u.skill.gainSp(target - u.skill.sp, 'init', true);
       else if (u.skill.sp > target) u.skill.setSpTotal(target);
     }
+    if (u.relicShelter > 0) {
+      // shelter（庇护）：承伤 ×(1−shelter)。走持久 buff 的 dmgTakenMul，与引擎自带的减伤通道同一条路
+      this.addBuff(u, { key: 'relic:shelter', mods: { dmgTakenMul: 1 - Math.min(1, u.relicShelter) }, persist: true, allowDead: true });
+    }
     if (u.relicStunOnDeploy > 0) this.applyStatus(u, 'stun', { duration: u.relicStunOnDeploy, ignoreSelect: true });
     return true;
   }

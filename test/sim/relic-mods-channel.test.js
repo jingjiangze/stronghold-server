@@ -62,3 +62,11 @@ test('spec 白名单：三组新字段放行，非数值整块剔除', () => {
   sanitizeUnitLoadout(bad);
   assert.equal(bad.relicMods, undefined, '非数值 ⇒ 整块丢弃');
 });
+
+test('shelter 走引擎承伤通道（dmgTakenMul）', () => {
+  const h = battle({ shelter: 0.4 });
+  const u = h.allies()[0];
+  assert.ok(Math.abs((u.s.dmgTakenMul ?? 1) - 0.6) < 1e-9, `承伤应 ×0.6（实得 ${u.s.dmgTakenMul}）`);
+  const plain = battle(null);
+  assert.equal(plain.allies()[0].s.dmgTakenMul ?? 1, 1, '缺省不动');
+});
