@@ -129,6 +129,9 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'dmgDealt',      // 「造成伤害 +50%」⇒ 用己方攻击 ×1.5 近似（无独立伤害乘区）
   'eliteAtkPerRound', // 精锐干员每回合攻击 −10%，最多 −50%（per-unit，见 battleInput）
   'eliteHpPerRound',  // 精锐干员每回合生命 −10%，最多 −50%（同上）
+  'eliteStatsPerElite', // 场上每有一名精锐：精锐 生命/攻击/防御 +10%（per-unit，见 battleInput）
+  'eliteAspdPerElite',  // 本场每有一名精锐：精锐 攻速 +10，最多 10 层（同上）
+  'eliteAtkPerMerge',   // 每有一次 4 阶以上合成：精锐 攻击 +40%，最多 4 层（ps.relicEliteMerges）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -536,6 +539,30 @@ export class MatchMeltdown {
    *   完成悬赏额外 +1 次的规则未接（无悬赏完成计数）
    * 其余己方属性类（atkPerNeighbor/atkPerEquip/atkPerBenchItem/homeCooked/atkPerSpend/hpIfDp…）见覆盖清单，逐个待接。
    */
+  /**
+   * 精锐目标类藏品的参数（都对**精锐干员**生效，4 阶以上）：
+   * - `eliteStatsPerElite`（场上每有一名精锐：精锐 生命/攻击/防御 +10%）
+   * - `eliteAspdPerElite`（本场每有一名精锐：精锐 攻速 +10，最多 10 层）
+   * - `eliteAtkPerMerge`（每有一次 4 阶以上合成：精锐 攻击 +40%，最多 4 层；计数在 acquire.js）
+   */
+  relicEliteRules() {
+    let hp = 0, atk = 0, def = 0, aspdPer = 0, aspdMax = 0, mergePer = 0, mergeMax = 0;
+    for (const ru of this.relicRuleParams('eliteStatsPerElite')) {
+      const per = Math.max(0, Number(ru.per) || 0);
+      hp += per; atk += per; def += per;
+    }
+    for (const ru of this.relicRuleParams('eliteAspdPerElite')) {
+      aspdPer += Math.max(0, Number(ru.per) || 0);
+      aspdMax = Math.max(aspdMax, Number.isFinite(Number(ru.max)) ? Number(ru.max) : 10);
+    }
+    for (const ru of this.relicRuleParams('eliteAtkPerMerge')) {
+      mergePer += Math.max(0, Number(ru.per) || 0);
+      mergeMax = Math.max(mergeMax, Number.isFinite(Number(ru.max)) ? Number(ru.max) : 4);
+    }
+    if (!hp && !atk && !def && !aspdPer && !mergePer) return null;
+    return { hp, atk, def, aspdPer, aspdMax, mergePer, mergeMax };
+  }
+
   /**
    * 精锐干员（4 阶以上）每回合被削弱的倍率（`eliteAtkPerRound` / `eliteHpPerRound`，desc 的负向那半句）：
    * 「我方精锐干员攻击力/生命每回合 −10%，最多 −50%」。返回 { atkMul, hpMul }（≤1）。
