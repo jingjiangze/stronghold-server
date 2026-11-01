@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
 import { html, Button, Modal } from './components.js';
-import { useStore } from '../store.js';
+import { useStore, selectRoute } from '../store.js';
 import { t } from '../../../shared/i18n.js';
 
 const TOKEN_KEY = 'sp.accountToken';
@@ -127,6 +127,8 @@ function AnnouncementModal({ open, onClose }) {
 
 /** 右下角常驻入口（账号 + 公告）。挂一次即可。 */
 export function AccountDock() {
+  // 业主 2026-11-01：账号入口挂在首页，不再做全屏悬浮窗——非首页一律不渲染。
+  const route = useStore(selectRoute);
   const [accOpen, setAccOpen] = useState(false);
   const [annOpen, setAnnOpen] = useState(false);
   const [account, setAccount] = useState(null);
@@ -140,9 +142,10 @@ export function AccountDock() {
     if (!document.getElementById('sp-acc-style')) {
       const st = document.createElement('style');
       st.id = 'sp-acc-style';
-      st.textContent = `.sp-acc{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;gap:8px;align-items:center}
-        .sp-acc button{font:inherit;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(20,24,32,.86);color:#e6e9ef;cursor:pointer}
-        .sp-acc img{width:26px;height:26px;border-radius:50%;vertical-align:-7px;margin-right:6px}
+      st.textContent = `.sp-acc{position:fixed;left:.44rem;top:.8rem;z-index:60;display:flex;gap:.1rem;align-items:center;font-size:calc(.14 * var(--t, 11))}
+        .sp-acc button{display:inline-flex;align-items:center;gap:.06rem;height:max(.28rem,1.5em);padding:0 .12rem;border:1px solid rgba(255,255,255,.18);border-radius:2px;background:rgba(10,13,12,.72);color:var(--text-hi,#e6e9ef);font:inherit;cursor:pointer}
+        .sp-acc button:hover{border-color:var(--mint-500,#7fd1b0);color:#fff}
+        .sp-acc img{width:1.3em;height:1.3em;border-radius:50%}
         .acc-head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
         .acc-avatar{border-radius:50%}
         .acc-dim{color:#8b93a1;font-size:12px}
@@ -159,6 +162,7 @@ export function AccountDock() {
     }
   }, []);
 
+  if (route !== 'title') return null;
   return html`<div class="sp-acc">
     ${hasAnn ? html`<button type="button" onClick=${() => setAnnOpen(true)}>${t('公告')}</button>` : null}
     <button type="button" onClick=${() => setAccOpen(true)}>
