@@ -21,6 +21,13 @@ export class PlayerEconomy {
     return this.funds - before;
   }
 
+  /** 干员价格（含 rule 藏品折扣：`kingCrystal`「购买的干员所消耗的资金 −1」）——不低于 1。 */
+  _relicChessPrice(id) {
+    const base = this.gd.chessPrice(id);
+    const d = this.m && typeof this.m.relicChessPriceDelta === 'function' ? this.m.relicChessPriceDelta() : 0;
+    return Math.max(1, base + d);
+  }
+
   spend(n) {
     const v = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
     if (v > this.funds) return false;
@@ -71,7 +78,7 @@ export class PlayerEconomy {
   _rollChessSlot() {
     // the slotted 自选 pieces join the draw once the 调度中心 reaches their slot's level (player/diy.js diyRollEntries)
     const id = this.m.pool.roll(this.m.rngShop, { maxTier: this.shop.level, extra: this.diyRollEntries() });
-    return id ? { kind: 'chess', id, basePrice: this.gd.chessPrice(id), frozen: false, sold: false } : null;
+    return id ? { kind: 'chess', id, basePrice: this._relicChessPrice(id), frozen: false, sold: false } : null;
   }
 
   _rollItemSlot() {
@@ -128,7 +135,7 @@ export class PlayerEconomy {
     if (!ok) return false;
     const slots = queued.map((s) => ({
       kind: s.kind, id: s.id,
-      basePrice: s.kind === 'chess' ? this.gd.chessPrice(s.id) : this.gd.itemPrice(s.id),
+      basePrice: s.kind === 'chess' ? this._relicChessPrice(s.id) : this.gd.itemPrice(s.id),
       frozen: false, sold: false,
     }));
     this.shop.slots = slots;

@@ -121,6 +121,9 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'aspdPerSpend',  // 每花 3 资金：全队攻速 +7（加法）
   'atkPerNeighbor', // 周围 4 格每有一名干员：攻击 +20%（per-unit，见 battleInput）
   'aspdPerNeighbor', // 周围 4 格每有一名干员：攻速 +30（per-unit）
+  'bountyMul',     // 悬赏资金翻倍（relicBountyMul）
+  'lpDrainRest',   // 进入休整期 LP −1，最低 1（applyRelicLpDrain；低血时 SP 回复 −20% 那半句未接）
+  'bountyKillDeploy', // 初始部署 −3 已由 effect.deployCap 生效（别再扣一次）；「每击杀赏金目标 +1」待击杀计数
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -601,6 +604,56 @@ export class MatchMeltdown {
     }
     if (!atk && !hp && !def && !aspdAdd) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}) };
+  }
+
+  /**
+   * rule 藏品的**赏金倍率**（照 desc 连乘）：
+   * - `bountyMul`「悬赏中获得的资金奖励翻倍」(`mul`)
+   * - `loseAllFunds`「使悬赏获得的资金减半」(`bountyMul`)
+   * - `effect.postBountyMul`（至宝指环「悬赏获得的资金 +50%」，非 rule 键）
+   */
+  relicBountyMul() {
+    let mul = 1;
+    for (const ru of this.relicRuleParams('bountyMul')) mul *= Math.max(0, Number(ru.mul) || 1);
+    for (const ru of this.relicRuleParams('loseAllFunds')) mul *= Math.max(0, Number(ru.bountyMul) || 1);
+    const players = this.players && typeof this.players.values === 'function' ? this.players.values() : [];
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    const byId = new Map(defs.map((r) => [r.id, r]));
+    const seen = new Set();
+    for (const ps of players) {
+      for (const id of (ps && Array.isArray(ps.relics) ? ps.relics : [])) {
+        if (seen.has(id)) continue;
+        const def = byId.get(id) || {};
+        const v = Number((def.effect || {}).postBountyMul);
+        if (Number.isFinite(v) && v > 0) { mul *= v; seen.add(id); }
+      }
+    }
+    return mul;
+  }
+
+  /**
+   * rule 藏品的**干员价格折扣**（`kingCrystal`「购买的干员所消耗的资金 −1」）——返回给商店/刷新处叠加。
+   */
+  relicChessPriceDelta() {
+    let d = 0;
+    for (const ru of this.relicRuleParams('kingCrystal')) d += Math.trunc(Number(ru.priceChess) || 0);
+    return d;
+  }
+
+  /** rule 藏品：`lpDrainRest`（进入休整期目标生命 −1，最低 1）与 `kingCrystal`（战斗结束 −2，最低 1）。 */
+  applyRelicLpDrain(phase) {
+    if (!this.players || typeof this.players.values !== 'function') return;
+    for (const ps of this.players.values()) {
+      if (!ps || ps.isBot || !Array.isArray(ps.relics) || !ps.relics.length) continue;
+      const hits = phase === 'rest' ? this.relicRuleParams('lpDrainRest') : this.relicRuleParams('kingCrystal');
+      for (const ru of hits) {
+        const n = Math.abs(Math.trunc(Number(ru.n) || 0));
+        const crystal = phase === 'rest' ? 0 : Math.abs(Math.trunc(Number(ru.lp) || 0));
+        const take = phase === 'rest' ? n : crystal;
+        if (take > 0) { try { ps.lp = Math.max(1, (Number(ps.lp) || 1) - take); ps.dirty && ps.dirty(); } catch { /* noop */ } }
+      }
+    }
   }
 
   applyRelicPostBattle() {
