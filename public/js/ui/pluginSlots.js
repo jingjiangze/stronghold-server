@@ -67,14 +67,21 @@ function unmount(id) {
   entry.host.remove();
 }
 
+/** 正在 import/mount 的插件：ensure() 是异步的，start() 与 observer 同时进来会各建一个 host（页面上出现两份）。 */
+const pending = new Set();
+
 async function ensure() {
   if (!pluginIds.length) return;
   const slot = slotOf();
   for (const id of pluginIds) {
-    if (!slot) { unmount(id); continue; }
+    if (!slot) { unmount(id); pending.delete(id); continue; }
     const entry = mounted.get(id);
     if (entry && entry.host.isConnected && entry.host.parentElement === slot) continue;
+    if (pending.has(id)) continue;
     unmount(id);
+    // 同一插件只留一个宿主（上一轮可能留下孤儿节点）
+    for (const stale of slot.querySelectorAll(`[data-plugin="${id}"]`)) stale.remove();
+    pending.add(id);
     const host = document.createElement('div');
     host.className = 'title-plugin-slot__body';
     host.setAttribute('data-plugin', id);
@@ -87,6 +94,8 @@ async function ensure() {
     } catch (e) {
       host.remove();
       log(`${id} did not mount into ${SLOT}`, e);
+    } finally {
+      pending.delete(id);
     }
   }
 }
