@@ -127,6 +127,15 @@ export class MatchProxy {
   }
 
   handle(playerId, msg) { return this._request('handle', [playerId, msg]); }
+  /**
+   * 观战接管 AI（潜入）：插件对局跑在 worker 里，lobby 这边没有 players / phase / round，
+   * 所以投票流程与「直接接管」都要经这两个 RPC 问对端。
+   * ⚠️ 这两条原先只存在于 `plugins/mota/server/match/host/proxy.js` 的**镜像副本**里，活的核心 proxy 没有
+   * ⇒ `server/aiTakeover.js` 的 `matchState()` 一调就 `m.takeoverSeatState is not a function`，
+   * 表现为「申请接管/直接接管」全部返回 `INTERNAL 服务器内部错误`（2026-11-01 定位）。
+   */
+  takeoverSeatState() { return this._request('takeoverSeatState', []); }
+  takeoverSeat(botId, applicantId, name) { return this._request('takeoverSeat', [botId, applicantId, name]); }
   setLoadout(playerId, loadout, ops) { return this._request('setLoadout', [playerId, loadout, ops]); }
   requestSetupReroll(playerId, revision) { return this._request('requestSetupReroll', [playerId, revision]); }
   cancelSetupReroll(playerId, voteId) { return this._request('cancelSetupReroll', [playerId, voteId]); }
