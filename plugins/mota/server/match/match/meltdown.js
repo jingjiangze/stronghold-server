@@ -92,6 +92,18 @@ function shuffled(list, rng) {
   return a;
 }
 
+/**
+ * 这条藏品的效果在本局**是否真的生效**（业主 2026-11-01「完成完整肉鸽」的透明化）：
+ * 目前只有 `enemy` / `enemyRank`（敌人乘区）与 `immediate` / `deployCap` / `lpCap`（入手即结算）接了实现；
+ * `rule.*`（57 条，官方 DSL，需逐条语义）、`ally*`、`price`、`income`、`hand`、`enemyMove` 等**尚未接入**。
+ * 返回 false 的藏品仍会进背包、仍显示在 HUD，但会标注「未实装」，避免玩家以为它已经生效。
+ */
+export const RELIC_APPLIED_KEYS = Object.freeze(['enemy', 'enemyRank', 'immediate', 'deployCap', 'lpCap']);
+export function relicEffectApplied(effect) {
+  if (!effect || typeof effect !== 'object') return false;
+  return RELIC_APPLIED_KEYS.some((k) => Object.hasOwn(effect, k));
+}
+
 export class MatchMeltdown {
   /** 惰性建状态（老对局 / 非无尽对局永远不会碰它）。 */
   _melt() {

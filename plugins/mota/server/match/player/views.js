@@ -7,6 +7,7 @@ import { PHASE } from '../../../shared/constants.js';
 import { boardOrder, pieceDir } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
 import { bountyText, bountyCard } from '../choices.js';
+import { relicEffectApplied } from '../match/meltdown.js';
 
 export class PlayerViews {
   pieceView(p, rc = null) {
@@ -162,7 +163,7 @@ export class PlayerViews {
         const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
         const idx = new Map(defs.map((d) => [d.id, d]));
         return list.map((id) => { const d = idx.get(id) || {}; return { id, name: String(d.name || id),
-          tier: String(d.tier || ''), kind: String(d.kind || '') }; });
+          tier: String(d.tier || ''), kind: String(d.kind || ''), applied: relicEffectApplied(d.effect) }; });
       })(),
       hexStats: typeof this.m.hexStatsView === 'function' ? this.m.hexStatsView(this) : null,
       hexGrade: this.hexGrade || null,
