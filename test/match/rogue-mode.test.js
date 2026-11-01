@@ -234,3 +234,41 @@ test('己方属性通道：atkPerBond 按激活盟约数、atkPerRound 按已过
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('己方属性：atkPerEquip 按棋盘装备数、atkPerBenchItem 按待部署区装备数（封顶）、homeCooked 按完美作战', () => {
+  const mk = (relics, extra = {}) => {
+    const ps = { playerId: 'p0', relics: relics.slice(), bonds: {},
+      board: new Map([['a', { items: [{ id: 'x' }, { id: 'y' }] }], ['b', { items: [] }]]),
+      temp: [{ kind: 'item' }, { kind: 'item' }, { kind: 'chess' }], hand: [],
+      relicPerfectBattles: 0, ...extra };
+    const self = { gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+      players: new Map([['p0', ps]]),
+      relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+      activeBondsOf: MatchMeltdown.prototype.activeBondsOf,
+      relicAllyMul: MatchMeltdown.prototype.relicAllyMul };
+    return { ps, mul: self.relicAllyMul(ps) };
+  };
+
+  // atkPerEquip：棋盘共 2 件装备 ⇒ 攻击 +20%、生命 +40%
+  const eq = mk(['p33']).mul;
+  assert.ok(Math.abs(eq.atkMul - 1.2) < 1e-9, `atkPerEquip atk=${eq.atkMul}`);
+  assert.ok(Math.abs(eq.hpMul - 1.4) < 1e-9, `atkPerEquip hp=${eq.hpMul}`);
+
+  // atkPerBenchItem：待部署区 2 件 ⇒ +20%
+  const bench = mk(['p37']).mul;
+  assert.ok(Math.abs(bench.atkMul - 1.2) < 1e-9, `atkPerBenchItem atk=${bench.atkMul}`);
+  // 封顶 1.5：塞 30 件也只 +150%
+  const many = { temp: Array.from({ length: 30 }, () => ({ kind: 'item' })) };
+  const capped = mk(['p37'], many).mul;
+  assert.ok(Math.abs(capped.atkMul - 2.5) < 1e-9, `上限 +150% ⇒ 2.5，实际 ${capped.atkMul}`);
+
+  // homeCooked：基础 +20%/+20%，每场完美作战 +10%
+  const cooked0 = mk(['p31']).mul;
+  assert.ok(Math.abs(cooked0.atkMul - 1.2) < 1e-9);
+  const cooked3 = mk(['p31'], { relicPerfectBattles: 3 }).mul;
+  assert.ok(Math.abs(cooked3.atkMul - 1.5) < 1e-9, `3 场完美 ⇒ 1.5，实际 ${cooked3.atkMul}`);
+
+  for (const id of ['p33', 'p37', 'p31']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
