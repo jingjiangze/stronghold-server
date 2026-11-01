@@ -155,6 +155,7 @@ export async function mount(host) {
     mask.appendChild(card);
     mask.addEventListener('click', (e) => { if (e.target === mask) closeModal(); });
     document.addEventListener('keydown', onKey);
+    document.body.appendChild(mask);
 
     let busy = false;
     const err = document.createElement('p');
