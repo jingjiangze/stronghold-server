@@ -297,7 +297,8 @@ export class Match {
     }
     this.opts = opts;
     this.roomCode = opts.roomCode ?? '----';
-    this.mode = opts.mode === 'solo' ? 'solo' : opts.mode === 'versus' ? 'versus' : 'coop';
+    // `rogue` 是独立模式（2026-11-01）：除 isSolo/isVersus 之外一律按 coop 处理，肉鸽自己的判据看 mode/variant。
+    this.mode = opts.mode === 'solo' ? 'solo' : opts.mode === 'versus' ? 'versus' : opts.mode === 'rogue' ? 'rogue' : 'coop';
     /** 对抗模式（2V2 / 4V4）：两队共享 HP、各自 boss 池；规则在 match/confront.js + event.js。 */
     this.isVersus = this.mode === 'versus';
     // 房间玩法变体（room.variant：'xie' / 'rogue' / null）。注意不要用 this.variant —— 那是「参赛人数超出最大座位」的布尔。

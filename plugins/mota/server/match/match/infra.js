@@ -88,8 +88,11 @@ export class MatchInfra {
    * 用 modeId 前缀而不是 mode 字符串，因为 `mode` 只有 solo/coop 两档，区分不了「同盟模拟」和「协同共竞」。
    */
   get isXie() { return String(this.modeId || '').startsWith('mode_xie_'); }
-  /** 肉鸽模式（业主 2026-10-27）：房间 variant = 'rogue'，复用 coop 的难度表，但走自己的藏品节奏。 */
-  get isRogue() { return this.roomVariant === 'rogue'; }
+  /**
+   * 肉鸽模式：两条判据——独立模式 `mode === 'rogue'`（2026-11-01 业主「肉鸽独立模式」），
+   * 或老写法房间 `variant === 'rogue'`（兼容旧客户端与旧房间）。复用 coop 的难度表，但走自己的藏品节奏。
+   */
+  get isRogue() { return this.mode === 'rogue' || this.roomVariant === 'rogue'; }
 
   nextUid() { return ++this.uidSeq; }
 
