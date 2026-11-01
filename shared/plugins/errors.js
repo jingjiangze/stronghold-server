@@ -688,7 +688,7 @@ export const PLUGIN_ERRORS = Object.freeze({
   PLUGIN_UI_SLOTS: {
     level: 'problem', doc: D.ui,
     zh: '界面插件的 "slots" 写得不对：{detail}', en: 'The "slots" of a ui plugin are not right: {detail}',
-    fix: { zh: '"slots" 是列表，从 hud.right、result.tab、stats.tab、room.panel 里选，每个最多写一次。', en: '"slots" is a list of hud.right, result.tab, stats.tab and room.panel, each at most once.' },
+    fix: { zh: '"slots" 是列表，从 hud.right、result.tab、stats.tab、room.panel、title.login 里选，每个最多写一次。', en: '"slots" is a list of hud.right, result.tab, stats.tab, room.panel and title.login, each at most once.' },
   },
   PLUGIN_UI_NO_SLOT: {
     level: 'warning', doc: D.ui,
@@ -700,7 +700,7 @@ export const PLUGIN_ERRORS = Object.freeze({
   PLUGIN_SLOT: {
     level: 'frame', doc: D.ui,
     zh: '界面插件要的位置没有给它：清单的 "slots" 里没有这个位置，或者别的插件已经占了', en: 'The slot a ui plugin asked for was not granted: its manifest\'s "slots" does not list it, or another plugin holds it',
-    fix: { zh: '在 plugin.json 的 "slots" 里写上这个位置（hud.right、result.tab、stats.tab、room.panel）。协议表同一时间只挂一个插件；同一个位置有多个时，对局里用标签切换。', en: 'List the slot in "slots" of plugin.json (hud.right, result.tab, stats.tab, room.panel). The protocol table grants one plugin at a time; when several ask for one slot, the match shows tabs to switch.' },
+    fix: { zh: '在 plugin.json 的 "slots" 里写上这个位置（hud.right、result.tab、stats.tab、room.panel、title.login）。协议表同一时间只挂一个插件；同一个位置有多个时，对局里用标签切换。协议表同一时间只挂一个插件；同一个位置有多个时，对局里用标签切换。', en: 'List the slot in "slots" of plugin.json (hud.right, result.tab, stats.tab, room.panel, title.login). The protocol table grants one plugin at a time; when several ask for one slot, the match shows tabs to switch. The protocol table grants one plugin at a time; when several ask for one slot, the match shows tabs to switch.' },
   },
   PLUGIN_UI_SLOT_SHARED: {
     level: 'warning', doc: D.ui,
