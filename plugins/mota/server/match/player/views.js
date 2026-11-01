@@ -155,6 +155,15 @@ export class PlayerViews {
       // 肉鸽随机事件（2026-10-27）：{ round, eventId, name, desc, choices:[{id,label}] }
       rogueOffer: this.rogueOffer || null,
       relics: Array.isArray(this.relics) ? this.relics.slice() : [],
+      // 已拥有藏品的卡面（名称/品阶/正负），给局内常驻列表用 —— id 列表仍是上面那份 `relics`
+      relicCards: (() => {
+        const list = Array.isArray(this.relics) ? this.relics : [];
+        const raw = (this.m && this.m.gd && this.m.gd.raw && this.m.gd.raw.relics) || null;
+        const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
+        const idx = new Map(defs.map((d) => [d.id, d]));
+        return list.map((id) => { const d = idx.get(id) || {}; return { id, name: String(d.name || id),
+          tier: String(d.tier || ''), kind: String(d.kind || '') }; });
+      })(),
       hexStats: typeof this.m.hexStatsView === 'function' ? this.m.hexStatsView(this) : null,
       hexGrade: this.hexGrade || null,
       hexRerolls: Array.isArray(this.hexRerolls) ? this.hexRerolls.slice() : null,

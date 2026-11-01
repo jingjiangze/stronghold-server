@@ -102,6 +102,7 @@ import { EmoteWheel } from '../ui/emotes.js';
 import { ConfrontOverlay, ConfrontClash } from '../ui/confrontOverlay.js';
 import { HexOverlay, normalizeHexOffer } from '../ui/hexOverlay.js';
 import { RelicOverlay, normalizeRelicOffer } from '../ui/relicOverlay.js';
+import { RogueHud } from '../ui/rogueHud.js';
 import { RogueEventOverlay, normalizeRogueOffer } from '../ui/rogueEventOverlay.js';
 import { MeltdownOverlay } from '../ui/meltdownOverlay.js';
 import { EventOverlay } from '../ui/eventOverlay.js';
@@ -1904,6 +1905,8 @@ function MatchScreen() {
 
     ${!spectator && alive && normalizeRogueOffer(priv) ? html`<${RogueEventOverlay} offer=${normalizeRogueOffer(priv)} busy=${!!rogueBusy}
       onPick=${async (choiceId) => { setRogueBusy(choiceId); try { await net.request('g.roguePick', { choiceId }); } finally { setRogueBusy(null); } }} />` : null}
+
+    ${!spectator && alive ? html`<${RogueHud} rogue=${pub?.rogue || null} relicCards=${priv?.relicCards || null} />` : null}
 
     ${hasOffers && !sp && !personalChoice ? html`<${OfferOverlay} pub=${pub} myId=${myId} readOnly=${spectator || !alive} onAction=${actions.offer} />` : null}
     ${sp ? html`<${ChoiceOverlay} pub=${pub} sp=${sp} myId=${myId} solo=${solo} busyIdx=${spBusy} total=${total}

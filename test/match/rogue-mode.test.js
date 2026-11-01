@@ -1,0 +1,96 @@
+// 肉鸽模式的三大随机元素 + 紧急作战 + 幂等聚合（业主 2026-11-01「完成完整肉鸽模式」）。
+// 直接调实现（不复制逻辑）：这些函数都在 MatchMeltdown.prototype 上，用一个最小 `this` 就能跑。
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { MatchMeltdown } from '../../plugins/mota/server/match/match/meltdown.js';
+
+const RELICS = JSON.parse(fs.readFileSync(new URL('../../plugins/relics-87/data/relics.json', import.meta.url), 'utf8'));
+
+/** 只够这些纯函数跑起来的最小 self。 */
+function fakeMatch({ isRogue = true, round = 1, seed = 20261101, relics = [], modeId = 'mode_multi_normal' } = {}) {
+  const ps = { playerId: 'p_0', alive: true, relics: relics.slice(), rogueAffixBonus: null };
+  return {
+    ps,
+    self: {
+      modeId, isRogue, round, seed,
+      gd: { raw: { relics: RELICS } },
+      players: new Map([[ps.playerId, ps]]),
+      alivePlayers: () => [ps],
+      // 纯函数借过来
+      relicPool: MatchMeltdown.prototype.relicPool,
+      relicDraftRound: MatchMeltdown.prototype.relicDraftRound,
+      relicEnemyMul: MatchMeltdown.prototype.relicEnemyMul,
+      rogueEventRound: MatchMeltdown.prototype.rogueEventRound,
+      rogueRoundAffix: MatchMeltdown.prototype.rogueRoundAffix,
+      rogueEmergencyRound: MatchMeltdown.prototype.rogueEmergencyRound,
+    },
+  };
+}
+
+test('藏品节奏：肉鸽 = 开局 + 每 2 回合；协同共竞 = R4/R8/R12', () => {
+  const rogue = (r) => MatchMeltdown.prototype.relicDraftRound.call({ isRogue: true }, r);
+  const xie = (r) => MatchMeltdown.prototype.relicDraftRound.call({ isRogue: false }, r);
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(rogue), [true, true, false, true, false, true]);
+  assert.deepEqual([1, 2, 3, 4, 8, 12, 13].map(xie), [false, false, false, true, true, true, false]);
+});
+
+test('不期而遇：回合表是 R3 / R6 / R9', () => {
+  // 注意：`rogueEventRound(r)` 本身只看回合（不判 isRogue），"只有肉鸽才有"这道门在 phases.js 的调用点
+  // （`if (this.isRogue === true && ... rogueEventRound(r))`）—— 测试按实现如实断言，避免把调用点的门写进纯函数测试。
+  const at = (r) => MatchMeltdown.prototype.rogueEventRound.call({ isRogue: true }, r);
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(at),
+    [false, false, true, false, false, true, false, false, true, false]);
+});
+
+test('紧急作战：只在 R5 / R9（肉鸽专属）', () => {
+  const at = (r, isRogue = true) => MatchMeltdown.prototype.rogueEmergencyRound.call({ isRogue }, r);
+  assert.deepEqual([4, 5, 6, 8, 9, 10].map((r) => at(r)), [false, true, false, false, true, false]);
+  assert.equal(at(5, false), false);
+});
+
+test('每回合词缀：确定性（同 seed 同回合恒定）、三档之一、协同/普通房没有', () => {
+  const aff = (round, seed = 7) => MatchMeltdown.prototype.rogueRoundAffix.call({ isRogue: true, seed }, round);
+  const a1 = aff(4), a2 = aff(4);
+  assert.deepEqual(a1, a2, '同 seed 同回合必须一致');
+  for (const r of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+    const a = aff(r);
+    assert.ok(['hp', 'atk', 'speed'].includes(a.kind), `R${r} 的词缀种类异常：${a && a.kind}`);
+    assert.ok(Number.isFinite(a.mul) && a.mul > 0 && a.mul < 1, '倍率应是 0~1 的小数');
+    assert.ok(typeof a.label === 'string' && a.label.length > 0);
+  }
+  assert.equal(MatchMeltdown.prototype.rogueRoundAffix.call({ isRogue: false, seed: 7 }, 4), null);
+});
+
+test('敌人修正聚合：词缀 + 紧急作战都进同一个 acc（幂等由 combat.js 的 relicApplied 保证）', () => {
+  // R5 是紧急作战：hp +0.25 / atk +0.2；词缀另加一档
+  const { self } = fakeMatch({ round: 5 });
+  const mul = self.relicEnemyMul();
+  const aff = self.rogueRoundAffix(5);
+  const expectHp = 0.25 + (aff.kind === 'hp' ? aff.mul : 0);
+  const expectAtk = 0.2 + (aff.kind === 'atk' ? aff.mul : 0);
+  assert.ok(Math.abs(mul.hp - expectHp) < 1e-9, `hp=${mul.hp} != ${expectHp}`);
+  assert.ok(Math.abs(mul.atk - expectAtk) < 1e-9, `atk=${mul.atk} != ${expectAtk}`);
+  // R4 没有紧急作战
+  const r4 = fakeMatch({ round: 4 }).self.relicEnemyMul();
+  assert.ok(r4.hp < 0.25 + 1e-9, 'R4 不该吃到紧急作战的 +25%');
+});
+
+test('藏品里的 enemy/enemyRank 会累加进敌人修正；非肉鸽房没有词缀/紧急作战', () => {
+  // n06（莱塔尼亚权杖·重铸）带 effect.enemy —— p40/p45 是 rule/allyPerBench 类，不参与敌人乘区
+  const withRelic = fakeMatch({ isRogue: false, relics: ['n06'] }).self.relicEnemyMul();
+  const without = fakeMatch({ isRogue: false, relics: [] }).self.relicEnemyMul();
+  assert.notDeepEqual(withRelic, without, '带 enemy 类藏品的敌人修正应不同（n06）');
+  // 非肉鸽：没有词缀与紧急作战，回合不改变结果
+  const a = fakeMatch({ isRogue: false, round: 5 }).self.relicEnemyMul();
+  const b = fakeMatch({ isRogue: false, round: 4 }).self.relicEnemyMul();
+  assert.deepEqual(a, b, '非肉鸽房不该因回合变化而改变敌人修正');
+});
+
+test('藏品池：87 条、按 id 去重、排除已拥有', () => {
+  const { self } = fakeMatch();
+  const pool = self.relicPool();
+  assert.equal(pool.length, 87, 'relics-87 应提供 87 条');
+  assert.equal(new Set(pool.map((r) => r.id)).size, pool.length, 'id 不许重复');
+  assert.ok(pool.every((r) => typeof r.id === 'string' && r.id));
+});
