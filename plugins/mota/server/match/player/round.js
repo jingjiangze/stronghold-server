@@ -186,9 +186,16 @@ export class PlayerRound {
               if (occ.has(`${u.row + dr},${u.col + dc}`)) n += 1;
             }
           }
-          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0));
+          // 精锐干员（4 阶以上）额外吃 eliteAtkPerRound / eliteHpPerRound 的每回合削弱
+          let eliteMul = { atkMul: 1, hpMul: 1 };
+          try {
+            const tier = this.gd && typeof this.gd.tierOf === 'function' ? this.gd.tierOf(u.chessId) : 0;
+            if (Number(tier) >= 4 && this.m && typeof this.m.relicEliteRoundMul === 'function') eliteMul = this.m.relicEliteRoundMul();
+          } catch { /* 取不到阶数就不削弱 */ }
+          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0)) * eliteMul.atkMul;
           const aspdAdd = (am && Number.isFinite(am.aspdAdd) ? am.aspdAdd : 0) + (nb ? nb.aspdPer * n : 0);
-          u.relicMods = { ...(am || {}), atkMul, ...(aspdAdd ? { aspdAdd } : {}) };
+          const hpMul = (am && Number.isFinite(am.hpMul) ? am.hpMul : 1) * eliteMul.hpMul;
+          u.relicMods = { ...(am || {}), atkMul, hpMul, ...(aspdAdd ? { aspdAdd } : {}) };
         }
       }
     } catch { /* 尽力而为，绝不因为藏品坏了出不了兵 */ }
