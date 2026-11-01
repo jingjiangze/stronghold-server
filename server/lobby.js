@@ -1025,7 +1025,7 @@ export class Lobby {
     // must play them (rooms: fixed) cannot make that version's room; otherwise the room starts without them. Resolved
     // before the creator leaves the old room (a refusal keeps them there), so a set that room alone holds counts as freed
     // (limits.maxSets), as when the room went first before M1
-    let initial = this.baseContent(version);
+    let initial = this.contentWithRequired(this.baseContent(version));
     const defaults = this.plugins?.defaults?.() || [];
     if (defaults.length) {
       const r = this.resolveContent(null, defaults, {}, version, leaving ? cur.content : null);
@@ -1263,6 +1263,10 @@ export class Lobby {
    * asked for becomes the room's content and the other humans are un-readied — nothing changes (and nobody is un-readied)
    * when it is the set the room already has. The host's result replay (a settlement screen still open) is dropped only
    * when the set did change: re-applying the same plugins, or a refused set, leaves it.
+   * The server owner's `required` plugins (plugins/config.json) are added to what a host asks for — a host cannot switch
+   * them off, so a list that leaves them out still gives the set with them (and the room.state that says so). When this
+   * resolve cannot apply them (the install does not enable such a plugin), the host's own list is used instead, with one
+   * warning: a `required` line must not stop a host from switching anything on.
    */
   setPlugins(session, { plugins }) {
     const room = this.roomOf(session);
@@ -1274,7 +1278,19 @@ export class Lobby {
     /** @type {Record<string, Record<string, unknown>>} */
     const settings = {};
     for (const p of plugins) if (p.settings) settings[p.id] = p.settings;
-    const r = this.resolveContent(room, ids, settings);
+    // 服务端 required（plugins/config.json `required`，server/plugins/roomSets.js `required`）：这些插件房主关不掉，
+    // 并回他选的那一列里再去 resolve。房主以为关掉了其实还在时，下面的 sameSet / marks 比较会把它变成一次真实广播。
+    // 这次 resolve 认不下并回的那些（本安装没启用、策略不许、没装…）就退回房主自己选的那一列，并记一次警告：
+    // 一条 required 配置不该让房主连别的插件都开不了（本安装默认不启用 plugin 脚本，required 里正有这类插件）。
+    const extra = this.requiredIds().filter((id) => !ids.includes(id));
+    let r = this.resolveContent(room, extra.length ? [...ids, ...extra] : ids, settings);
+    if (extra.length && 'error' in r) {
+      const own = this.resolveContent(room, ids, settings);
+      if ('content' in own) {
+        this.warnOnce(`[lobby] required plugin(s) ${extra.join(', ')} cannot be applied (${r.error}${r.detail ? `: ${r.detail}` : ''}); the room keeps the host's own set`);
+        r = own;
+      }
+    }
     if ('error' in r) return r;
     let content = r.content;
     const before = room.content;
@@ -1300,6 +1316,34 @@ export class Lobby {
   }
 
   /**
+   * 每个房间都必须保留的插件（`plugins/config.json` 的 `required` — server/plugins/roomSets.js `required`）：房主
+   * 关不掉它们。本进程没有插件层、策略说房间只玩原版（rooms: off）或读不出来：空列表。
+   * @returns {string[]}
+   */
+  requiredIds() {
+    try {
+      const ids = this.plugins?.required?.();
+      return Array.isArray(ids) ? ids.filter((id) => typeof id === 'string' && id.length > 0) : [];
+    } catch { return []; }
+  }
+
+  /**
+   * 随房间内容集一起下发的 `required`：哪些 id 房主关不掉。内容对象是冻结的（Object.freeze），所以这个字段只能在
+   * 冻结之前写进去；事后补就用展开新建一个。已经写着同一份列表的对象原样返回，room.state 的形状不因此变化。
+   * @param {Room['content']} content
+   * @returns {Room['content']}
+   */
+  contentWithRequired(content) {
+    if (!content) return content;
+    const ids = this.requiredIds();
+    // 没有 required：房主没有关不掉的东西，旧形状一个字都不动（P0 的房间照旧）
+    if (!ids.length) return content;
+    const had = Array.isArray(content.required) ? content.required : null;
+    if (had && had.length === ids.length && had.every((id, i) => id === ids[i])) return content;
+    return Object.freeze({ ...content, required: Object.freeze(ids) });
+  }
+
+  /**
    * The content a room gets for the plugins `ids` (header "The room's plugins", "Gameplay plugins"): the vanilla set for
    * none, else what the room sets resolve — cosmetic plugins only: the vanilla cs with their `vs`; content plugins: the
    * content set's own cs (`vanilla: false`). Nothing is held yet (holdContent). On another official version (header
@@ -1317,7 +1361,7 @@ export class Lobby {
       // the server owner may fix every room's plugins (plugins/config.json rooms: fixed): the original game is not one
       const fixed = (() => { try { return this.plugins?.fixed?.() || null; } catch { return null; } })();
       if (fixed && fixed.length) return fail(ERR.PLUGIN_BLOCKED, 'this server fixes every room\'s plugins (plugins/config.json rooms: fixed)');
-      return { content: base };
+      return { content: this.contentWithRequired(base) };
     }
     if (!this.vanilla || !this.plugins || !base) return fail(ERR.PLUGIN_UNKNOWN, 'this server applies no plugins');
     const gameplay = version === DEFAULT_VERSION;
@@ -1332,6 +1376,7 @@ export class Lobby {
     // (roomSets refuses them itself; a room-sets object that does not know the option must not slip one through)
     if (modded && !gameplay) return fail(ERR.VERSION_UNSUPPORTED, 'gameplay plugins play the default version (act2autochess) only');
     const frozen = (a) => Object.freeze((Array.isArray(a) ? a : []).map((p) => Object.freeze({ ...p })));
+    const required = this.requiredIds();
     // the operators its plugins add to a 自选 slot's list (welcome.diyKitted holds the server's own): the pages' pickers
     const extra = modded && Array.isArray(kitted) ? kitted.filter((id) => typeof id === 'string' && !VANILLA_KITTED.has(id)).slice(0, 200) : [];
     return {
@@ -1341,6 +1386,8 @@ export class Lobby {
         ...(base.version ? { version: base.version } : {}),
         ...(vs ? { vs } : {}),
         plugins: frozen(list),
+        // 房主关不掉的插件（plugins/config.json required）：客户端据此把它们的开关钉住。没有就省略，旧形状不动。
+        ...(required.length ? { required: Object.freeze(required) } : {}),
         ...(trusted ? {trusted} : {}),
         ...(execution ? {execution} : {}),
         warnings: Object.freeze([...(warnings || [])]),
@@ -1645,7 +1692,7 @@ export class Lobby {
     // Switching between the two 第一期 versions keeps it.
     if (room.mode !== 'solo' || !this.versionSoloTimed(version)) room.soloUnlimited = false;
     room.difficulty = this.fallbackDifficulty(version, room.mode, room.difficulty);
-    let next = this.baseContent(version);
+    let next = this.contentWithRequired(this.baseContent(version));
     const ids = (before?.plugins || []).filter((p) => !p.auto).map((p) => p.id);
     if (ids.length) {
       const r = this.resolveContent(room, ids, this.pluginSettings(before));

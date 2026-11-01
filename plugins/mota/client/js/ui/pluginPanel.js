@@ -31,7 +31,7 @@ import { toastError } from './toasts.js';
 import { net } from '../net.js';
 import { useStore } from '../store.js';
 import { catalog, contentSet, loadCatalog, cosmeticPlugins, installedCount, pluginName, unofficialPlugins, personal, personalSet } from '../content.js';
-import { appVersionMatches } from '../../../shared/plugins/manifest.js';
+import { appVersionMatches, PLUGINS_URL } from '../../../shared/plugins/manifest.js';
 import { toggleRecommend, uiPluginEntries, uiRecommend, visibleRecommend } from './uiPlugins.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
 import { sizeText, roomPluginFacts, pluginTagText, pluginMicro, ruleLine } from './pluginTag.js';
@@ -39,6 +39,46 @@ import { sizeText, roomPluginFacts, pluginTagText, pluginMicro, ruleLine } from 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 export { sizeText, roomPluginFacts, pluginTagText, pluginMicro };
+
+/** A problem message of a plugin that did not load, as one short line (`n` characters at most). */
+const clipText = (s, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/**
+ * The catalogue's `skipped` entries — the plugin folders the server found but could not load, and why (GET
+ * /plugins/index.json: `skipped: [{ id, where, status: 'skipped', problems: [{ code, message }] }]`; the `plugins` array
+ * keeps its shape). content.js's catalogue holds only `plugins`, so this reads the same body itself: once per opening of
+ * the title screen's list. A server that sends no `skipped`, or a body this page cannot reach, is [] — the list then
+ * looks exactly as it did before.
+ * @returns {Promise<{ id: string, problems: string[] }[]>}
+ */
+let skippedLoad = null;
+function loadSkippedIndex() {
+  if (skippedLoad) return skippedLoad;
+  skippedLoad = (async () => {
+    try {
+      const res = await fetch(`${PLUGINS_URL}index.json`, { cache: 'no-store' });
+      if (!res || !res.ok) return [];
+      const body = await res.json();
+      const list = Array.isArray(body?.skipped) ? body.skipped : [];
+      return list.filter((s) => s && typeof s === 'object').map((s) => ({
+        id: String(s.id ?? s.where ?? ''),
+        problems: (Array.isArray(s.problems) ? s.problems : [])
+          .map((p) => (typeof p === 'string' ? p : String(p?.message ?? p?.code ?? ''))).filter(Boolean).slice(0, 2).map((m) => clipText(m)),
+      })).filter((s) => s.id);
+    } catch {
+      return [];
+    } finally {
+      skippedLoad = null;
+    }
+  })();
+  return skippedLoad;
+}
+
+/** Statuses of a catalogue entry that is installed but this server (or this room) cannot use: shown, never switched. */
+const UNLOADED = new Set(['disabled', 'unsupported', 'planned', 'incompatible']);
+
+/** Why a catalogue entry of status `p.status` is not offered (InstalledPlugins, PluginPanel). */
+const unloadedText = (p) => (p.status === 'disabled' ? `${t('禁用')} · ${t('锁定')}` : t('本版本不支持'));
 
 /**
  * The ids room.setPlugins sends when the host switches `id` on or off: the plugins the host chose, without the
@@ -128,6 +168,12 @@ export function PluginPanel({ open, room, myId, onClose }) {
   // a plugin the room has that the catalogue no longer offers (removed, skipped, another scope now) still shows, by its
   // id: its switch only turns it off
   const rows = [...offered, ...f.plugins.filter((p) => !offered.some((o) => o.id === p.id)).map((p) => ({ id: p.id, version: p.version, missing: true }))];
+  // installed, but not usable in this room (the trust/lock gates refused it, or this version does not support it): a
+  // read-only row with the reason — the catalogue says what sits on disk. Until the catalogue is there: nothing (as before).
+  const unloaded = installed && cat.status === 'ready'
+    ? cat.plugins.filter((p) => p && typeof p.id === 'string' && UNLOADED.has(p.status) && !rows.some((r) => r.id === p.id)
+      && Array.isArray(p.scope) && p.scope.includes('room'))
+    : [];
   // 管理器分组（2026-10-20）：声明了 capabilities:["transport"] 的插件单列一栏，不混进美术/玩法；
   // 没有这个字段的插件行为完全不变（全部落进下面那一栏）。
   const capOf = (id) => (cat.plugins.find((x) => x.id === id)?.capabilities) || [];
@@ -208,10 +254,21 @@ export function PluginPanel({ open, room, myId, onClose }) {
         : f.editable ? null : html`<p class="set-hint">${t('由创建者设置')}</p>`}
       ${installed && cat.status === 'loading' && !rows.length ? html`<p class="set-hint">${t('正在读取插件列表…')}</p>` : null}
       ${installed && cat.status === 'failed' && !rows.length ? html`<p class="set-hint is-warn">${t('无法读取插件列表')}</p>` : null}
-      ${(!installed || cat.status === 'ready') && !rows.length ? html`<p class="set-hint">${t('本服务器没有可在房间中使用的插件')}</p>` : null}
+      ${(!installed || cat.status === 'ready') && !rows.length && !unloaded.length ? html`<p class="set-hint">${t('本服务器没有可在房间中使用的插件')}</p>` : null}
       ${transportRows.length ? html`<p class="plugpanel__group">${t('联机传输')}</p>
               <ul class="plugpanel__list">${transportRows.map(rowHtml)}</ul>` : null}
             ${otherRows.length ? html`<ul class="plugpanel__list">${otherRows.map(rowHtml)}</ul>` : null}
+      ${unloaded.length ? html`<section class="plugpanel__unloaded" data-testid="plugin-unavailable">
+        <ul class="plugpanel__list">
+          ${unloaded.map((p) => html`<li key=${p.id} class="plugrow" data-plugin=${p.id}>
+            <div class="plugrow__body">
+              <div class="plugrow__name t-dim"><b>${pluginName(p)}</b>${p.version ? html`<span class="num t-dim">v${p.version}</span>` : null}
+                ${p.unofficial ? html`<span class="plugrow__badge">${t('非官方')}</span>` : null}</div>
+              <div class="plugrow__meta t-dim"><span>${unloadedText(p)}</span></div>
+            </div>
+          </li>`)}
+        </ul>
+      </section>` : null}
       ${f.editable && f.count ? html`<div class="plugpanel__reapply">
         <${Button} variant="secondary" size="sm" icon="refresh" data-testid="plugin-reapply" disabled=${!!busy} onClick=${reapply}>${t('重新应用')}<//>
         <span class="set-hint">${t('插件的文件在服务器上更新后，重新应用才会生效。')}</span>
@@ -251,6 +308,15 @@ export function InstalledPlugins({ open, onClose }) {
   const cat = useStore((s) => s, Object.is, catalog);
   useEffect(() => { loadCatalog({ force: true }); }, []);
   const plugins = unofficialPlugins(cat.plugins);
+  // the folders the server found but could not load (loadSkippedIndex; [] when the body has no `skipped`)
+  const [skipped, setSkipped] = useState([]);
+  useEffect(() => {
+    if (!open) return undefined;
+    let alive = true;
+    loadSkippedIndex().then((list) => { if (alive) setSkipped(list); });
+    return () => { alive = false; };
+  }, [open]);
+  const notLoaded = Array.isArray(skipped) ? skipped : [];
   return html`<${Modal} open=${open} onClose=${onClose} title=${t('本服务器的插件')} micro="PLUGINS" width="6.8rem"
       actions=${html`<${Button} variant="primary" icon="check" onClick=${onClose}>${t('完成')}<//>`}>
     <div class="plugpanel" data-testid="installed-plugins">
@@ -269,6 +335,19 @@ export function InstalledPlugins({ open, onClose }) {
           </div>
         </li>`)}
       </ul>
+      ${notLoaded.length ? html`<section class="plugpanel__skipped" data-testid="plugins-not-loaded">
+        <p class="set-hint">${t('没有载入：有 {n} 个问题', { n: notLoaded.reduce((sum, s) => sum + Math.max(1, s.problems.length), 0) })}</p>
+        <ul class="plugpanel__list">
+          ${notLoaded.map((s) => html`<li key=${s.id} class="plugrow" data-plugin=${s.id}>
+            <div class="plugrow__body">
+              <div class="plugrow__name t-dim"><b>${s.id}</b><span class="plugrow__badge">${t('读取插件失败')}</span></div>
+              ${s.problems.length ? html`<div class="plugrow__meta t-dim">
+                ${s.problems.map((m, i) => html`<span key=${i}>${m}</span>`)}
+              </div>` : null}
+            </div>
+          </li>`)}
+        </ul>
+      </section>` : null}
     </div>
   <//>`;
 }

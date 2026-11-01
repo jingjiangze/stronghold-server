@@ -1000,12 +1000,15 @@ export function pluginIndexEntry(p) {
 }
 
 /**
- * The catalogue body: { version, app, api, content?, plugins: [entry …] } — by class (PLUGIN_CLASSES order), then id.
+ * The catalogue body: { version, app, api, content?, plugins: [entry …], skipped? } — by class (PLUGIN_CLASSES order), then id.
  * @param {PluginEntry[]} plugins
- * @param {{ app?: string, api?: { current: number, min: number }, vanilla?: string | null }} [opts]
+ * @param {{ app?: string, api?: { current: number, min: number }, vanilla?: string | null,
+ *   skipped?: Array<{ where?: string, problems?: string[], issues?: Array<{ code?: string, text?: string }> }> }} [opts]
  *   vanilla: this server's vanilla content hash (server/plugins/identity.js)
+ *   skipped: the folders the scan refused (server/plugins/registry.js `report().skipped`) — listed so a page can show
+ *   「装了但装不上」 with a reason instead of the plugin simply not existing
  */
-export function buildPluginIndex(plugins, { app = APP_VERSION, api = PLUGIN_API, vanilla = null } = {}) {
+export function buildPluginIndex(plugins, { app = APP_VERSION, api = PLUGIN_API, vanilla = null, skipped = [] } = {}) {
   const order = Object.keys(PLUGIN_CLASSES);
   const rank = (p) => order.indexOf(p.class);
   const list = [...plugins].sort((a, b) => rank(a) - rank(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -1013,5 +1016,16 @@ export function buildPluginIndex(plugins, { app = APP_VERSION, api = PLUGIN_API,
   const body = { version: PLUGIN_INDEX_VERSION, app, api: { current: api.current, min: api.min } };
   if (vanilla) body.content = { vanilla };
   body.plugins = capCatalogueNotices(list.map(pluginIndexEntry));
+  // the folders the scan refused: id out of `plugins/<id>/`, at most 5 coded issues each (the plain `problems` strings
+  // carry no code); a `where` this cannot read is skipped — the catalogue is a page's view, not a diagnostics dump
+  const refused = [];
+  for (const s of Array.isArray(skipped) ? skipped : []) {
+    const id = /^plugins\/([^/]+)\//.exec(String(s?.where || ''))?.[1];
+    if (!id) continue;
+    const problems = (Array.isArray(s.issues) ? s.issues : []).slice(0, 5)
+      .map((i) => ({ code: String(i?.code || 'PLUGIN_INVALID'), message: String(i?.text || '') }));
+    refused.push({ id, where: String(s.where), status: 'skipped', problems });
+  }
+  if (refused.length) body.skipped = refused;
   return body;
 }
