@@ -112,7 +112,7 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   const applied = relics.filter((r) => relicEffectApplied(r.effect)).length;
   const ruleInert = relics.filter((r) => { const e = r.effect || {}; return !!e.rule && !relicEffectApplied(e); }).length;
   assert.ok(applied >= 30, `有实现效果的藏品过少：${applied}/${relics.length}`);
-  assert.ok(ruleInert >= 30, `rule 类藏品应仍有一批（≥30 条）未实装：${ruleInert}`);
+  assert.ok(ruleInert >= 5, `rule 类藏品应仍有一批未实装（逐批接入中）：${ruleInert}`);
   assert.equal(applied + relics.filter((r) => !relicEffectApplied(r.effect)).length, relics.length, '未生效 = 总数 - 已生效');
 });
 
@@ -269,6 +269,40 @@ test('己方属性：atkPerEquip 按棋盘装备数、atkPerBenchItem 按待部�
   assert.ok(Math.abs(cooked3.atkMul - 1.5) < 1e-9, `3 场完美 ⇒ 1.5，实际 ${cooked3.atkMul}`);
 
   for (const id of ['p33', 'p37', 'p31']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
+
+test('消费类：atkPerSpend / hpdefPerSpend / aspdPerSpend 按整局累计花费换算', () => {
+  const mk = (relics, totalSpent) => {
+    const ps = { playerId: 'p0', relics: relics.slice(), bonds: {}, board: new Map(), temp: [], hand: [], totalSpent };
+    const self = { gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+      players: new Map([['p0', ps]]),
+      relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+      activeBondsOf: MatchMeltdown.prototype.activeBondsOf,
+      relicAllyMul: MatchMeltdown.prototype.relicAllyMul };
+    return self.relicAllyMul(ps);
+  };
+  // atkPerSpend：每 5 资金 +5% ⇒ 花 20 ⇒ +20%
+  assert.ok(Math.abs(mk(['p25'], 20).atkMul - 1.2) < 1e-9);
+  assert.equal(mk(['p25'], 4), null, '不够 5 点就没有加成（返回 null）');
+  // hpdefPerSpend：每 3 资金 +3% 生命/+3% 防御 ⇒ 花 9 ⇒ ×1.09
+  const hd = mk(['p26'], 9);
+  assert.ok(Math.abs(hd.hpMul - 1.09) < 1e-9);
+  assert.ok(Math.abs(hd.defMul - 1.09) < 1e-9);
+  // aspdPerSpend：每 3 资金 +7 攻速（加法）⇒ 花 9 ⇒ +21
+  assert.equal(mk(['p09'], 9).aspdAdd, 21);
+});
+
+test('相邻类：relicNeighborRules 读出每相邻一人的加成（per-unit 在 battleInput 里算）', () => {
+  const mkSelf = (relics) => ({ gd: { raw: { relics: RELICS } },
+    players: new Map([['p0', { playerId: 'p0', relics: relics.slice() }]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    relicNeighborRules: MatchMeltdown.prototype.relicNeighborRules });
+  assert.deepEqual(mkSelf(['p18']).relicNeighborRules(), { atkPer: 0.2, aspdPer: 0 });
+  assert.deepEqual(mkSelf(['p17']).relicNeighborRules(), { atkPer: 0, aspdPer: 30 });
+  assert.equal(mkSelf([]).relicNeighborRules(), null, '没有相邻类藏品时返回 null（不产生 relicMods）');
+  for (const id of ['p09', 'p17', 'p18', 'p25', 'p26']) {
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
