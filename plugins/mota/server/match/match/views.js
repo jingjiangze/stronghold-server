@@ -119,7 +119,18 @@ export class MatchViews {
             round: this.round,
             ratio: this.confrontRatio ? this.confrontRatio() : null,
             budget: this.confrontBudget ? this.confrontBudget() : null,
-            // 本回合一次最多放几只：对抗按官方出怪只数折半（confrontPlaceCap），协同沿用协议上限
+            // 2026-11-01 P1（审计 D12/D13/死 UI）：规则档与同盟狩猎标记下发（客户端 conf.hunt 以前读不到）；
+            // 事件期 boss 格下发（池 + 上限），客户端据此渲染选择区 —— boss 不占预算、不计只数上限
+            versusRule: this.versusRule || null,
+            hunt: typeof this.coopHuntActive === 'function' ? this.coopHuntActive() : false,
+            bosses: {
+              open: this.confrontBossOpen ? this.confrontBossOpen() : false,
+              cap: this.confrontBossCap ? this.confrontBossCap() : 0,
+              pool: this.confrontBossOpen && this.confrontBossOpen()
+                ? (this.confrontBossPool ? this.confrontBossPool() : []).map((r) => ({ key: r.key, name: r.name, coin: r.coin }))
+                : [],
+            },
+            // 本回合一次最多放几只：协议硬上限 maxPicks（防一次误提交塞爆消息），真正的约束是 Σ价值 ≤ 预算
             maxPicks: this.confrontPlaceCap ? this.confrontPlaceCap() : VERSUS_CONFRONT.maxPicks,
             targets: this.confrontTargets ? Object.fromEntries(this.confrontTargets) : {},
             groups: (this.confrontGroups ? this.confrontGroups() : []).map((g) => ({ id: g.id, name: g.name, icon: g.icon, desc: g.desc, rows: (g.rows || []).map((r) => ({ key: r.key, name: r.name, value: r.value })) })),

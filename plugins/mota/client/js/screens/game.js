@@ -1844,7 +1844,7 @@ function MatchScreen() {
         onPick=${async (target) => { setEventBusy(true); try { await actions.eventPick(target); } finally { setEventBusy(false); } }} />` : null}
       ${pub?.confront && ((myRole === 'attack' && (pub.confront.active || pub.confront.roster)) || (myRole === 'defend' && pub.confront.roster)) ? html`<${ConfrontOverlay} pub=${pub} busy=${confBusy}
         onTarget=${async (targetPlayerId) => { setConfBusy(true); try { await actions.confrontTarget(targetPlayerId); } finally { setConfBusy(false); } }}
-        onConfirm=${async (group, position, picks, commit) => { setConfBusy(true); try { await actions.confront(group, position, picks, commit); } finally { setConfBusy(false); } }} />` : null}
+        onConfirm=${async (group, position, picks, commit, bosses) => { setConfBusy(true); try { await actions.confront(group, position, picks, commit, bosses); } finally { setConfBusy(false); } }} />` : null}
       ${pub?.confront && pub.confront.applied ? html`<${ConfrontClash} pub=${pub} />` : null}
       ${myRole === 'attack' && (phase === PHASE.ROUND_START || phase === PHASE.PREP || phase === PHASE.COMBAT || phase === PHASE.SETTLE) ? html`<div class="gm__attackwait" role="status" data-testid="attack-wait">
         <div class="gm__attackwait__in">
