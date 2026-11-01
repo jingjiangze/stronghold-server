@@ -113,6 +113,9 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'enemyRamp',     // 战斗开始那一档 +step（战斗内每 10 秒递增缺通道，未接）
   'atkPerBond',    // 己方攻击：每激活盟约 +10%（relicAllyMul → sim 的 relicMods 通道）
   'atkPerRound',   // 己方攻击：每过一回合 +15%，最多 10 次（同上）
+  'atkPerEquip',   // 棋盘每件装备：攻击 +10% / 生命 +20%（relicAllyMul）
+  'atkPerBenchItem', // 待部署区每件装备：攻击 +10%（上限 +150%）
+  'homeCooked',    // 生命/攻击 +20%，每场完美作战再 +10%（ps.relicPerfectBattles）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -531,6 +534,39 @@ export class MatchMeltdown {
       const per = Math.max(0, Number(ru.per) || 0);
       const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 10;
       atk += per * Math.min(max, Math.max(0, (Number(this.round) || 1) - 1));
+    }
+    // 棋盘上已装备的件数（atkPerEquip「每装备一件：攻击 +10%、生命 +20%」）
+    const boardItems = (() => {
+      const b = ps.board;
+      if (!b || typeof b.values !== 'function') return 0;
+      let n = 0;
+      for (const piece of b.values()) n += Array.isArray(piece && piece.items) ? piece.items.length : 0;
+      return n;
+    })();
+    for (const ru of this.relicRuleParams('atkPerEquip')) {
+      atk += Math.max(0, Number(ru.atk) || 0) * boardItems;
+      hp += Math.max(0, Number(ru.hp) || 0) * boardItems;
+    }
+    // 待部署区/手牌里的装备件数（atkPerBenchItem「每有一件：攻击 +10%，最多 +150%」）
+    const benchItems = (() => {
+      let n = 0;
+      for (const area of [ps.temp, ps.hand]) {
+        if (!Array.isArray(area)) continue;
+        for (const piece of area) if (piece && piece.kind === 'item') n += 1;
+      }
+      return n;
+    })();
+    for (const ru of this.relicRuleParams('atkPerBenchItem')) {
+      const per = Math.max(0, Number(ru.per) || 0);
+      const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 1.5;
+      atk += Math.min(max, per * benchItems);
+    }
+    // homeCooked「生命 +20%、攻击 +20%；每通过一场完美作战额外 +10%」
+    const perfect = Math.max(0, Number(ps.relicPerfectBattles) || 0);
+    for (const ru of this.relicRuleParams('homeCooked')) {
+      const per = Math.max(0, Number(ru.per) || 0);
+      hp += 0.2 + per * perfect;
+      atk += 0.2 + per * perfect;
     }
     if (!atk && !hp) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp };
