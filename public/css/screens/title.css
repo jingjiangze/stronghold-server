@@ -230,6 +230,46 @@
   background: linear-gradient(90deg, var(--mint-500), transparent 60%);
 }
 .title-login .btn--xl { letter-spacing: .6em; padding-left: calc(.48rem + .3em); }
+/* 账号条（ui/account.js AccountBar；业主 2026-11-01：账号入口要显眼、但登录不强制，游客照样输代号开局） */
+.title-account-bar-row { display: flex; gap: .1rem; align-items: stretch; }
+.title-account-bar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .1rem;
+  height: .56rem;
+  padding: 0 .16rem;
+  border: 1px solid var(--line-2);
+  background: rgba(10, 13, 12, .72);
+  color: var(--text-hi);
+  font: inherit;
+  font-size: calc(.18 * var(--t));
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: border-color 140ms, color 140ms;
+}
+.title-account-bar:hover, .title-account-bar:focus-visible { border-color: var(--mint-500); color: #fff; }
+.title-account-bar--ann { flex: 0 0 auto; padding: 0 .18rem; font-size: calc(.16 * var(--t)); color: var(--text-lo); }
+.title-account-bar--in { justify-content: flex-start; gap: .12rem; cursor: default; }
+.title-account-bar--in:hover { border-color: var(--line-2); color: var(--text-hi); }
+.title-account-bar__avatar { width: .3rem; height: .3rem; border-radius: 50%; flex: none; }
+.title-account-bar__icon { width: .2rem; height: .2rem; opacity: .8; }
+.title-account-bar__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-weight: 600; }
+.title-account-bar--in .btn { flex: none; }
+/* 登录后代号锁定为账号昵称（title.js），退出登录才能改回自由代号 */
+.title-callsign-locked {
+  display: flex;
+  align-items: center;
+  gap: .1rem;
+  height: .68rem;
+  padding: 0 .18rem;
+  border: 1px dashed var(--line-2);
+  background: rgba(10, 13, 12, .5);
+}
+.title-callsign-locked__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(.22 * var(--t)); }
+.title-callsign-locked__hint { flex: none; color: var(--text-lo); font-size: calc(.12 * var(--t)); }
 /* 下载完整素材 and 导入素材包 side by side under the login box (ui/assetDownload.js, ui/assetImport.js), each with its hint line;
    a label too long for its half (a larger 文字大小) wraps inside its button instead of spilling over the other one */
 .title-assets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .12rem; width: 4.9rem; margin-top: .12rem; text-align: center; }

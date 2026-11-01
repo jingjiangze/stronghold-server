@@ -1,14 +1,20 @@
-// public/js/ui/account.js — 账号面板（P2，业主 2026-11-01）。
+// public/js/ui/account.js — 账号面板（P2/P5，业主 2026-11-01）。
 //
-// 口径：QQ 号就是账号、头像直接调 QQ 头像 API（不存图）、游客可绑定、密码自己设（**两次输入**）、
-// 登录默认保留（令牌存 localStorage）。公告来自服务端 /api/announcements（管理后台写）。
+// 口径：QQ 号就是账号、头像直接调 QQ 头像 API（不存图）、**账号不强制**（游客仍可直接开局，
+// 想留名/跨设备再手动绑定）、密码自己设（**两次输入**）、登录默认保留（令牌存 localStorage）。
+// 公告来自服务端 /api/announcements（管理后台写）。
 //
-// 这个文件在核心 public/js 下；mota 插件的 main.js 用 `./ui/account.js` 引它时，运行时回退到这里
-// （插件只覆盖列出的文件，ui/account.js 不在其中）。
+// 2026-11-01 业主第二次改口径：「账号按钮太小」「首页替换为账号」——
+// 入口不再是左上角小 chip，而是首页登录卡里那条宽度撑满的 `AccountBar`（`public/css/screens/title.css`
+// 的 `.title-account-bar`）；登录后首页代号框锁定为账号昵称（`title.js`）。`AccountDock` 保留导出但已停用
+// （插件 `main.js` 仍在挂它，撤掉会 404/报错）。
+//
+// 这个文件在核心 public/js 下：插件 `main.js` 用 `./ui/account.js`、插件 `ui/accounts.js` 用 `./account.js`
+// 引它时，运行时回退到这里（`plugins/mota/plugin.json` 的 `code.client` 只列了复数 `js/ui/accounts.js`）。
 
-import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
-import { html, Button, Modal } from './components.js';
-import { useStore, selectRoute } from '../store.js';
+import { useEffect, useState } from '../../vendor/hooks.module.js';
+import { html, Button, Icon, Modal } from './components.js';
+import { useStore } from '../store.js';
 import { t } from '../../../shared/i18n.js';
 
 const TOKEN_KEY = 'sp.accountToken';
@@ -36,7 +42,79 @@ const ERR = {
   UNAUTHORIZED: () => t('登录已过期，请重新登录'),
 };
 
-function AccountModal({ open, onClose, onChanged }) {
+/** 一次性把面板样式塞进 head（不依赖任何插件 CSS）；入口条本身的样式在 title.css。 */
+let styled = false;
+function ensureStyle() {
+  if (styled || typeof document === 'undefined') return;
+  styled = true;
+  if (document.getElementById('sp-acc-style')) return;
+  const st = document.createElement('style');
+  st.id = 'sp-acc-style';
+  st.textContent = `
+    .acc-head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+    .acc-avatar{border-radius:50%}
+    .acc-dim{color:#8b93a1;font-size:12px}
+    .acc-row{display:flex;gap:10px;align-items:center;margin:8px 0}
+    .acc-row span{width:84px;flex:none;color:#aab2c0}
+    .acc-row input{flex:1;padding:6px 8px;border-radius:6px;border:1px solid #2f3745;background:#0e1116;color:#e6e9ef;font:inherit}
+    .acc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+    .acc-err{color:#ff8a80;margin:8px 0 0}
+    .acc-ann{list-style:none;padding:0;margin:0}
+    .acc-ann li{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+    .acc-ann__t{font-weight:600;display:flex;justify-content:space-between;gap:10px}
+    .acc-ann__b{white-space:pre-wrap;color:#c8cdd6;margin-top:4px}`;
+  document.head.appendChild(st);
+}
+
+// ── 账号会话（模块级快照 + 订阅）：首页登录条、大厅身份 chip、代号锁定都读同一份 ─────────────
+let snapshot = { token: readToken(), account: null, ready: false };
+const subs = new Set();
+const publish = (patch) => { snapshot = { ...snapshot, ...patch }; for (const f of [...subs]) f(snapshot); };
+
+/** 已登录账号（可能为 null）。任何组件都能读；登录/退出后自动重渲染。 */
+export function useAccount() {
+  const [snap, setSnap] = useState(snapshot);
+  useEffect(() => {
+    subs.add(setSnap);
+    ensureStyle();
+    if (snapshot.token && !snapshot.account) refreshAccount();
+    else if (!snapshot.token && !snapshot.ready) publish({ ready: true });
+    return () => { subs.delete(setSnap); };
+  }, []);
+  return snap;
+}
+
+/** 用本地令牌向服务端确认身份；令牌失效就丢掉。 */
+export async function refreshAccount() {
+  const token = readToken();
+  if (!token) { publish({ token: '', account: null, ready: true }); return null; }
+  try {
+    const r = await call('/api/account/me', { token });
+    if (r.ok) { publish({ token, account: r.account, ready: true }); return r.account; }
+  } catch { /* offline: keep the token, retry on the next mount */ }
+  writeToken('');
+  publish({ token: '', account: null, ready: true });
+  return null;
+}
+
+/** 登录/绑定成功后写入令牌并广播。 */
+export function setAccountSession(token, account) {
+  writeToken(token || '');
+  publish({ token: token || '', account: account || null, ready: true });
+}
+
+/** 退出登录（只清本地令牌，不影响对局）。 */
+export function clearAccountSession() {
+  writeToken('');
+  publish({ token: '', account: null, ready: true });
+}
+
+/** 大厅等处读一眼「有没有绑定账号」——非响应式，够用于静态标签。 */
+export function hasBoundAccount() {
+  return !!snapshot.account || !!readToken();
+}
+
+export function AccountModal({ open, onClose, onChanged }) {
   const me = useStore((s) => s.me);
   const [token, setToken] = useState(readToken);
   const [account, setAccount] = useState(null);
@@ -68,7 +146,8 @@ function AccountModal({ open, onClose, onChanged }) {
         ? await call('/api/auth/bind', { method: 'POST', body: { qq, password: pw }, token: me?.token || '' })
         : await call('/api/auth/login', { method: 'POST', body: { qq, password: pw } });
       if (!r.ok) { setErr((ERR[r.error] || (() => r.error || t('操作失败')))()); return; }
-      writeToken(r.token); setToken(r.token); setAccount(r.account); setName(r.account.name || ''); setColor(r.account.nameStyle?.color || '');
+      setToken(r.token); setAccount(r.account); setName(r.account.name || ''); setColor(r.account.nameStyle?.color || '');
+      setAccountSession(r.token, r.account);
       setPw(''); setPw2(''); onChanged?.(r.account);
     } finally { setBusy(false); }
   };
@@ -79,11 +158,11 @@ function AccountModal({ open, onClose, onChanged }) {
       const body = { name: name.trim(), nameStyle: color ? { color } : null };
       const r = await call('/api/account/profile', { method: 'POST', body, token });
       if (!r.ok) { setErr((ERR[r.error] || (() => r.error || t('保存失败')))()); return; }
-      setAccount(r.account); onChanged?.(r.account);
+      setAccount(r.account); publish({ account: r.account }); onChanged?.(r.account);
     } finally { setBusy(false); }
   };
 
-  const logout = () => { writeToken(''); setToken(''); setAccount(null); onChanged?.(null); };
+  const logout = () => { setToken(''); setAccount(null); clearAccountSession(); onChanged?.(null); };
 
   return html`<${Modal} open=${open} onClose=${onClose} title=${t('账号')} width="min(460px,92vw)"
       actions=${html`<${Button} onClick=${onClose}>${t('关闭')}<//>`}>
@@ -106,7 +185,7 @@ function AccountModal({ open, onClose, onChanged }) {
   <//>`;
 }
 
-function AnnouncementModal({ open, onClose }) {
+export function AnnouncementModal({ open, onClose }) {
   const [items, setItems] = useState(null);
   useEffect(() => {
     if (!open) return;
@@ -125,50 +204,50 @@ function AnnouncementModal({ open, onClose }) {
   <//>`;
 }
 
-/** 右下角常驻入口（账号 + 公告）。挂一次即可。 */
-export function AccountDock() {
-  // 业主 2026-11-01：账号入口挂在首页，不再做全屏悬浮窗——非首页一律不渲染。
-  const route = useStore(selectRoute);
-  const [accOpen, setAccOpen] = useState(false);
+/**
+ * 首页登录卡里的账号条（业主 2026-11-01：入口要显眼，不做小 chip）。
+ * 未登录：整行「账号登录 / 绑定」；已登录：QQ 头像 + 昵称 + 「切换账号」。
+ * 账号不强制——游客直接输代号点开始即可，绑定只是可选。
+ */
+export function AccountBar({ account = null, onAccount }) {
+  const [open, setOpen] = useState(false);
   const [annOpen, setAnnOpen] = useState(false);
-  const [account, setAccount] = useState(null);
   const [hasAnn, setHasAnn] = useState(false);
-
   useEffect(() => {
-    const token = readToken();
-    if (token) call('/api/account/me', { token }).then((r) => { if (r.ok) setAccount(r.account); });
+    ensureStyle();
     call('/api/announcements').then((r) => setHasAnn((r.items || []).length > 0)).catch(() => {});
-    // 极简样式：整块自包含，避免依赖插件 CSS
-    if (!document.getElementById('sp-acc-style')) {
-      const st = document.createElement('style');
-      st.id = 'sp-acc-style';
-      st.textContent = `.sp-acc{position:fixed;left:.44rem;top:1.08rem;z-index:60;display:flex;gap:.1rem;align-items:center;font-size:calc(.14 * var(--t, 11))}
-        .sp-acc button{display:inline-flex;align-items:center;gap:.06rem;height:max(.28rem,1.5em);padding:0 .12rem;border:1px solid rgba(255,255,255,.18);border-radius:2px;background:rgba(10,13,12,.72);color:var(--text-hi,#e6e9ef);font:inherit;cursor:pointer}
-        .sp-acc button:hover{border-color:var(--mint-500,#7fd1b0);color:#fff}
-        .sp-acc img{width:1.3em;height:1.3em;border-radius:50%}
-        .acc-head{display:flex;gap:12px;align-items:center;margin-bottom:12px}
-        .acc-avatar{border-radius:50%}
-        .acc-dim{color:#8b93a1;font-size:12px}
-        .acc-row{display:flex;gap:10px;align-items:center;margin:8px 0}
-        .acc-row span{width:84px;flex:none;color:#aab2c0}
-        .acc-row input{flex:1;padding:6px 8px;border-radius:6px;border:1px solid #2f3745;background:#0e1116;color:#e6e9ef;font:inherit}
-        .acc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-        .acc-err{color:#ff8a80;margin:8px 0 0}
-        .acc-ann{list-style:none;padding:0;margin:0}
-        .acc-ann li{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-        .acc-ann__t{font-weight:600;display:flex;justify-content:space-between;gap:10px}
-        .acc-ann__b{white-space:pre-wrap;color:#c8cdd6;margin-top:4px}`;
-      document.head.appendChild(st);
-    }
   }, []);
 
-  if (route !== 'title') return null;
-  return html`<div class="sp-acc">
-    ${hasAnn ? html`<button type="button" onClick=${() => setAnnOpen(true)}>${t('公告')}</button>` : null}
-    <button type="button" onClick=${() => setAccOpen(true)}>
-      ${account ? html`<img src=${account.avatar} alt="" /><span>${account.name || account.qq}</span>` : t('账号')}
-    </button>
-    <${AccountModal} open=${accOpen} onClose=${() => setAccOpen(false)} onChanged=${setAccount} />
-    <${AnnouncementModal} open=${annOpen} onClose=${() => setAnnOpen(false)} />
+  const modal = html`<${AccountModal} open=${open} onClose=${() => setOpen(false)}
+      onChanged=${(a) => { setOpen(false); onAccount?.(a); }} />`;
+  const annModal = html`<${AnnouncementModal} open=${annOpen} onClose=${() => setAnnOpen(false)} />`;
+
+  if (!account) {
+    return html`<div class="title-account-bar-row">
+      <button type="button" class="title-account-bar" onClick=${() => setOpen(true)} title=${t('用 QQ 号登录或绑定账号')}>
+        <${Icon} name="user" class="title-account-bar__icon" />
+        <span>${t('账号登录 / 绑定')}</span>
+      </button>
+      ${hasAnn ? html`<button type="button" class="title-account-bar title-account-bar--ann" onClick=${() => setAnnOpen(true)}>${t('公告')}</button>` : null}
+      ${modal}${annModal}
+    </div>`;
+  }
+  return html`<div class="title-account-bar-row">
+    <div class="title-account-bar title-account-bar--in">
+      <img class="title-account-bar__avatar" src=${account.avatar} alt="" width="26" height="26" loading="lazy" />
+      <span class="title-account-bar__name">${account.name || account.qq}</span>
+      <${Button} variant="ghost" size="sm" onClick=${() => setOpen(true)}>${t('切换账号')}<//>
+    </div>
+    ${hasAnn ? html`<button type="button" class="title-account-bar title-account-bar--ann" onClick=${() => setAnnOpen(true)}>${t('公告')}</button>` : null}
+    ${modal}${annModal}
   </div>`;
+}
+
+/**
+ * 旧的全屏悬浮 dock：已停用（业主 2026-11-01「入口挂首页、不要悬浮窗」）。
+ * 插件 `main.js` 仍然 `render(html\`<${App}/><${AccountDock}/>\`)`，所以这个导出必须留着。
+ */
+export function AccountDock() {
+  useEffect(() => { ensureStyle(); }, []);
+  return null;
 }
