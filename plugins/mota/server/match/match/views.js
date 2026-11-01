@@ -86,6 +86,21 @@ export class MatchViews {
       stageId: this.stageId,
       // 下一回合的战场 id（客户端据此在本回合空闲时预热场景包，换图时只重建一次）
       nextStageId: this.nextStageId || this.stageId,
+      // 肉鸽（完整模式，业主 2026-11-01）：本回合词缀 / 是否紧急作战 / 下回合预告 —— 客户端常驻 HUD 直接读。
+      ...(this.isRogue === true ? (() => {
+        const r = Number(this.round) || 1;
+        const aff = typeof this.rogueRoundAffix === 'function' ? this.rogueRoundAffix(r) : null;
+        const nextOf = (pred, span) => {
+          for (let i = 1; i <= span; i++) { const n = r + i; if (typeof pred === 'function' && pred.call(this, n)) return n; }
+          return null;
+        };
+        return { rogue: {
+          affix: aff ? { kind: aff.kind, mul: aff.mul, label: aff.label } : null,
+          emergency: typeof this.rogueEmergencyRound === 'function' ? this.rogueEmergencyRound(r) === true : false,
+          nextEventRound: nextOf(this.rogueEventRound, 3),
+          nextEmergencyRound: nextOf(this.rogueEmergencyRound, 5),
+        } };
+      })() : {}),
       setupRevision: this.setupRevision,
       rerollVote: this.setupVote ? {
         id: this.setupVote.id,
