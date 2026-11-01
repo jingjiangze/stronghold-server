@@ -586,10 +586,12 @@ export function RoomScreen() {
   const setDifficulty = (difficulty) => run('diff', () => net.request('room.setDifficulty', { difficulty }));
   // 潜入需要一个「可接的 AI 席」，而 coop 房默认不填 AI ⇒ 开启「AI 协作」时若一个 AI 席都没有，自动补一个。
   const setAiTakeover = (on) => run('aihandover', async () => {
+    // 潜入：先保证房里**有可接的 AI 席**（coop 房默认不填 AI），再开接管开关 —— 顺序反了会「开了但没人可接」。
+    if (on) {
+      const hasBot = (room.seats || []).some((s) => s && s.isBot && !s.left);
+      if (!hasBot) await net.request('room.addBot', {});
+    }
     await net.request('room.setAiTakeover', { on });
-    if (!on) return;
-    const hasBot = (room.seats || []).some((s) => s && s.isBot && !s.left);
-    if (!hasBot) await net.request('room.addBot', {});
   });
   const setAiRandom = (on) => run('airandom', () => net.request('room.setAiRandom', { on }));
   const setAiLast = (on) => run('ailast', () => net.request('room.setAiPicksLast', { on }));
