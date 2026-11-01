@@ -1,5 +1,5 @@
 import { useState } from '../../vendor/hooks.module.js';
-import { html } from './components.js';
+import { html, Icon } from './components.js';
 import { t } from '../../../shared/i18n.js';
 
 /**
@@ -13,10 +13,11 @@ export function RogueHud({ rogue, relicCards, disabled = false }) {
   const cards = Array.isArray(relicCards) ? relicCards : [];
   if (disabled || (!rogue && !cards.length)) return null;
   const affix = rogue && rogue.affix ? rogue.affix.label : '';
+  // 徽章带图标（2026-11-01）：警告=紧急作战、骰子=不期而遇、沙漏=回合预告
   const badges = [];
-  if (rogue && rogue.emergency === true) badges.push(t('紧急作战'));
-  if (rogue && Number.isInteger(rogue.nextEventRound)) badges.push(t('下次不期而遇 R{r}', { r: rogue.nextEventRound }));
-  if (rogue && Number.isInteger(rogue.nextEmergencyRound)) badges.push(t('下次紧急作战 R{r}', { r: rogue.nextEmergencyRound }));
+  if (rogue && rogue.emergency === true) badges.push({ icon: 'warn', text: t('紧急作战') });
+  if (rogue && Number.isInteger(rogue.nextEventRound)) badges.push({ icon: 'dice', text: t('下次不期而遇 R{r}', { r: rogue.nextEventRound }) });
+  if (rogue && Number.isInteger(rogue.nextEmergencyRound)) badges.push({ icon: 'hourglass', text: t('下次紧急作战 R{r}', { r: rogue.nextEmergencyRound }) });
   return html`<div class="rogue-hud" data-testid="rogue-hud"
       style="position:fixed;left:.6rem;bottom:.6rem;z-index:40;max-width:min(360px,46vw);font-size:12px;
              background:rgba(12,14,20,.82);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:.45rem .6rem;color:#e8eaf0">
@@ -28,7 +29,7 @@ export function RogueHud({ rogue, relicCards, disabled = false }) {
       <span style="margin-left:auto;opacity:.6">${open ? '▾' : '▸'}</span>
     </button>
     ${badges.length ? html`<div data-testid="rogue-hud-badges" style="margin-top:.3rem;display:flex;flex-wrap:wrap;gap:.3rem">
-      ${badges.map((b) => html`<span key=${b} style="padding:.05rem .35rem;border-radius:999px;background:rgba(232,178,92,.18);border:1px solid rgba(232,178,92,.4)">${b}</span>`)}
+      ${badges.map((b) => html`<span key=${b.text} style="padding:.05rem .35rem;border-radius:999px;background:rgba(232,178,92,.18);border:1px solid rgba(232,178,92,.4);display:inline-flex;align-items:center;gap:.25rem"><${Icon} name=${b.icon} />${b.text}</span>`)}
     </div>` : null}
     ${open ? html`<div data-testid="rogue-hud-list" style="margin-top:.35rem;border-top:1px solid rgba(255,255,255,.12);padding-top:.3rem">
       ${cards.length

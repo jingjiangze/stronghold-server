@@ -460,13 +460,13 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
     return () => { removeEventListener('keydown', onKey); document.body.classList.remove('hub-dialog-open'); };
   }, []);
   const cells = [
-    { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', acc: 'var(--gold)',
+    { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', icon: 'joint', acc: 'var(--gold)',
       desc: t('两人共竞：团队储备、三项商店升级、借贷、救济与救援。') },
-    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', acc: 'var(--ice)',
+    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', icon: 'bounty', acc: 'var(--ice)',
       desc: t('2V2 攻防：官方出怪为主，你替换其中一部分，靠自家怪被击杀拿赏金；建房时可选倍速。') },
-    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', acc: 'var(--orange)',
+    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', icon: 'confront', acc: 'var(--orange)',
       desc: t('出怪、路线、时机全部由你决定；守方遇到的怪约为官方的 1.5 倍。') },
-    { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', acc: '#9d7cf0',
+    { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', icon: 'rogue', acc: '#9d7cf0',
       desc: t('开局与每 2 回合各抽一次藏品三选一，外加随机词缀、随机事件与每回合换图。') },
   ];
   return html`<div class=${`modal${leaving ? ' is-leaving' : ''}`} role="presentation"
@@ -485,7 +485,7 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
       <div class="fun-grid">
         ${cells.map((c) => html`<button key=${c.id} type="button" class="fun-card" data-testid=${`fun-${c.id}`}
             disabled=${!!busy} style=${`--acc:${c.acc}`} onClick=${() => onPick(c.id)}>
-          <span class="fun-card__en">${c.en}</span>
+          <span class="fun-card__head"><${Icon} name=${c.icon} class="fun-card__icon" /><span class="fun-card__en">${c.en}</span></span>
           <span class="fun-card__name">${c.name}</span>
           <span class="fun-card__desc">${c.desc}</span>
           <span class="fun-card__corner" aria-hidden="true"></span>
