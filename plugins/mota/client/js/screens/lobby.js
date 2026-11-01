@@ -485,7 +485,8 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
       <div class="fun-grid">
         ${cells.map((c) => html`<button key=${c.id} type="button" class="fun-card" data-testid=${`fun-${c.id}`}
             disabled=${!!busy} style=${`--acc:${c.acc}`} onClick=${() => onPick(c.id)}>
-          <span class="fun-card__head"><${Icon} name=${c.icon} size=${28} class="fun-card__icon" /><span class="fun-card__en">${c.en}</span></span>
+          <span class="fun-card__head" style="display:flex;align-items:center;gap:.55rem;min-width:0">
+            <${Icon} name=${c.icon} size=${28} class="fun-card__icon" /><span class="fun-card__en">${c.en}</span></span>
           <span class="fun-card__name">${c.name}</span>
           <span class="fun-card__desc">${c.desc}</span>
           <span class="fun-card__corner" aria-hidden="true"></span>
