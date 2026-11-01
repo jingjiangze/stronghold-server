@@ -28,7 +28,7 @@ export function RogueEventOverlay({ offer, busy = false, onPick }) {
     <div class="hxd__inner">
       <span class="hxd__micro">ROGUE // <b>ENCOUNTER</b></span>
       <h2 class="hxd__title" data-text=${offer.name}>
-        <${Icon} name=${EVENT_ICONS[offer.eventId] || 'dots'} class="rgv__icon" />${offer.name}
+        <${Icon} name=${EVENT_ICONS[offer.eventId] || 'dots'} size=${22} class="rgv__icon" />${offer.name}
       </h2>
       <div class="hxd__rule" aria-hidden="true"><i></i><span></span><i></i></div>
       <p class="hxd__sub">
