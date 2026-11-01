@@ -19,6 +19,7 @@ function fakeMatch({ modeId, isRogue, round = 1, relics = RELICS, owned = [] }) 
     gd: { raw: { relics } },
     alivePlayers: () => [ps],
     relicPool: MatchMeltdown.prototype.relicPool,
+    relicDraftPool: MatchMeltdown.prototype.relicDraftPool,
     relicDraftRound: MatchMeltdown.prototype.relicDraftRound,
     markPrivate() {}, markPublic() {}, reportError() {},
     later(ms, fn) { timers.push({ ms, fn }); return timers.length; },
