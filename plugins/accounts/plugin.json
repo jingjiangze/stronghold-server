@@ -1,0 +1,19 @@
+{
+  "manifest": 2,
+  "name": { "zh": "账号登录", "en": "Account sign-in" },
+  "description": {
+    "zh": "首页登录卡里的 QQ 账号入口：登录/绑定后显示头像与昵称；不登录也能直接以游客代号开局。",
+    "en": "The QQ account entry inside the home screen's login card: after signing in or linking, it shows your avatar and nickname. Playing as a guest still works without it."
+  },
+  "version": "0.1.0",
+  "app": ">=0.3.0 <0.4.0",
+  "api": 1,
+  "class": "ui",
+  "scope": ["personal"],
+  "authors": ["jingjiangze"],
+  "license": "MIT",
+  "slots": ["title.login"],
+  "code": {
+    "client": ["js/plugins/accounts/title.login.js"]
+  }
+}
