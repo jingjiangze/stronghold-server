@@ -38,6 +38,7 @@ import { getData, setData } from '../../data.js';
 import { installOfficialBounds } from '../../../shared/plugins/officialBounds.js';
 import { contentHashOf } from '../../../shared/plugins/identity.js';
 import { DEFAULT_VERSION, versionOfData } from '../../../shared/versions.js';
+import { applyMatchMixins } from './mixins.js';
 
 /** A worker thread (parentPort), else a child process (its IPC channel). */
 const viaWorker = !!parentPort;
@@ -204,6 +205,14 @@ async function boot() {
       grantPrepDsl(this, dslGrants);
     }
   };
+  // 多插件 Match 叠加（2026-11-01，业主「肉鸽做成插件」）：种子 Match 之外的插件用 `code.matchMixin` 各带一个
+  // 导出 `Mixin` 类的模块，其原型方法按插件加载顺序拷到同一个对局类上（重名直接报错，见 host/mixins.js）。
+  // 没有插件声明 matchMixin 时这一段完全不执行，行为与只有 code.match 时逐字节一致。
+  const mixins = options.code && Array.isArray(options.code.matchMixins) ? options.code.matchMixins : [];
+  if (mixins.length) {
+    const applied = await applyMatchMixins(MatchClass, mixins, { log });
+    log.info(`[plugins] match mixins: ${applied.length ? applied.join(', ') : '—'}`);
+  }
   if (options.virtualTime) ({ VirtualScheduler } = await import('../scheduler.js'));
 }
 
