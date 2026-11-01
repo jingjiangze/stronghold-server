@@ -202,6 +202,18 @@ export class PlayerRound {
       const am = this.m && typeof this.m.relicAllyMul === 'function' ? this.m.relicAllyMul(this) : null;
       const nb = this.m && typeof this.m.relicNeighborRules === 'function' ? this.m.relicNeighborRules() : null;
       const camo = this.m && typeof this.m.relicCamoRules === 'function' ? this.m.relicCamoRules() : null;
+      // survivor（生还者合约）：只强化**场上攻击力最高**的那一名干员
+      const surv = this.m && typeof this.m.relicSurvivorRule === 'function' ? this.m.relicSurvivorRule(this) : null;
+      let survUid = null;
+      if (surv) {
+        let bestAtk = -1;
+        for (const u of units) {
+          if (u.kind !== 'chess') continue;
+          const rec = this.gd && typeof this.gd.chess === 'function' ? this.gd.chess(u.chessId) : null;
+          const a = Number(rec && rec.stats && rec.stats.atk) || 0;
+          if (a > bestAtk) { bestAtk = a; survUid = u.uid; }
+        }
+      }
       // camoAura（犬植浆）：每被**别的干员**的攻击范围覆盖一次，攻击 +auraAtk（可叠加）
       let auraCount = null;
       if (camo && camo.auraAtk > 0) {
@@ -224,7 +236,7 @@ export class PlayerRound {
           auraCount.set(u.uid, n);
         }
       }
-      if (am || nb || camo) {
+      if (am || nb || camo || surv) {
         const occ = new Set(boardOrder(this.board).map(({ r, c }) => `${r},${c}`));
         for (const u of units) {
           let n = 0;
@@ -268,10 +280,13 @@ export class PlayerRound {
             }
             if (camo.auraAtk > 0 && auraCount) camoMul *= 1 + camo.auraAtk * (auraCount.get(u.uid) || 0);
           }
-          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0)) * eliteMul.atkMul * camoMul;
+          // survivor（生还者合约）：只有攻击力最高的那一名吃「+20% ×(1+已打场数)」的攻/防
+          let survMul = 1;
+          if (surv && survUid === u.uid) survMul = 1 + surv.per * surv.stacks;
+          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0)) * eliteMul.atkMul * camoMul * survMul;
           const aspdAdd = (am && Number.isFinite(am.aspdAdd) ? am.aspdAdd : 0) + (nb ? nb.aspdPer * n : 0);
           const hpMul = (am && Number.isFinite(am.hpMul) ? am.hpMul : 1) * eliteMul.hpMul;
-          const defMul = (am && Number.isFinite(am.defMul) ? am.defMul : 1) * eliteMul.defMul;
+          const defMul = (am && Number.isFinite(am.defMul) ? am.defMul : 1) * eliteMul.defMul * survMul;
           const aspdAdd2 = aspdAdd + eliteMul.aspdAdd;
           u.relicMods = { ...(am || {}), atkMul, hpMul, ...(defMul !== 1 ? { defMul } : {}), ...(aspdAdd2 ? { aspdAdd: aspdAdd2 } : {}) };
         }
