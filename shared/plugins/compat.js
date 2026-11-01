@@ -34,6 +34,7 @@ export const COMPAT_STATUS = Object.freeze({
  */
 export const CORE_CAPABILITIES = Object.freeze(new Set([
   'code.match',        // 宿主按插件给的入口加载 Match（contentSet → 宿主 init options）
+  'code.matchMixin',   // 对局类叠加层：code.matchMixin 模块的 Mixin 方法拷到种子 Match 原型上（2026-11-01）
   'code.client',       // 插件 client/** 按同路径顶替页面资源
   'code.data',         // 插件 data/config.json 覆盖内容集配置
   'code.lobby',        // lobby 级插件面（server/plugins/lobbyModules.js）
