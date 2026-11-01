@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { MatchMeltdown } from '../../plugins/mota/server/match/match/meltdown.js';
+import { MatchMeltdown, relicEffectApplied } from '../../plugins/mota/server/match/match/meltdown.js';
 
 const RELICS = JSON.parse(fs.readFileSync(new URL('../../plugins/relics-87/data/relics.json', import.meta.url), 'utf8'));
 
@@ -93,4 +93,22 @@ test('藏品池：87 条、按 id 去重、排除已拥有', () => {
   assert.equal(pool.length, 87, 'relics-87 应提供 87 条');
   assert.equal(new Set(pool.map((r) => r.id)).size, pool.length, 'id 不许重复');
   assert.ok(pool.every((r) => typeof r.id === 'string' && r.id));
+});
+
+test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpCap 算生效，rule 类不算', () => {
+  assert.equal(relicEffectApplied({ enemy: { atk: 0.1 } }), true);
+  assert.equal(relicEffectApplied({ enemyRank: { BOSS: { hp: 0.1 } } }), true);
+  assert.equal(relicEffectApplied({ immediate: { funds: 3 } }), true);
+  assert.equal(relicEffectApplied({ deployCap: 1 }), true);
+  assert.equal(relicEffectApplied({ lpCap: 2 }), true);
+  assert.equal(relicEffectApplied({ rule: { id: 'fundsDrain' } }), false, 'rule 类尚未接入');
+  assert.equal(relicEffectApplied({ ally: { atk: 0.1 } }), false, 'ally 类尚未接入');
+  assert.equal(relicEffectApplied(null), false);
+  // 数据侧盘点：87 条里「有已实现效果」的那批要够用，且 rule 类一律标未生效（诚实暴露给 HUD）
+  const relics = RELICS.relics;
+  const applied = relics.filter((r) => relicEffectApplied(r.effect)).length;
+  const ruleInert = relics.filter((r) => { const e = r.effect || {}; return !!e.rule && !relicEffectApplied(e); }).length;
+  assert.ok(applied >= 30, `有实现效果的藏品过少：${applied}/${relics.length}`);
+  assert.ok(ruleInert >= 40, `rule 类藏品应有 40+ 条被标为未实装：${ruleInert}`);
+  assert.equal(applied + relics.filter((r) => !relicEffectApplied(r.effect)).length, relics.length, '未生效 = 总数 - 已生效');
 });

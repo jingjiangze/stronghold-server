@@ -35,6 +35,8 @@ export function RogueHud({ rogue, relicCards, disabled = false }) {
         ? html`<ul style="margin:0;padding-left:1rem">
             ${cards.map((c) => html`<li key=${c.id} data-relic-id=${c.id} style=${c.kind === 'negative' ? 'color:#e28a6a' : ''}>
               ${c.name}${c.tier ? html` <small style="opacity:.6">${c.tier}</small>` : null}
+              ${c.applied === false ? html` <small data-relic-unapplied title=${t('这条藏品的效果还没接进引擎：本局只记录、不生效')}
+                style="opacity:.55;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:0 .2rem">${t('未实装')}</small>` : null}
             </li>`)}
           </ul>`
         : html`<p style="margin:0;opacity:.7">${t('还没有藏品：开局与每 2 回合各有一次三选一。')}</p>`}
