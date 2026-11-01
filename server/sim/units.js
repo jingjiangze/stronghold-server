@@ -126,6 +126,7 @@ export class Unit {
     this.relicInitSp = 0;
     this.relicSpRegenMul = 1;
     this.relicStunOnDeploy = 0;
+    this.relicShelter = 0;
   }
 
   markDirty() { this._dirty = true; }

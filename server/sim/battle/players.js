@@ -209,6 +209,7 @@ export class BattlePlayers {
       if (rm.initSp != null) u.relicInitSp = Math.trunc(n('initSp'));
       if (rm.spRegenMul != null) u.relicSpRegenMul = Math.max(0, n('spRegenMul'));
       if (rm.stunOnDeploy != null) u.relicStunOnDeploy = Math.max(0, n('stunOnDeploy'));
+      if (rm.shelter != null) u.relicShelter = Math.max(0, Math.min(1, n('shelter')));
     }
     u.alive = false;
     u.deployed = false;

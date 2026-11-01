@@ -144,6 +144,8 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'hpIfDp',           // 场上部署费用合计 ≥ 阈值：全队最大生命 +150%（relicAllyMul，费用取 gd.chess().stats.cost）
   'spInit',           // 所有干员初始技力 −10（relicAllyMul → 引擎 initSp 通道）
   'spOnDeploy',       // 所有干员部署时失去 15 点技力（同一条 initSp 通道：初始技力减少、夹在 0 以上）
+  'shelter',          // 所有我方单位获得 10% 庇护（引擎 dmgTakenMul 通道；低血再 +35% 那半句要战斗内 HP，未接）
+  'stunOnDeploy',     // 随机 N 名干员部署时晕眩 10s，N 每回合 +1、最多 4（per-unit relicMods.stunOnDeploy）
   'survivor',         // 攻击最高的一名干员 攻/防 +20%，每打完一场再 +20%（per-unit，见 battleInput）
 ]);
 export function relicEffectApplied(effect) {
@@ -615,6 +617,25 @@ export class MatchMeltdown {
     return acc;
   }
 
+  /**
+   * `stunOnDeploy`（“未尽的生命”）「我方随机一名干员部署时晕眩 10s，每过一个回合使晕眩人数 +1，最多 +3 名」：
+   * 返回 { count, dur }，由 `battleInput()` 用 seed+回合确定性地挑出这几个单位，写进它们的 `relicMods.stunOnDeploy`。
+   */
+  relicStunRule(ps) {
+    const list = this.relicRuleParams('stunOnDeploy');
+    if (!list.length) return null;
+    let base = 1, perRound = 0, max = 4, dur = 0;
+    for (const ru of list) {
+      base = Math.max(base, Number(ru.count) || 1);
+      perRound = Math.max(perRound, Number(ru.perRound) || 0);
+      max = Math.max(max, Number(ru.max) || 4);
+      dur = Math.max(dur, Number(ru.dur) || 10);
+    }
+    const round = Math.max(1, Number(this.round) || 1);
+    const count = Math.min(max, base + perRound * (round - 1));
+    return count > 0 && dur > 0 ? { count, dur } : null;
+  }
+
   /** 相邻类藏品的「每相邻一人」参数（`atkPerNeighbor` / `aspdPerNeighbor`）—— 需要 per-unit 计算，见 battleInput。 */
   relicNeighborRules() {
     let atkPer = 0, aspdPer = 0;
@@ -746,9 +767,14 @@ export class MatchMeltdown {
       const low = ru.spLowLp && typeof ru.spLowLp === 'object' ? ru.spLowLp : null;
       if (low && (Number(ps.lp) || 0) < (Number(low.lp) || 10)) spRegenMul *= 1 + Math.min(0, Number(low.pct) || 0);
     }
-    if (!atk && !hp && !def && !aspdAdd && !initSp && spRegenMul === 1) return null;
+    // shelter（佣兵保单）「所有我方单位获得 10% 庇护，生命低于初始 50% 时额外 35%」——
+    // 庇护有通道（引擎 dmgTakenMul），静态这半句接上；低血那半句是**战斗中动态 HP**，对局侧拿不到，未接。
+    let shelter = 0;
+    for (const ru of this.relicRuleParams('shelter')) shelter += Math.max(0, Number(ru.base) || 0);
+    if (!atk && !hp && !def && !aspdAdd && !initSp && spRegenMul === 1 && !shelter) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}),
-      ...(initSp ? { initSp } : {}), ...(spRegenMul !== 1 ? { spRegenMul } : {}) };
+      ...(initSp ? { initSp } : {}), ...(spRegenMul !== 1 ? { spRegenMul } : {}),
+      ...(shelter ? { shelter: Math.min(1, shelter) } : {}) };
   }
 
   /**

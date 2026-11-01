@@ -137,7 +137,7 @@ export function sanitizeUnitLoadout(u) {
   // stunOnDeploy（部署时晕眩秒数）。全部仍走同一条数值白名单，越界值由 battle/players.js 夹取。
   if ('relicMods' in u) {
     const m = u.relicMods;
-    const keys = ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd', 'initSp', 'spRegenMul', 'stunOnDeploy'];
+    const keys = ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd', 'initSp', 'spRegenMul', 'stunOnDeploy', 'shelter'];
     const ok = m && typeof m === 'object' && keys.every((k) => m[k] == null || Number.isFinite(Number(m[k])));
     if (!ok) delete u.relicMods;
   }

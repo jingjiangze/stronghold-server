@@ -590,3 +590,33 @@ test('技力类：spInit + spOnDeploy 合并成 initSp；lpDrainRest 低血时 s
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('庇护与部署晕眩：shelter 静态 10%；stunOnDeploy 人数按回合涨、封顶 4', () => {
+  const mkSelf = (relics, round = 1) => {
+    const ps = { playerId: 'p0', relics: relics.slice(), lp: 20 };
+    return {
+      self: {
+        gd: { raw: { relics: RELICS } }, round, isRogue: false, seed: 42, players: new Map([[ps.playerId, ps]]),
+        relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+        relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+        relicStunRule: MatchMeltdown.prototype.relicStunRule,
+      },
+      ps,
+    };
+  };
+  // p11 佣兵保单：所有我方单位 10% 庇护（低血 +35% 那半句要战斗内 HP，未接）
+  const sh = mkSelf(['p11']);
+  assert.equal(sh.self.relicAllyMul(sh.ps).shelter, 0.1);
+
+  // n19 “未尽的生命”：R1 = 1 人、R3 = 3 人、R9 = 封顶 4 人，时长 10s
+  const r1 = mkSelf(['n19'], 1);
+  assert.deepEqual(r1.self.relicStunRule(r1.ps), { count: 1, dur: 10 });
+  const r3 = mkSelf(['n19'], 3);
+  assert.deepEqual(r3.self.relicStunRule(r3.ps), { count: 3, dur: 10 });
+  const r9 = mkSelf(['n19'], 9);
+  assert.deepEqual(r9.self.relicStunRule(r9.ps), { count: 4, dur: 10 }, '最多 +3（含初始 1 人）');
+
+  for (const id of ['p11', 'n19']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
