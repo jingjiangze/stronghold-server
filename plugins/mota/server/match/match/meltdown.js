@@ -572,11 +572,22 @@ export class MatchMeltdown {
   }
 
   /** 给每名存活玩家发一份 3 选 1（独立抽，不与他人共享）。 */
+  /**
+   * 抽卡池：**只发效果真的接进引擎的藏品**（业主 2026-11-01「完成完整肉鸽」）。
+   * 87 条里 55 条的效果尚未接入（41 条纯 `rule` 类 + ally/price/income 等）——发出去只会是「什么都不做」的死牌。
+   * 兜底：若数据侧一条都没有已实现效果（老数据/裁剪包），退回全池，绝不让抽卡空转。
+   */
+  relicDraftPool() {
+    const all = this.relicPool();
+    const live = all.filter((r) => relicEffectApplied(r && r.effect));
+    return live.length ? live : all;
+  }
+
   relicOffer() {
     // 协同共竞与肉鸽都有藏品节奏（业主 2026-10-30「肉鸽并入协同」）。这里以前只认 `mode_xie_` 前缀，
     // 而肉鸽的 modeId 是 `mode_multi_*` ⇒ 肉鸽**一件藏品都发不出来**（`relicDraftRound` 每 2 回合返 true 也白搭）。
     if (!String(this.modeId || '').startsWith('mode_xie_') && this.isRogue !== true) return;
-    const pool = this.relicPool();
+    const pool = this.relicDraftPool();
     if (!pool.length) return;
     const round = Number(this.round) || 1;
     const rng = createRng(deriveSeed(this.seed, `relic:${round}`));

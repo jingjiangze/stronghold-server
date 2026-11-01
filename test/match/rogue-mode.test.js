@@ -112,3 +112,16 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   assert.ok(ruleInert >= 40, `rule 类藏品应有 40+ 条被标为未实装：${ruleInert}`);
   assert.equal(applied + relics.filter((r) => !relicEffectApplied(r.effect)).length, relics.length, '未生效 = 总数 - 已生效');
 });
+
+test('抽卡池只发「效果已接实现」的藏品（死牌不进三选一），且数据异常时兜底回全池', () => {
+  const { self } = fakeMatch();
+  self.relicDraftPool = MatchMeltdown.prototype.relicDraftPool;
+  const pool = self.relicDraftPool();
+  assert.ok(pool.length > 0);
+  assert.ok(pool.every((r) => relicEffectApplied(r.effect)), '池子里不许有未实装的藏品');
+  assert.ok(pool.length < self.relicPool().length, '这是过滤后的子集（全池 87 条里应更少）');
+  // 兜底：数据里一条已实现的都没有时，退回全池而不是空池
+  const noLive = { gd: { raw: { relics: { relics: [{ id: 'x1', effect: { rule: { id: 'whatever' } } }] } } },
+    relicPool: MatchMeltdown.prototype.relicPool, relicDraftPool: MatchMeltdown.prototype.relicDraftPool };
+  assert.equal(noLive.relicDraftPool().length, 1, '没有已实现藏品时退回全池');
+});
