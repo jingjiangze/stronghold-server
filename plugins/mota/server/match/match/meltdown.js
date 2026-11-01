@@ -111,6 +111,8 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'postBattleFunds', // 每场战斗 +1 资金（applyRelicPostBattle；悬赏 +50% 待钩子）
   'choiceFunds',   // 每次选择 +8（applyRelicChoiceFunds；入手 +3 走 immediate）
   'enemyRamp',     // 战斗开始那一档 +step（战斗内每 10 秒递增缺通道，未接）
+  'atkPerBond',    // 己方攻击：每激活盟约 +10%（relicAllyMul → sim 的 relicMods 通道）
+  'atkPerRound',   // 己方攻击：每过一回合 +15%，最多 10 次（同上）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -509,6 +511,31 @@ export class MatchMeltdown {
    * desc：「战斗结束（包括联防）额外获得 1 点资金，且悬赏获得的资金 +50%」——
    * 后半句 `effect.postBountyMul` 需要赏金发放点的倍率钩子（尚未接入），这里只接前半句。
    */
+  /**
+   * rule 藏品的**己方属性**聚合（语义照 relics.json 的官方 desc），返回给 BattleSpec 每个 unit 的 `relicMods`。
+   * 引擎侧通道：`server/sim/battle/players.js` 的 `_makeAlly` 会把 `atkMul/hpMul/defMul/aspdMul/aspdAdd` 乘/加到单位基础属性上。
+   * 当前接入：
+   * - `atkPerBond`「每有一个激活的盟约，所有干员攻击力 +10%」→ 按该玩家激活盟约数累加
+   * - `atkPerRound`「回合结束后所有干员攻击力 +15%（最多 10 次）」→ 按已过回合数（round-1，封顶 10）累加；
+   *   完成悬赏额外 +1 次的规则未接（无悬赏完成计数）
+   * 其余己方属性类（atkPerNeighbor/atkPerEquip/atkPerBenchItem/homeCooked/atkPerSpend/hpIfDp…）见覆盖清单，逐个待接。
+   */
+  relicAllyMul(ps) {
+    if (!ps || !Array.isArray(ps.relics) || !ps.relics.length) return null;
+    let atk = 0, hp = 0;
+    for (const ru of this.relicRuleParams('atkPerBond')) {
+      const per = Math.max(0, Number(ru.per) || 0);
+      atk += per * this.activeBondsOf(ps.playerId);
+    }
+    for (const ru of this.relicRuleParams('atkPerRound')) {
+      const per = Math.max(0, Number(ru.per) || 0);
+      const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 10;
+      atk += per * Math.min(max, Math.max(0, (Number(this.round) || 1) - 1));
+    }
+    if (!atk && !hp) return null;
+    return { atkMul: 1 + atk, hpMul: 1 + hp };
+  }
+
   applyRelicPostBattle() {
     if (!this.players || typeof this.players.values !== 'function') return;
     for (const ps of this.players.values()) {

@@ -172,6 +172,11 @@ export class PlayerRound {
         units.push(u);
       }
     }
+    // 肉鸽 rule 藏品：己方属性（攻击/生命…）——算一次，挂到每个 unit 上（sim 侧 _makeAlly 会应用）
+    try {
+      const am = this.m && typeof this.m.relicAllyMul === 'function' ? this.m.relicAllyMul(this) : null;
+      if (am) for (const u of units) u.relicMods = am;
+    } catch { /* 尽力而为，绝不因为藏品坏了出不了兵 */ }
     return {
       playerId: this.playerId,
       seat: this.seat,

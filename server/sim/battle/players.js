@@ -141,7 +141,7 @@ export class BattlePlayers {
       const owner = inp.ownerUid != null ? ps.units.find((x) => x.uid === inp.ownerUid) : null;
       const def = this._tokenDef(inp.tokenId ?? inp.chessId, owner, inp.def);
       if (!def) { this.log(`unknown token ${inp.tokenId}`); return null; }
-      const u = this._makeAlly(ps, def, 'token', r, c, { uid: inp.uid, ownerUnit: owner, dir });
+      const u = this._makeAlly(ps, def, 'token', r, c, { uid: inp.uid, ownerUnit: owner, dir, relicMods: inp.relicMods });
       u.carry = inp.carryState ?? null;
       return u;
     }
@@ -159,7 +159,7 @@ export class BattlePlayers {
     if (!def) { this.log(`unknown chess ${inp.chessId}${lo.diy ? ' (illegal 自选 pick)' : ''}`); return null; }
     // a DIY slot has no body of its own (甄选干员): it fights only as a 自选 piece (its `diy` pick)
     if (def.raw?.isDiy && !def.diyFor) { this.log(`自选 slot ${inp.chessId} without a pick`); return null; }
-    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, skin: inp.skin });
+    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, skin: inp.skin, relicMods: inp.relicMods });
     u.items = [...(inp.items ?? [])];
     u.carry = inp.carryState ?? null;
     // 练度 (自持有, 0.2.2): the owned operator's ×ATK / ×DEF / ×max HP (units.js Πmul) — never a 补位 stand-in's nor a
@@ -185,12 +185,19 @@ export class BattlePlayers {
 
   _makeAlly(ps, def, kind, r, c, extra = {}) {
     const st = def.stats;
+    // 己方属性通道（肉鸽 rule 藏品）：`extra.relicMods` 是 { atkMul, hpMul, defMul, aspdMul, aspdAdd }，
+    // 由 lobby 侧的 `relicAllyMul()` 算好后随 BattleSpec 的每个 unit 传进来；缺省时一切照旧（对上游零影响）。
+    const rm = extra.relicMods && typeof extra.relicMods === 'object' ? extra.relicMods : null;
+    const mul = (v, k) => (rm && Number.isFinite(Number(rm[k])) ? Number(v) * Number(rm[k]) : Number(v));
+    const add = (v, k) => (rm && Number.isFinite(Number(rm[k])) ? Number(v) + Number(rm[k]) : Number(v));
     const u = new Unit({
       id: ++this._idSeq, side: 'ally', kind, def, defId: def.id, name: def.name, ownerId: ps ? ps.playerId : null,
       uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, skin: extra.skin ?? null, x: c, y: r, tileR: r, tileC: c,
       dir: extra.dir != null ? normDir(extra.dir) : extra.facing != null ? normDir(extra.facing) : ps ? ps.dir : 'RIGHT',
       base: {
-        maxHp: st.maxHp, atk: st.atk, def: st.def, res: st.res, aspd: st.aspd, bat: st.bat, blockCnt: st.blockCnt,
+        maxHp: Math.max(1, mul(st.maxHp, 'hpMul')), atk: Math.max(0, mul(st.atk, 'atkMul')),
+        def: Math.max(0, mul(st.def, 'defMul')), res: st.res,
+        aspd: Math.max(1, add(mul(st.aspd, 'aspdMul'), 'aspdAdd')), bat: st.bat, blockCnt: st.blockCnt,
         moveSpeed: 0, spRecovery: st.spRecovery, tauntLevel: st.tauntLevel, massLevel: st.massLevel,
         hpRecoveryPerSec: st.hpRecoveryPerSec, cost: st.cost, respawnTime: st.respawnTime,
       },
