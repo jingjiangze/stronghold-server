@@ -50,9 +50,16 @@ export class MatchIntents {
       case 'g.destroy': return ps.destroy(msg.uid);
       case 'g.unequip': return ps.unequip(msg.itemUid);
       case 'g.reward': return ps.pickReward(msg.idx);
-      case 'g.choice': return msg.choiceId !== undefined
-        ? this.pickPersonalChoice(ps, msg.idx, msg.choiceId)
-        : this.pickCard(ps, msg.idx);
+      case 'g.choice': {
+        const res = msg.choiceId !== undefined
+          ? this.pickPersonalChoice(ps, msg.idx, msg.choiceId)
+          : this.pickCard(ps, msg.idx);
+        // rule 藏品：choiceFunds（笞心魔宝宝）「选择决策时资金额外 +8」——只在选择成功时发
+        if (res && res.error === undefined && typeof this.applyRelicChoiceFunds === 'function') {
+          try { this.applyRelicChoiceFunds(ps); } catch { /* noop */ }
+        }
+        return res;
+      }
       case 'g.ready': {
         const ready = ps.setReady(!!msg.ready);
         // 协同经济 (DESIGN §28): a human readying up withdraws its own pending requests (the ready gate)

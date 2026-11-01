@@ -17,6 +17,8 @@ import { creditedKillsOf } from '../../sim/spec.js';
 export class MatchSettle {
   settle(plan, uniteResult) {
     this.phase = PHASE.SETTLE;
+    // rule 藏品：每场战斗结束的资金奖励（至宝指环 postBattleFunds）
+    try { if (typeof this.applyRelicPostBattle === 'function') this.applyRelicPostBattle(); } catch (e) { this.reportError?.('relic post battle', e); }
     this.runner = null;
     this._stopClientCombat();
     // the pending in-battle gains the views showed become persistent below (alive players) or lapse (DESIGN §20.15)

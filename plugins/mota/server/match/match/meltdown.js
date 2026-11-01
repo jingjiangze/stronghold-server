@@ -108,6 +108,9 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'fundsDrain',    // 每回合失去 1 资金，最多 5（applyRelicRoundEconomy）
   'kingCrystal',   // 休整期资金 +5（另两项 LP/价格待接，见清单）
   'loseAllFunds',  // 入手清空资金（悬赏减半待赏金钩子）
+  'postBattleFunds', // 每场战斗 +1 资金（applyRelicPostBattle；悬赏 +50% 待钩子）
+  'choiceFunds',   // 每次选择 +8（applyRelicChoiceFunds；入手 +3 走 immediate）
+  'enemyRamp',     // 战斗开始那一档 +step（战斗内每 10 秒递增缺通道，未接）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -480,6 +483,12 @@ export class MatchMeltdown {
       acc.hp += 0.35 + 0.5 * half;
       acc.atk += 0.35 + 0.2 * half;
     }
+    // enemyRamp（谒日之祈）：「战斗开始时敌方 攻/生/防/法抗 +10%，每过 10 秒额外 +10%，最多 +50%」
+    //   ⇒ 本引擎没有「战斗内按时长递增」的通道，这里只结算**战斗开始那一档**（`step`），并注明未接的部分。
+    for (const ru of this.relicRuleParams('enemyRamp')) {
+      const step = Number(ru.step) || 0;
+      if (step > 0) { acc.hp += step; acc.atk += step; }
+    }
     // enemyDmgTaken：「敌人受到的物理/法术伤害降低 20%」⇒ 等效生命 +25%（引擎没有独立受击乘区，用 hp 等价近似）
     for (const ru of this.relicRuleParams('enemyDmgTaken')) {
       const p = Math.max(Number(ru.phys) || 0, Number(ru.arts) || 0);
@@ -495,6 +504,35 @@ export class MatchMeltdown {
    * - `kingCrystal`（国王水晶）：休整期资金 +5
    * 计数挂在 `ps.relicRuleState` 上，跨回合累积（不随回合清零）。
    */
+  /**
+   * rule 藏品：**每场战斗结束**的资金奖励（`postBattleFunds`，至宝指环）
+   * desc：「战斗结束（包括联防）额外获得 1 点资金，且悬赏获得的资金 +50%」——
+   * 后半句 `effect.postBountyMul` 需要赏金发放点的倍率钩子（尚未接入），这里只接前半句。
+   */
+  applyRelicPostBattle() {
+    if (!this.players || typeof this.players.values !== 'function') return;
+    for (const ps of this.players.values()) {
+      if (!ps || !Array.isArray(ps.relics) || !ps.relics.length) continue;
+      for (const ru of this.relicRuleParams('postBattleFunds')) {
+        const n = Math.max(0, Number(ru.n) || 0);
+        if (n > 0) { try { ps.addFunds(n, { reason: 'relic-post-battle' }); } catch { /* noop */ } }
+      }
+    }
+  }
+
+  /**
+   * rule 藏品：**做出一次选择**时的资金奖励（`choiceFunds`，笞心魔宝宝）
+   * desc：「资金 +3，在选择决策、完成悬赏时资金额外 +8」——入手 +3 由 `effect.immediate` 结算，这里是「每次选择 +8」。
+   * 「完成悬赏」那一半需要赏金完成点的钩子（尚未接入）。
+   */
+  applyRelicChoiceFunds(ps) {
+    if (!ps || !Array.isArray(ps.relics) || !ps.relics.length) return;
+    for (const ru of this.relicRuleParams('choiceFunds')) {
+      const n = Math.max(0, Number(ru.n) || 0);
+      if (n > 0) { try { ps.addFunds(n, { reason: 'relic-choice' }); } catch { /* noop */ } }
+    }
+  }
+
   applyRelicRoundEconomy() {
     if (!this.players || typeof this.players.values !== 'function') return;
     const players = [...this.players.values()];

@@ -185,3 +185,32 @@ test('rule 经济：fundsDrain 每回合 −1、最多 5 次；kingCrystal 休�
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('rule 第三组：postBattleFunds 每战 +1、choiceFunds 每次选择 +8、enemyRamp 开局 +step', () => {
+  const mkPs = (relics, funds = 0) => ({ playerId: 'p0', relics: relics.slice(), funds,
+    addFunds(n) { this.funds += n; }, dirty() {} });
+  const mkSelf = (ps) => ({ gd: { raw: { relics: RELICS } }, round: 1, isRogue: false,
+    players: new Map([[ps.playerId, ps]]),
+    relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+    applyRelicPostBattle: MatchMeltdown.prototype.applyRelicPostBattle,
+    applyRelicChoiceFunds: MatchMeltdown.prototype.applyRelicChoiceFunds,
+    relicEnemyMul: MatchMeltdown.prototype.relicEnemyMul,
+    activeBondsOf: MatchMeltdown.prototype.activeBondsOf });
+
+  const battlePs = mkPs(['p07'], 0);
+  const battleSelf = mkSelf(battlePs);
+  battleSelf.applyRelicPostBattle();
+  battleSelf.applyRelicPostBattle();
+  assert.equal(battlePs.funds, 2, '每场战斗 +1（两次 = 2）');
+
+  const choicePs = mkPs(['p28'], 0);
+  mkSelf(choicePs).applyRelicChoiceFunds(choicePs);
+  assert.equal(choicePs.funds, 8, '每次选择 +8');
+
+  const ramp = mkSelf(mkPs(['n40'], 0)).relicEnemyMul();
+  assert.ok(ramp.hp >= 0.1 - 1e-9 && ramp.atk >= 0.1 - 1e-9, `enemyRamp 开局那一档应 ≥ +10%，实际 ${ramp.hp}`);
+
+  for (const id of ['p07', 'p28', 'n40']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
