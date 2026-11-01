@@ -466,7 +466,7 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
       desc: t('2V2 攻防：官方出怪为主，你替换其中一部分，靠自家怪被击杀拿赏金；建房时可选倍速。') },
     { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', icon: 'confront', acc: 'var(--orange)',
       desc: t('出怪、路线、时机全部由你决定；守方遇到的怪约为官方的 1.5 倍。') },
-    { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', icon: 'rogue', acc: '#9d7cf0',
+    { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', icon: 'rogue', acc: 'var(--violet)',
       desc: t('开局与每 2 回合各抽一次藏品三选一，外加随机词缀、随机事件与每回合换图。') },
   ];
   return html`<div class=${`modal${leaving ? ' is-leaving' : ''}`} role="presentation"
@@ -530,26 +530,6 @@ function HubDialog({ open, micro, title, onClose, wide = false, children }) {
       <div class="hub-dialog__body">${children}</div>
     </div>
   </div>`;
-}
-
-function DifficultyCard({ roomMode, difficulty, selected, onSelect, matchmaking, random = false, variant = 'blitz' }) {
-  const info = difficultyInfo(roomMode, difficulty, { random, variant });
-  return html`<button type="button" class=${`diff-card${selected ? ' is-selected' : ''}`}
-      style=${`--d-color:${DIFFICULTY_COLORS[difficulty]}`} onClick=${() => onSelect(difficulty)} aria-pressed=${selected ? 'true' : 'false'}>
-    <span class="diff-card__bar" aria-hidden="true"></span>
-    <span class="diff-card__head">
-      <${DifficultyIcon} difficulty=${difficulty} class="diff-card__glyph" />
-      <span class="diff-card__name">${t(DIFFICULTY_NAMES[difficulty])}</span>
-      <span class="diff-card__code num">${info.code}</span>
-      ${roomMode === 'coop' && !random ? html`<${MatchmakingCount} count=${matchmaking?.byDifficulty?.[difficulty]} />` : null}
-      <span class="diff-card__meta">
-        <span class="num">${info.rounds}</span> ${tc('rounds', '回合')}${info.hidden ? html`<span class="diff-card__hidden">${t('+ 隐秘核心')}</span>` : null}
-      </span>
-    </span>
-    <span class="diff-card__desc">${info.desc}</span>
-    <span class="diff-card__effects">${info.effects.map((e) => html`<span key=${e}>${e}</span>`)}${info.stageNote ? html`<span key="stage" class="diff-card__stage"><${Icon} name="rook" />${info.stageNote}</span>` : null}</span>
-    <span class="diff-card__check" aria-hidden="true"><${Icon} name="check" /><span>${t('已选定')}</span></span>
-  </button>`;
 }
 
 /** The hand-drawn ring of the 已选定 stamp (two loose strokes). */
@@ -658,11 +638,11 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
           ${roomMode === 'versus' ? html`<div class="proto-dock">
             <div class="proto-dock__row" role="radiogroup" aria-label=${t('对抗规则')}>
               ${[
-                { key: 'bounty', code: 'B', acc: '#e8b25c', name: t('赏金'), sub: t('替换部分官方出怪'),
+                { key: 'bounty', code: 'B', acc: 'var(--gold-2)', name: t('赏金'), sub: t('替换部分官方出怪'),
                   title: t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金') },
-                { key: 'confront', code: 'C', acc: '#e2653d', name: t('控怪'), sub: t('出怪 · 路线 · 时机全可控'),
+                { key: 'confront', code: 'C', acc: 'var(--orange)', name: t('控怪'), sub: t('出怪 · 路线 · 时机全可控'),
                   title: t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定') },
-                { key: 'ai', code: 'AI', acc: '#5cc9e8', name: t('AI 对抗'), sub: t('你控怪 · AI 布防'), locked: false,
+                { key: 'ai', code: 'AI', acc: 'var(--ice)', name: t('AI 对抗'), sub: t('你控怪 · AI 布防'), locked: false,
                   title: t('AI 对抗：你操作怪物、AI 布防（1–20 人；你与队友坐 team0、AI 坐对面）') },
               ].map((r) => html`<button key=${r.key} type="button" role="radio" aria-checked=${versusRule === r.key ? 'true' : 'false'}
                 class=${`vsopt${versusRule === r.key ? ' is-on' : ''}`} style=${`--acc:${r.acc}`}
