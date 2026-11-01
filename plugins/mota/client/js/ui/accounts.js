@@ -147,9 +147,11 @@ export function AccountMeChip({ player, onStats }) {
   const { me } = useCurrentAccount();
   useEffect(ensureStyle, []);
   const name = player?.name || me.name || '博士';
-  return html`<button type="button" class="me-chip me-chip--btn stats-entry" onClick=${() => openAccountPanel({ onStats })} title="本机账号 · 统计数据" aria-label="本机账号">
+  // 2026-11-01 业主：不再写死「LOCAL · 本机账号」——绑了账号就叫 QQ 账号，没绑就是游客（登录不强制）。
+  const bound = (() => { try { return !!globalThis.localStorage?.getItem('sp.accountToken'); } catch { return false; } })();
+  return html`<button type="button" class="me-chip me-chip--btn stats-entry" onClick=${() => openAccountPanel({ onStats })} title="账号 · 统计数据" aria-label="账号">
     <${AvatarFrame} size="sm" name=${name} seat=${0} self=${true} src=${me.avatar || undefined} />
-    <span class="me-chip__text"><span class="me-chip__name">${name}<span class="acct-tag">#${me.tag}</span></span><${MicroLabel}>LOCAL · 本机账号<//></span>
+    <span class="me-chip__text"><span class="me-chip__name">${name}<span class="acct-tag">#${me.tag}</span></span><${MicroLabel}>${bound ? 'QQ 账号' : '游客'}<//></span>
     <${Icon} name="user" class="me-chip__stats" />
   </button>`;
 }

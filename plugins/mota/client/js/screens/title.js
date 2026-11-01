@@ -39,6 +39,7 @@ import { GIcon } from '../ui/gameComponents.js';
 import { SettingsModal } from '../ui/settings.js';
 import { installedCount } from '../content.js';
 import { NoticesButton } from '../ui/notices.js';
+import { AccountBar, useAccount } from '../ui/account.js';
 import { sanitizeName, isValidName } from '../ui/playerName.js';
 
 export { stripLoneSurrogates, sanitizeName, isValidName } from '../ui/playerName.js';
@@ -167,6 +168,12 @@ export function TitleScreen() {
   useLang(); // re-render on a language switch
   const currentName = useStore((s) => s.me.name);
   const [name, setName] = useState(() => currentName || identity.loadName() || '');
+  // 业主 2026-11-01：登录后首页代号锁定为账号昵称（退出登录才能改）；未登录仍是游客代号。
+  const acc = useAccount();
+  const accountName = acc.account?.name || '';
+  useEffect(() => {
+    if (accountName) setName(accountName);
+  }, [accountName]);
   // An import may restore the current name while this screen remains behind the stats overlay.
   useEffect(() => {
     if (currentName) setName((draft) => draft || currentName);
@@ -253,10 +260,15 @@ export function TitleScreen() {
           <${Icon} name="key" />
           <span>${t('收到同盟邀请')}</span><b class="num">${pendingJoin}</b><span class="t-lo">${t('· 输入代号后将自动加入')}</span>
         </div>` : null}
-        <${TextField} label=${t('博士代号')} micro="CALLSIGN" size="lg" icon="user" value=${name} maxLength=${NAME_MAX_LEN}
+        ${accountName ? html`<div class="title-callsign-locked">
+          <${MicroLabel} tone="hi">CALLSIGN<//>
+          <b class="title-callsign-locked__name">${accountName}</b>
+          <span class="title-callsign-locked__hint">${t('显示为账号昵称')}</span>
+        </div>` : html`<${TextField} label=${t('博士代号')} micro="CALLSIGN" size="lg" icon="user" value=${name} maxLength=${NAME_MAX_LEN}
           placeholder=${t('输入你的代号（最多 {NAME_MAX_LEN} 字）', { NAME_MAX_LEN })} autoFocus=${!touchUi}
-          onInput=${setName} onEnter=${start} />
+          onInput=${setName} onEnter=${start} />`}
         <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" disabled=${!valid} onClick=${start}>${t('开始')}<//>
+        <${AccountBar} account=${acc.account} onAccount=${(a) => { if (a?.name) setName(a.name); }} />
         <div class="title-conn">
           <span class=${`status-dot ${dotClass}`}></span>
           <span>${STATUS_TEXT[conn.status] ? t(STATUS_TEXT[conn.status]) : conn.status}</span>
