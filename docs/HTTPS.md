@@ -125,3 +125,43 @@ DNS 侧把灰云记录删掉即可。
 - `deploy/baidu/sync.sh` 的 `health_ok` 探 `127.0.0.1:<port>/healthz`，**不受** HTTPS 影响，蓝绿照常。
 - 切流文件 `/etc/nginx/stronghold-upstream.conf` 被 443 站点同样 include（`upstream stronghold_app` 已定义），所以 HTTPS 与蓝绿天然兼容。
 - 部署脚本安装 nginx 站点用的是 `deploy/baidu/nginx/stronghold.conf` 整份覆盖；**443 站点要写进这份文件**（或另建 `stronghold-ssl.conf` 并确保 `sync.sh` 不覆盖它）。
+
+## 七、最终落地（2026-11-01）：Cloudflare Tunnel（不需要备案）
+
+### 硬约束（实测，不可绕）
+- 未备案域名在**百度备案墙**后面：任何 `*.jiangjiangze.icu` 指到本机时，
+  HTTP 一律 302 → `http://domainwall.cloud.baidu.com/block.html`（LE 的 HTTP-01 校验也因此失败）；
+  HTTPS 握手直接被 RST（`errno=10054`）。**与 nginx/证书无关**。
+- Cloudflare 代理（橙云）也不行：CF→源站仍带该域名 Host/SNI，拿到的是同一张拦截页。
+
+### 采用的链路
+```
+浏览器 ──https──▶ game.jiangjiangze.icu（CF 边缘，Universal SSL）
+        ◀─tunnel── baidu 隧道 49c5c300-274c-4dd7-af66-4be0570769e9（盒子上 cloudflared.service，出站）
+                   └─▶ http://127.0.0.1:80（httpHostHeader: supercup.jiangjiangze.icu）→ nginx → 应用
+```
+- DNS：`game` = **CNAME → `49c5c300-….cfargotunnel.com`（proxied）**。
+- ingress 在 CF 端管理：`PUT /accounts/{acc}/cfd_tunnel/{id}/configurations`（remote-managed，盒子无需改配置）。
+
+### 外网验收（2026-11-01）
+| 项 | 结果 |
+|---|---|
+| `https://game.jiangjiangze.icu/` | **200**（游戏首页） |
+| `…/healthz` | **200** `{ok:true, app:0.3.3, plugins:13}` |
+| `…/js/main.js` | **200**，30126 B |
+| `wss://game.jiangjiangze.icu/ws` | **hello → welcome**（返回 playerId） |
+
+### 没走成的两条（留档，别再试）
+- **CF Pages 内嵌**：`POST /pages/projects` + 直传部署 API 都返回成功，但 `*.pages.dev` 与自定义域一概 **500**（部署 `deploy:success` 却无内容可服务）。
+- **Worker 反代到 IP**：CF 在回源处直接拒绝 —— **error 1003（不允许直连 IP）**。
+
+### 附带：IP 证书（直连备用）
+- `120.48.56.189` 已签 **Let's Encrypt IP 证书**（`--cert-profile shortlived`，SAN=IP，7 天一轮；acme.sh cron + ARI 自动续）。
+- `/etc/nginx/conf.d/game-ssl.conf`（**手工安装、不在仓库**）：443 `default_server` 用 IP 证书、另有一个 `server_name game…` 的域名证书块、80 只为 `Host: 120.48.56.189` 提供 ACME。
+- 为此仓库里的 `deploy/baidu/nginx/stronghold.conf` 增加了 `listen 80 default_server`（两条）与
+  `location /.well-known/acme-challenge/ { root /var/www/acme; }`。
+- 若将来备案下来：把 `game` 的 CNAME 换回 `A → 120.48.56.189`（灰云）即可切回直连；域名证书已到 **2027-01-29**。
+
+### 运维
+- 盒子侧：`systemctl status cloudflared`（隧道出站，断线自动重连）；CF 侧看 tunnel `baidu` 的 health。
+- 证书：域名 90 天（DNS-01，需 `CF_Token` 在 `~/.acme.sh/account.conf` 才算能自动续——**目前未落盘，需手工续**）；IP 证书 7 天（HTTP-01，已能自动续）。
