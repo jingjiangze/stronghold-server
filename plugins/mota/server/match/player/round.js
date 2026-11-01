@@ -172,10 +172,25 @@ export class PlayerRound {
         units.push(u);
       }
     }
-    // 肉鸽 rule 藏品：己方属性（攻击/生命…）——算一次，挂到每个 unit 上（sim 侧 _makeAlly 会应用）
+    // 肉鸽 rule 藏品：己方属性（攻击/生命/防御/攻速）—— 全局部分算一次，相邻类按每个单位自己的 4 邻域补
+    // （sim 侧 `_makeAlly()` 会把这些乘/加到单位基础属性上；缺省时什么都不改）
     try {
       const am = this.m && typeof this.m.relicAllyMul === 'function' ? this.m.relicAllyMul(this) : null;
-      if (am) for (const u of units) u.relicMods = am;
+      const nb = this.m && typeof this.m.relicNeighborRules === 'function' ? this.m.relicNeighborRules() : null;
+      if (am || nb) {
+        const occ = new Set(boardOrder(this.board).map(({ r, c }) => `${r},${c}`));
+        for (const u of units) {
+          let n = 0;
+          if (nb) {
+            for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              if (occ.has(`${u.row + dr},${u.col + dc}`)) n += 1;
+            }
+          }
+          const atkMul = (am && Number.isFinite(am.atkMul) ? am.atkMul : 1) * (1 + (nb ? nb.atkPer * n : 0));
+          const aspdAdd = (am && Number.isFinite(am.aspdAdd) ? am.aspdAdd : 0) + (nb ? nb.aspdPer * n : 0);
+          u.relicMods = { ...(am || {}), atkMul, ...(aspdAdd ? { aspdAdd } : {}) };
+        }
+      }
     } catch { /* 尽力而为，绝不因为藏品坏了出不了兵 */ }
     return {
       playerId: this.playerId,

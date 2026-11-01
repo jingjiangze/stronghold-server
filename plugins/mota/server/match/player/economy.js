@@ -27,6 +27,8 @@ export class PlayerEconomy {
     this.funds -= v;
     this.stats.gold += v;
     this.round.spent += v;
+    // 肉鸽 rule 藏品（atkPerSpend / hpdefPerSpend / aspdPerSpend）要的是**整局累计花费**，不是本回合
+    this.totalSpent = (Number(this.totalSpent) || 0) + v;
     this.dirty();
     return true;
   }

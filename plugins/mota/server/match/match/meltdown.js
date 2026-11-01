@@ -116,6 +116,11 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'atkPerEquip',   // 棋盘每件装备：攻击 +10% / 生命 +20%（relicAllyMul）
   'atkPerBenchItem', // 待部署区每件装备：攻击 +10%（上限 +150%）
   'homeCooked',    // 生命/攻击 +20%，每场完美作战再 +10%（ps.relicPerfectBattles）
+  'atkPerSpend',   // 每花 5 资金：全队攻击 +5%（ps.totalSpent）
+  'hpdefPerSpend', // 每花 3 资金：全队生命/防御 +3%
+  'aspdPerSpend',  // 每花 3 资金：全队攻速 +7（加法）
+  'atkPerNeighbor', // 周围 4 格每有一名干员：攻击 +20%（per-unit，见 battleInput）
+  'aspdPerNeighbor', // 周围 4 格每有一名干员：攻速 +30（per-unit）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -523,9 +528,17 @@ export class MatchMeltdown {
    *   完成悬赏额外 +1 次的规则未接（无悬赏完成计数）
    * 其余己方属性类（atkPerNeighbor/atkPerEquip/atkPerBenchItem/homeCooked/atkPerSpend/hpIfDp…）见覆盖清单，逐个待接。
    */
+  /** 相邻类藏品的「每相邻一人」参数（`atkPerNeighbor` / `aspdPerNeighbor`）—— 需要 per-unit 计算，见 battleInput。 */
+  relicNeighborRules() {
+    let atkPer = 0, aspdPer = 0;
+    for (const ru of this.relicRuleParams('atkPerNeighbor')) atkPer += Math.max(0, Number(ru.per) || 0);
+    for (const ru of this.relicRuleParams('aspdPerNeighbor')) aspdPer += Math.max(0, Number(ru.per) || 0);
+    return (atkPer || aspdPer) ? { atkPer, aspdPer } : null;
+  }
+
   relicAllyMul(ps) {
     if (!ps || !Array.isArray(ps.relics) || !ps.relics.length) return null;
-    let atk = 0, hp = 0;
+    let atk = 0, hp = 0, def = 0, aspdAdd = 0;
     for (const ru of this.relicRuleParams('atkPerBond')) {
       const per = Math.max(0, Number(ru.per) || 0);
       atk += per * this.activeBondsOf(ps.playerId);
@@ -561,6 +574,24 @@ export class MatchMeltdown {
       const max = Number.isFinite(Number(ru.max)) ? Number(ru.max) : 1.5;
       atk += Math.min(max, per * benchItems);
     }
+    // 消费类（desc 都是「每花费 N 点资金 → +X」）：
+    //   atkPerSpend「每花 5 资金，所有干员攻击 +5%」
+    //   hpdefPerSpend「每花 3 资金，所有干员最大生命 +3%、防御 +3%」
+    //   aspdPerSpend「每消耗 3 点资金 +7 攻速」（攻速是加法不是乘法）
+    const spent = Math.max(0, Math.floor(Number(ps.totalSpent) || 0));
+    for (const ru of this.relicRuleParams('atkPerSpend')) {
+      const each = Math.max(1, Number(ru.each) || 5);
+      atk += (Math.floor(spent / each) * Math.max(0, Number(ru.per) || 0));
+    }
+    for (const ru of this.relicRuleParams('hpdefPerSpend')) {
+      const each = Math.max(1, Number(ru.each) || 3);
+      const gain = Math.floor(spent / each) * Math.max(0, Number(ru.per) || 0);
+      hp += gain; def += gain;
+    }
+    for (const ru of this.relicRuleParams('aspdPerSpend')) {
+      const each = Math.max(1, Number(ru.each) || 3);
+      aspdAdd += Math.floor(spent / each) * Math.max(0, Number(ru.per) || 0);
+    }
     // homeCooked「生命 +20%、攻击 +20%；每通过一场完美作战额外 +10%」
     const perfect = Math.max(0, Number(ps.relicPerfectBattles) || 0);
     for (const ru of this.relicRuleParams('homeCooked')) {
@@ -568,8 +599,8 @@ export class MatchMeltdown {
       hp += 0.2 + per * perfect;
       atk += 0.2 + per * perfect;
     }
-    if (!atk && !hp) return null;
-    return { atkMul: 1 + atk, hpMul: 1 + hp };
+    if (!atk && !hp && !def && !aspdAdd) return null;
+    return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}) };
   }
 
   applyRelicPostBattle() {
