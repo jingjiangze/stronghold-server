@@ -124,6 +124,7 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'bountyMul',     // 悬赏资金翻倍（relicBountyMul）
   'lpDrainRest',   // 进入休整期 LP −1，最低 1（applyRelicLpDrain；低血时 SP 回复 −20% 那半句未接）
   'bountyKillDeploy', // 初始部署 −3 已由 effect.deployCap 生效（别再扣一次）；「每击杀赏金目标 +1」待击杀计数
+  'spawnHpChance', // 每个敌人按概率生命 +extra（combat.js 逐 spawn 用波次 rng 掷一次）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
