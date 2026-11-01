@@ -75,6 +75,24 @@ export class BattleDeploy {
     // Explicit carry outside the 联防 opening follows this one deployment. The opening itself restores at the end
     // of Battle.start, so deployment/battle-start gifts do not come on top of it; later redeploys keep their gifts.
     if (!restoreLater && cs && Number.isFinite(cs.sp) && u.alive && u.skill) u.skill.setSpTotal(cs.sp);
+    // 藏品通道（BattleSpec relicMods，缺省零影响）：放在部署**收尾**做 —— content 侧的 setupUnitKit /
+    // syncUnitLoadout 会在这个函数中段整块重写 base（spRecovery 就在那份列表里），早写等于白写。
+    //   ① spRegenMul：走持久 buff 的 spRecoveryMul（聚合在 units.js，不会被 base 重写冲掉），同 key 重部署只替换不叠加
+    //   ② initSp：相对技能自身的 initSp 叠加一次，再按当前 sp 补齐/扣到目标值（负值夹在 0）
+    //   ③ stunOnDeploy：部署即晕眩 N 秒
+    if (u.relicSpRegenMul !== 1) {
+      this.addBuff(u, { key: 'relic:spRegen', mods: { spRecoveryMul: Math.max(0, u.relicSpRegenMul) }, persist: true, allowDead: true });
+    }
+    if (u.relicInitSp && u.skill && !cs) {
+      if (!Number.isFinite(u.skill._relicBaseInitSp)) {
+        u.skill._relicBaseInitSp = u.skill.initSp;
+        u.skill.initSp = Math.max(0, u.skill._relicBaseInitSp + u.relicInitSp);
+      }
+      const target = Math.max(0, u.skill.initSp);
+        if (u.skill.sp < target) u.skill.gainSp(target - u.skill.sp, 'init', true);
+      else if (u.skill.sp > target) u.skill.setSpTotal(target);
+    }
+    if (u.relicStunOnDeploy > 0) this.applyStatus(u, 'stun', { duration: u.relicStunOnDeploy, ignoreSelect: true });
     return true;
   }
 

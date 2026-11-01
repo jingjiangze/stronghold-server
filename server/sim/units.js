@@ -121,6 +121,11 @@ export class Unit {
     // char_attribute_mul — ATK / DEF / max HP, a multiplier of its own (never summed with the 直接乘算 percentages)
     this.cultivate = null;
     this.cultMul = null;
+    // 藏品通道（BattleSpec relicMods, battle/players.js）：初始技力增减 / 技力回复倍率 / 部署时晕眩秒数。
+    // 缺省即「零影响」（0 / 1 / 0），与没有这两条藏品时逐位一致。
+    this.relicInitSp = 0;
+    this.relicSpRegenMul = 1;
+    this.relicStunOnDeploy = 0;
   }
 
   markDirty() { this._dirty = true; }
