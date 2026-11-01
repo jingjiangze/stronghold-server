@@ -26,6 +26,7 @@ export const THEME_TOKENS = Object.freeze({
   '--orange': 'colour', '--orange-hi': 'colour', '--orange-a20': 'colour',
   '--red': 'colour', '--red-abyss': 'colour', '--red-premium': 'colour', '--red-a20': 'colour',
   '--ice': 'colour', '--ice-a20': 'colour', '--ice-900': 'colour',
+  '--violet': 'colour', '--violet-a20': 'colour',
   '--text-hi': 'colour', '--text-md': 'colour', '--text-lo': 'colour', '--text-dim': 'colour', '--text-on-mint': 'colour',
   '--diff-funny': 'colour', '--diff-normal': 'colour', '--diff-hard': 'colour', '--diff-abyss': 'colour',
   '--tier-1': 'colour', '--tier-2': 'colour', '--tier-3': 'colour', '--tier-4': 'colour', '--tier-5': 'colour', '--tier-6': 'colour',

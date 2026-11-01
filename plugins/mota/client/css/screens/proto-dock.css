@@ -22,15 +22,17 @@
 .proto-dock__note { flex: 1 1 auto; min-width: 0; font-size: max(.13rem, 9.5px); line-height: 1.35; color: #98a09d;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.vsopt { --acc: #8b9092; position: relative; display: flex; align-items: center; gap: .08rem; min-width: 0; height: max(.6rem, 38px); padding: 0 .1rem 0 .14rem;
+/* 三档按钮与原生卡同一套语言（2026-11-01）：左竖条 = .fun-card，选中态 = .dpick__opt.is-active 的
+   底边条 + 令牌色边框，两者都不再用自造色值。 */
+.vsopt { --acc: var(--line-3); position: relative; display: flex; align-items: center; gap: .08rem; min-width: 0; height: max(.6rem, 38px); padding: 0 .1rem 0 .14rem;
   font: inherit; color: #cdd2d0; text-align: left; cursor: pointer; background: linear-gradient(180deg, #232527, #16181a); border: 2px solid #474b4d; border-radius: .12rem;
   transition: border-color 180ms, box-shadow 180ms, transform 180ms var(--ease-out), background 180ms; }
-.vsopt::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--acc); opacity: .5; transition: opacity 180ms, width 180ms; }
+.vsopt::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--acc); opacity: .85; transition: opacity 180ms; }
 .vsopt:hover:not(:disabled):not(.is-on) { border-color: color-mix(in srgb, var(--acc) 55%, #474b4d); transform: translateY(-1px); }
 .vsopt:disabled { opacity: .45; filter: grayscale(.6); cursor: default; }
-.vsopt.is-on { color: #fff; border-color: var(--acc); background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 30%, #1c1e1f), #121415);
-  box-shadow: 0 0 .16rem color-mix(in srgb, var(--acc) 32%, transparent); }
-.vsopt.is-on::before { width: 4px; opacity: 1; }
+.vsopt.is-on { color: var(--text-hi); border-color: var(--acc); background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 17%, #1a1c1d), #121415);
+  box-shadow: inset 0 -3px 0 var(--acc), 0 0 .16rem color-mix(in srgb, var(--acc) 26%, transparent); }
+.vsopt.is-on::before { opacity: 1; }
 .vsopt__code { flex: none; display: grid; place-items: center; min-width: max(.34rem, 22px); height: max(.34rem, 22px); padding: 0 .04rem;
   font: 900 max(.17rem, 11px)/1 var(--font-display, inherit); letter-spacing: .02em; color: var(--acc);
   background: rgba(0, 0, 0, .5); border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent); border-radius: .06rem; }
@@ -52,15 +54,11 @@
   background: #1b1d1e; border: 1px solid rgba(255, 255, 255, .18); border-radius: .06rem; }
 .proto-team select:disabled { opacity: .5; }
 
-/* 协同资金归属（协同共竞的 xie 模式，右侧面板）：容器 .proto-versus 此前没有任何规则，两个 dpick__opt 竖着堆成
-   默认按钮（与三按钮同一类问题）。这里补容器与按钮的外框，说明文字单独占一行。 */
+/* 协同资金说明（协同共竞的 xie 模式，右侧面板）：2026-11-01 起这里只承载一段说明文字
+   （.proto-versus--info），曾经的 dpick 选择器已按业主裁决取消——那三条 `.proto-versus .dpick__opt`
+   规则因此从未命中任何 DOM，一并删掉；按钮样式真身在核心 public/css/screens/room.css 的 .dpick__opt。 */
 .proto-versus { display: flex; flex-wrap: wrap; align-items: center; gap: .06rem; padding: .07rem; border: 1px solid var(--line-2);
   border-radius: .12rem; background: rgba(0, 0, 0, .32); }
-.proto-versus .dpick__opt { height: max(.44rem, 28px); padding: 0 .16rem; font: inherit; font-size: max(.16rem, 11px); font-weight: 700;
-  color: var(--text-lo); cursor: pointer; background: linear-gradient(180deg, #232527, #16181a); border: 1px solid var(--line-2); border-radius: .1rem; }
-.proto-versus .dpick__opt:hover:not(.is-active) { color: var(--text-hi); border-color: #7b7f81; }
-.proto-versus .dpick__opt.is-active { color: #d7f7ee; border-color: var(--mint-500); background: color-mix(in srgb, var(--mint-500) 22%, #16181a);
-  box-shadow: 0 0 .14rem color-mix(in srgb, var(--mint-500) 30%, transparent); }
 .proto-versus__note { flex: 1 1 100%; font-size: max(.13rem, 9.5px); line-height: 1.4; color: #98a09d; }
 /* 只剩说明文字时（选择器已取消，见 2026-10-27 业主裁决）：整块变成一段说明，不再是按钮组 */
 .proto-versus--info { display: block; padding: .09rem .12rem; }
