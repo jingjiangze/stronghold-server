@@ -142,7 +142,7 @@ export function AccountDock() {
     if (!document.getElementById('sp-acc-style')) {
       const st = document.createElement('style');
       st.id = 'sp-acc-style';
-      st.textContent = `.sp-acc{position:fixed;left:.44rem;top:.8rem;z-index:60;display:flex;gap:.1rem;align-items:center;font-size:calc(.14 * var(--t, 11))}
+      st.textContent = `.sp-acc{position:fixed;left:.44rem;top:1.08rem;z-index:60;display:flex;gap:.1rem;align-items:center;font-size:calc(.14 * var(--t, 11))}
         .sp-acc button{display:inline-flex;align-items:center;gap:.06rem;height:max(.28rem,1.5em);padding:0 .12rem;border:1px solid rgba(255,255,255,.18);border-radius:2px;background:rgba(10,13,12,.72);color:var(--text-hi,#e6e9ef);font:inherit;cursor:pointer}
         .sp-acc button:hover{border-color:var(--mint-500,#7fd1b0);color:#fff}
         .sp-acc img{width:1.3em;height:1.3em;border-radius:50%}
