@@ -125,9 +125,10 @@ export function createAccountsApi({ store, dataDir, registry = null, log = conso
         const body = await readJson(req);
         if (!body) { sendJson(req, res, 400, { ok: false, error: 'BAD_BODY' }); return; }
         const wsToken = bearer(req);
+        // 游客绑定只是「有 WS 会话就顺手记一次 playerId」：刚打开页面/没进房间时没有会话，
+        // 不该因此挡住建号与登录（线上实测过：标题页直接绑定会 401 NO_GUEST_SESSION）。
         const session = wsToken && registry ? registry.byToken(wsToken) : null;
-        if (!session) { sendJson(req, res, 401, { ok: false, error: 'NO_GUEST_SESSION' }); return; }
-        const r = store.bind(body.qq, body.password, session.playerId);
+        const r = store.bind(body.qq, body.password, session ? session.playerId : '');
         sendJson(req, res, r.ok ? 200 : r.error === 'BAD_CREDENTIALS' ? 401 : 400, r.ok ? { ok: true, token: r.token, account: r.account } : { ok: false, error: r.error });
         return;
       }

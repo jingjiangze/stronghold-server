@@ -149,3 +149,19 @@ test('布阵库全服额度：按库目录 *.jsonl 总量判定（outbox 不计�
     if (prev === undefined) delete process.env.SP_LINEUP_LIBRARY; else process.env.SP_LINEUP_LIBRARY = prev;
   }
 });
+
+test('bind 没有 WS 会话也能建号（玩家还停在标题页）', async (t) => {
+  const dir = tmpDir();
+  const prev = process.env.SP_ADMIN_KEY;
+  delete process.env.SP_ADMIN_KEY;
+  const srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, dataDir: dir, accounts: true });
+  t.after(async () => { await srv.close(); if (prev !== undefined) process.env.SP_ADMIN_KEY = prev; });
+  const r = await fetch(srv.url + '/api/auth/bind', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ qq: '987654321', password: 'hunter2!' }) });
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.ok, true);
+  assert.equal(j.account.qq, '987654321');
+  // 第二次同样不带会话，凭密码即可登录（同一个号）
+  const again = await fetch(srv.url + '/api/auth/bind', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ qq: '987654321', password: 'hunter2!' }) });
+  assert.equal(again.status, 200);
+});
