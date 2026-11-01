@@ -511,7 +511,9 @@ export const C2S = {
   // default create stays the message it was.
   // 插件房的模式与分边人数：引擎协议表是权威，所以插件自己的房间模式必须在**这里**放行（`api.protocol()` 只新增键，
   // 不覆盖已有键）。只有「模式枚举 + 队伍人数」两项，玩法本体仍全在 plugins/mota。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true, version: isVersionId, soloUnlimited: isBool, teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', variant: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)), versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'difficulty', 'version', 'soloUnlimited', 'teamSize', 'variant', 'versusAlt'] },
+  // 独立模式 `rogue`（2026-11-01，业主「肉鸽独立模式」）：房间层只认这三/四个字面量，玩法本体在 plugins/rogue
+  // （code.matchMixin）+ plugins/mota 的引擎；难度表与座位规则按 coop 家族走（lobby.offered）。
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus' || v === 'rogue', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true, version: isVersionId, soloUnlimited: isBool, teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', variant: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)), versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'difficulty', 'version', 'soloUnlimited', 'teamSize', 'variant', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   // 大厅快照（人数 + 公开房间列表）：无入参，服务端回一条 lobby.state

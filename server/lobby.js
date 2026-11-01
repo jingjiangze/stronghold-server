@@ -1486,8 +1486,8 @@ export class Lobby {
   }
 
   offered(v, mode) {
-    // 插件房模式（versus）沿用 coop 的难度表：玩法本体在插件里，房间选项仍是同一套难度。
-    const family = mode === 'versus' ? 'coop' : mode;
+    // 插件房模式（versus / rogue）沿用 coop 的难度表：玩法本体在插件里，房间选项仍是同一套难度。
+    const family = mode === 'versus' || mode === 'rogue' ? 'coop' : mode;
     if (!this.versions || v === DEFAULT_VERSION) return DIFFICULTIES;
     return this.versions.offered(v, /** @type {'solo' | 'coop'} */ (family));
   }

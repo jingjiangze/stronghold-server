@@ -1078,8 +1078,9 @@ export function LobbyScreen() {
   const create = () => run('create', async () => {
     // 0.3.3 的 room.create 已删除 private / random：继续发会被 validateC2S 判 bad field（BAD_MSG）。
     // 随机地图改走房间级消息 room.setRandomStage（room-chat 插件的 code.lobby 处理）。
+    // 肉鸽是独立模式（2026-11-01）：直接发 mode:'rogue'；variant 一并保留，旧服务端仍按 coop+variant 认它。
     const res = await net.request('room.create', {
-      mode: roomMode, difficulty,
+      mode: simulation === 'coop' && rogueRules ? 'rogue' : roomMode, difficulty,
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
       ...(simulation === 'coop' && rogueRules ? { variant: 'rogue' } : {}),
       ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
