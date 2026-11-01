@@ -132,10 +132,13 @@ export function sanitizeUnitLoadout(u) {
   if ('diy' in u) { const d = cleanDiyPick(u.diy); if (d) u.diy = d; else delete u.diy; }
   if ('potential' in u && !isPotential(u.potential)) delete u.potential;
   if ('cultivate' in u && !isCultivate(u.cultivate)) delete u.cultivate;
-  // 己方属性通道（肉鸽 rule 藏品）：只认有限数值，别的一律剔除
+  // 己方属性通道（肉鸽 rule 藏品）：只认有限数值，别的一律剔除。
+  // 2026-11-01 扩到「技力 / 承伤 / 部署晕眩」三组：initSp（初始技力增减）、spRegenMul（技力自然回复倍率）、
+  // stunOnDeploy（部署时晕眩秒数）。全部仍走同一条数值白名单，越界值由 battle/players.js 夹取。
   if ('relicMods' in u) {
     const m = u.relicMods;
-    const ok = m && typeof m === 'object' && ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd'].every((k) => m[k] == null || Number.isFinite(Number(m[k])));
+    const keys = ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd', 'initSp', 'spRegenMul', 'stunOnDeploy'];
+    const ok = m && typeof m === 'object' && keys.every((k) => m[k] == null || Number.isFinite(Number(m[k])));
     if (!ok) delete u.relicMods;
   }
   if (u.standIn === true) { delete u.potential; delete u.cultivate; }

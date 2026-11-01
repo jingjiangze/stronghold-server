@@ -142,6 +142,8 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'camoRanged',       // 远程干员攻击 +50%（per-unit，见 battleInput；迷彩本体在引擎内，这里只接加攻）
   'camoAura',         // 攻击范围内的其他干员攻击 +10%，可叠加（per-unit，同上）
   'hpIfDp',           // 场上部署费用合计 ≥ 阈值：全队最大生命 +150%（relicAllyMul，费用取 gd.chess().stats.cost）
+  'spInit',           // 所有干员初始技力 −10（relicAllyMul → 引擎 initSp 通道）
+  'spOnDeploy',       // 所有干员部署时失去 15 点技力（同一条 initSp 通道：初始技力减少、夹在 0 以上）
   'survivor',         // 攻击最高的一名干员 攻/防 +20%，每打完一场再 +20%（per-unit，见 battleInput）
 ]);
 export function relicEffectApplied(effect) {
@@ -732,8 +734,21 @@ export class MatchMeltdown {
         if (dp >= need) hp += 1.5;
       }
     }
-    if (!atk && !hp && !def && !aspdAdd) return null;
-    return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}) };
+    // 技力类（2026-11-01，引擎 initSp / spRegenMul 通道；见 server/sim/battle/deploy.js）：
+    //   spInit「所有干员初始技力 −10」+ spOnDeploy「部署时失去 15 点技力」——两者都是「初始技力减少」，
+    //   合并成一项交给引擎，负值由引擎夹到 0（初始技力本身就不能为负）。
+    let initSp = 0;
+    for (const ru of this.relicRuleParams('spInit')) initSp += Math.trunc(Number(ru.n) || 0);
+    for (const ru of this.relicRuleParams('spOnDeploy')) initSp += Math.trunc(Number(ru.n) || 0);
+    // lpDrainRest 的后半句：「关卡生命低于 10 时，我方技力回复速度 −20%」——按当前 LP 判定，乘进 spRegenMul
+    let spRegenMul = 1;
+    for (const ru of this.relicRuleParams('lpDrainRest')) {
+      const low = ru.spLowLp && typeof ru.spLowLp === 'object' ? ru.spLowLp : null;
+      if (low && (Number(ps.lp) || 0) < (Number(low.lp) || 10)) spRegenMul *= 1 + Math.min(0, Number(low.pct) || 0);
+    }
+    if (!atk && !hp && !def && !aspdAdd && !initSp && spRegenMul === 1) return null;
+    return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}),
+      ...(initSp ? { initSp } : {}), ...(spRegenMul !== 1 ? { spRegenMul } : {}) };
   }
 
   /**

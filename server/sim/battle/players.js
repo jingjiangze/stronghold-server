@@ -202,6 +202,14 @@ export class BattlePlayers {
         hpRecoveryPerSec: st.hpRecoveryPerSec, cost: st.cost, respawnTime: st.respawnTime,
       },
     });
+    if (rm) {
+      // 藏品通道的第二组（技力/晕眩）：写成单位自有字段，**不进 base** —— base 会在部署时被
+      // content/index.js 的 syncUnitLoadout 整块重写（spRecovery 就在那份列表里），写进 base 等于白写。
+      const n = (k) => (Number.isFinite(Number(rm[k])) ? Number(rm[k]) : 0);
+      if (rm.initSp != null) u.relicInitSp = Math.trunc(n('initSp'));
+      if (rm.spRegenMul != null) u.relicSpRegenMul = Math.max(0, n('spRegenMul'));
+      if (rm.stunOnDeploy != null) u.relicStunOnDeploy = Math.max(0, n('stunOnDeploy'));
+    }
     u.alive = false;
     u.deployed = false;
     u.items = [];

@@ -562,3 +562,31 @@ test('hpIfDp 按部署费用合计给生命；survivor 只强化攻击最高的�
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('技力类：spInit + spOnDeploy 合并成 initSp；lpDrainRest 低血时 spRegenMul=0.8', () => {
+  const mkSelf = (relics, lp = 20) => {
+    const ps = { playerId: 'p0', relics: relics.slice(), lp };
+    return {
+      self: {
+        gd: { raw: { relics: RELICS } }, round: 1, isRogue: false, players: new Map([[ps.playerId, ps]]),
+        relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+        relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+      },
+      ps,
+    };
+  };
+
+  // n30 spInit「初始技力 −10」 + n10 spOnDeploy「部署时失去 15 点技力」 ⇒ initSp −25（引擎夹到 0 以上）
+  const both = mkSelf(['n30', 'n10']);
+  assert.equal(both.self.relicAllyMul(both.ps).initSp, -25);
+
+  // n06 lpDrainRest：「关卡生命低于 10 时，我方技力回复速度 −20%」
+  const lowLp = mkSelf(['n06'], 5);
+  assert.equal(lowLp.self.relicAllyMul(lowLp.ps).spRegenMul, 0.8);
+  const highLp = mkSelf(['n06'], 20);
+  assert.equal(highLp.self.relicAllyMul(highLp.ps), null, 'LP 够高时这条不生效');
+
+  for (const id of ['n30', 'n10']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
