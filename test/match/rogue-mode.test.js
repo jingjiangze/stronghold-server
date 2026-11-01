@@ -522,3 +522,41 @@ test('迷彩类：camoRanged 只看远程 / camoAura 按覆盖人数叠攻，范
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('hpIfDp 按部署费用合计给生命；survivor 只强化攻击最高的那一名并按场数叠', () => {
+  const CHESS = {
+    a: { position: 'MELEE', stats: { atk: 900, cost: 12 } },
+    b: { position: 'RANGED', stats: { atk: 300, cost: 20 } },
+  };
+  const mkSelf = (relics, boardIds, extra = {}) => {
+    const board = new Map(boardIds.map((id, i) => [i, { kind: 'chess', id }]));
+    const ps = Object.assign({ playerId: 'p0', relics: relics.slice(), board }, extra);
+    return {
+      self: {
+        gd: { raw: { relics: RELICS }, chess: (id) => CHESS[id] || null }, round: 1, isRogue: false,
+        players: new Map([[ps.playerId, ps]]),
+        relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+        relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+        relicSurvivorRule: MatchMeltdown.prototype.relicSurvivorRule,
+      },
+      ps,
+    };
+  };
+
+  // p20 黑洞协议：费用 12+20=32 < 50 ⇒ 不生效；补到 ≥50 ⇒ +150% 生命（按 desc，不用 params 的 0.5）
+  assert.equal(mkSelf(['p20'], ['a']).self.relicAllyMul(mkSelf(['p20'], ['a']).ps), null);
+  const big = mkSelf(['p20'], ['a', 'b', 'b', 'b']);
+  const hp = big.self.relicAllyMul(big.ps);
+  assert.ok(hp && Math.abs(hp.hpMul - 2.5) < 1e-9, `费用 72 应 +150%（hpMul 2.5）：${JSON.stringify(hp)}`);
+
+  // p12 生还者合约：per 0.2，stacks = 1 + 已打场数（首战 1 层 ⇒ +20%，打完 2 场 ⇒ 3 层 ⇒ +60%）
+  const s0 = mkSelf(['p12'], ['a'], { relicBattles: 0 });
+  assert.deepEqual(s0.self.relicSurvivorRule(s0.ps), { per: 0.2, stacks: 1 });
+  const s2 = mkSelf(['p12'], ['a'], { relicBattles: 2 });
+  assert.deepEqual(s2.self.relicSurvivorRule(s2.ps), { per: 0.2, stacks: 3 });
+  assert.equal(mkSelf([], ['a']).self.relicSurvivorRule(mkSelf([], ['a']).ps), null);
+
+  for (const id of ['p12', 'p20']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});

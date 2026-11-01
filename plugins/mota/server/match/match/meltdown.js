@@ -141,6 +141,8 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'consumableRefund', // 一次性道具用掉后再发一个（每回合最多 3 次，同上）
   'camoRanged',       // 远程干员攻击 +50%（per-unit，见 battleInput；迷彩本体在引擎内，这里只接加攻）
   'camoAura',         // 攻击范围内的其他干员攻击 +10%，可叠加（per-unit，同上）
+  'hpIfDp',           // 场上部署费用合计 ≥ 阈值：全队最大生命 +150%（relicAllyMul，费用取 gd.chess().stats.cost）
+  'survivor',         // 攻击最高的一名干员 攻/防 +20%，每打完一场再 +20%（per-unit，见 battleInput）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -712,6 +714,24 @@ export class MatchMeltdown {
       if (streak >= 3) hp += 2;
       else if (streak >= 1) hp += 0.8;
     }
+    // hpIfDp（黑洞协议）「部署费用达到 50 以上时，所有干员的生命值 +150%」
+    //   ⚠ params 写的是 `hp: 0.5`，desc 写的是 +150% —— 按 desc 落地（本项目一律以官方 desc 为准），
+    //   部署费用取棋子 `stats.cost` 之和（data/chess.json 自带，如 chess_char_1_01_a 是 12）。
+    if (this.relicRuleParams('hpIfDp').length) {
+      let dp = 0;
+      const b = ps.board;
+      if (b && typeof b.values === 'function') {
+        for (const piece of b.values()) {
+          if (!piece || piece.kind !== 'chess') continue;
+          const rec = this.gd && typeof this.gd.chess === 'function' ? this.gd.chess(piece.id) : null;
+          dp += Math.max(0, Number(rec && rec.stats && rec.stats.cost) || 0);
+        }
+      }
+      for (const ru of this.relicRuleParams('hpIfDp')) {
+        const need = Number.isFinite(Number(ru.dp)) ? Number(ru.dp) : 50;
+        if (dp >= need) hp += 1.5;
+      }
+    }
     if (!atk && !hp && !def && !aspdAdd) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}) };
   }
@@ -836,6 +856,21 @@ export class MatchMeltdown {
     for (const ru of this.relicRuleParams('camoAura')) auraAtk += Math.max(0, Number(ru.atk) || 0);
     if (!hasRanged && !auraAtk) return null;
     return { rangedAtk: hasRanged ? 0.5 : 0, auraAtk };
+  }
+
+  /**
+   * `survivor`（生还者合约）「战斗开始时，使攻击力最高的一名干员攻击力和防御力 +20%，
+   * 且每次战斗结束后（不包括联防）额外 +20%」——只对**一个**单位生效，所以参数交给 battleInput 逐单位判定。
+   * 打完的场数记在 `ps.relicBattles`（settle 里非联防时 +1）。
+   */
+  relicSurvivorRule(ps) {
+    const list = this.relicRuleParams('survivor');
+    if (!list.length) return null;
+    let per = 0;
+    for (const ru of list) per += Math.max(0, Number(ru.per) || 0);
+    if (per <= 0) return null;
+    const battles = Math.max(0, Math.trunc(Number(ps && ps.relicBattles) || 0));
+    return { per, stacks: 1 + battles };
   }
 
   /**
