@@ -137,6 +137,10 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'kingVessel',       // 上一回合没掉目标生命：全队生命 +80%；连续 3 回合 +200%（ps.relicNoLossStreak）
   'probe',            // 入手后下一休整期资金 −1；每过 2 回合敌方 攻/生 +10%（relicEnemyMul）
   'recruitTopBond',   // 进新回合随机获得一名「当前盟约层数最高」的干员（+1 部署由 effect.deployCap）
+  'consumableFree',   // 一次性道具用掉后返还价格（relicConsumableUsed，挂 items.js 的两个消耗点）
+  'consumableRefund', // 一次性道具用掉后再发一个（每回合最多 3 次，同上）
+  'camoRanged',       // 远程干员攻击 +50%（per-unit，见 battleInput；迷彩本体在引擎内，这里只接加攻）
+  'camoAura',         // 攻击范围内的其他干员攻击 +10%，可叠加（per-unit，同上）
 ]);
 export function relicEffectApplied(effect) {
   if (!effect || typeof effect !== 'object') return false;
@@ -820,6 +824,69 @@ export class MatchMeltdown {
    * 「当前盟约层数最高的干员」：取该玩家层数最高的**已激活**盟约 → 从该盟约的可见干员里随机一名发放。
    * 复用 hex 抽卡已有的 `hexBondChess()` / `_hexPickChess()`（同实例方法，非 hex 模式下按 `typeof` 跳过）。
    */
+  /**
+   * 隐匿/迷彩类藏品的**攻击加成**参数（迷彩本身是引擎内的目标选择状态，对局侧接不了；能接的是加攻）：
+   * - `camoRanged`（捕鳞蓑）「远程干员获得【迷彩】，攻击力提升 50%」→ `rangedAtk = 0.5`（desc 无参数，硬编码）
+   * - `camoAura`（犬植浆）「干员攻击范围内的其他干员获得迷彩，攻击力 +10%（可叠加）」→ `auraAtk`（每覆盖一名 +10%）
+   * 远程判定用棋子的 `position === 'RANGED'`（data/chess.json 自带 MELEE/RANGED），范围用 `rangeGrid`。
+   */
+  relicCamoRules() {
+    const hasRanged = this.relicRuleParams('camoRanged').length > 0;
+    let auraAtk = 0;
+    for (const ru of this.relicRuleParams('camoAura')) auraAtk += Math.max(0, Number(ru.atk) || 0);
+    if (!hasRanged && !auraAtk) return null;
+    return { rangedAtk: hasRanged ? 0.5 : 0, auraAtk };
+  }
+
+  /**
+   * 一次性道具（`kind: consume_on_equip*` 的装备 / `itemType: MAGIC` 的战术道具）判据，
+   * 与 `player/items.js` 的两个消耗点保持一致。
+   */
+  relicIsConsumable(rec) {
+    if (!rec || typeof rec !== 'object') return false;
+    return (typeof rec.kind === 'string' && rec.kind.startsWith('consume_on_equip')) || rec.itemType === 'MAGIC';
+  }
+
+  /** 随机一件一次性道具的 id（`consumableRefund` 再发一件时用；rng 走 this.rng，缺失时退 Math.random）。 */
+  relicRandomConsumableId() {
+    const items = (this.gd && this.gd.raw && this.gd.raw.items) || null;
+    if (!items || typeof items !== 'object') return null;
+    const pool = Object.keys(items).filter((id) => this.relicIsConsumable(items[id]));
+    if (!pool.length) return null;
+    const r = typeof this.rng === 'function' ? this.rng() : Math.random();
+    return pool[Math.min(pool.length - 1, Math.floor((Number(r) || 0) * pool.length))];
+  }
+
+  /**
+   * 一次性道具**被用掉之后**的 rule 钩子（由 `player/items.js` 在 equip 消耗分支与 useArt 成功分支调用）：
+   * - `consumableFree`（果腹）：「一次性装备道具免费（使用后返还购买价格）」⇒ 按目录价 `gd.itemPrice` 退资金
+   * - `consumableRefund`（复得之轮）：「使用后获得一个一次性装备道具，每回合最多 3 次」⇒ 发一件同类，按回合记账
+   */
+  relicConsumableUsed(ps, itemId) {
+    if (!ps) return;
+    const free = this.relicRuleParams('consumableFree').length > 0;
+    const refund = this.relicRuleParams('consumableRefund').length > 0;
+    if (!free && !refund) return;
+    if (free) {
+      let price = 0;
+      try { price = Math.max(0, Math.trunc(Number(this.gd.itemPrice(itemId)) || 0)); } catch { /* 没目录价就不退 */ }
+      if (price > 0) { try { ps.addFunds(price, { reason: 'relic-consumable-free' }); } catch { /* noop */ } }
+    }
+    if (refund) {
+      const st = (ps.relicRuleState ||= {});
+      const round = Number(this.round) || 1;
+      if (st.refundRound !== round) { st.refundRound = round; st.refundCount = 0; }
+      const done = Number(st.refundCount) || 0;
+      if (done < 3) {
+        const id = this.relicRandomConsumableId();
+        if (id) {
+          st.refundCount = done + 1;
+          try { ps.acquireItem(id, { source: 'relic' }); } catch { /* 池子/数据守卫 */ }
+        }
+      }
+    }
+  }
+
   relicRecruitTopBond(ps) {
     if (!ps || typeof ps.acquireChess !== 'function') return null;
     let best = null;

@@ -73,6 +73,7 @@ export class PlayerItems {
       // !ev.keep, or the carrier is gone: the consumed item left play. A kept item is on the carrier.
       if (!this.find(item.uid)) this.releaseItemStock(item);
       this.stats.itemsEquipped++;
+      this._afterConsumableUsed(item.id);
       this.checkItemMerges();
       this.recompute();
       return OK;
@@ -161,9 +162,18 @@ export class PlayerItems {
       if (again) this._detach(again);
       this.releaseItemStock(loc.piece);
       this.round.arts++;
+      this._afterConsumableUsed(loc.piece.id);
     }
     this.recompute();
     return OK;
+  }
+
+  /**
+   * 肉鸽 rule 藏品钩子（consume 类道具被用掉之后）：`consumableFree` 退款 / `consumableRefund` 再发一件。
+   * 规则聚合在 match 侧（`meltdown.js` 的 `relicConsumableUsed`），这里只负责通知。
+   */
+  _afterConsumableUsed(itemId) {
+    try { if (this.m && typeof this.m.relicConsumableUsed === 'function') this.m.relicConsumableUsed(this, itemId); } catch { /* 尽力而为 */ }
   }
 
   /**
