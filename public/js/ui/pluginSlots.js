@@ -93,6 +93,11 @@ async function ensure() {
 
 let timer = 0;
 function schedule() {
+  // 只有首页在的时候才值得干活：对局里 DOM 每帧都在变，别让 observer 把这里拖成热点。
+  if (!document.querySelector('.title-login')) {
+    if (mounted.size) for (const id of [...mounted.keys()]) unmount(id);
+    return;
+  }
   clearTimeout(timer);
   // 自己的插入也会触发 observer；ensure() 幂等，两三个周期内就稳定下来
   timer = setTimeout(() => { ensure(); }, 120);
