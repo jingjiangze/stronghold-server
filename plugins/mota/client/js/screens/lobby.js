@@ -627,14 +627,15 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
       </div>
     </header>
     <div class="proto-body">
-      <section class="proto-stage">
+      <div class="proto-stage">
         <${ProtocolScene} key=${difficulty} difficulty=${difficulty} />
-        <div class=${`proto-bottom${roomMode === 'versus' ? ' has-dock' : ''}`}>
-          <div class="proto-brief">
-            <span class="proto-brief__code num">${info.code}</span>
-            <b class="proto-brief__name">${t(DIFFICULTY_NAMES[difficulty])}</b>
-            <p>${t(card.desc, card.params)}</p>
-          </div>
+      </div>
+      <section class="proto-main">
+        <div class="proto-brief">
+          <b class="proto-brief__mode">${t(card.name)}<i>${card.en}</i></b>
+          <p>${t(card.desc, card.params)}</p>
+        </div>
+        ${brief ? html`<div class="proto-fp">${brief}</div>` : null}
           ${roomMode === 'versus' ? html`<div class="proto-dock">
             <div class="proto-dock__row" role="radiogroup" aria-label=${t('对抗规则')}>
               ${[
@@ -654,11 +655,6 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
               </button>`)}
             </div>
             <div class="proto-dock__foot">
-              <span class="proto-dock__note">${versusRule === 'bounty'
-                ? t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金')
-                : versusRule === 'confront'
-                  ? t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定')
-                  : t('AI 对抗：你操作怪物、AI 布防（1–20 人；你与队友坐 team0、AI 坐对面）')}</span>
               ${versusRule === 'confront' ? html`<label class="proto-versus__alt">
                 <input type="checkbox" checked=${versusAlt !== false} disabled=${!!busy}
                   onChange=${(e) => onVersusAlt && onVersusAlt(e.currentTarget.checked)} />
@@ -670,21 +666,13 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                   onChange=${(e) => onVersusSpeed && onVersusSpeed(Number(e.currentTarget.value))}>
                   ${[1, 1.5, 2].map((m) => html`<option key=${m} value=${String(m)}>${t('{m}× 出怪', { m })}</option>`)}
                 </select></label>` : null}
-              <label class="proto-team" title=${t('每队人数：2 人一队 = 4 人房，10 人一队 = 20 人房')}>
-                <span>${t('人数')}</span>
-                <select value=${String(versusTeam)} disabled=${!!busy}
-                  onChange=${(e) => onVersusTeam && onVersusTeam(Number(e.currentTarget.value))}>
-                  ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => html`<option key=${n} value=${String(n)}>${t('{n}V{n}（{total} 人）', { n, total: n * 2 })}</option>`)}
-                </select></label>
             </div>
           </div>` : null}
-        </div>
-        ${brief ? html`<div class="proto-fp">${brief}</div>` : null}
-      </section>
-      <section class="proto-side">
         ${modeVariant === 'xie' ? html`<div class="proto-versus proto-versus--info">
           <span class="proto-versus__note">${t('团队储备：全队共用一个池子。防守奖励与主动存入攒钱，用来买商店升级（商店等级 / 协同资金获取 / 装备造价）、借款垫付、告急救济与救援。回合末没花完的钱直接清零。')}</span>
         </div>` : null}
+      </section>
+      <section class="proto-side">
         <div class="proto-list" role="radiogroup" aria-label=${t('模拟难度')}>
           ${DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
             matchmaking=${matchmaking} random=${random} variant=${variant} modeVariant=${modeVariant} />`)}
@@ -939,8 +927,7 @@ export function LobbyScreen() {
     return () => { alive = false; clearInterval(id); };
   }, []);
   const [simulation, setSimulation] = useState(lobbySimulationPreference);
-  // 对抗模式：2V2（teamSize 2，4 席）/ 4V4（teamSize 4，8 席）
-  const [versusTeam, setVersusTeam] = useState(2);
+  // 对抗模式固定 2V2（4 席）：人数选择已按业主裁决移出本页，改在别处调（当前无可调入口）
   // 对抗规则档（业主 2026-10-26）：赏金 = 线上那套（官方波次 + 替换份额），对抗 = 纯玩家出怪
   const [versusRule, setVersusRule] = useState('bounty');
   // 纯对抗里可以关掉「每回合交换攻守」（业主 2026-10-26）；赏金档恒交替。
@@ -1064,7 +1051,7 @@ export function LobbyScreen() {
       mode: simulation === 'coop' && rogueRules ? 'rogue' : roomMode, difficulty,
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
       ...(simulation === 'coop' && rogueRules ? { variant: 'rogue' } : {}),
-      ...(simulation === 'versus' ? { teamSize: versusTeam, variant: versusRule,
+      ...(simulation === 'versus' ? { teamSize: 2, variant: versusRule,
         versusAlt: versusRule === 'ai' ? false : (versusRule === 'confront' ? versusAlt !== false : true),
         versusSpeed: versusRule === 'bounty' ? versusSpeed : 1 } : {}),
       ...(testMode && asTest ? { test: true } : {}),
@@ -1240,7 +1227,6 @@ export function LobbyScreen() {
       brief=${randomMode ? html`<${FirepowerBrief} variant=${fpVariant} onVariant=${pickVariant} />` : null}
       privateRoom=${privateRoom} onPrivate=${setPrivateRoom} online=${online} maint=${maint} busy=${busy} isSearching=${isSearching}
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
-      versusTeam=${versusTeam} onVersusTeam=${setVersusTeam}
       versusRule=${versusRule} onVersusRule=${setVersusRule} versusAlt=${versusAlt} onVersusAlt=${setVersusAlt}
       versusSpeed=${versusSpeed} onVersusSpeed=${setVersusSpeed}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
