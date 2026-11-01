@@ -132,6 +132,12 @@ export function sanitizeUnitLoadout(u) {
   if ('diy' in u) { const d = cleanDiyPick(u.diy); if (d) u.diy = d; else delete u.diy; }
   if ('potential' in u && !isPotential(u.potential)) delete u.potential;
   if ('cultivate' in u && !isCultivate(u.cultivate)) delete u.cultivate;
+  // 己方属性通道（肉鸽 rule 藏品）：只认有限数值，别的一律剔除
+  if ('relicMods' in u) {
+    const m = u.relicMods;
+    const ok = m && typeof m === 'object' && ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd'].every((k) => m[k] == null || Number.isFinite(Number(m[k])));
+    if (!ok) delete u.relicMods;
+  }
   if (u.standIn === true) { delete u.potential; delete u.cultivate; }
   if (u.kind === 'token') { delete u.skillIndex; delete u.moduleId; delete u.standIn; delete u.diy; delete u.potential; delete u.cultivate; }
   return u;

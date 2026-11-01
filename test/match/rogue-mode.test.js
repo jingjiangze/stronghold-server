@@ -214,3 +214,23 @@ test('rule 第三组：postBattleFunds 每战 +1、choiceFunds 每次选择 +8�
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });
+
+test('己方属性通道：atkPerBond 按激活盟约数、atkPerRound 按已过回合（封顶 10）', () => {
+  const mk = (relics, { round = 1, bonds = 0 } = {}) => {
+    const ps = { playerId: 'p0', relics: relics.slice(), bonds: Object.fromEntries(
+      Array.from({ length: bonds }, (_, i) => ['b' + i, { active: true }])) };
+    const self = { gd: { raw: { relics: RELICS } }, round, isRogue: false,
+      players: new Map([['p0', ps]]),
+      relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+      activeBondsOf: MatchMeltdown.prototype.activeBondsOf,
+      relicAllyMul: MatchMeltdown.prototype.relicAllyMul };
+    return self.relicAllyMul(ps);
+  };
+  assert.equal(mk(['p16'], { bonds: 0 }), null, '没有激活盟约就没有加成');
+  assert.ok(Math.abs(mk(['p16'], { bonds: 3 }).atkMul - 1.3) < 1e-9, '每 1 个盟约 +10% → 3 个 = 1.3');
+  assert.ok(Math.abs(mk(['p34'], { round: 5 }).atkMul - 1.6) < 1e-9, '4 个已过回合 × 15% = 1.6');
+  assert.ok(Math.abs(mk(['p34'], { round: 20 }).atkMul - (1 + 0.15 * 10)) < 1e-9, '最多叠 10 次');
+  for (const id of ['p16', 'p34']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
