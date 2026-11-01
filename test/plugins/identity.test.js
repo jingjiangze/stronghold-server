@@ -224,7 +224,10 @@ describe('the wire: welcome, room.state, the match, /healthz, /cs/, BattleSpec, 
     const r = await c.request({ t: 'room.create', mode: 'solo', difficulty: 'FUNNY' });
     assert.equal(r.t, 'ok', JSON.stringify(r));
     const state = await c.waitFor('room.state', (s) => s.mode === 'solo');
-    assert.deepEqual(state.content, { cs: srv.content.cs, vanilla: true, plugins: [] });
+    // `required` rides along when the policy names any (plugins/config.json): the plugins the host cannot switch off
+    const { required: reqIds, ...contentBase } = state.content;
+    assert.deepEqual(contentBase, { cs: srv.content.cs, vanilla: true, plugins: [] });
+    assert.ok(reqIds === undefined || (Array.isArray(reqIds) && reqIds.every((id) => typeof id === 'string')), 'required — ids only');
     assert.equal((await c.request({ t: 'room.start' })).t, 'ok');
     await c.waitFor('room.state', (s) => s.inMatch === true);
     assert.equal(RecordingStub.last.cs, srv.content.cs, 'lobby → Match opts.cs');

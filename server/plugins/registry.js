@@ -879,8 +879,8 @@ export function packIndexOf(packs, { app = APP_VERSION } = {}) {
  * @param {Plugin[]} plugins
  * @param {{ app?: string, vanilla?: string | null }} [opts] vanilla: this server's vanilla content hash
  */
-export function pluginIndexOf(plugins, { app = APP_VERSION, vanilla = null } = {}) {
-  return buildPluginIndex(plugins, { app, vanilla });
+export function pluginIndexOf(plugins, { app = APP_VERSION, vanilla = null, skipped = [] } = {}) {
+  return buildPluginIndex(plugins, { app, vanilla, skipped });
 }
 
 /**
@@ -1013,7 +1013,7 @@ export function createPluginRegistry(dirs, { log = { info: noop, warn: noop }, a
      * The catalogue body (GET /plugins/index.json).
      * @param {{ vanilla?: string | null }} [opts] vanilla: the server's vanilla content hash
      */
-    pluginIndex: ({ vanilla = null } = {}) => pluginIndexOf(refresh().plugins, { app, vanilla }),
+    pluginIndex: ({ vanilla = null } = {}) => { const s = refresh(); return pluginIndexOf(s.plugins, { app, vanilla, skipped: s.skipped }); },
     /** Packs and plugins that were not loaded and why, and the warnings of the loaded ones. */
     report: () => { const s = refresh(); return { skipped: s.skipped, warnings: s.warnings }; },
     /**
