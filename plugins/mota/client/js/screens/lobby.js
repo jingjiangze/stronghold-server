@@ -377,6 +377,7 @@ function RecruitCard({ rooms, online, onJoin, onAll, onCreate }) {
               <${DifficultyIcon} difficulty=${r.difficulty} class="diff-glyph" />
               <span>${DIFFICULTY_NAMES[r.difficulty] ? t(DIFFICULTY_NAMES[r.difficulty]) : r.difficulty}</span>
               ${r.random ? html`<span class="hub-recruit__fp">无限火力</span>` : null}
+              ${r.plugins ? html`<span class="hub-recruit__fp">${t('插件 ×{n}', { n: r.plugins })}</span>` : null}
               ${r.nodeName ? html`<span class="t-dim">${r.nodeName}</span>` : null}
             </span>
           </span>
@@ -862,6 +863,7 @@ function MatchmakingModal({ open, onClose, onJoin, onSpectate }) {
                       <span>${DIFFICULTY_NAMES[r.difficulty] || r.difficulty}</span>
                     </span>
                     ${r.random ? html`<span class="mm-room-rm">无限火力 · 1.1 · ${r.variant === 'endurance' ? '持久鏖战' : r.variant === 'marathon' ? '最长时赛' : '快速突袭'}</span>` : null}
+                    ${r.plugins ? html`<span class="mm-room-rm">${t('插件 ×{n}', { n: r.plugins })}</span>` : null}
                     <span class="mm-room-players">
                       <${Icon} name="users" />
                       <span class="num">${r.humans} / ${r.maxSeats || MAX_SEATS}</span>
