@@ -24,7 +24,7 @@ globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), se
 const { HubEntry, ProtocolSelect, AllianceSelect, normalizeCode, codeArg } = await import('../../public/js/screens/lobby.js');
 const { Modal, TextField } = await import('../../public/js/ui/components.js');
 const { ReplayWait, BondAchievement } = await import('../../public/js/screens/stats.js');
-const { DIFFICULTIES } = await import('../../shared/constants.js');
+const { DIFFICULTIES, LEGACY_DIFFICULTIES } = await import('../../shared/constants.js');
 
 function* walk(v) {
   if (Array.isArray(v)) { for (const x of v) yield* walk(x); return; }
@@ -82,16 +82,16 @@ const proto = (props) => ProtocolSelect({
 
 test('选择模拟协议: the project Modal, four difficulty cards, the official picture of the selected one', () => {
   const picked = [];
-  const v = proto({ difficulty: 'HARD', onDifficulty: (d) => picked.push(d) });
+  const v = proto({ difficulty: 'HARD', difficulties: LEGACY_DIFFICULTIES, onDifficulty: (d) => picked.push(d) });
   assert.equal(v.type, Modal, 'a Modal (focus trap, Esc, focus restored)');
   assert.equal(titleOf(v), '选择模拟协议');
   assert.ok(hasClass(v, 'proto'));
   assert.equal(byClass(v, 'proto-back').length, 1, 'the back plate');
   assert.equal(typeof v.props.onClose, 'function');
   const cards = byClass(v, 'diff-card');
-  assert.equal(cards.length, DIFFICULTIES.length);
-  assert.deepEqual(cards.map((c) => hasClass(c, 'is-selected')), DIFFICULTIES.map((d) => d === 'HARD'));
-  assert.deepEqual(cards.map((c) => hasClass(c, 'is-on') && byClass(c, 'pcard__stamp').length === 1), DIFFICULTIES.map((d) => d === 'HARD'));
+  assert.equal(cards.length, LEGACY_DIFFICULTIES.length);
+  assert.deepEqual(cards.map((c) => hasClass(c, 'is-selected')), LEGACY_DIFFICULTIES.map((d) => d === 'HARD'));
+  assert.deepEqual(cards.map((c) => hasClass(c, 'is-on') && byClass(c, 'pcard__stamp').length === 1), LEGACY_DIFFICULTIES.map((d) => d === 'HARD'));
   cards[0].props.onClick();
   assert.deepEqual(picked, ['FUNNY']);
   const art = find(v, (x) => x.type?.name === 'ProtocolArt');
@@ -130,11 +130,11 @@ test('选择模拟协议: 开始独立模拟, offline and busy states, the test-
 });
 
 test('选择模拟协议 read-only (a room’s other doctors): the cards shown, not chosen, no button, 由创建者选择', () => {
-  const v = proto({ roomMode: 'coop', difficulty: 'ABYSS', readOnly: true, onCreate: () => assert.fail('sent') });
+  const v = proto({ roomMode: 'coop', difficulty: 'ABYSS', difficulties: LEGACY_DIFFICULTIES, readOnly: true, onCreate: () => assert.fail('sent') });
   const cards = byClass(v, 'diff-card');
-  assert.equal(cards.length, DIFFICULTIES.length);
+  assert.equal(cards.length, LEGACY_DIFFICULTIES.length);
   assert.ok(cards.every((c) => c.props.disabled === true), 'no card can be chosen');
-  assert.deepEqual(cards.map((c) => hasClass(c, 'is-selected')), DIFFICULTIES.map((d) => d === 'ABYSS'), 'the room’s difficulty');
+  assert.deepEqual(cards.map((c) => hasClass(c, 'is-selected')), LEGACY_DIFFICULTIES.map((d) => d === 'ABYSS'), 'the room’s difficulty');
   assert.equal(byClass(v, 'proto-start').length, 0, 'no 确认 / 创建同盟 button');
   assert.equal(find(v, (x) => x.props?.['data-testid'] === 'create-test').length, 0);
   assert.ok(textOf(byClass(v, 'proto-hint--ro')[0]).includes('由创建者选择'));
@@ -357,7 +357,7 @@ test('选择模拟协议 on a short screen (§35.18 leftover: at 文字大小 �
   // the list still scrolls should a pack's names not fit (its base rule)
   assert.match(lobbyCss, /\.proto-list \{[^}]*overflow-y: auto;/);
   // the markup the rules rely on: the description on each card and in the brief, the name in its own element
-  const v = ProtocolSelect({ roomMode: 'solo', difficulty: 'ABYSS', onDifficulty: () => {}, onClose: () => {}, onCreate: () => {}, online: true });
+  const v = ProtocolSelect({ roomMode: 'solo', difficulty: 'ABYSS', difficulties: LEGACY_DIFFICULTIES, onDifficulty: () => {}, onClose: () => {}, onCreate: () => {}, online: true });
   assert.equal(byClass(v, 'pcard__name').length, 4);
   assert.equal(byClass(byClass(v, 'proto-brief')[0], 'proto-brief__name').length, 1);
   assert.ok(textOf(find(byClass(v, 'proto-brief')[0], (x) => x.type === 'p')[0]).length > 0, 'the brief\'s description');

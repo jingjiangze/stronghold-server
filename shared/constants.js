@@ -34,9 +34,46 @@ export const SETUP_REROLL_COOLDOWN_MS = 30_000;
 export const ROOM_CODE_LEN = 4;
 export const NAME_MAX_LEN = 12;
 
-export const DIFFICULTIES = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
-export const DIFFICULTY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境模拟'), HARD: N_('绝境模拟'), ABYSS: N_('终极模拟') };
-export const DIFFICULTY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', ABYSS: '#ff0024' };
+// 难度档（2026-11-02，业主：共 20 档替换原来的 4 档，以 4 档为基准）。
+//   · `DIFFICULTY_TIERS` = 界面上可选的全部 20 档；`DIFFICULTIES` 就是它（协议/大厅/版本/内容集都读这个）；
+//   · 旧 4 档（FUNNY/NORMAL/HARD/ABYSS）作为**兼容别名**保留：协议仍接受、数据里仍有对应 mode 记录，
+//     但不再出现在选择器里 —— 老房间、老客户端、历史统计都不会炸；
+//   · 锚点关系：N1=FUNNY、N8=NORMAL、N14=HARD、N20=ABYSS（`tools/build-nmodes.mjs` 按这四点插值生成数据）。
+export const LEGACY_DIFFICULTIES = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
+export const DIFFICULTY_TIERS = Array.from({ length: 20 }, (_, i) => `N${i + 1}`);
+export const DIFFICULTIES = [...DIFFICULTY_TIERS];
+/** 旧档名 → 新档（只在需要「同一难度」语义的地方用：默认档、统计归并）。 */
+export const LEGACY_DIFFICULTY_ALIAS = Object.freeze({ FUNNY: 'N1', NORMAL: 'N8', HARD: 'N14', ABYSS: 'N20' });
+const LEGACY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境模拟'), HARD: N_('绝境模拟'), ABYSS: N_('终极模拟') };
+const LEGACY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', ABYSS: '#ff0024' };
+/** 20 档的色阶：在 4 个锚点颜色之间线性插值，保证从暖橙到预警红平滑过渡。 */
+const TIER_DIFFICULTY_COLORS = (() => {
+  const hex = (s) => parseInt(s.slice(1), 16);
+  const anchors = [[1, '#f6a329'], [8, '#e85a1a'], [14, '#e73118'], [20, '#ff0024']];
+  const out = {};
+  for (let n = 1; n <= 20; n++) {
+    let a = anchors[0], b = anchors[anchors.length - 1];
+    for (let i = 0; i < anchors.length - 1; i++) if (n >= anchors[i][0] && n <= anchors[i + 1][0]) { a = anchors[i]; b = anchors[i + 1]; }
+    const t = b[0] === a[0] ? 0 : (n - a[0]) / (b[0] - a[0]);
+    const pa = hex(a[1]), pb = hex(b[1]);
+    const mix = [16, 8, 0].map((sh) => Math.round(((pa >> sh) & 255) + (((pb >> sh) & 255) - ((pa >> sh) & 255)) * t));
+    out[`N${n}`] = '#' + mix.map((v) => v.toString(16).padStart(2, '0')).join('');
+  }
+  return out;
+})();
+/** 难度阶梯上的序（N1..N20 = 1..20；旧档按锚点映射：FUNNY 1 / NORMAL 8 / HARD 14 / ABYSS 20）。 */
+export const difficultyRank = (d) => {
+  const tier = DIFFICULTY_TIERS.indexOf(d);
+  if (tier >= 0) return tier + 1;
+  const alias = LEGACY_DIFFICULTY_ALIAS[d];
+  if (alias) return DIFFICULTY_TIERS.indexOf(alias) + 1;
+  return 0;
+};
+export const DIFFICULTY_NAMES = {
+  ...LEGACY_NAMES,
+  ...Object.fromEntries(DIFFICULTY_TIERS.map((d) => [d, N_('难度 {d}').replace('{d}', d)])),
+};
+export const DIFFICULTY_COLORS = { ...LEGACY_COLORS, ...TIER_DIFFICULTY_COLORS };
 
 // modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi
 export const modeIdFor = (roomMode, difficulty) =>

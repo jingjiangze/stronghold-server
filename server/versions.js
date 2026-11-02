@@ -32,7 +32,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIFFICULTIES, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, modeIdFor } from '../shared/constants.js';
 import { DEFAULT_VERSION, VERSIONS, versionById, versionSlug } from '../shared/versions.js';
 import { canonicalJson, csUrlPart } from '../shared/plugins/identity.js';
 import { officialBoundsOf } from '../shared/plugins/officialBounds.js';
@@ -182,7 +182,9 @@ export function createVersionSets({ enabled, defaultId = DEFAULT_VERSION, dataDi
       const entry = ids.includes(id) ? versionById(id) : null;
       if (!entry || !entry.roomModes.includes(roomMode)) return [];
       const modes = id === DEFAULT_VERSION ? defaultModes() : /** @type {any} */ (others.get(id)).modes;
-      return DIFFICULTIES.filter((d) => modes.has(modeIdFor(roomMode, d)));
+      // 2026-11-02：难度换成 N1–N20。老版本的数据里只有旧 4 档 ⇒ 回退到旧档，绝不能返回空数组（那会让房间开不起来）。
+      const tiers = DIFFICULTIES.filter((d) => modes.has(modeIdFor(roomMode, d)));
+      return tiers.length ? tiers : LEGACY_DIFFICULTIES.filter((d) => modes.has(modeIdFor(roomMode, d)));
     },
     /**
      * welcome.versions, or null when the server offers act2autochess alone (that welcome carries no `versions`). A

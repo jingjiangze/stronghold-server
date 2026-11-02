@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 
 import { createVersionSets } from '../server/versions.js';
 import { computeVanillaContent } from '../server/plugins/identity.js';
+import { DIFFICULTIES } from '../shared/constants.js';
 import { DATA_DIR, ROOT, getData, versionDataDir } from '../server/data.js';
 import { DATA_SHIM_JS } from '../server/http/static.js';
 import { contentHashOf, csUrlPart, canonicalJson } from '../shared/plugins/identity.js';
@@ -98,7 +99,8 @@ test('a disabled version gives nothing; offered and welcome follow the data and 
   }
   assert.equal(off.get(vanilla.cs), null, 'the vanilla set never runs in a version host');
   assert.deepEqual(off.servedDirs(), []);
-  assert.deepEqual(off.offered(DEFAULT_VERSION, 'coop'), ['FUNNY', 'NORMAL', 'HARD', 'ABYSS']);
+  // 2026-11-02：默认版本的数据里是 N1–N20（旧 4 档仍留在数据里，但不再「提供给界面」）
+  assert.deepEqual(off.offered(DEFAULT_VERSION, 'coop'), [...DIFFICULTIES]);
 
   const on = createVersionSets({ enabled: ALL, defaultId: 'act1autochess', vanilla, log: quiet });
   assert.equal(on.defaultId, 'act1autochess');
