@@ -500,7 +500,10 @@ export const C2S = {
   // server that does not know the field ignores it (it is only read after a full validateC2S pass).
   hello: { name: (v) => isStr(v, NAME_MAX_LEN) && v.trim().length > 0, token: (v) => v == null || isStr(v, 64), version: (v) => v == null || isInt(v, 0, 1e6),
     noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER), delta: (v) => v == null || isInt(v, 0, 1e6),
-    $optional: ['token', 'version', 'noReplace', 'claimAt', 'delta'] },
+    // 名片代号与卡面（业主 2026-11-02）：重名时显示 `名字#代号`；卡面只是素材 id，图仍在 CDN/本机素材树。
+    tag: (v) => v == null || (typeof v === 'string' && /^[0-9]{4}$/.test(v)),
+    nc: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9._-]{1,32}$/.test(v)),
+    $optional: ['token', 'version', 'noReplace', 'claimAt', 'delta', 'tag', 'nc'] },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
   // test: only the literal true (DESIGN §34.8). Omit it for a normal room — `false` is a bad field, so a
   // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
@@ -579,8 +582,6 @@ export const C2S = {
   // official mode of the room's type (the one of a difficulty: it sets the difficulty) or a mode a plugin of the room's
   // content set provides (room.state.content.modes; room.state.content.modeId while it is chosen)
   'room.setMode': { modeId: isId },
-  // 房主的「界面插件·推荐」(2026-11-02)：房间级、只影响展示；房间状态以 uiRecommend 下发（为空时省略该键）
-  'room.setUiRecommend': { ids: (v) => isList(v, 32, (x) => isPluginId(x)) },
   // the page has loaded and checked the room's content set (DESIGN §32.6): `cs` = the room.state.content.cs it checked —
   // every data file's bytes against /cs/<cs16>/index.json, that manifest's composition against `cs`; `ok: false` = it
   // could not (the seat shows it). A room with gameplay plugins starts only once every player's page sent it for its cs

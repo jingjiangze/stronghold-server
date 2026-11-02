@@ -350,12 +350,12 @@ function SeatCard({ seat, index, room, facts, myId, busy, onKick, onInvite, sear
       onClick=${() => onKick(index, seat.name, seat.playerId)} title=${t('将该博士移出同盟')} aria-label=${t('移出该博士')}><${Icon} name="user" /><${Icon} name="close" /></button>` : null}
     ${seat.isBot && facts.isHost && onRemoveBot ? html`<button type="button" class="rseat__kick rseat__kick--bot" disabled=${busy === `rm${index}`}
       onClick=${() => onRemoveBot(index)} title=${t('移除 AI 队友')} aria-label=${t('移除 AI 队友')}><${Icon} name="robot" /><${Icon} name="close" /></button>` : null}
-    <div class=${`rseat__plate${seatAccount?.card ? ' has-nc' : ''}`}>
-      <${NameCardLayer} card=${seatAccount?.card} />
+    <div class=${`rseat__plate${seat.nc || seatAccount?.card ? ' has-nc' : ''}`}>
+      <${NameCardLayer} card=${seat.nc ? { skin: seat.nc } : seatAccount?.card} />
       ${isMe ? html`<span class="rseat__me" title=${t('你')}><${Icon} name="info" /></span>` : null}
       <${AvatarFrame} size="sm" name=${seat.name} src=${seatAccount?.avatar || undefined} seat=${index} bot=${seat.isBot} self=${isMe} />
       <span class="rseat__who">
-        <${TrophyBadge} count=${seatAccount?.trophies} class="tbadge--inline" /><b class=${`rseat__name${owner ? ' sp-owner-name' : ''}`}>${seat.name || t('博士')}</b><${AccountTag} playerId=${seat.isBot ? null : seat.playerId} />
+        <${TrophyBadge} count=${seatAccount?.trophies} class="tbadge--inline" /><b class=${`rseat__name${owner ? ' sp-owner-name' : ''}`}>${seat.name || t('博士')}</b>${seat.tag && !seat.isBot ? html`<span class="acct-tag">#${seat.tag}</span>` : null}<${AccountTag} playerId=${seat.isBot ? null : seat.playerId} />
         ${owner ? html`<span class="sp-owner-badge">${t('服主')}</span>` : null}
       </span>
       <small class="rseat__doc">${seat.isBot ? 'AUTONOMOUS UNIT' : `DOCTOR #${doctorNo(seat.playerId)}`}</small>

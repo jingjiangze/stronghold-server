@@ -745,6 +745,9 @@ export class Network {
       session.disconnectedAt = null;
     }
     session.name = name;
+    // 名片代号（重名时显示 名字#代号）与卡面 id：都只是短字符串，不带素材
+    if (typeof msg.tag === 'string' && /^[0-9]{4}$/.test(msg.tag)) session.tag = msg.tag;
+    if (typeof msg.nc === 'string' && /^[A-Za-z0-9._-]{1,32}$/.test(msg.nc)) session.nc = msg.nc;
     session.lastSeen = now;
     session.addr = conn.ip;
     session.limitKey = conn.key;

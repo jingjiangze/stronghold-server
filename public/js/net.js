@@ -383,6 +383,13 @@ export class Net {
     // `delta` says this build decodes `m.state` frames (shared/stateDelta.js). A server that does not speak it ignores
     // the field, and the client then keeps receiving the plain m.public / m.private frames it always got.
     const msg = { t: 'hello', rid, name: this.name, version: PROTOCOL_VERSION, delta: STATE_DELTA_VERSION };
+    // 名片代号与卡面（可选）：代号让重名可区分，nc 只是一个素材 id（图在 CDN/本机素材树）
+    try {
+      const tag = globalThis.localStorage?.getItem('sp.tag') || '';
+      const nc = globalThis.localStorage?.getItem('sp.cardSkin') || '';
+      if (/^[0-9]{4}$/.test(tag)) msg.tag = tag;
+      if (/^[A-Za-z0-9._-]{1,32}$/.test(nc)) msg.nc = nc;
+    } catch { /* private mode */ }
     let token = null;
     try { token = this.getToken(); } catch { token = null; }
     if (typeof token === 'string' && token.length > 0 && token.length <= 64) {

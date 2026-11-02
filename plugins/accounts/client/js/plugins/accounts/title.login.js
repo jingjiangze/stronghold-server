@@ -18,6 +18,7 @@ import { NAMECARD_IDS, namecardUrl, namecardThumbUrl } from './namecards.js';
 const TOKEN_KEY = 'sp.accountToken';
 const NAME_KEY = 'sp.name';
 const SKIN_KEY = 'sp.cardSkin';
+const TAG_KEY = 'sp.tag'; // 4 位代号（QQ 后四位），重名时显示 名字#代号
 /** 卡面/账号变化时广播，首页预览与房间页名片一起刷新 */
 const CARD_EVENT = 'sp:card-changed';
 const notifyCard = () => { try { window.dispatchEvent(new CustomEvent(CARD_EVENT)); } catch { /* ignore */ } };
@@ -144,6 +145,8 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
         : await call('/api/auth/login', { method: 'POST', body: { qq, password: pw } });
       if (!r.ok) { setErr((ERRORS[r.error] || (() => r.error || say('操作失败', 'Failed')))()); return; }
       writeToken(r.token);
+      // 代号取 QQ 后四位：稳定、跨设备一致
+      if (/^[0-9]{5,12}$/.test(String(qq))) writeLocal(TAG_KEY, String(qq).slice(-4));
       setPw(''); setPw2('');
       onAccount(r.account);
       notifyCard();
@@ -165,6 +168,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
       });
       if (!r.ok) { setErr((ERRORS[r.error] || (() => r.error || say('保存失败', 'Could not save')))()); return; }
       writeLocal(SKIN_KEY, skin);
+      if (/^[0-9]{5,12}$/.test(String(r.account.qq))) writeLocal(TAG_KEY, String(r.account.qq).slice(-4));
       onAccount(r.account);
       notifyCard();
       applyName(r.account.name);
@@ -248,6 +252,7 @@ function AccountSlot({ overlay }) {
   const [mode, setMode] = useState(null); // null | 'signin' | 'profile' | 'notices'
   const [hasNotices, setHasNotices] = useState(false);
   const [skin, setSkin] = useState(readLocal(SKIN_KEY));
+  const [tag, setTag] = useState(readLocal(TAG_KEY));
 
   useEffect(() => {
     let live = true;
@@ -261,7 +266,7 @@ function AccountSlot({ overlay }) {
 
   // 名片面板里换了卡面 → 首页这张预览跟着换
   useEffect(() => {
-    const sync = () => setSkin(readLocal(SKIN_KEY));
+    const sync = () => { setSkin(readLocal(SKIN_KEY)); setTag(readLocal(TAG_KEY)); };
     window.addEventListener(CARD_EVENT, sync);
     return () => window.removeEventListener(CARD_EVENT, sync);
   }, []);
@@ -279,11 +284,14 @@ function AccountSlot({ overlay }) {
 
   const row = account
     ? html`<div class="title-account-bar title-account-bar--in">
-        <button type="button" class="title-account-bar__avatar-btn" title=${say('编辑名片', 'Edit name card')}
-          aria-label=${say('编辑名片', 'Edit name card')} onClick=${() => setMode('profile')}>
-          <${Avatar} account=${account} />
+        <button type="button" class="title-account-bar__nc" title=${say('名片', 'Name card')}
+          aria-label=${say('名片', 'Name card')} onClick=${() => setMode('profile')}>
+          ${skin
+            ? html`<img src=${namecardThumbUrl(skin)} alt="" loading="lazy"
+                onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
+            : html`<${Avatar} account=${account} />`}
         </button>
-        <span class="title-account-bar__name">${account.name || account.qq}</span>
+        <span class="title-account-bar__name">${account.name || account.qq}${tag ? html`<span class="acct-tag">#${tag}</span>` : null}</span>
         <${Button} variant="ghost" size="sm" onClick=${() => setMode('profile')}>${say('名片', 'Card')}<//>
       </div>`
     : html`<button type="button" class="title-account-bar" onClick=${() => setMode('signin')}>
@@ -292,45 +300,11 @@ function AccountSlot({ overlay }) {
       </button>`;
 
   return html`<div class="title-account-bar-row">
-    ${account && skin
-      ? html`<img class="acc-mini" src=${namecardUrl(skin)} alt="" loading="lazy"
-          onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
-      : null}
     ${row}
     ${hasNotices
       ? html`<button type="button" class="title-account-bar title-account-bar--ann" onClick=${() => setMode('notices')}>${say('公告', 'Notices')}</button>`
       : null}
     ${!account ? html`<p class="acc-hint">${say('不登录也能直接开始（游客）', 'You can start as a guest without signing in')}</p>` : null}
-  </div>`;
-}
-
-/** 房间页的「我的名片」：固定卡片，只在 `.room-screen` 存在时显示（CSS `body:has()` 控制，不碰 mota）。 */
-function RoomCard() {
-  const [acc, setAcc] = useState(null);
-  const [skin, setSkin] = useState(readLocal(SKIN_KEY));
-
-  useEffect(() => {
-    let live = true;
-    const load = () => {
-      setSkin(readLocal(SKIN_KEY));
-      const token = readToken();
-      if (!token) { setAcc(null); return; }
-      call('/api/account/me', { token }).then((r) => { if (live && r.ok) setAcc(r.account); }).catch(() => {});
-    };
-    load();
-    window.addEventListener(CARD_EVENT, load);
-    return () => { live = false; window.removeEventListener(CARD_EVENT, load); };
-  }, []);
-
-  if (!acc || !skin) return null;
-  const color = acc.nameStyle?.color || '';
-  return html`<div class="sp-roomcard">
-    <img class="sp-roomcard__art" src=${namecardUrl(skin)} alt="" loading="lazy"
-      onError=${(e) => { e.currentTarget.style.display = 'none'; }} />
-    <div class="sp-roomcard__line">
-      <img class="sp-roomcard__avatar" src=${acc.avatar || ''} alt="" width="22" height="22" loading="lazy" />
-      <b style=${color ? `color:${color}` : undefined}>${acc.name || acc.qq}</b>
-    </div>
   </div>`;
 }
 
@@ -342,14 +316,6 @@ export function mount(host) {
     overlay.id = 'sp-accounts-overlay';
     document.body.appendChild(overlay);
   }
-  // 房间页名片：同样挂 body（Preact 重渲染不会清掉），显示与否交给 CSS
-  let room = document.getElementById('sp-accounts-room');
-  if (!room) {
-    room = document.createElement('div');
-    room.id = 'sp-accounts-room';
-    document.body.appendChild(room);
-  }
-  render(html`<${RoomCard} />`, room);
   render(html`<${AccountSlot} overlay=${overlay} />`, host);
 }
 
@@ -358,6 +324,4 @@ export function unmount(host) {
   host.replaceChildren();
   const overlay = document.getElementById('sp-accounts-overlay');
   if (overlay) { render(null, overlay); overlay.remove(); }
-  const room = document.getElementById('sp-accounts-room');
-  if (room) { render(null, room); room.remove(); }
 }

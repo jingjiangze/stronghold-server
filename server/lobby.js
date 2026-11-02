@@ -432,8 +432,6 @@ export class Room {
     this.replay = null;
     /** @type {string[] | null} plugins of the room's set that changed on disk — the host not told yet (Lobby.pluginsChanged) */
     this.pluginsChanged = null;
-    /** @type {string[]} 房主标了「推荐」的界面插件（owner 2026-11-02，room.setUiRecommend）：只影响展示，空则不下发 */
-    this.uiRecommend = [];
     this.pluginNoticeKeys = {};
     /** @type {string | null} per-network limit key of the creator (net.js clientAddress) */
     this.ownerKey = null;
@@ -506,11 +504,14 @@ export class Room {
           ...(this.needsContent && !s.isBot ? { content: s.content || 'loading' } : {}),
           // 名片干员 (room.card): only a human seat with a card carries the key
           ...(!s.isBot && s.card ? { card: s.card } : {}),
+          ...(!s.isBot && s.tag ? { tag: s.tag } : {}),
+          ...(!s.isBot && s.nc ? { nc: s.nc } : {}),
           // 干员皮肤 (room.skins, PUBLIC like Match.publicView().players[].skins): the seat card's outfit (header);
           // only a human seat with a non-empty map carries the key
           ...(!s.isBot && s.skins && Object.keys(s.skins).length ? { skins: s.skins } : {}) }
         : null)),
-      spectators: this.spectators.map((s) => ({ playerId: s.playerId, name: s.name, connected: s.connected, ...(this.needsContent ? { content: /** @type {any} */ (s).content || 'loading' } : {}) })),
+      spectators: this.spectators.map((s) => ({ playerId: s.playerId, name: s.name, connected: s.connected,
+        ...(s.tag ? { tag: s.tag } : {}), ...(s.nc ? { nc: s.nc } : {}), ...(this.needsContent ? { content: /** @type {any} */ (s).content || 'loading' } : {}) })),
       ...(this.content ? { content: this.content.trusted ? {...this.content, trusted:{...this.content.trusted, consent:Object.fromEntries(this.seats.filter(x => x && !x.isBot).map(x => [x.seat,x.consentCs === this.content.cs]))}} : this.content } : {}),
       // another official version than 第二期下半, and its open vote (header "Official versions"): omitted otherwise, so a
       // default room's room.state stays identical
@@ -522,10 +523,6 @@ export class Room {
       ...(this.test ? { test: true } : {}),
       // 「不限时」 (header): omitted unless on, so a default room.state stays identical
       ...(this.soloUnlimited === true ? { soloUnlimited: true } : {}),
-      // 插件文件在服务器上变了、房主还没重新应用（审计 G8）：持久标记，房主离线再回来也看得到（原来只有一条 toast）
-      ...(Array.isArray(this.pluginsChanged) && this.pluginsChanged.length ? { pluginsChanged: [...this.pluginsChanged] } : {}),
-      // 房主的界面插件推荐（room.setUiRecommend）：空则省略，默认房间的 room.state 保持不变
-      ...(Array.isArray(this.uiRecommend) && this.uiRecommend.length ? { uiRecommend: [...this.uiRecommend] } : {}),
       // 插件平铺进 room.state 的字段（后写的覆盖同名核心键；插件自己保证不冲撞）
       ...(this.ext?.state?.(this) || {}),
     };
@@ -760,8 +757,6 @@ export class Lobby {
       list.push({
         code: r.code, mode: r.mode, difficulty: r.difficulty, variant: r.variant || null,
         humans, seats: r.seats.filter(Boolean).length, inMatch: !!r.match, test: r.test === true,
-        // 大厅房间列表的插件摘要（审计 G7）：让玩家在进房前就知道这是不是「非官方局」
-        ...(Array.isArray(r.content?.plugins) && r.content.plugins.length ? { plugins: r.content.plugins.length } : {}),
       });
     }
     // 等人多的、没开局排前面（可直接加的那种）
@@ -808,6 +803,8 @@ export class Lobby {
     let changed = !seat.connected;
     seat.connected = true;
     if (!room.match && seat.name !== session.name) { seat.name = session.name; changed = true; }
+    if (!room.match && session.tag && seat.tag !== session.tag) { seat.tag = session.tag; changed = true; }
+    if (!room.match && session.nc && seat.nc !== session.nc) { seat.nc = session.nc; changed = true; }
     if (!room.hostId) { this.migrateHost(room); changed = true; }
     if (changed) this.broadcastState(room);
     else this.sendState(room, session);
@@ -915,7 +912,6 @@ export class Lobby {
       case 'room.removeSpectator': return this.removeSpectator(session, msg);
       case 'room.setPlugins': return this.setPlugins(session, msg);
       case 'room.setMode': return this.setMode(session, msg);
-      case 'room.setUiRecommend': return this.setUiRecommend(session, msg);
       case 'room.contentReady': return this.contentReady(session, msg, ctx);
       case 'room.consent': return this.consent(session,msg);
       case 'room.proposeVersion': return this.proposeVersion(session, msg);
@@ -1287,22 +1283,6 @@ export class Lobby {
    * resolve cannot apply them (the install does not enable such a plugin), the host's own list is used instead, with one
    * warning: a `required` line must not stop a host from switching anything on.
    */
-  /**
-   * 房主的「界面插件·推荐」：房间级展示信息，不动对局与内容集。房主专属；集合没变就不广播。
-   * @param {any} session @param {{ ids: string[] }} msg
-   */
-  setUiRecommend(session, { ids }) {
-    const room = this.roomOf(session);
-    if (!room) return fail(ERR.NOT_IN_ROOM);
-    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
-    const next = [...new Set(ids)].sort();
-    const prev = Array.isArray(room.uiRecommend) ? room.uiRecommend : [];
-    if (next.length === prev.length && next.every((id, i) => id === prev[i])) return OK;
-    room.uiRecommend = next;
-    this.broadcastState(room);
-    return OK;
-  }
-
   setPlugins(session, { plugins }) {
     const room = this.roomOf(session);
     if (!room) return fail(ERR.NOT_IN_ROOM);
@@ -1331,11 +1311,7 @@ export class Lobby {
     const before = room.content;
     const sameSet = (before?.vs ?? null) === (content?.vs ?? null) && (before?.cs ?? null) === (content?.cs ?? null);
     const marks = (c) => JSON.stringify((c?.plugins || []).map((p) => [p.id, !!p.auto, p.settings || null]));
-    if (sameSet && marks(before) === marks(content)) {
-      // 同一组插件 = 房主点了「重新应用」：把「文件已更新」的持久标记清掉并广播
-      if (Array.isArray(room.pluginsChanged) && room.pluginsChanged.length) { room.pluginsChanged = null; this.broadcastState(room); }
-      return OK;
-    }
+    if (sameSet && marks(before) === marks(content)) return OK;
     this.dropReplay(room, session.playerId);
     // another set: a notice still waiting for the end of a match (pluginsChanged) is moot
     if (!sameSet) { room.pluginsChanged = null; room.pluginNoticeKeys = {}; }
@@ -2556,6 +2532,9 @@ export class Lobby {
       skins: session.skins || null,
       // 名片干员 (room.card): the operator on this player's seat card (PUBLIC: room.state seats[].card)
       card,
+      // 名片代号 / 卡面 (业主 2026-11-02)：重名时显示「名字#代号」；卡面只是素材 id
+      tag: session.tag || null,
+      nc: session.nc || null,
       // the content each was checked for (header "Gameplay plugins": filtered at the match start when it is another)
       loadoutCs: session.loadoutCs ?? null,
       notOwnedCs: session.notOwnedCs ?? null,
