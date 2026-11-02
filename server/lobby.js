@@ -432,6 +432,8 @@ export class Room {
     this.replay = null;
     /** @type {string[] | null} plugins of the room's set that changed on disk — the host not told yet (Lobby.pluginsChanged) */
     this.pluginsChanged = null;
+    /** @type {string[]} 房主标了「推荐」的界面插件（owner 2026-11-02，room.setUiRecommend）：只影响展示，空则不下发 */
+    this.uiRecommend = [];
     this.pluginNoticeKeys = {};
     /** @type {string | null} per-network limit key of the creator (net.js clientAddress) */
     this.ownerKey = null;
@@ -520,6 +522,8 @@ export class Room {
       ...(this.test ? { test: true } : {}),
       // 「不限时」 (header): omitted unless on, so a default room.state stays identical
       ...(this.soloUnlimited === true ? { soloUnlimited: true } : {}),
+      // 房主的界面插件推荐（room.setUiRecommend）：空则省略，默认房间的 room.state 保持不变
+      ...(Array.isArray(this.uiRecommend) && this.uiRecommend.length ? { uiRecommend: [...this.uiRecommend] } : {}),
       // 插件平铺进 room.state 的字段（后写的覆盖同名核心键；插件自己保证不冲撞）
       ...(this.ext?.state?.(this) || {}),
     };
@@ -907,6 +911,7 @@ export class Lobby {
       case 'room.removeSpectator': return this.removeSpectator(session, msg);
       case 'room.setPlugins': return this.setPlugins(session, msg);
       case 'room.setMode': return this.setMode(session, msg);
+      case 'room.setUiRecommend': return this.setUiRecommend(session, msg);
       case 'room.contentReady': return this.contentReady(session, msg, ctx);
       case 'room.consent': return this.consent(session,msg);
       case 'room.proposeVersion': return this.proposeVersion(session, msg);
@@ -1278,6 +1283,22 @@ export class Lobby {
    * resolve cannot apply them (the install does not enable such a plugin), the host's own list is used instead, with one
    * warning: a `required` line must not stop a host from switching anything on.
    */
+  /**
+   * 房主的「界面插件·推荐」：房间级展示信息，不动对局与内容集。房主专属；集合没变就不广播。
+   * @param {any} session @param {{ ids: string[] }} msg
+   */
+  setUiRecommend(session, { ids }) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
+    const next = [...new Set(ids)].sort();
+    const prev = Array.isArray(room.uiRecommend) ? room.uiRecommend : [];
+    if (next.length === prev.length && next.every((id, i) => id === prev[i])) return OK;
+    room.uiRecommend = next;
+    this.broadcastState(room);
+    return OK;
+  }
+
   setPlugins(session, { plugins }) {
     const room = this.roomOf(session);
     if (!room) return fail(ERR.NOT_IN_ROOM);
