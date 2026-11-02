@@ -723,8 +723,10 @@ test('official spot checks (hard-coded values from the zh_CN client data)', () =
   assert.deepEqual(es('enemy_1422_lrsldr'), [4700, 300, 100, 40]);           // 萨卡兹枯朽前锋 (template N)
   assert.deepEqual(es('enemy_1427_lrnazg'), [15000, 900, 500, 50]);          // “灵幛” (template E)
   assert.deepEqual(es('enemy_1045_hammer'), [10000, 1000, 1000, 0]);         // 粉碎攻坚手
-  assert.deepEqual(bosses.boss_1.bloodPoint, { FUNNY: 247500, NORMAL: 675000, HARD: 1800000, ABYSS: 3600000 });
-  assert.deepEqual(bosses.boss_10.bloodPoint, { FUNNY: 825000, NORMAL: 1012500, HARD: 3800000, ABYSS: 7600000 });
+  // 2026-11-02：bloodPoint 现在还有 N1–N20 的插值档（tools/build-nmodes.mjs），这里只校验官方 4 档
+  const pick4 = (bp) => ({ FUNNY: bp.FUNNY, NORMAL: bp.NORMAL, HARD: bp.HARD, ABYSS: bp.ABYSS });
+  assert.deepEqual(pick4(bosses.boss_1.bloodPoint), { FUNNY: 247500, NORMAL: 675000, HARD: 1800000, ABYSS: 3600000 });
+  assert.deepEqual(pick4(bosses.boss_10.bloodPoint), { FUNNY: 825000, NORMAL: 1012500, HARD: 3800000, ABYSS: 7600000 });
   assert.deepEqual([items.chess_item_1_01_e_a.name, items.chess_item_1_01_e_a.price, items.chess_item_1_01_e_a.params.atk], ['维式重锤', 1, 0.15]);
   assert.deepEqual([bands.band_sarkazb.totalHp, bands.band_lisa.totalHp], [45, 20]);
   assert.deepEqual(config.modes.mode_multi_abyss.rounds['15'].prepTime, 215);
