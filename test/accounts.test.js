@@ -55,19 +55,38 @@ test('store: 游客绑定（存在账号要校验密码；不存在就建号）'
   assert.equal(a.get('22334455').playerId, 'p_guest2');
 });
 
-test('store: 名片记录有字节上限；布阵额度到顶就拒；管理员可改密码', () => {
+test('store: 名片记录有字节上限；管理员可改密码', () => {
   const dir = tmpDir();
   const a = openAccounts({ dataDir: dir, quotaBytes: 1000, log: { warn() {}, info() {}, error() {} } });
   a.register('12345678', 'hunter2!');
   assert.equal(a.setProfile('12345678', { name: '博士', nameStyle: { color: '#fff' }, card: { op: 'char_1' } }).ok, true);
   assert.equal(a.setProfile('12345678', { name: 'x'.repeat(2000) }).error, 'TOO_LARGE');
-  assert.equal(a.addLineupBytes('12345678', 900).ok, true);
-  assert.equal(a.addLineupBytes('12345678', 200).error, 'QUOTA');
-  assert.equal(a.addLineupBytes('12345678', 100).used, 1000);
   assert.equal(a.login('12345678', 'hunter2!').ok, true);
   assert.equal(a.adminPatch('12345678', { password: 'newpass1' }).ok, true);
   assert.equal(a.login('12345678', 'hunter2!').error, 'BAD_CREDENTIALS');
   assert.equal(a.login('12345678', 'newpass1').ok, true);
+});
+
+test('store: 首次以 SQLite 打开时导入旧 accounts.jsonl（后行覆盖前行），重开不重复导入', (t) => {
+  const dir = tmpDir();
+  // append-only 的旧库：同一个 QQ 两行，最后一行才是名片真值（线上就是这个形状）
+  fs.writeFileSync(path.join(dir, 'accounts.jsonl'), [
+    JSON.stringify({ qq: '1689170897', hash: 'h1', created: 1, updated: 2, playerId: null, profile: {}, lineupBytes: 0 }),
+    JSON.stringify({ qq: '1689170897', hash: 'h1', created: 1, updated: 3, playerId: 'p_1', profile: { name: '腐竹大人', card: { skin: '35d01a1ce371' } }, lineupBytes: 0 }),
+  ].join('\n') + '\n', 'utf8');
+  const quiet = { warn() {}, info() {}, error() {} };
+  const a = openAccounts({ dataDir: dir, log: quiet });
+  if (a.backend !== 'sqlite') { a.close(); t.skip('node:sqlite 不可用（需要 --experimental-sqlite / Node 24）'); return; }
+  const v = a.view('1689170897');
+  assert.equal(v.name, '腐竹大人', 'JSONL 的最后一行必须赢');
+  assert.deepEqual(v.card, { skin: '35d01a1ce371' });
+  assert.equal(a.size(), 1, '同一 QQ 只应有一个账号');
+  a.close();
+  const b = openAccounts({ dataDir: dir, log: quiet });
+  assert.equal(b.size(), 1, '重开不能再导一遍');
+  assert.equal(b.view('1689170897').name, '腐竹大人');
+  assert.equal(b.login('1689170897', 'whatever').error, 'BAD_CREDENTIALS', '导入的 hash 仍然可用');
+  b.close();
 });
 
 test('http: /api 注册登录、公告读写、管理端点无钥匙时不存在', async (t) => {

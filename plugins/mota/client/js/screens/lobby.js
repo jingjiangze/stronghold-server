@@ -45,7 +45,7 @@ import { net, identity } from '../net.js';
 import { store, useStore, shallowEqual, loadPref, savePref } from '../store.js';
 import { data, getConfig, getMode, getStage, useData } from '../data.js';
 import {
-  AnnouncementBar, AnnouncementBoard, announcementRevision, announcementDismissed, dismissAnnouncement, parseAnnouncements,
+  AnnouncementBoard, announcementRevision, announcementDismissed, dismissAnnouncement,
 } from '../ui/announcements.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
 import { NoticesButton } from '../ui/notices.js';
@@ -1112,15 +1112,8 @@ export function LobbyScreen() {
   // getRaw：公告是房主写的中文正文，不该走本地化叠加。
   const noticeStatus = data.status('announcements');
   const noticeValue = data.getRaw('announcements');
-  const noticeEntries = noticeStatus === 'ready' ? parseAnnouncements(noticeValue) : null;
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeRev, setNoticeRev] = useState(null);
-  const [noticeClock, setNoticeClock] = useState(() => Date.now());
-  useEffect(() => {
-    // One minute is enough for a bar whose shortest unit is a minute; the open board ticks its own seconds.
-    const id = setInterval(() => setNoticeClock(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
   useEffect(() => {
     setNoticeRev(null);
     if (noticeStatus !== 'ready') return undefined;
@@ -1217,7 +1210,6 @@ export function LobbyScreen() {
             <${Button} variant="danger" size="md" loading=${busy === 'cancel'} onClick=${cancelMatch}>取消匹配<//>
           </div>` : null}
         ${maint?.active ? html`<div class="hub-maint">${t('服务器即将维护，暂停开启新的模拟')}</div>` : null}
-        <${AnnouncementBar} entries=${noticeEntries} now=${noticeClock} onOpen=${() => setNoticeOpen(true)} />
         ${CAN_LIST ? html`<button type="button" class="hub-invite" onClick=${() => setModalOpen(true)}>${t('模拟邀约')}<${Icon} name="chevronRight" /></button>` : null}
         <div class="hub-entries__row">
           <${HubEntry} group=${{ icon: 'user', label: t('独立模拟') }} name=${t('独立模拟')} en="SOLO" icon="user" onClick=${() => openMode('solo')} />

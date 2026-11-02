@@ -277,13 +277,19 @@ body.sp-account .title-login .field { display: none; }
   gap: .12rem;
   padding: .1rem .12rem;
   text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   border: 1px solid rgba(78, 216, 175, .45);
   background: linear-gradient(180deg, rgba(14, 28, 23, .7), rgba(7, 14, 12, .78));
+  transition: border-color 140ms;
 }
+.acct-title-card:hover, .acct-title-card:focus-visible { border-color: var(--mint-500); }
 .acct-title-card.has-nc {
   --nc-shade: linear-gradient(90deg, rgba(8, 11, 11, .84), rgba(8, 11, 11, .5) 55%, rgba(8, 11, 11, .2));
   border-color: rgba(255, 255, 255, .22);
 }
+.acct-title-card.has-nc:hover, .acct-title-card.has-nc:focus-visible { border-color: rgba(255, 255, 255, .5); }
 .acct-title-card__pic {
   flex: none;
   width: .52rem;
@@ -291,7 +297,7 @@ body.sp-account .title-login .field { display: none; }
   display: grid;
   place-items: center;
   overflow: hidden;
-  font-size: .24rem;
+  font-size: calc(.24 * var(--t));
   font-weight: 700;
   line-height: 1;
   color: #8bdfb0;
@@ -304,19 +310,10 @@ body.sp-account .title-login .field { display: none; }
 .acct-title-card.has-nc .acct-title-card__who small { color: #d6dedb; }
 .acct-title-card__who b { font-size: calc(.2 * var(--t)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-title-card__who .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
-.acct-title-card__btn {
-  flex: none;
-  height: .32rem;
-  padding: 0 .12rem;
-  cursor: pointer;
-  font: inherit;
-  font-size: calc(.13 * var(--t));
-  font-weight: 600;
-  color: var(--text-md, #c4d0cb);
-  background: transparent;
-  border: 1px solid var(--line-2);
-}
-.acct-title-card__btn:hover, .acct-title-card__btn:focus-visible { color: #fff; border-color: var(--text-lo); }
+/* 面板里那张卡面大图本身就是「换卡面」的入口（按钮化了，保持图片原样） */
+.acc-hero__art-btn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.acc-hero__art-btn:hover .acc-hero__art, .acc-hero__art-btn:focus-visible .acc-hero__art { opacity: .86; }
+.acc-hero__art-btn:focus-visible { outline: 2px solid var(--mint-500); outline-offset: -2px; }
 /* 条下的小字（游客提示）：站点没有等价类，只有这一条留在页面样式里 */
 .acc-hint { flex: 0 0 100%; margin: 0; color: var(--text-lo); font-size: calc(.12 * var(--t)); text-align: center; }
 /* 账号面板内部排版：一律吃主题变量，颜色/字号随「文字大小」缩放 */
