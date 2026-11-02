@@ -289,7 +289,7 @@ export function PluginPanel({ open, room, myId, onClose }) {
                   <span class="plugrow__badge">${t('界面')}</span><span class="plugrow__badge is-unofficial">${t('非官方')}</span>
                   ${recommended.includes(p.id) ? html`<span class="plugrow__badge">${t('房主推荐')}</span>` : null}</div>
                 ${isHost ? html`<button type="button" class=${cx('set-toggle', marked && 'is-on')} data-testid="ui-recommend-toggle" aria-pressed=${marked ? 'true' : 'false'}
-                  onClick=${() => toggleRecommend(p.id, !marked)}>${t('推荐')}</button>` : null}
+                  onClick=${() => { toggleRecommend(p.id, !marked); net.request('room.setUiRecommend', { ids: uiRecommend.get().ids }).catch(() => {}); }}>${t('推荐')}</button>` : null}
               </div>
             </li>`;
           })}
