@@ -2205,7 +2205,9 @@ export class Lobby {
         mode: room.mode,
         difficulty: room.difficulty,
         // a plugin mode the host chose (header "Gameplay plugins"), else the official mode of the difficulty
-        modeId: (this.ext?.options?.(room) || {}).modeId || room.content?.modeId || modeIdFor(room.mode, room.difficulty),
+        // 肉鸽用自己的一份 mode 记录（mode_rogue_<难度>）：回合数/敌人数值都从那里读，不再借用多人的表
+        modeId: (this.ext?.options?.(room) || {}).modeId || room.content?.modeId
+          || modeIdFor(room.mode, room.difficulty, room.mode === 'rogue' ? 'rogue' : null),
         // 房间变体（协同共竞 'xie' / 肉鸽 'rogue' / 无限火力 blitz…）。**必须透传给 Match**：引擎侧
         // `Match.roomVariant` 靠它判 `isRogue`。以前只把变体存进 `room.variant` 并广播给客户端，却没进 opts
         // ⇒ `isRogue` 恒 false，肉鸽的藏品节奏 / 随机事件 / 随机词缀 / 每回合换图**全部静默失效**（2026-10-31 修）。

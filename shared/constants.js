@@ -76,8 +76,10 @@ export const DIFFICULTY_NAMES = {
 export const DIFFICULTY_COLORS = { ...LEGACY_COLORS, ...TIER_DIFFICULTY_COLORS };
 
 // modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi
-export const modeIdFor = (roomMode, difficulty) =>
-  `mode_${roomMode === 'solo' ? 'single' : 'multi'}_${difficulty.toLowerCase()}`;
+// `variant`（'xie' 协同共竞 / 'rogue' 肉鸽）会让 modeId 变成 `mode_<variant>_<难度>`（2026-11-02 起核心也支持，
+// 之前只有插件那份有三参）。
+export const modeIdFor = (roomMode, difficulty, variant = null) =>
+  `mode_${variant || (roomMode === 'solo' ? 'single' : 'multi')}_${difficulty.toLowerCase()}`;
 
 export const PHASE = Object.freeze({
   LOBBY: 'LOBBY',
