@@ -147,11 +147,11 @@ export function AccountMeChip({ player, onStats }) {
   const { me } = useCurrentAccount();
   useEffect(ensureStyle, []);
   const name = player?.name || me.name || '博士';
-  // 名片卡面（业主 2026-11-02）：本机选的卡面 id → 缩略图贴在 chip 左侧
+  // 名片卡面：走 UI 包既有的 .has-nc + .nc-layer（本机卡面 id 存在 sp.cardSkin）
   const skin = (() => { try { return globalThis.localStorage?.getItem('sp.cardSkin') || ''; } catch { return ''; } })();
-  const skinUrl = /^[A-Za-z0-9._-]{1,32}$/.test(skin) ? '/assets/local/sp-namecards-20261014/' + skin + '.s.webp' : '';
-  return html`<button type="button" class="me-chip me-chip--btn stats-entry" onClick=${() => openAccountPanel({ onStats })} title="本机账号 · 统计数据" aria-label="本机账号">
-    ${skinUrl ? html`<img class="me-chip__nc" src=${skinUrl} alt="" loading="lazy" onError=${(e) => { e.currentTarget.style.display = 'none'; }} />` : null}
+
+  return html`<button type="button" class=${`me-chip me-chip--btn stats-entry${skin ? ' has-nc' : ''}`} onClick=${() => openAccountPanel({ onStats })} title="本机账号 · 统计数据" aria-label="本机账号">
+    <${NameCardLayer} card=${skin ? { skin } : null} />
     <${AvatarFrame} size="sm" name=${name} seat=${0} self=${true} src=${me.avatar || undefined} />
     <span class="me-chip__text"><span class="me-chip__name">${name}<span class="acct-tag">#${me.tag}</span></span><${MicroLabel}>LOCAL · 本机账号<//></span>
     <${Icon} name="user" class="me-chip__stats" />
