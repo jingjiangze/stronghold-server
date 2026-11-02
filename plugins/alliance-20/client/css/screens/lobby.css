@@ -4838,3 +4838,7 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 }
 .hub-invite:hover { color: var(--mint-500); border-color: var(--mint-500); background: var(--mint-a10); }
 .hub-invite .icon { width: max(.13rem, 9px); height: max(.13rem, 9px); }
+
+/* 插件库清单的筛选条（2026-11-02）：复用 .set-toggle 的观感，只补排布 */
+.plugpanel__filters { display: flex; flex-wrap: wrap; gap: .06rem; margin: .06rem 0 .08rem; }
+.plugpanel__filters .set-toggle { font-size: max(.12rem, 9.5px); }

@@ -311,24 +311,42 @@ export function InstalledPlugins({ open, onClose }) {
     return () => { alive = false; };
   }, [open]);
   const notLoaded = Array.isArray(skipped) ? skipped : [];
+  // 清单筛选（P1，2026-11-02）：按 class 收窄、以及「只看不可用」——后者是审计里最常被问的一句
+  // 「服务器上明明装了，为什么面板里没有/为什么用不了」
+  const [cls, setCls] = useState('all');
+  const [badOnly, setBadOnly] = useState(false);
+  const classes = [...new Set(plugins.map((p) => p.class))];
+  const badLabel = t('只看不可用');
+  const emptyLabel = t('没有符合筛选的插件');
+  const shown = plugins.filter((p) => (cls === 'all' || p.class === cls) && (!badOnly || p.status !== 'loaded'));
   return html`<${Modal} open=${open} onClose=${onClose} title=${t('本服务器的插件')} micro="PLUGINS" width="6.8rem"
       actions=${html`<${Button} variant="primary" icon="check" onClick=${onClose}>${t('完成')}<//>`}>
     <div class="plugpanel" data-testid="installed-plugins">
       <p class="plugpanel__lead">${t('插件为非官方制作，不属于原版游戏；原版内容始终是默认。')}</p>
       ${cat.status === 'loading' && !plugins.length ? html`<p class="set-hint">${t('正在读取插件列表…')}</p>` : null}
       ${cat.status === 'failed' && !plugins.length ? html`<p class="set-hint is-warn">${t('无法读取插件列表')}</p>` : null}
+      ${plugins.length ? html`<div class="plugpanel__filters" data-testid="plugin-filters">
+        <button type="button" class=${cx('set-toggle', cls === 'all' && 'is-on')} aria-pressed=${cls === 'all' ? 'true' : 'false'}
+          onClick=${() => setCls('all')}>${t('全部')}</button>
+        ${classes.map((c) => html`<button key=${c} type="button" class=${cx('set-toggle', cls === c && 'is-on')} aria-pressed=${cls === c ? 'true' : 'false'}
+          onClick=${() => setCls(c)}>${CLASS_NAMES[c] ? t(CLASS_NAMES[c]) : c}</button>`)}
+        <button type="button" class=${cx('set-toggle', badOnly && 'is-on')} data-testid="plugin-only-bad" aria-pressed=${badOnly ? 'true' : 'false'}
+          onClick=${() => setBadOnly((v) => !v)}>${badLabel}</button>
+      </div>` : null}
       <ul class="plugpanel__list">
-        ${plugins.map((p) => html`<li key=${p.id} class="plugrow" data-plugin=${p.id}>
+        ${shown.map((p) => html`<li key=${p.id} class="plugrow" data-plugin=${p.id}>
           <div class="plugrow__body">
             <div class="plugrow__name"><b>${pluginName(p)}</b>${p.version ? html`<span class="num t-dim">v${p.version}</span>` : null}
               <span class="plugrow__badge">${p.execution === 'sandbox' ? t('脚本（沙箱）') : (CLASS_NAMES[p.class] ? t(CLASS_NAMES[p.class]) : t('插件'))}</span><span class="plugrow__badge is-unofficial">${t('非官方')}</span></div>
             <div class="plugrow__meta t-dim">
-              <span>${p.status === 'loaded' ? t('可以使用') : t('本版本不支持')}</span>
+              <span>${p.status === 'loaded' ? t('可以使用') : t('本版本不支持')}${p.status !== 'loaded' && p.disabled && p.disabled.code ? html` <span class="num">${p.disabled.code}</span>` : null}</span>
+              ${p.hash ? html`<span class="num" title=${String(p.hash)}>${t('锁定')} ${String(p.hash).slice(0, 8)}</span>` : null}
               ${Array.isArray(p.authors) && p.authors.length ? html`<span>${t('作者 {names}', { names: p.authors.join(', ') })}</span>` : null}
             </div>
           </div>
         </li>`)}
       </ul>
+      ${plugins.length && !shown.length ? html`<p class="set-hint">${emptyLabel}</p>` : null}
       ${notLoaded.length ? html`<section class="plugpanel__skipped" data-testid="plugins-not-loaded">
         <p class="set-hint">${t('没有载入：有 {n} 个问题', { n: notLoaded.reduce((sum, s) => sum + Math.max(1, s.problems.length), 0) })}</p>
         <ul class="plugpanel__list">
