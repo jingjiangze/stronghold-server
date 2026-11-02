@@ -258,7 +258,20 @@ function AccountSlot({ overlay }) {
     let live = true;
     const token = readToken();
     if (token) {
-      call('/api/account/me', { token }).then((r) => { if (!live) return; if (r.ok) setAccount(r.account); else writeToken(''); });
+      call('/api/account/me', { token }).then((r) => {
+        if (!live) return;
+        if (!r.ok) { writeToken(''); return; }
+        setAccount(r.account);
+        // 账号就是这里的真源：昵称回填到首页（代号输入框即使被隐藏也要有值，否则「开始」校验不过），
+        // 卡面标识从云端取回并缓存到本机（换设备也能直接显示同一张名片）。
+        if (r.account?.name) applyName(r.account.name);
+        const cloud = r.account?.card?.skin;
+        if (typeof cloud === 'string' && /^[A-Za-z0-9._-]{1,32}$/.test(cloud)) {
+          if (readLocal(SKIN_KEY) !== cloud) { writeLocal(SKIN_KEY, cloud); setSkin(cloud); }
+        }
+        const qqTag = /^[0-9]{5,12}$/.test(String(r.account?.qq || '')) ? String(r.account.qq).slice(-4) : '';
+        if (qqTag && readLocal(TAG_KEY) !== qqTag) { writeLocal(TAG_KEY, qqTag); setTag(qqTag); }
+      });
     }
     call('/api/announcements').then((r) => { if (live) setHasNotices((r.items || []).length > 0); }).catch(() => {});
     return () => { live = false; };
@@ -271,6 +284,15 @@ function AccountSlot({ overlay }) {
     return () => window.removeEventListener(CARD_EVENT, sync);
   }, []);
 
+  // 登录态标记：有账号时首页不再出现「游客」那套东西（代号输入框 + 游客提示），
+  // 名片大图排到「开始」上方（样式在 public/css/screens/title.css 的 body.sp-account 段）。
+  useEffect(() => {
+    const root = document.body;
+    if (!root) return undefined;
+    root.classList.toggle('sp-account', !!account);
+    return () => root.classList.remove('sp-account');
+  }, [account]);
+
   // 面板挂到 body 级容器：首页登录卡带 backdrop-filter，会生成 stacking context，
   // 留在卡里的弹窗会被后面的「下载完整素材 / 导入素材包」盖住（真机截图实测）。
   useEffect(() => {
@@ -282,17 +304,18 @@ function AccountSlot({ overlay }) {
     return () => { render(null, overlay); };
   }, [mode, account, overlay]);
 
+  // 已登录：名片大图（600×185 横幅）当首页门面 + 名字#代号；未登录才给游客入口。
   const row = account
-    ? html`<div class="title-account-bar title-account-bar--in">
-        <button type="button" class="title-account-bar__nc" title=${say('名片', 'Name card')}
-          aria-label=${say('名片', 'Name card')} onClick=${() => setMode('profile')}>
-          ${skin
-            ? html`<img src=${namecardThumbUrl(skin)} alt="" loading="lazy"
-                onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
-            : html`<${Avatar} account=${account} />`}
-        </button>
-        <span class="title-account-bar__name">${account.name || account.qq}${tag ? html`<span class="acct-tag">#${tag}</span>` : null}</span>
-        <${Button} variant="ghost" size="sm" onClick=${() => setMode('profile')}>${say('名片', 'Card')}<//>
+    ? html`<div class="title-account-card">
+        ${skin
+          ? html`<img class="title-account-card__art" src=${namecardUrl(skin)} alt="" loading="lazy"
+              onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
+          : null}
+        <div class="title-account-card__id">
+          <${Avatar} account=${account} />
+          <span class="title-account-card__name">${account.name || account.qq}${tag ? html`<span class="acct-tag">#${tag}</span>` : null}</span>
+          <${Button} variant="ghost" size="sm" onClick=${() => setMode('profile')}>${say('名片', 'Card')}<//>
+        </div>
       </div>`
     : html`<button type="button" class="title-account-bar" onClick=${() => setMode('signin')}>
         <${Icon} name="user" class="title-account-bar__icon" />
