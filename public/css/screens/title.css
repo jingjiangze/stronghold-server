@@ -264,6 +264,22 @@
 .title-account-bar__nc:hover { border-color: var(--mint-500); }
 .title-account-bar__nc:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 1px; }
 .title-account-bar__name .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
+/* 已登录的首页门面（业主 2026-11-02）：名片大图顶到卡片上沿当横幅，名字#代号压在下面那条；
+   游客那套（博士代号输入框 + 「不登录也能直接开始」）在 body.sp-account 下整块不出现。 */
+body.sp-account .title-plugin-slot { order: -1; }
+body.sp-account .title-login .field { display: none; }
+.title-account-card { flex: 1 1 100%; min-width: 0; display: block; margin: -.24rem -.28rem 0; }
+.title-account-card__art { display: block; width: 100%; height: auto; aspect-ratio: 600 / 186; object-fit: cover; background: #0b0e0d; }
+.title-account-card__id {
+  display: flex;
+  align-items: center;
+  gap: .1rem;
+  padding: .09rem .12rem;
+  border-top: 1px solid var(--line-2);
+  background: rgba(8, 10, 9, .82);
+}
+.title-account-card__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-weight: 700; }
+.title-account-card__name .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
 /* 条下的小字（游客提示）：站点没有等价类，只有这一条留在页面样式里 */
 .acc-hint { flex: 0 0 100%; margin: 0; color: var(--text-lo); font-size: calc(.12 * var(--t)); text-align: center; }
 /* 账号面板内部排版：一律吃主题变量，颜色/字号随「文字大小」缩放 */
