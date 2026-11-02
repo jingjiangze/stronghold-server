@@ -295,7 +295,7 @@ body.sp-account .title-login .field { display: none; }
 }
 .acct-title-card__pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acct-title-card__who { flex: 1; min-width: 0; display: grid; gap: .02rem; }
-.acct-title-card__who small { font-size: max(calc(.13 * var(--t)), 10px); letter-spacing: .06em; color: var(--text-lo); }
+.acct-title-card__who small { font-size: max(calc(.13 * var(--t)), 10px); letter-spacing: .06em; color: var(--text-lo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-title-card.has-nc .acct-title-card__who small { color: #d6dedb; }
 .acct-title-card__who b { font-size: calc(.18 * var(--t)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-title-card__who .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 500; font-size: .86em; }
