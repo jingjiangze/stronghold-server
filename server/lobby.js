@@ -758,6 +758,8 @@ export class Lobby {
       list.push({
         code: r.code, mode: r.mode, difficulty: r.difficulty, variant: r.variant || null,
         humans, seats: r.seats.filter(Boolean).length, inMatch: !!r.match, test: r.test === true,
+        // 大厅房间列表的插件摘要（审计 G7）：让玩家在进房前就知道这是不是「非官方局」
+        ...(Array.isArray(r.content?.plugins) && r.content.plugins.length ? { plugins: r.content.plugins.length } : {}),
       });
     }
     // 等人多的、没开局排前面（可直接加的那种）
