@@ -63,12 +63,12 @@ function applyName(name) {
 }
 
 /** 站点字段外观（label 在上、框在下，`.field__box brackets` 画四角括线）；支持 password，站点 TextField 没有。 */
-function Field({ label, micro, type = 'text', value, onInput, maxLength, placeholder, inputMode, autofocus }) {
+function Field({ label, micro, type = 'text', value, onInput, maxLength, placeholder, inputMode, autofocus, field }) {
   return html`<label class="field field--lg">
     ${label || micro ? html`<span class="field__label">${label}${micro ? html`<span class="micro">${micro}</span>` : null}</span>` : null}
     <span class="field__box brackets">
       <input class="field__input" type=${type} value=${value} maxLength=${maxLength} placeholder=${placeholder}
-        inputMode=${inputMode} autocomplete="off" spellcheck=${false}
+        inputMode=${inputMode} autocomplete="off" spellcheck=${false} data-acc-field=${field || undefined}
         data-autofocus=${autofocus ? '' : undefined} onInput=${(e) => onInput(e.currentTarget.value)} />
     </span>
   </label>`;
@@ -182,6 +182,14 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
 
   const signOut = () => { writeToken(''); notifyCard(); onSignedOut(); };
 
+  // 「编辑信息」= 把光标送到昵称输入框（面板本身已经在这一屏，不需要另开弹窗）。
+  const focusName = () => {
+    const input = document.querySelector('#sp-accounts-overlay [data-acc-field="name"]');
+    if (!input) return;
+    try { input.scrollIntoView?.({ block: 'center' }); } catch { /* older browsers */ }
+    input.focus();
+  };
+
   if (mode === 'notices') {
     return html`<${Modal} open title=${say('公告', 'Notices')} micro="NOTICES" width="min(640px,94vw)"
         onClose=${onClose} actions=${html`<${Button} variant="primary" onClick=${onClose}>${say('关闭', 'Close')}<//>`}>
@@ -218,21 +226,21 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
         <${Button} variant="ghost" onClick=${signOut} disabled=${busy}>${say('退出登录', 'Sign out')}<//>
         <${Button} variant="primary" onClick=${saveProfile} disabled=${busy}>${say('保存', 'Save')}<//>`}>
     <div class="acc-hero">
-      ${skin
-        ? html`<img class="acc-hero__art" src=${namecardUrl(skin)} alt="" loading="lazy"
-            onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
-        : html`<span class="acc-hero__empty">${say('未选卡面', 'No card art')}</span>`}
+      <button type="button" class="acc-hero__art-btn" title=${say('更换卡面', 'Change card art')}
+        aria-label=${say('更换卡面', 'Change card art')} onClick=${() => setGallery(true)}>
+        ${skin
+          ? html`<img class="acc-hero__art" src=${namecardUrl(skin)} alt="" loading="lazy"
+              onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
+          : html`<span class="acc-hero__empty">${say('选一张卡面', 'Pick a card art')}</span>`}
+      </button>
       <div class="acc-hero__id">
         <${Avatar} account=${account} size=${44} />
-        <div>
-          <b>${account.qq}</b>
-          <div class="t-dim">${say('布阵占用', 'Lineup used')} ${((account.lineup?.used || 0) / 1024 ** 2).toFixed(1)} MiB / ${((account.lineup?.quota || 0) / 1024 ** 3).toFixed(0)} GiB</div>
-        </div>
-        <${Button} variant="secondary" onClick=${() => setGallery(true)}>${say('更换卡面', 'Change card art')}<//>
+        <div><b>${account.qq}</b></div>
+        <${Button} variant="secondary" onClick=${focusName}>${say('编辑信息', 'Edit profile')}<//>
       </div>
     </div>
     <div class="acc-form">
-      <${Field} label=${say('昵称', 'Nickname')} micro="NAME" value=${name} maxLength=${24}
+      <${Field} label=${say('昵称', 'Nickname')} micro="NAME" value=${name} maxLength=${24} field="name"
         placeholder=${say('留空就用 QQ 号', 'Empty: your QQ number')} onInput=${setName} />
       <label class="field">
         <span class="field__label">${say('昵称颜色', 'Name colour')}</span>
@@ -301,16 +309,19 @@ function AccountSlot({ overlay }) {
     if (!overlay) return undefined;
     if (!mode) { render(null, overlay); return undefined; }
     render(html`<${AccountPanel} account=${account} mode=${mode} onClose=${() => setMode(null)}
-        onAccount=${(a) => { setAccount(a); setMode('profile'); }}
+        onAccount=${(a) => { setAccount(a); setMode((m) => (m === 'signin' ? 'profile' : m)); }}
         onSignedOut=${() => { setAccount(null); setMode(null); }} />`, overlay);
     return () => { render(null, overlay); };
-  }, [mode, account, overlay]);
+    // 依赖里故意不放 account：保存资料会换掉 account 对象，放进来会把 Modal 卸载重建（闪一下、并清掉「已保存」提示）。
+  }, [mode, overlay]);
 
   // 已登录：照 sp.bbsmc.cn 的首页做法——一张名片卡（卡面图当卡片背景层，头像 + 「已登录账号 · 以此名字进入」
-  // + 名字#代号 + 名片按钮）；未登录才给游客入口。
+  // + 名字#代号）。整张卡就是入口（点它开面板），所以不再单独放「名片」按钮；未登录才给游客入口。
   const initial = account ? [...(account.name || account.qq || '?')][0] || '?' : '';
   const row = account
-    ? html`<div class=${`acct-title-card${skin ? ' has-nc' : ''}`}>
+    ? html`<button type="button" class=${`acct-title-card${skin ? ' has-nc' : ''}`}
+        title=${say('账号 · 名片', 'Account · name card')} aria-label=${say('账号 · 名片', 'Account · name card')}
+        onClick=${() => setMode('profile')}>
         ${skin ? html`<span class="nc-layer" aria-hidden="true" style=${`--nc:url(${namecardUrl(skin)})`}></span>` : null}
         <span class="acct-title-card__pic">
           ${account.avatar ? html`<img src=${account.avatar} alt="" loading="lazy" />` : initial}
@@ -319,8 +330,7 @@ function AccountSlot({ overlay }) {
           <small>${say('已登录账号 · 以此名字进入', 'Signed in · you enter as this name')}</small>
           <b>${account.name || account.qq}${tag ? html`<span class="acct-tag">#${tag}</span>` : null}</b>
         </span>
-        <button type="button" class="acct-title-card__btn" onClick=${() => setMode('profile')}>${say('名片', 'Card')}</button>
-      </div>`
+      </button>`
     : html`<button type="button" class="title-account-bar" onClick=${() => setMode('signin')}>
         <${Icon} name="user" class="title-account-bar__icon" />
         <span>${say('账号登录 / 绑定', 'Sign in / link account')}</span>
