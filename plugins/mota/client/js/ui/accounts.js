@@ -9,6 +9,7 @@ import { html, AvatarFrame, MicroLabel, Icon, Modal, Button } from './components
 import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { render } from '../../vendor/preact.module.js';
 import { store } from '../store.js';
+import { NameCardLayer } from './namecards.js';
 
 /** This module keeps the account in the browser (other modules may check it to word their notes). */
 export const LOCAL_ACCOUNT = true;
