@@ -230,6 +230,45 @@
   background: linear-gradient(90deg, var(--mint-500), transparent 60%);
 }
 .title-login .btn--xl { letter-spacing: .6em; padding-left: calc(.48rem + .3em); }
+/* 账号条（ui 插件 accounts 的 title.login 槽位；业主 2026-11-02：入口显眼、外观跟站点一致） */
+.title-account-bar-row { display: flex; flex-wrap: wrap; gap: .1rem; align-items: stretch; }
+.title-account-bar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .1rem;
+  height: .56rem;
+  padding: 0 .16rem;
+  border: 1px solid var(--line-2);
+  background: rgba(10, 13, 12, .72);
+  color: var(--text-hi);
+  font: inherit;
+  font-size: calc(.18 * var(--t));
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: border-color 140ms, color 140ms;
+}
+.title-account-bar:hover, .title-account-bar:focus-visible { border-color: var(--mint-500); color: var(--text-hi); }
+.title-account-bar--ann { flex: 0 0 auto; padding: 0 .18rem; font-size: calc(.16 * var(--t)); color: var(--text-lo); }
+.title-account-bar--in { justify-content: flex-start; gap: .12rem; cursor: default; }
+.title-account-bar__avatar-btn { flex: none; display: inline-flex; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 50%; }
+.title-account-bar__avatar-btn:hover { box-shadow: 0 0 0 1px var(--mint-500); }
+.title-account-bar__avatar-btn:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 2px; }
+.title-account-bar__avatar { width: .3rem; height: .3rem; border-radius: 50%; flex: none; object-fit: cover; }
+.title-account-bar__icon { width: .2rem; height: .2rem; opacity: .8; }
+.title-account-bar__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-weight: 700; }
+/* 条下的小字（游客提示）：站点没有等价类，只有这一条留在页面样式里 */
+.acc-hint { flex: 0 0 100%; margin: 0; color: var(--text-lo); font-size: calc(.12 * var(--t)); text-align: center; }
+/* 账号面板内部排版：一律吃主题变量，颜色/字号随「文字大小」缩放 */
+.acc-form { display: flex; flex-direction: column; gap: .14rem; margin-top: .14rem; }
+.acc-head { display: flex; gap: .16rem; align-items: center; margin-bottom: .14rem; }
+.acc-head img { border-radius: 50%; }
+.acc-color { gap: .12rem; }
+.acc-color__input { width: .5rem; flex: none; padding: 0; background: none; border: 0; }
+.acc-color__preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.acc-err, .acc-ok { margin: .12rem 0 0; font-size: calc(.15 * var(--t)); }
 /* 下载完整素材 and 导入素材包 side by side under the login box (ui/assetDownload.js, ui/assetImport.js), each with its hint line;
    a label too long for its half (a larger 文字大小) wraps inside its button instead of spilling over the other one */
 .title-assets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .12rem; width: 4.9rem; margin-top: .12rem; text-align: center; }

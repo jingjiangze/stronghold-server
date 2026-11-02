@@ -716,7 +716,7 @@ export class Lobby {
   /** @param {string} code @returns {Room | null} */
   getRoom(code) { return this.rooms.get(String(code).toUpperCase()) || null; }
 
-  /** Counters for /healthz. */
+  /** Counters for /healthz and the lobby snapshot. */
   stats() {
     let matches = 0;
     let humans = 0;
@@ -727,7 +727,17 @@ export class Lobby {
       for (const s of r.seats) if (s && !s.left) (s.isBot ? bots++ : humans++);
       spectators += r.spectators.length;
     }
-    return { rooms: this.rooms.size, matches, humans, bots, spectators };
+    // 在线人数 = 绑定着活连接的会话数。业主 2026-11-02：「大厅在线人数显示不对」——之前这里是
+    // humans + spectators（房间里的座次），待在大厅没进房的人不算，掉线但还在重连窗口内的座次反而算，
+    // 于是数字既不等于在线玩家、也不等于连接数。registry 里每个会话有唯一 playerId，connected=false
+    // 的是「掉线等重连」，bot 没有会话，所以这个计数就是「此刻真的在线的人」。
+    let online = 0;
+    try {
+      for (const s of this.registry.all()) if (s.connected) online++;
+    } catch {
+      online = humans + spectators; // 没有 registry（单测里手工构造）时退回旧口径
+    }
+    return { rooms: this.rooms.size, matches, humans, bots, spectators, online };
   }
 
   /**
@@ -748,7 +758,7 @@ export class Lobby {
     }
     // 等人多的、没开局排前面（可直接加的那种）
     list.sort((a, b) => (Number(a.inMatch) - Number(b.inMatch)) || (b.humans - a.humans) || a.code.localeCompare(b.code));
-    return { t: 'lobby.state', online: st.humans + st.spectators, humans: st.humans, bots: st.bots, spectators: st.spectators, rooms: st.rooms, matches: st.matches, list: list.slice(0, 50) };
+    return { t: 'lobby.state', online: st.online, humans: st.humans, bots: st.bots, spectators: st.spectators, rooms: st.rooms, matches: st.matches, list: list.slice(0, 50) };
   }
 
   /** C2S `room.list`：把大厅快照直接回给请求者（客户端进大厅后轮询它）。 */
