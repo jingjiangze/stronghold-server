@@ -131,6 +131,7 @@ export class BattleSpawns {
     e.bounty = opts.bounty ?? null;
     e.sourcePlayerId = opts.sourcePlayerId ?? null;
     e.ownerId = opts.ownerPlayerId ?? this._ownerForTile(start);
+    this._applyEnemyRelicMods(e, def);
     e.spawnX = e.x; e.spawnY = e.y;
     e.spawnSeq = ++this._spawnSeq;
     e.deploySeq = ++this._deploySeq;
@@ -221,5 +222,44 @@ export class BattleSpawns {
     if (!this._enemiesDirty) return;
     this.enemies = this.enemies.filter((e) => e.alive);
     this._enemiesDirty = false;
+  }
+
+  /**
+   * 藏品对敌人的 spawn 级修正（2026-11-02，`opts.enemyMods`；缺省 null ⇒ 零影响）：
+   *   · `defAdd` + `defShredPerHit/max`（戈渎不语）——防御 +3000，每次受击 −100、最多 30 次；
+   *   · `eliteDmgTakenMul` + `eliteDmgDur`（生命蓝图）——精英/领袖登场 `eliteDmgDur` 秒内受到伤害 ×mul；
+   *   · `statusDurationMul`（精神治疗录像带）——异常状态时长倍率（由 `applyStatus` 读取）。
+   */
+  _applyEnemyRelicMods(e, def) {
+    const em = this.enemyMods;
+    if (!em) return;
+    const flat = Number(em.defAdd) || 0;
+    const perHit = Number(em.defShredPerHit) || 0;
+    if (flat || perHit) {
+      const max = Math.max(0, Number(em.defShredMax) || 0);
+      const buff = { key: 'relic:defShred', persist: true, mods: { defFlat: flat }, data: { hits: 0 } };
+      if (perHit && max > 0) {
+        buff.observeInjury = (ev) => {
+          if (!(ev && ev.amount > 0)) return;            // 只算「真的吃到伤害」的那一次
+          const d = buff.data;
+          if (d.hits >= max) return;
+          d.hits += 1;
+          buff.mods.defFlat = flat + perHit * d.hits;
+          e.markDirty();
+        };
+      }
+      this.addBuff(e, buff);
+    }
+    const eliteMul = Number(em.eliteDmgTakenMul);
+    if (eliteMul > 0 && eliteMul !== 1) {
+      const rank = String((def && def.rank) || '').toUpperCase();
+      if (e.isBoss || rank === 'ELITE' || rank === 'BOSS') {
+        this.addBuff(e, { key: 'relic:eliteDmgReduce', persist: true, duration: Number(em.eliteDmgDur) || 30, mods: { dmgTakenMul: eliteMul } });
+      }
+    }
+    const durMul = Number(em.statusDurationMul);
+    if (durMul > 0 && durMul !== 1) {
+      this.addBuff(e, { key: 'relic:statusDur', persist: true, mods: { statusDurationMul: durMul } });
+    }
   }
 }

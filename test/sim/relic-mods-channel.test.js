@@ -100,3 +100,40 @@ test('DoT 带 duration 的版本会在到期后停止（fogOnDeploy 60s）', () 
   h.run(2);
   assert.equal(u.hp, afterDot, '到期后不再掉血');
 });
+
+test('敌人 spawn 级修正：防御加成 + 受击衰减 / 异常时长倍率', () => {
+  const h = makeBattle({
+    units: [{ chessId: CHESS, row: 10, col: 5 }],
+    enemies: [{ key: 'enemy_1422_lrsldr', time: 0, route: 0 }],
+    content: 'generic', autoFinish: false,
+    enemyMods: { defAdd: 3000, defShredPerHit: -100, defShredMax: 30, statusDurationMul: 2.5 },
+  });
+  h.step();
+  const e = h.enemies()[0];
+  assert.ok(e, '敌人应已生成');
+  assert.ok(e.s.def >= 3000, `防御应含 +3000（实得 ${e.s.def}）`);
+  const before = e.s.def;
+  h.b.dealDamage(null, e, { amount: 1, type: 'true', canDodge: false, ignoreSelect: true });
+  assert.ok(Math.abs(e.s.def - (before - 100)) < 1e-6, `受击一次应 −100 防（${before} → ${e.s.def}）`);
+
+  // 异常状态时长 ×2.5（晕眩 10s → 25s）
+  h.b.applyStatus(e, 'stun', { duration: 10, ignoreSelect: true });
+  const st = e.findBuff('stun');
+  assert.ok(st && Math.abs(st.timeLeft - 25) < 1e-6, `晕眩时长应 ×2.5（实得 ${st && st.timeLeft}）`);
+});
+
+test('shelterOnDebuff：有干员中负面后全队获得庇护与无视双防', () => {
+  const h = makeBattle({
+    players: [{ playerId: 'p1', seat: 0, side: 'L', colOffset: 0,
+      units: [{ uid: 1, kind: 'chess', chessId: CHESS, row: 10, col: 5, relicMods: { debuffShelter: 0.35, debuffIgnore: 0.35 } },
+        { uid: 2, kind: 'chess', chessId: CHESS, row: 10, col: 6, relicMods: { debuffShelter: 0.35, debuffIgnore: 0.35 } }],
+      bonds: {}, bandId: null, playerEffects: [] }],
+    content: 'generic', autoFinish: false,
+  });
+  h.step();
+  const [a1, a2] = h.allies();
+  h.b.applyStatus(a1, 'stun', { duration: 3, ignoreSelect: true });
+  assert.ok(Math.abs((a1.s.dmgTakenMul ?? 1) - 0.65) < 1e-9, `中负面后承伤应 ×0.65（实得 ${a1.s.dmgTakenMul}）`);
+  assert.ok(Math.abs((a2.s.dmgTakenMul ?? 1) - 0.65) < 1e-9, '队友也应吃到');
+  assert.ok(Math.abs((a2.s.defIgnorePct ?? 0) - 0.35) < 1e-9, '攻击应无视 35% 防御');
+});

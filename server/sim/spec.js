@@ -62,6 +62,22 @@ const specReplacer = (k, v) => (typeof v === 'number' && !Number.isFinite(v) ? (
  * minus object references: `stageId` instead of a stage object, `boss: { poolHp, poolMax }` instead of a pool.
  * @returns {object} a fresh JSON-safe object
  */
+/**
+ * 藏品对**全部敌人**的修正白名单（2026-11-02）：只认这几个键、只认有限数值；不合法整块丢弃。
+ * 与 `relicMods`（己方单位）成对：那个挂在 unit 上，这个挂在 spec 上（生成每个敌人时施加）。
+ */
+const ENEMY_MOD_KEYS = ['defAdd', 'defShredPerHit', 'defShredMax', 'eliteDmgTakenMul', 'eliteDmgDur', 'statusDurationMul'];
+export function sanitizeEnemyMods(m) {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+  const out = {};
+  for (const k of ENEMY_MOD_KEYS) {
+    if (m[k] == null) continue;
+    const v = Number(m[k]);
+    if (Number.isFinite(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export function buildBattleSpec(o = {}) {
   if (o.version != null && !versionById(o.version)) throw new RangeError(`Unknown battle version ${o.version}`);
   const bossLike = o.kind === 'boss' || o.kind === 'hidden';
@@ -87,6 +103,8 @@ export function buildBattleSpec(o = {}) {
     waveId: o.waveId ?? null,
     bossId: o.bossId ?? null,
     content: o.content ?? 'full',
+    // 藏品对敌人的修正（缺省不出键：官方 spec 的字段集合不变）
+    ...(sanitizeEnemyMods(o.enemyMods) ? { enemyMods: sanitizeEnemyMods(o.enemyMods) } : {}),
     boss: bossLike && o.boss ? { poolHp: Number(o.boss.poolHp) || 0, poolMax: Number(o.boss.poolMax) || 1 } : null,
     // the content set the battle runs on and the art it was drawn with (header): not read by the sim
     ...(isContentHash(o.cs) ? { cs: o.cs } : {}),
@@ -186,6 +204,7 @@ export function createBattleFromSpec(spec, dataSource, opts = {}) {
     flags: s.flags ?? {},
     fieldId: s.fieldId,
     enemyOverrides: s.enemyOverrides ?? {},
+    enemyMods: sanitizeEnemyMods(s.enemyMods) ?? undefined,
     waveId: s.waveId ?? null,
     data: BattleClass === Battle ? withUnitLoadouts(toDataSource(dataSource), s.players) : dataSource,
     content: opts.content ?? s.content ?? 'full',

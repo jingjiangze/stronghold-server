@@ -114,6 +114,9 @@ export class Battle {
     this.routes = (opts.routes ?? []).map((r) => normalizeRoute(r));
     /** Per-template enemy overrides `{ [enemyKey]: { stats: {…partial} } }` (waves.json `overrides`). */
     this.enemyOverrides = opts.enemyOverrides ?? {};
+    /** 藏品对**全部敌人**的修正（2026-11-02）：`{ defAdd, defShredPerHit, defShredMax, eliteDmgTakenMul, eliteDmgDur, statusDurationMul }`。
+     *  在 spawns.js 生成每个敌人时施加；缺省 null ⇒ 与没有这条通道时逐位一致。 */
+    this.enemyMods = opts.enemyMods && typeof opts.enemyMods === 'object' ? opts.enemyMods : null;
     this.dt = TICK;
     this.time = 0;
     this.tickCount = 0;

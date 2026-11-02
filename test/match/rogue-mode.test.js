@@ -106,7 +106,7 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   assert.equal(relicEffectApplied({ immediate: { funds: 3 } }), true);
   assert.equal(relicEffectApplied({ deployCap: 1 }), true);
   assert.equal(relicEffectApplied({ lpCap: 2 }), true);
-  assert.equal(relicEffectApplied({ rule: { id: 'enemyDefShred' } }), false, '仍未接入的 rule 不算生效');
+  assert.equal(relicEffectApplied({ rule: { id: 'noSuchRule' } }), false, '未知 / 未接入的 rule 不算生效');
   assert.equal(relicEffectApplied({ rule: { id: 'fundsDrain' } }), true, '经济类 rule 已接入');
   assert.equal(relicEffectApplied({ ally: { atk: 0.1 } }), false, 'ally 类尚未接入');
   assert.equal(relicEffectApplied(null), false);
@@ -115,8 +115,8 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   const applied = relics.filter((r) => relicEffectApplied(r.effect)).length;
   const ruleInert = relics.filter((r) => { const e = r.effect || {}; return !!e.rule && !relicEffectApplied(e); }).length;
   assert.ok(applied >= 30, `有实现效果的藏品过少：${applied}/${relics.length}`);
-  // 逐批接入：门槛只挡「一夜之间全标已实现」这种假绿（2026-11-02 剩 3 条未实装）
-  assert.ok(ruleInert >= 1, `rule 类藏品应仍有未实装项（逐批接入中）：${ruleInert}`);
+  // 2026-11-02：57 条 rule 已全部接入；这条只留作「未来新增数据时」的可见提示（不再要求一定有未实装项）
+  assert.ok(ruleInert >= 0, `未实装 rule 数异常：${ruleInert}`);
   assert.equal(applied + relics.filter((r) => !relicEffectApplied(r.effect)).length, relics.length, '未生效 = 总数 - 已生效');
 });
 
@@ -618,6 +618,49 @@ test('庇护与部署晕眩：shelter 静态 10%；stunOnDeploy 人数按回合�
   assert.deepEqual(r9.self.relicStunRule(r9.ps), { count: 4, dur: 10 }, '最多 +3（含初始 1 人）');
 
   for (const id of ['p11', 'n19']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
+
+test('敌方 spawn 级三条 + removeTemp：参数聚合与置旗', () => {
+  const mkSelf = (relics, round = 1) => {
+    const ps = { playerId: 'p0', relics: relics.slice(), lp: 20, funds: 5, temp: [{ uid: 1, kind: 'item', id: 'x' }] };
+    return {
+      self: {
+        gd: { raw: { relics: RELICS } }, round, isRogue: false, players: new Map([[ps.playerId, ps]]),
+        relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+        relicEnemyMods: MatchMeltdown.prototype.relicEnemyMods,
+        relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+        relicGrantInstant: MatchMeltdown.prototype.relicGrantInstant,
+      },
+      ps,
+    };
+  };
+
+  // n27 戈渎不语：敌方防御 +3000，每次受击 −100、最多 30 次
+  const def = mkSelf(['n27']);
+  assert.deepEqual(def.self.relicEnemyMods(), { defAdd: 3000, defShredPerHit: -100, defShredMax: 30 });
+  // n42 生命蓝图：精英/领袖登场 30 秒内受伤 ×0.5
+  const elite = mkSelf(['n42']);
+  const em = elite.self.relicEnemyMods();
+  assert.equal(em.eliteDmgTakenMul, 0.5);
+  assert.equal(em.eliteDmgDur, 30);
+  // p29 精神治疗录像带：异常时长 +150% ⇒ ×2.5
+  assert.equal(mkSelf(['p29']).self.relicEnemyMods().statusDurationMul, 2.5);
+  assert.equal(mkSelf([]).self.relicEnemyMods(), null);
+
+  // p13 养育者：庇护 35% + 无视双防 35%（走己方 per-unit 通道）
+  const sh = mkSelf(['p13']);
+  assert.equal(sh.self.relicAllyMul(sh.ps).debuffShelter, 0.35);
+
+  // n23 维度流质：拿到即移除临时部署区（置旗 + 清空）
+  const rt = mkSelf(['n23']);
+  const defN23 = RELICS.relics.find((r) => r.id === 'n23');
+  rt.self.relicGrantInstant(rt.ps, defN23);
+  assert.equal(rt.ps.relicNoTemp, true);
+  assert.equal(rt.ps.temp.filter(Boolean).length, 0, '已在临时部署区里的东西被清掉');
+
+  for (const id of ['n27', 'n42', 'p29', 'p13', 'n23']) {
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });

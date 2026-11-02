@@ -199,6 +199,10 @@ export class BattleStatus {
       const rv = this.resistOf(target);
       if (rv > 0) duration *= 1 - rv;
     }
+    // 藏品 statusDuration：「敌人受到的一次性晕眩、寒冷、冻结等异常效果影响时间提高 150%」——
+    // 乘在抵抗之后（抵抗先削、藏品再拉长），浮空/缚地的重量减半仍在其后生效。
+    const durMul = Number(target.s.statusDurationMul);
+    if (durMul > 0 && durMul !== 1) duration *= durMul;
     // 浮空 / 缚地 (ba.levitate, ba.groundbind): "对重量大于3的单位持续时间减半"
     if ((key === 'levitate' || key === 'groundbind') && target.s.massLevel > LEVITATE_HALF_WEIGHT) duration /= 2;
     if (!(duration > 0)) return false;

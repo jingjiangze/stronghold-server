@@ -74,6 +74,8 @@ export class PlayerPieces {
    * slot is free (`toTemp`) moves into the hand at the next recompute (_fillHandFromTemp).
    */
   stow(piece, { allowTemp = true, toTemp = false, preferIdx = null } = {}) {
+    // 藏品 removeTemp（维度流质）「移除临时部署区」：手牌满了就是没地方放（溢出丢弃），不再往 temp 塞
+    if (this.relicNoTemp) allowTemp = false;
     if (!toTemp) {
       if (Number.isInteger(preferIdx) && preferIdx >= 0 && preferIdx < this.hand.length && this.hand[preferIdx] == null) {
         this.hand[preferIdx] = piece;
