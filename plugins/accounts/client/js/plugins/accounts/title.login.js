@@ -107,7 +107,8 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   const [pw2, setPw2] = useState('');
   const [name, setName] = useState(account?.name || '');
   const [color, setColor] = useState(account?.nameStyle?.color || '#4ed8af');
-  const [skin, setSkin] = useState(readLocal(SKIN_KEY));
+  // 卡面标识云端同步（账号 card.skin）；本机仅作离线缓存/兜底
+  const [skin, setSkin] = useState(account?.card?.skin || readLocal(SKIN_KEY));
   const [gallery, setGallery] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -117,7 +118,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   useEffect(() => {
     setName(account?.name || '');
     setColor(account?.nameStyle?.color || '#4ed8af');
-    setSkin(readLocal(SKIN_KEY));
+    setSkin(account?.card?.skin || readLocal(SKIN_KEY));
     setErr(''); setSaved(''); setGallery(false);
   }, [account, mode]);
 
@@ -152,10 +153,10 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
     if (trimmed.length > 24) { setErr(say('昵称最多 24 字', 'At most 24 characters')); return; }
     setBusy(true);
     try {
-      // 服务器只存名字与昵称颜色；卡面只在本机
+      // 名字/颜色/卡面标识一起存服务器（卡面只存一个 id，图片仍在 CDN 上，不进服务器）
       const r = await call('/api/account/profile', {
         method: 'POST',
-        body: { name: trimmed, nameStyle: { color } },
+        body: { name: trimmed, nameStyle: { color }, card: skin ? { skin } : null },
         token: readToken(),
       });
       if (!r.ok) { setErr((ERRORS[r.error] || (() => r.error || say('保存失败', 'Could not save')))()); return; }
