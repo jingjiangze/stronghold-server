@@ -196,7 +196,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   <//>`;
 }
 
-function AccountSlot() {
+function AccountSlot({ overlay }) {
   const [account, setAccount] = useState(null);
   const [mode, setMode] = useState(null); // null | 'signin' | 'profile' | 'notices'
   const [hasNotices, setHasNotices] = useState(false);
@@ -225,23 +225,40 @@ function AccountSlot() {
         <span>${say('账号登录 / 绑定', 'Sign in / link account')}</span>
       </button>`;
 
+  // 面板挂到 body 级容器：首页登录卡带 backdrop-filter，会生成 stacking context，
+  // 留在卡里的弹窗会被后面的「下载完整素材 / 导入素材包」盖住（真机截图实测）。
+  useEffect(() => {
+    if (!overlay) return undefined;
+    if (!mode) { render(null, overlay); return undefined; }
+    render(html`<${AccountPanel} account=${account} mode=${mode} onClose=${() => setMode(null)}
+        onAccount=${(a) => { setAccount(a); setMode('profile'); }}
+        onSignedOut=${() => { setAccount(null); setMode(null); }} />`, overlay);
+    return () => { render(null, overlay); };
+  }, [mode, account, overlay]);
+
   return html`<div class="title-account-bar-row">
     ${row}
     ${hasNotices
       ? html`<button type="button" class="title-account-bar title-account-bar--ann" onClick=${() => setMode('notices')}>${say('公告', 'Notices')}</button>`
       : null}
     ${!account ? html`<p class="acc-hint">${say('不登录也能直接开始（游客）', 'You can start as a guest without signing in')}</p>` : null}
-    ${mode ? html`<${AccountPanel} account=${account} mode=${mode} onClose=${() => setMode(null)}
-        onAccount=${(a) => { setAccount(a); setMode('profile'); }}
-        onSignedOut=${() => { setAccount(null); setMode(null); }} />` : null}
   </div>`;
 }
 
 export function mount(host) {
-  render(html`<${AccountSlot} />`, host);
+  // 弹窗容器挂在 body 上，脱离 #app 里任何 backdrop-filter 造成的层叠上下文
+  let overlay = document.getElementById('sp-accounts-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'sp-accounts-overlay';
+    document.body.appendChild(overlay);
+  }
+  render(html`<${AccountSlot} overlay=${overlay} />`, host);
 }
 
 export function unmount(host) {
   render(null, host);
   host.replaceChildren();
+  const overlay = document.getElementById('sp-accounts-overlay');
+  if (overlay) { render(null, overlay); overlay.remove(); }
 }
