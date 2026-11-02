@@ -75,7 +75,9 @@ function Field({ label, micro, type = 'text', value, onInput, maxLength, placeho
 }
 
 function Avatar({ account, size = 26 }) {
-  return html`<img class="title-account-bar__avatar" src=${account?.avatar || ''} alt="" width=${size} height=${size} loading="lazy" />`;
+  const src = typeof account?.avatar === 'string' ? account.avatar.trim() : '';
+  if (!src) return null; // 没头像就整块不画，别留一个破图标
+  return html`<img class="title-account-bar__avatar" src=${src} alt="" width=${size} height=${size} loading="lazy" />`;
 }
 
 /** 卡面画廊：二级弹窗，网格 + 左侧大图预览。选中只改本机。 */
