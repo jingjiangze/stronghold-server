@@ -203,7 +203,7 @@ export class PlayerItems {
     if (ruleOption(this.m?.rules, 'unequip') !== 'allow') return fail(ERR.BAD_TARGET, 'equipped items are locked');
     const loc = this.find(itemUid);
     if (!loc || loc.piece.kind !== 'item' || loc.area !== 'equipped') return fail(ERR.BAD_TARGET);
-    const handAt = freeSlot(this.hand);
+    const handAt = this.freeHandSlot();
     const tempAt = freeSlot(this.temp.slice(0, GEO.TEMP_SIZE));
     if (handAt < 0 && tempAt < 0) return fail(ERR.HAND_FULL);
     const piece = loc.piece;

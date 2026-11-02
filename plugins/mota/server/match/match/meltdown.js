@@ -98,7 +98,19 @@ function shuffled(list, rng) {
  * `rule.*`（57 条，官方 DSL，需逐条语义）、`ally*`、`price`、`income`、`hand`、`enemyMove` 等**尚未接入**。
  * 返回 false 的藏品仍会进背包、仍显示在 HUD，但会标注「未实装」，避免玩家以为它已经生效。
  */
-export const RELIC_APPLIED_KEYS = Object.freeze(['enemy', 'enemyRank', 'immediate', 'deployCap', 'lpCap']);
+/**
+ * 已接进引擎的 **effect 键**（非 rule 类藏品）。
+ * 2026-11-03：补齐 7 个此前被当成「未实装」的键——抽卡池只发这里认的藏品，缺一个就少一堆牌。
+ */
+export const RELIC_APPLIED_KEYS = Object.freeze(['enemy', 'enemyRank', 'immediate', 'deployCap', 'lpCap',
+  'ally',          // 全队 攻/防/生命 百分比（relicAllyMul）
+  'allyElite',     // 精锐干员 攻击 百分比（per-unit，round.js 的精英分支）
+  'allyPerBench',  // 待部署区每有一名干员叠一层（relicAllyMul）
+  'income',        // 进入休整期资金额外 +N（applyRelicRoundEconomy）
+  'price',         // 商店价格（干员 / 装备 / 五阶以上 / 首个购买）
+  'refreshLimit',  // 休整期收费刷新上限（economy.refresh）
+  'hand',          // 待部署区容量 −N（pieces.handCap / freeHandSlot）
+]);
 /** 已接进引擎的 rule id（语义逐条照 relics.json 的官方 desc，不要按字段名猜）。 */
 export const RELIC_APPLIED_RULES = Object.freeze([
   'ussuri',        // 敌方 +35%，每回合 +10%，最低 35%（relicEnemyMul）
@@ -449,6 +461,28 @@ export class MatchMeltdown {
    * 不要按字段名猜方向 —— 例如 `enemyCount.mul = 0.5` 的 desc 是「敌人数量 **+50%**」（是增量不是倍率）。
    * @param {string} ruleId @returns {object[]} 每件持有藏品的 rule 参数对象
    */
+  /**
+   * 取某玩家持有的、带 `effect[key]` 的藏品效果对象（这些藏品没有 `rule`，只有 `ally` / `allyElite` /
+   * `allyPerBench` / `price` / `income` / `hand` / `refreshLimit` 这类键）。同一条藏品只算一次。
+   */
+  relicEffectList(ps, key) {
+    const ids = ps && Array.isArray(ps.relics) ? ps.relics : null;
+    if (!ids || !ids.length) return [];
+    const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
+    const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
+    if (!defs.length) return [];
+    const byId = new Map(defs.map((r) => [r.id, r]));
+    const out = [];
+    for (const id of ids) {
+      const def = byId.get(id);
+      const v = def && def.effect && def.effect[key];
+      if (v == null) continue;
+      // 这些键有的值是对象（ally / price / allyPerBench），有的是标量（income 1 / hand −4 / refreshLimit 5）
+      out.push(typeof v === 'object' ? { ...v, relicId: id } : v);
+    }
+    return out;
+  }
+
   relicRuleParams(ruleId) {
     const raw = (this.gd && this.gd.raw && this.gd.raw.relics) || null;
     const defs = raw && Array.isArray(raw.relics) ? raw.relics : [];
@@ -684,6 +718,17 @@ export class MatchMeltdown {
     return out;
   }
 
+  /** `allyElite`（未叙魔王残片）「精锐干员的攻击力 −30%」→ 只作用在 4 阶以上单位上的乘区。 */
+  relicAllyEliteMul(ps) {
+    let mul = 1;
+    const list = typeof this.relicEffectList === 'function' ? this.relicEffectList(ps, 'allyElite') : [];
+    for (const v of list) {
+      const a = Number(v.atk);
+      if (Number.isFinite(a)) mul *= 1 + a;
+    }
+    return Math.max(0, mul);
+  }
+
   /** 相邻类藏品的「每相邻一人」参数（`atkPerNeighbor` / `aspdPerNeighbor`）—— 需要 per-unit 计算，见 battleInput。 */
   relicNeighborRules() {
     let atkPer = 0, aspdPer = 0;
@@ -695,6 +740,8 @@ export class MatchMeltdown {
   relicAllyMul(ps) {
     if (!ps || !Array.isArray(ps.relics) || !ps.relics.length) return null;
     let atk = 0, hp = 0, def = 0, aspdAdd = 0;
+    // 这些 effect 键是新接的；老测试的假 this 不一定挂 relicEffectList，缺了就按空处理
+    const effects = (k) => (typeof this.relicEffectList === 'function' ? this.relicEffectList(ps, k) : []);
     for (const ru of this.relicRuleParams('atkPerBond')) {
       const per = Math.max(0, Number(ru.per) || 0);
       atk += per * this.activeBondsOf(ps.playerId);
@@ -842,6 +889,27 @@ export class MatchMeltdown {
       skillAtkWindow = Math.max(skillAtkWindow, Number(ru.window) || 1);
       skillAtkMul = Math.max(skillAtkMul, Number(ru.mul) || 2);
     }
+    // ally（坍缩之种 −30% / “坏家伙”+35%+35%+45% / 未知仪器 生命+50%）：直接加到全局乘区上
+    for (const v of effects('ally')) {
+      if (Number.isFinite(Number(v.atk))) atk += Number(v.atk);
+      if (Number.isFinite(Number(v.hp))) hp += Number(v.hp);
+      if (Number.isFinite(Number(v.def))) def += Number(v.def);
+    }
+    // allyPerBench（琥珀伤痕 / 树海贵宾套餐 / 悲伤的红）：待部署区（手牌 + 临时区）每有一名干员叠一层，封顶 max
+    const benchChess = (() => {
+      let n = 0;
+      for (const area of [ps.hand, ps.temp]) {
+        if (!Array.isArray(area)) continue;
+        for (const piece of area) if (piece && piece.kind === 'chess') n += 1;
+      }
+      return n;
+    })();
+    for (const v of effects('allyPerBench')) {
+      const per = (k) => Math.max(0, Number(v[k]) || 0);
+      const max = Number.isFinite(Number(v.max)) ? Number(v.max) : 1.5;
+      if (per('atk')) atk += Math.min(max, per('atk') * benchChess);
+      if (per('hp')) hp += Math.min(max, per('hp') * benchChess);
+    }
     // shelterOnDebuff（养育者基因种）「有干员陷入负面状态后所有友方单位获得 35% 庇护，攻击无视目标 35% 法术抗性和防御力
     // 持续至战斗结束」——触发是战斗内事件，数值交给 players.js 的 statusApplied 钩子（这里只给出两个系数）。
     let debuffShelter = 0, debuffIgnore = 0;
@@ -895,10 +963,27 @@ export class MatchMeltdown {
   /**
    * rule 藏品的**干员价格折扣**（`kingCrystal`「购买的干员所消耗的资金 −1」）——返回给商店/刷新处叠加。
    */
-  relicChessPriceDelta() {
+  relicChessPriceDelta(ps, chessId = null) {
     let d = 0;
     for (const ru of this.relicRuleParams('kingCrystal')) d += Math.trunc(Number(ru.priceChess) || 0);
+    // price（无限续杯瓶 −1 全干员 / 奎萨图什塔允诺 +1 五阶以上）
+    let tier = 0;
+    try { tier = this.gd && typeof this.gd.tierOf === 'function' ? Number(this.gd.tierOf(chessId)) || 0 : 0; } catch { /* 取不到阶数 */ }
+    const priceList = typeof this.relicEffectList === 'function' ? this.relicEffectList(ps, 'price') : [];
+    for (const v of priceList) {
+      if (Number.isFinite(Number(v.chessAll))) d += Number(v.chessAll);
+      if (Number.isFinite(Number(v.chessTier5)) && tier >= 5) d += Number(v.chessTier5);
+    }
     return d;
+  }
+
+  /** `refreshLimit`（主教的研究）「休整期间最多刷新商店 N 次」——返回 N 或 null（没有这条藏品）。 */
+  relicRefreshCap(ps) {
+    const list = typeof this.relicEffectList === 'function' ? this.relicEffectList(ps, 'refreshLimit') : [];
+    if (!list.length) return null;
+    let cap = Infinity;
+    for (const v of list) if (Number.isFinite(Number(v))) cap = Math.min(cap, Math.max(0, Math.trunc(Number(v))));
+    return Number.isFinite(cap) ? cap : null;
   }
 
   /** rule 藏品：`lpDrainRest`（进入休整期目标生命 −1，最低 1）与 `kingCrystal`（战斗结束 −2，最低 1）。 */
@@ -956,6 +1041,12 @@ export class MatchMeltdown {
       for (const ru of this.relicRuleParams('kingCrystal')) {
         const inc = Math.max(0, Number(ru.income) || 0);
         if (inc > 0) { try { ps.addFunds(inc, { reason: 'relic-king-crystal' }); } catch { /* noop */ } }
+      }
+      // income（无限续杯瓶 +1 / 迷幻的藏宝图 +2）：「进入休整期时资金额外 +N」
+      const incomeList = typeof this.relicEffectList === 'function' ? this.relicEffectList(ps, 'income') : [];
+      for (const v of incomeList) {
+        const n = Math.trunc(Number(v) || 0);
+        if (n) { try { ps.addFunds(n, { reason: 'relic-income' }); } catch { /* noop */ } }
       }
       // probe（探测先锋）：「获得时下次休整期资金 −1」——只扣一次（`st.probePaid` 跨回合记账）
       if (this.relicRuleParams('probe').length && !st.probePaid) {

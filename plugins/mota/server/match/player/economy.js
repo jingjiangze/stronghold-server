@@ -24,8 +24,27 @@ export class PlayerEconomy {
   /** 干员价格（含 rule 藏品折扣：`kingCrystal`「购买的干员所消耗的资金 −1」）——不低于 1。 */
   _relicChessPrice(id) {
     const base = this.gd.chessPrice(id);
-    const d = this.m && typeof this.m.relicChessPriceDelta === 'function' ? this.m.relicChessPriceDelta() : 0;
-    return Math.max(1, base + d);
+    const d = this.m && typeof this.m.relicChessPriceDelta === 'function' ? this.m.relicChessPriceDelta(this, id) : 0;
+    // price.firstChessBuy / firstChessBuys：「休整期间购买的第一个（前 N 个）干员资金额外 +X」
+    let extra = 0;
+    if (this.m && typeof this.m.relicEffectList === 'function') {
+      const buys = Number(this.round && this.round.buys) || 0;
+      for (const v of this.m.relicEffectList(this, 'price')) {
+        if (Number.isFinite(Number(v.firstChessBuy)) && buys === 0) extra += Number(v.firstChessBuy);
+        if (Number.isFinite(Number(v.firstChessBuys)) && buys > 0 && buys < Number(v.firstChessBuys)) extra += Number(v.n) || 1;
+      }
+    }
+    return Math.max(1, base + d + extra);
+  }
+
+  /** 装备价（含 `price.item` 折扣 / 加价）——与 `_relicChessPrice` 同款，不低于 0。 */
+  _relicItemPrice(id) {
+    const base = this.gd.itemPrice(id);
+    let d = 0;
+    if (this.m && typeof this.m.relicEffectList === 'function') {
+      for (const v of this.m.relicEffectList(this, 'price')) if (Number.isFinite(Number(v.item))) d += Number(v.item);
+    }
+    return Math.max(0, base + d);
   }
 
   spend(n) {
@@ -92,7 +111,7 @@ export class PlayerEconomy {
       for (const [id, st] of Object.entries(bonds)) if (st && st.active) bias.add(id);
     }
     const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level, this.m.itemPool, bias);
-    return id ? { kind: 'item', id, basePrice: this.gd.itemPrice(id), frozen: false, sold: false } : null;
+    return id ? { kind: 'item', id, basePrice: this._relicItemPrice(id), frozen: false, sold: false } : null;
   }
 
   /**
@@ -135,7 +154,7 @@ export class PlayerEconomy {
     if (!ok) return false;
     const slots = queued.map((s) => ({
       kind: s.kind, id: s.id,
-      basePrice: s.kind === 'chess' ? this._relicChessPrice(s.id) : this.gd.itemPrice(s.id),
+      basePrice: s.kind === 'chess' ? this._relicChessPrice(s.id) : this._relicItemPrice(s.id),
       frozen: false, sold: false,
     }));
     this.shop.slots = slots;
@@ -188,7 +207,7 @@ export class PlayerEconomy {
     if (slot.sold) return fail(ERR.SOLD_OUT);
     const price = this.priceOf(slot);
     if (this.funds < price) return fail(ERR.NO_FUNDS);
-    const handFull = freeSlot(this.hand) < 0;
+    const handFull = this.freeHandSlot() < 0;
     let piece;
     if (slot.kind === 'chess') {
       const rec = this.gd.chess(slot.id);
@@ -228,6 +247,9 @@ export class PlayerEconomy {
   refresh() {
     const g = this._gate(); if (g) return g;
     const free = this.shop.freeRefreshes > 0;
+    // refreshLimit（主教的研究）：「休整期间最多刷新商店 N 次」，免费刷新不计入
+    const cap = !free && this.m && typeof this.m.relicRefreshCap === 'function' ? this.m.relicRefreshCap(this) : null;
+    if (cap != null && (Number(this.round && this.round.refreshes) || 0) >= cap) return fail(ERR.BAD_TARGET, 'refresh limit');
     const price = free ? 0 : this.gd.refreshPrice;
     if (!free && this.funds < price) return fail(ERR.NO_FUNDS);
     if (free) this.shop.freeRefreshes--;

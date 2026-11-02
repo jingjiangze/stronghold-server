@@ -278,7 +278,9 @@ export class PlayerRound {
                     if (Number(t2) >= 4) elites += 1;
                   }
                 }
-                eliteMul.atkMul *= 1 + er.atk * elites + er.mergePer * Math.min(er.mergeMax, Number(this.relicEliteMerges) || 0);
+                // allyElite（未叙魔王残片）「精锐干员攻击 −30%」：只乘在精锐身上
+                const ae = this.m && typeof this.m.relicAllyEliteMul === 'function' ? this.m.relicAllyEliteMul(this) : 1;
+                eliteMul.atkMul *= ae * (1 + er.atk * elites + er.mergePer * Math.min(er.mergeMax, Number(this.relicEliteMerges) || 0));
                 eliteMul.hpMul *= 1 + er.hp * elites;
                 eliteMul.defMul *= 1 + er.def * elites;
                 eliteMul.aspdAdd += er.aspdPer * Math.min(er.aspdMax, elites);
