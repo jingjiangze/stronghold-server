@@ -308,36 +308,6 @@ function AccountSlot({ overlay }) {
   </div>`;
 }
 
-/** 房间页的「我的名片」：固定卡片，只在 `.room-screen` 存在时显示（CSS `body:has()` 控制，不碰 mota）。 */
-function RoomCard() {
-  const [acc, setAcc] = useState(null);
-  const [skin, setSkin] = useState(readLocal(SKIN_KEY));
-
-  useEffect(() => {
-    let live = true;
-    const load = () => {
-      setSkin(readLocal(SKIN_KEY));
-      const token = readToken();
-      if (!token) { setAcc(null); return; }
-      call('/api/account/me', { token }).then((r) => { if (live && r.ok) setAcc(r.account); }).catch(() => {});
-    };
-    load();
-    window.addEventListener(CARD_EVENT, load);
-    return () => { live = false; window.removeEventListener(CARD_EVENT, load); };
-  }, []);
-
-  if (!acc || !skin) return null;
-  const color = acc.nameStyle?.color || '';
-  return html`<div class="sp-roomcard">
-    <img class="sp-roomcard__art" src=${namecardUrl(skin)} alt="" loading="lazy"
-      onError=${(e) => { e.currentTarget.style.display = 'none'; }} />
-    <div class="sp-roomcard__line">
-      <img class="sp-roomcard__avatar" src=${acc.avatar || ''} alt="" width="22" height="22" loading="lazy" />
-      <b style=${color ? `color:${color}` : undefined}>${acc.name || acc.qq}</b>
-    </div>
-  </div>`;
-}
-
 export function mount(host) {
   // 弹窗容器挂在 body 上，脱离 #app 里任何 backdrop-filter 造成的层叠上下文
   let overlay = document.getElementById('sp-accounts-overlay');
@@ -346,14 +316,6 @@ export function mount(host) {
     overlay.id = 'sp-accounts-overlay';
     document.body.appendChild(overlay);
   }
-  // 房间页名片：同样挂 body（Preact 重渲染不会清掉），显示与否交给 CSS
-  let room = document.getElementById('sp-accounts-room');
-  if (!room) {
-    room = document.createElement('div');
-    room.id = 'sp-accounts-room';
-    document.body.appendChild(room);
-  }
-  render(html`<${RoomCard} />`, room);
   render(html`<${AccountSlot} overlay=${overlay} />`, host);
 }
 
@@ -362,6 +324,4 @@ export function unmount(host) {
   host.replaceChildren();
   const overlay = document.getElementById('sp-accounts-overlay');
   if (overlay) { render(null, overlay); overlay.remove(); }
-  const room = document.getElementById('sp-accounts-room');
-  if (room) { render(null, room); room.remove(); }
 }
