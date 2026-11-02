@@ -102,8 +102,10 @@ async function ensure() {
 
 let timer = 0;
 function schedule() {
-  // 只有首页在的时候才值得干活：对局里 DOM 每帧都在变，别让 observer 把这里拖成热点。
-  if (!document.querySelector('.title-login')) {
+  // 只有首页或房间页在的时候才值得干活：对局里 DOM 每帧都在变，别让 observer 把这里拖成热点。
+  // 房间页也保持挂载——插件在房间里另画一张「我的名片」（用 body:has(.room-screen) 控制显示，
+  // 不需要 mota 在 room.js 里加标记）。
+  if (!document.querySelector('.title-login') && !document.querySelector('.room-screen')) {
     if (mounted.size) for (const id of [...mounted.keys()]) unmount(id);
     return;
   }

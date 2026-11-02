@@ -269,6 +269,25 @@
 .acc-color__input { width: .5rem; flex: none; padding: 0; background: none; border: 0; }
 .acc-color__preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .acc-err, .acc-ok { margin: .12rem 0 0; font-size: calc(.15 * var(--t)); }
+/* 首页：账号条上方的卡面预览 */
+.acc-mini { flex: 0 0 100%; display: block; width: 100%; margin-bottom: .06rem; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); }
+/* 房间页：「我的名片」固定卡片（只在 .room-screen 在场时显示，无需 mota 加标记） */
+.sp-roomcard { display: none; }
+body:has(.room-screen) .sp-roomcard {
+  display: block;
+  position: fixed;
+  left: .16rem;
+  bottom: .16rem;
+  z-index: 40;
+  width: 2.6rem;
+  border: 1px solid var(--line-2);
+  background: rgba(8, 10, 9, .84);
+  box-shadow: 0 .1rem .3rem rgba(0, 0, 0, .55);
+  pointer-events: none;
+}
+.sp-roomcard__art { display: block; width: 100%; height: auto; }
+.sp-roomcard__line { display: flex; align-items: center; gap: .06rem; padding: .06rem .08rem; font-size: calc(.15 * var(--t)); }
+.sp-roomcard__avatar { border-radius: 50%; flex: none; }
 /* 名片：顶部大图 + 卡面画廊（素材在 /assets/local/sp-namecards-*，本机没有时由 cdn-local 302 到 CDN） */
 .acc-hero { position: relative; margin: -.02rem 0 .14rem; border: 1px solid var(--line); background: rgba(0, 0, 0, .32); overflow: hidden; }
 .acc-hero__art { display: block; width: 100%; height: auto; }
