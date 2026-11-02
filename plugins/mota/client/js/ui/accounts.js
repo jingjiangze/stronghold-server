@@ -35,7 +35,10 @@ globalThis.addEventListener?.('storage', (e) => { if (e.key === KEY) { profile =
 export function currentAccount() {
   const p = load();
   const name = store.get().me?.name || p.name || '博士';
-  return { id: `local-${p.tag}`, name, tag: p.tag, avatar: typeof p.avatar === 'string' ? p.avatar : null, card: null, local: true };
+  // 业主 2026-11-02：代号以 sp.tag 为准（就是 hello 里发给服务端的那个），保证 chip 与座位卡显示同一个 #代号
+  const spTag = (() => { try { const t = globalThis.localStorage?.getItem('sp.tag') || ''; return /^[0-9]{4}$/.test(t) ? t : ''; } catch { return ''; } })();
+  const tag = spTag || p.tag;
+  return { id: `local-${tag}`, name, tag, avatar: typeof p.avatar === 'string' ? p.avatar : null, card: null, local: true };
 }
 export function onAccountChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export async function refreshAccount() { return currentAccount(); }
