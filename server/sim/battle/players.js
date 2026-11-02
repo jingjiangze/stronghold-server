@@ -224,6 +224,26 @@ export class BattlePlayers {
         u.relicSkill = { window: opt('skillAtkWindow') ?? 0, mul: opt('skillAtkMul') ?? 2, spPer: opt('skillSpPer') ?? 0, spMax: opt('skillSpMax') ?? 5 };
       }
     }
+    // shelterOnDebuff（养育者基因种）：「有干员陷入负面状态后所有友方单位获得 35% 庇护，
+    // 攻击无视目标 35% 法术抗性和防御力，持续至战斗结束」——按**玩家**存一份配置，战斗级钩子只装一次。
+    if (ps && rm && Number(rm.debuffShelter) > 0) {
+      ps._relicDebuff = { shelter: Math.min(1, Number(rm.debuffShelter) || 0), ignore: Math.max(0, Math.min(1, Number(rm.debuffIgnore) || 0)) };
+      if (!this._relicDebuffHooked) {
+        this._relicDebuffHooked = true;
+        this.on('statusApplied', ({ target }) => {
+          if (!target || target.side !== 'ally' || !target.player) return;
+          const cfg = target.player._relicDebuff;
+          if (!cfg) return;
+          for (const a of this.allyUnits) {
+            if (a.player !== target.player || !a.alive) continue;
+            this.addBuff(a, { key: 'relic:debuffShelter', persist: true, allowDead: true, mods: { dmgTakenMul: 1 - cfg.shelter } });
+            if (cfg.ignore > 0) {
+              this.addBuff(a, { key: 'relic:debuffIgnore', persist: true, allowDead: true, mods: { defIgnorePct: cfg.ignore, resIgnorePct: cfg.ignore } });
+            }
+          }
+        });
+      }
+    }
     if (u.relicSkill) {
       // 技能触发钩子（atkAfterSkill / spRegenStack）：注册在**单位生成**这一步而不是部署收尾 ——
       // 部署会重复执行（初部署 / 再部署 / 召唤），挂 deploy 会叠出多份监听。

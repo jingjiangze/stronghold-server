@@ -203,6 +203,7 @@ export class Unit {
       atkScaleMul: m('atkScaleMul'),
       spRecovery: Math.max(0, fin((b.spRecovery + a('spRecoveryFlat')) * m('spRecoveryMul'), 0)),
       spCostFlat: a('spCostFlat'),
+      statusDurationMul: m('statusDurationMul'),
       redeployMul: m('redeployMul'),
       costMul: m('costMul'),
       hpRegen: fin(b.hpRecoveryPerSec + a('hpRegen') + a('hpRegenRatio') * maxHp, 0),

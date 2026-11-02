@@ -152,6 +152,11 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'fogOnDeploy',      // 部署后 60 秒内每秒 2% 最大生命真实伤害（同上，带 duration）
   'spRegenStack',     // 每用一次技能永久 +0.4 技力回复，最多 5 层（skillStart 钩子）
   'atkAfterSkill',    // 技能触发后 1 秒内攻击 +100%（同上）
+  'enemyDefShred',    // 敌方防御 +3000，每次受击 −100、最多 30 次（spec.enemyMods，见 spawns.js）
+  'eliteDmgReduce',   // 精英/领袖登场 30 秒内受到伤害 ×0.5（同上）
+  'statusDuration',   // 敌方异常状态时长 ×2.5（同上 → applyStatus）
+  'shelterOnDebuff',  // 有干员陷入负面后：全体 35% 庇护 + 攻击无视 35% 双防（per-unit 钩子，见 players.js）
+  'removeTemp',       // 移除临时部署区（player/pieces.js 的 stow 尊重 ps.relicNoTemp；已有的 temp 一并清掉）
   'survivor',         // 攻击最高的一名干员 攻/防 +20%，每打完一场再 +20%（per-unit，见 battleInput）
 ]);
 export function relicEffectApplied(effect) {
@@ -649,6 +654,36 @@ export class MatchMeltdown {
     return count > 0 && dur > 0 ? { count, dur } : null;
   }
 
+  /**
+   * 藏品对**敌人**的修正（照 desc，交给 `spec.enemyMods`，引擎在敌人生成时施加）：
+   * - `enemyDefShred`（戈渎不语）「敌方防御力 +3000，但每次受到伤害时防御力下降 100（最多 30 次）」
+   * - `eliteDmgReduce`（生命蓝图）「精英和领袖敌人登场 30 秒内受到的物理和法术伤害 −50%」
+   * - `statusDuration`（精神治疗录像带）「敌人受到的一次性晕眩、寒冷、冻结等异常效果影响时间提高 150%」⇒ ×2.5
+   */
+  relicEnemyMods() {
+    let defAdd = 0, perHit = 0, max = 0, eliteMul = 1, eliteDur = 0, statusMul = 1;
+    for (const ru of this.relicRuleParams('enemyDefShred')) {
+      defAdd += Number(ru.flat) || 0;
+      if (Number(ru.perHit)) perHit += Number(ru.perHit);
+      max = Math.max(max, Number(ru.max) || 0);
+    }
+    for (const ru of this.relicRuleParams('eliteDmgReduce')) {
+      const m = Number(ru.mul);
+      if (m > 0 && m < 1) eliteMul = Math.min(eliteMul, m);
+      eliteDur = Math.max(eliteDur, Number(ru.dur) || 30);
+    }
+    for (const ru of this.relicRuleParams('statusDuration')) {
+      const pct = Number(ru.pct);
+      if (pct > 0) statusMul *= 1 + pct;
+    }
+    if (!defAdd && !perHit && eliteMul === 1 && statusMul === 1) return null;
+    const out = {};
+    if (defAdd || perHit) { out.defAdd = defAdd; if (perHit) { out.defShredPerHit = perHit; out.defShredMax = max || 30; } }
+    if (eliteMul !== 1) { out.eliteDmgTakenMul = eliteMul; out.eliteDmgDur = eliteDur || 30; }
+    if (statusMul !== 1) out.statusDurationMul = statusMul;
+    return out;
+  }
+
   /** 相邻类藏品的「每相邻一人」参数（`atkPerNeighbor` / `aspdPerNeighbor`）—— 需要 per-unit 计算，见 battleInput。 */
   relicNeighborRules() {
     let atkPer = 0, aspdPer = 0;
@@ -807,11 +842,18 @@ export class MatchMeltdown {
       skillAtkWindow = Math.max(skillAtkWindow, Number(ru.window) || 1);
       skillAtkMul = Math.max(skillAtkMul, Number(ru.mul) || 2);
     }
+    // shelterOnDebuff（养育者基因种）「有干员陷入负面状态后所有友方单位获得 35% 庇护，攻击无视目标 35% 法术抗性和防御力
+    // 持续至战斗结束」——触发是战斗内事件，数值交给 players.js 的 statusApplied 钩子（这里只给出两个系数）。
+    let debuffShelter = 0, debuffIgnore = 0;
+    for (const ru of this.relicRuleParams('shelterOnDebuff')) {
+      debuffShelter = Math.max(debuffShelter, Number(ru.mul) || 0);
+      debuffIgnore = Math.max(debuffIgnore, Number(ru.ignore) || 0);
+    }
     // shelter（佣兵保单）「所有我方单位获得 10% 庇护，生命低于初始 50% 时额外 35%」——
     // 庇护有通道（引擎 dmgTakenMul），静态这半句接上；低血那半句是**战斗中动态 HP**，对局侧拿不到，未接。
     let shelter = 0;
     for (const ru of this.relicRuleParams('shelter')) shelter += Math.max(0, Number(ru.base) || 0);
-    const hasTimed = startDur || flatDps || dotMaxHpPct || skillSpPer || skillAtkWindow;
+    const hasTimed = startDur || flatDps || dotMaxHpPct || skillSpPer || skillAtkWindow || debuffShelter;
     if (!atk && !hp && !def && !aspdAdd && !initSp && spRegenMul === 1 && !shelter && !hasTimed) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}),
       ...(initSp ? { initSp } : {}), ...(spRegenMul !== 1 ? { spRegenMul } : {}),
@@ -820,7 +862,8 @@ export class MatchMeltdown {
       ...(flatDps ? { flatDps } : {}),
       ...(dotMaxHpPct ? { dotMaxHpPct, dotDur } : {}),
       ...(skillSpPer ? { skillSpPer, skillSpMax } : {}),
-      ...(skillAtkWindow ? { skillAtkWindow, skillAtkMul } : {}) };
+      ...(skillAtkWindow ? { skillAtkWindow, skillAtkMul } : {}),
+      ...(debuffShelter ? { debuffShelter, debuffIgnore } : {}) };
   }
 
   /**
@@ -1037,6 +1080,17 @@ export class MatchMeltdown {
     if (Number.isFinite(e.deployCap) && e.deployCap) ps.deployCapBonus = (Number(ps.deployCapBonus) || 0) + Math.trunc(e.deployCap);
     // rule：loseAllFunds（追忆仪）「获得时，本次休整期失去所有的资金」（悬赏减半那半边待赏金倍率钩子，见覆盖清单）
     if (e.rule && e.rule.id === 'loseAllFunds') { try { ps.funds = 0; ps.dirty && ps.dirty(); } catch { /* noop */ } }
+    // rule：removeTemp（维度流质）「移除临时部署区」——置旗（stow 不再往 temp 塞）并把已经在里面的清掉
+    if (e.rule && e.rule.id === 'removeTemp') {
+      try {
+        ps.relicNoTemp = true;
+        if (Array.isArray(ps.temp)) {
+          for (const piece of ps.temp) { try { if (piece) ps.releaseItemStock && ps.releaseItemStock(piece); } catch { /* noop */ } }
+          ps.temp.fill ? ps.temp.fill(null) : (ps.temp.length = 0);
+        }
+        ps.dirty && ps.dirty();
+      } catch { /* noop */ }
+    }
     if (Number.isFinite(e.lpCap) && e.lpCap) ps.lp = Math.max(1, (Number(ps.lp) || 0) + Math.trunc(e.lpCap));
   }
 

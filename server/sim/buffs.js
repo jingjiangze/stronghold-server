@@ -30,6 +30,8 @@ export const MUL_KEYS = Object.freeze([
   'atkMul', 'defMul', 'hpMul', 'resMul', 'moveMul', 'dmgDealtMul', 'dmgTakenMul', 'physTakenMul', 'artsTakenMul',
   'trueTakenMul', 'elemTakenMul', 'elementalTakenMul', 'healingDealtMul', 'healingTakenMul', 'spRecoveryMul', 'redeployMul',
   'atkScaleMul', 'physDealtMul', 'artsDealtMul', 'costMul',
+  // 异常状态时长倍率（2026-11-02，藏品 statusDuration）：只影响 applyStatus 的 duration，别的都不碰
+  'statusDurationMul',
 ]);
 /**
  * Boolean flag keys (OR). `taunt` is also accepted as a numeric mod. `liftoff` = 起飞 of an ally (蒂比's skills): blocks

@@ -49,6 +49,10 @@ export class MatchCombat {
     for (const s of Array.isArray(list) ? list : []) {
       if (!s || typeof s !== 'object' || typeof s.enemyKey !== 'string' || !this.gd.enemy(s.enemyKey)) continue;
       const spec = { ...s, mods: s.mods && typeof s.mods === 'object' ? { ...s.mods } : {} };
+      // 藏品对敌人的修正（防御/受击衰减/精英限时减伤/异常时长）：交给 spec.enemyMods，引擎在生成敌人时施加
+      if (typeof this.relicEnemyMods === 'function') {
+        try { const em = this.relicEnemyMods(); if (em) spec.enemyMods = em; } catch { /* 尽力而为 */ }
+      }
       // 熔毁商店的代价（业主 2026-10-26 接线）：allStats/growth → 全属性；dmg → 等效血量。
       // 复审计 2026-10-27：只在**还没贴过**时才乘 —— 普通场的 mods 会随漏怪带进联防、再随接力带进下一段，
       // 每次 _sanitizeSpawns 都乘一遍会让联防 ×2、接力 ×3（与「漏怪保持同属性」的设计冲突）。
