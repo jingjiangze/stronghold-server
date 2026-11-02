@@ -101,9 +101,20 @@ async function ensure() {
 }
 
 let timer = 0;
+/** 房间页标记：插件在房间里另画一张「我的名片」，用 body.sp-in-room 控制显示（CSS 禁用 :has()）。 */
+function markRoom(root) {
+  try {
+    const inRoom = !!root.querySelector('.room-screen');
+    if (document.body.classList.contains('sp-in-room') !== inRoom) {
+      document.body.classList.toggle('sp-in-room', inRoom);
+    }
+  } catch { /* 尽力而为 */ }
+}
+
 function schedule() {
-  // 只有首页在的时候才值得干活：对局里 DOM 每帧都在变，别让 observer 把这里拖成热点。
-  if (!document.querySelector('.title-login')) {
+  // 只有首页或房间页在的时候才值得干活：对局里 DOM 每帧都在变，别让 observer 把这里拖成热点。
+  markRoom(document);
+  if (!document.querySelector('.title-login') && !document.querySelector('.room-screen')) {
     if (mounted.size) for (const id of [...mounted.keys()]) unmount(id);
     return;
   }
@@ -118,6 +129,7 @@ async function start() {
   ensure();
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('pageshow', schedule);
+  document.body.classList.toggle('sp-in-room', false);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
