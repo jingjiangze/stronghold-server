@@ -4828,3 +4828,13 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
   .proto-side .pcard { padding: .08rem .12rem .08rem .16rem; }
   .proto-side .pcard__effects { display: none; }
 }
+
+/* 模拟邀约（2026-11-02 业主：放到首页三个模式卡正上方、靠右）：与入口卡同族，mint 描边药丸 */
+.hub-invite {
+  display: inline-flex; align-items: center; gap: .03rem; margin-bottom: .02rem;
+  padding: .03rem .12rem; font: inherit; font-size: max(.13rem, 10px); font-weight: 700;
+  color: var(--mint-400); background: rgba(0, 0, 0, .35); border: 1px solid var(--line-2); border-radius: 999px;
+  cursor: pointer; white-space: nowrap; transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast);
+}
+.hub-invite:hover { color: var(--mint-500); border-color: var(--mint-500); background: var(--mint-a10); }
+.hub-invite .icon { width: max(.13rem, 9px); height: max(.13rem, 9px); }

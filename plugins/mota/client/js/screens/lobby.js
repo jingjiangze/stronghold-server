@@ -111,6 +111,12 @@ export function stageNote(stages) {
   return Number.isInteger(stages) && stages > 1 ? t('战场随机（共{stages}张）', { stages }) : '';
 }
 
+/** 娱乐模式 → 肉鸽：直接进协议页时用的模式卡（MODE_CARDS 没有肉鸽这一格，标题与简介按它显示）。 */
+const ROGUE_CARD = {
+  id: 'rogue', name: N_('肉鸽模式'), en: 'ROGUELIKE', icon: 'rogue',
+  desc: N_('开局与之后每 2 回合各抽一次藏品三选一（每人本局最多 3 件），每回合随机词缀、事件期出随机事件、每回合换战场；同时开启协同团队储备。'),
+};
+
 const MODE_CARDS = [
   {
     id: 'solo', name: N_('独立模拟'), en: 'SOLO SIMULATION', icon: 'user',
@@ -359,7 +365,6 @@ function RecruitCard({ rooms, online, onJoin, onAll, onCreate }) {
       <span class="hub-recruit__title">${t('缺人同盟')}</span>
       <span class="hub-recruit__en">RECRUITING</span>
       <span class="hub-recruit__n num">${open.length}</span>
-      
     </header>
     <div class="hub-recruit__list">
       ${open.length ? open.slice(0, 3).map((r) => {
@@ -709,8 +714,8 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
  * key field, 观战, recent keys) at the right, 模拟邀约 (the public alliances) and 搜寻队友 between them, 入门协议 (玩法说明)
  * at the bottom left. Esc or ‹ returns to the hub.
  */
-function AllianceSelect({ onClose, code, onCode, codeOk, recent, online, maint, busy, onCreate, onJoin, onSpectate, onBrowse, onSearch, recruiting = 0, difficulty,
-  testMode = false, asTest = false, onTest = null, rogue = false, onRogue = null }) {
+function AllianceSelect({ onClose, code, onCode, codeOk, recent, online, maint, busy, onCreate, onJoin, onSpectate, onBrowse, onSearch, difficulty,
+  testMode = false, asTest = false, onTest = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -740,12 +745,8 @@ function AllianceSelect({ onClose, code, onCode, codeOk, recent, online, maint, 
         ${testMode ? html`<label class="proto-private ally-test" data-testid="create-test"
           title=${t('不计入战绩。房间会标明「测试」，只有房主能使用测试指令。')}>
           <input type="checkbox" checked=${asTest} onChange=${(e) => onTest?.(e.currentTarget.checked)} /><span>${t('测试房间')}</span></label>` : null}
-        <label class="proto-private ally-test" data-testid="create-rogue"
-          title=${t('肉鸽规则：开局与之后每 2 回合各抽一次藏品三选一（每人本局最多 3 件），每回合随机词缀、事件期出随机事件、每回合换战场；同时开启协同团队储备（防守奖励 + 主动存入）。')}>
-          <input type="checkbox" checked=${rogue} onChange=${(e) => onRogue && onRogue(e.currentTarget.checked)} /><span>${t('肉鸽规则（藏品）')}</span></label>
         <div class="ally-links">
           ${CAN_QUEUE ? html`<button type="button" class="ally-pill" onClick=${onSearch}><${Icon} name="search" />${t('搜寻队友')}</button>` : null}
-          ${CAN_LIST ? html`<button type="button" class="ally-pill ally-pill--invite" onClick=${onBrowse}>${t('模拟邀约')}${recruiting ? html`<b class="num">${recruiting}</b>` : null}<span class="ally-pill__mark" aria-hidden="true"></span></button>` : null}
         </div>
         <div class="ally-card ally-card--join">
           <span class="ally-card__art"><${JoinArt} /></span>
@@ -1145,8 +1146,10 @@ export function LobbyScreen() {
   // 娱乐模式的四格 → 各自打开对应的建房流程
   const pickFun = (id) => {
     setFunOpen(false);
+    if (id !== 'rogue') setRogueRules(false);
     if (id === 'xie') { pickMode('xie'); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
-    if (id === 'rogue') { pickMode('coop'); setRogueRules(true); setAllyOpen(true); return; }
+    // 肉鸽（2026-11-02 业主）：点了直接到难度选择，不再先过一遍「选择同盟方式」面板
+    if (id === 'rogue') { pickMode('coop'); setRogueRules(true); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
     pickMode('versus');
     setVersusRule(id === 'confront' ? 'confront' : 'bounty');
     setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true);
@@ -1213,6 +1216,7 @@ export function LobbyScreen() {
           </div>` : null}
         ${maint?.active ? html`<div class="hub-maint">${t('服务器即将维护，暂停开启新的模拟')}</div>` : null}
         <${AnnouncementBar} entries=${noticeEntries} now=${noticeClock} onOpen=${() => setNoticeOpen(true)} />
+        ${CAN_LIST ? html`<button type="button" class="hub-invite" onClick=${() => setModalOpen(true)}>${t('模拟邀约')}<${Icon} name="chevronRight" /></button>` : null}
         <div class="hub-entries__row">
           <${HubEntry} group=${{ icon: 'user', label: t('独立模拟') }} name=${t('独立模拟')} en="SOLO" icon="user" onClick=${() => openMode('solo')} />
           <${HubEntry} group=${{ icon: 'users', label: t('同盟模拟') }} name=${t('同盟模拟')} en="ALLIANCE" icon="users" count=${matchmakingCounts?.total} onClick=${() => openMode('coop')} />
@@ -1222,7 +1226,7 @@ export function LobbyScreen() {
       </section>
     </main>
 
-    ${sheetOpen ? html`<${ProtocolSelect} card=${modeCard} roomMode=${roomMode} random=${randomMode} variant=${variant} difficulty=${difficulty} modeVariant=${simulation === 'xie' ? 'xie' : null}
+    ${sheetOpen ? html`<${ProtocolSelect} card=${rogueRules ? ROGUE_CARD : modeCard} roomMode=${roomMode} random=${randomMode} variant=${variant} difficulty=${difficulty} modeVariant=${simulation === 'xie' ? 'xie' : null}
       onDifficulty=${pickDifficulty} onClose=${() => setSheetOpen(false)} matchmaking=${matchmakingCounts}
       brief=${randomMode ? html`<${FirepowerBrief} variant=${fpVariant} onVariant=${pickVariant} />` : null}
       privateRoom=${privateRoom} onPrivate=${setPrivateRoom} online=${online} maint=${maint} busy=${busy} isSearching=${isSearching}
@@ -1233,8 +1237,8 @@ export function LobbyScreen() {
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 
     ${allyOpen ? html`<${AllianceSelect} onClose=${() => setAllyOpen(false)} code=${code} onCode=${(v) => setCode(normalizeCode(v))} codeOk=${codeOk}
-      recent=${recent} online=${online} maint=${maint} busy=${busy} difficulty=${difficulty} recruiting=${recruitingRooms(rooms).length}
-      testMode=${testMode} asTest=${asTest} onTest=${setAsTest} rogue=${rogueRules} onRogue=${setRogueRules}
+      recent=${recent} online=${online} maint=${maint} busy=${busy} difficulty=${difficulty}
+      testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
       onCreate=${create} onJoin=${() => join()} onSpectate=${() => spectate()} onBrowse=${() => setModalOpen(true)} onSearch=${openSearch} />` : null}
 
     ${funOpen ? html`<${FunSelect} onClose=${() => setFunOpen(false)} busy=${busy} onPick=${pickFun}
