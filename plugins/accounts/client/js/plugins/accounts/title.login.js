@@ -3,13 +3,11 @@
 // 宿主：public/js/ui/pluginSlots.js 把它 import 进来并调用 mount(el)。
 //
 // 口径（业主 2026-11-01/02）：
-//   * QQ 号就是账号、头像调 QQ 头像 API（不存图）、密码两次输入、登录默认保留；
-//   * **账号不强制**——不登录照样输代号开局；
-//   * **点头像 = 打开名片**（昵称 / 昵称颜色），保存走 /api/account/profile 同步到服务器；
-//   * 面板一律用站点的 Modal / Button / 字段类与主题变量，不再自带一套硬编码颜色（与 public/css/theme.css 一致）。
-//
-// 这个模块是**同源模块**：server/boot-main.js 的 clientOverlay 把 code.client 的文件按应用路径下发，
-// 所以可以直接 import `/js/ui/components.js`（站点组件）与 `/vendor/*`（preact/hooks）。
+//   * QQ 号就是账号、头像调 QQ 头像 API（不存图）、密码两次输入、登录默认保留；**账号不强制**。
+//   * **服务器只存名字**：保存名片只提交 name / nameStyle；**卡面选择不进账号**，只记在本机
+//     `localStorage['sp.cardSkin']`。卡面图也不放服务器 —— 走 `/assets/local/sp-namecards-*`，
+//     本机没有时由 cdn-local 插件 302 到 CDN。
+//   * 界面重构成：「名片」面板（大卡面预览 + 昵称/颜色）+ 独立的「卡面画廊」二级弹窗。
 
 import { render } from '/vendor/preact.module.js';
 import { useEffect, useState } from '/vendor/hooks.module.js';
@@ -19,6 +17,7 @@ import { NAMECARD_IDS, namecardUrl, namecardThumbUrl } from './namecards.js';
 
 const TOKEN_KEY = 'sp.accountToken';
 const NAME_KEY = 'sp.name';
+const SKIN_KEY = 'sp.cardSkin';
 
 const en = () => document.documentElement.getAttribute('data-script') === 'alphabetic';
 const say = (zh, eng) => (en() ? eng : zh);
@@ -33,8 +32,10 @@ const ERRORS = {
   UNAUTHORIZED: () => say('登录已过期，请重新登录', 'The sign-in expired — sign in again'),
 };
 
-const readToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
-const writeToken = (v) => { try { if (v) localStorage.setItem(TOKEN_KEY, v); else localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ } };
+const readLocal = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const writeLocal = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* private mode */ } };
+const readToken = () => readLocal(TOKEN_KEY);
+const writeToken = (v) => writeLocal(TOKEN_KEY, v);
 
 async function call(path, { method = 'GET', body = null, token = '' } = {}) {
   const res = await fetch(path, {
@@ -49,7 +50,7 @@ async function call(path, { method = 'GET', body = null, token = '' } = {}) {
 /** 把昵称回填到首页代号（受控输入，派发 input 让应用自己更新状态）并记到 sp.name。 */
 function applyName(name) {
   if (!name) return;
-  try { localStorage.setItem(NAME_KEY, name); } catch { /* private mode */ }
+  writeLocal(NAME_KEY, name);
   const input = document.querySelector('.title-login input');
   if (input && input.value !== name) {
     input.value = name;
@@ -58,7 +59,7 @@ function applyName(name) {
 }
 
 /** 站点字段外观（label 在上、框在下，`.field__box brackets` 画四角括线）；支持 password，站点 TextField 没有。 */
-function Field({ label, micro, type = 'text', value, onInput, maxLength, placeholder, inputMode, autofocus, hint }) {
+function Field({ label, micro, type = 'text', value, onInput, maxLength, placeholder, inputMode, autofocus }) {
   return html`<label class="field field--lg">
     ${label || micro ? html`<span class="field__label">${label}${micro ? html`<span class="micro">${micro}</span>` : null}</span>` : null}
     <span class="field__box brackets">
@@ -66,12 +67,38 @@ function Field({ label, micro, type = 'text', value, onInput, maxLength, placeho
         inputMode=${inputMode} autocomplete="off" spellcheck=${false}
         data-autofocus=${autofocus ? '' : undefined} onInput=${(e) => onInput(e.currentTarget.value)} />
     </span>
-    ${hint ? html`<span class="field__hint">${hint}</span>` : null}
   </label>`;
 }
 
 function Avatar({ account, size = 26 }) {
   return html`<img class="title-account-bar__avatar" src=${account?.avatar || ''} alt="" width=${size} height=${size} loading="lazy" />`;
+}
+
+/** 卡面画廊：二级弹窗，网格 + 左侧大图预览。选中只改本机。 */
+function CardGallery({ value, onPick, onClose }) {
+  const [preview, setPreview] = useState(value || '');
+  return html`<${Modal} open title=${say('卡面画廊', 'Name card gallery')} micro="NAMECARDS" width="min(880px,96vw)"
+      onClose=${onClose}
+      actions=${html`
+        <${Button} variant="secondary" onClick=${onClose}>${say('取消', 'Cancel')}<//>
+        <${Button} variant="primary" onClick=${() => onPick(preview)} disabled=${!preview}>${say('使用这张', 'Use this')}<//>`}>
+    <div class="nc-gallery">
+      <div class="nc-gallery__preview">
+        ${preview
+          ? html`<img src=${namecardUrl(preview)} alt="" loading="lazy"
+              onError=${(e) => { e.currentTarget.style.visibility = 'hidden'; }} />`
+          : html`<span class="nc-gallery__empty">${say('选一张卡面', 'Pick a card art')}</span>`}
+      </div>
+      <div class="nc-gallery__grid">
+        <button type="button" class=${'nc-tile' + (value ? '' : ' is-on')} onClick=${() => setPreview('')}
+          title=${say('不使用卡面', 'No card art')}><span class="nc-tile__none">${say('无', 'None')}</span></button>
+        ${NAMECARD_IDS.map((id) => html`<button key=${id} type="button"
+          class=${'nc-tile' + (preview === id ? ' is-on' : '')} onClick=${() => setPreview(id)}
+          title=${id}><img src=${namecardThumbUrl(id)} alt="" loading="lazy"
+          onError=${(e) => { e.currentTarget.style.visibility = 'hidden'; }} /></button>`)}
+      </div>
+    </div>
+  <//>`;
 }
 
 function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
@@ -80,7 +107,8 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   const [pw2, setPw2] = useState('');
   const [name, setName] = useState(account?.name || '');
   const [color, setColor] = useState(account?.nameStyle?.color || '#4ed8af');
-  const [skin, setSkin] = useState(account?.card?.skin || '');
+  const [skin, setSkin] = useState(readLocal(SKIN_KEY));
+  const [gallery, setGallery] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [saved, setSaved] = useState('');
@@ -89,8 +117,8 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   useEffect(() => {
     setName(account?.name || '');
     setColor(account?.nameStyle?.color || '#4ed8af');
-    setSkin(account?.card?.skin || '');
-    setErr(''); setSaved('');
+    setSkin(readLocal(SKIN_KEY));
+    setErr(''); setSaved(''); setGallery(false);
   }, [account, mode]);
 
   useEffect(() => {
@@ -124,16 +152,17 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
     if (trimmed.length > 24) { setErr(say('昵称最多 24 字', 'At most 24 characters')); return; }
     setBusy(true);
     try {
+      // 服务器只存名字与昵称颜色；卡面只在本机
       const r = await call('/api/account/profile', {
         method: 'POST',
-        body: { name: trimmed, nameStyle: { color }, card: skin ? { skin } : null },
+        body: { name: trimmed, nameStyle: { color } },
         token: readToken(),
       });
       if (!r.ok) { setErr((ERRORS[r.error] || (() => r.error || say('保存失败', 'Could not save')))()); return; }
+      writeLocal(SKIN_KEY, skin);
       onAccount(r.account);
       applyName(r.account.name);
-      // 已经在局/厅里时把会话名也改掉：net.setName 走 repeated hello，服务端会把 session.name 换掉并
-      // resync（大厅房内会广播新名字；对局中不广播，等这局结束）。没有活连接时它什么都不做。
+      // 已在会话里时把会话名也改掉（repeated hello = 重命名 + resync；大厅房内会广播）
       try { if (net?.status === 'online' && net.playerId) net.setName(r.account.name || ''); } catch { /* 尽力而为 */ }
       setSaved(say('已保存到服务器', 'Saved to the server'));
     } finally { setBusy(false); }
@@ -171,32 +200,26 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
     <//>`;
   }
 
-  return html`<${Modal} open title=${say('名片', 'Profile card')} micro="CALLSIGN" width="min(480px,94vw)"
+  return html`<${Modal} open title=${say('名片', 'Name card')} micro="CALLSIGN" width="min(560px,95vw)"
       onClose=${onClose}
       actions=${html`
         <${Button} variant="ghost" onClick=${signOut} disabled=${busy}>${say('退出登录', 'Sign out')}<//>
         <${Button} variant="primary" onClick=${saveProfile} disabled=${busy}>${say('保存', 'Save')}<//>`}>
-    <div class="acc-head">
-      <${Avatar} account=${account} size=${56} />
-      <div>
-        <b>${account.qq}</b>
-        <div class="t-dim">${say('布阵占用', 'Lineup used')} ${((account.lineup?.used || 0) / 1024 ** 2).toFixed(1)} MiB / ${((account.lineup?.quota || 0) / 1024 ** 3).toFixed(0)} GiB</div>
+    <div class="acc-hero">
+      ${skin
+        ? html`<img class="acc-hero__art" src=${namecardUrl(skin)} alt="" loading="lazy"
+            onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
+        : html`<span class="acc-hero__empty">${say('未选卡面', 'No card art')}</span>`}
+      <div class="acc-hero__id">
+        <${Avatar} account=${account} size=${44} />
+        <div>
+          <b>${account.qq}</b>
+          <div class="t-dim">${say('布阵占用', 'Lineup used')} ${((account.lineup?.used || 0) / 1024 ** 2).toFixed(1)} MiB / ${((account.lineup?.quota || 0) / 1024 ** 3).toFixed(0)} GiB</div>
+        </div>
+        <${Button} variant="secondary" onClick=${() => setGallery(true)}>${say('更换卡面', 'Change card art')}<//>
       </div>
     </div>
-    ${skin ? html`<div class="acc-banner"><img src=${namecardUrl(skin)} alt="" loading="lazy"
-        onError=${(e) => { e.currentTarget.style.display = 'none'; }} /></div>` : null}
     <div class="acc-form">
-      <div class="acc-pick">
-        <span class="field__label">${say('卡面', 'Card art')}<span class="micro">NAMECARD</span></span>
-        <div class="acc-cards">
-          <button type="button" class=${'acc-card-tile' + (skin ? '' : ' is-on')} onClick=${() => setSkin('')}
-            title=${say('默认（不选卡面）', 'Default (no card art)')}><span class="acc-card-tile__none">${say('默认', 'Default')}</span></button>
-          ${NAMECARD_IDS.map((id) => html`<button key=${id} type="button"
-            class=${'acc-card-tile' + (skin === id ? ' is-on' : '')} onClick=${() => setSkin(id)}
-            title=${id}><img src=${namecardThumbUrl(id)} alt="" loading="lazy"
-            onError=${(e) => { e.currentTarget.style.visibility = 'hidden'; }} /></button>`)}
-        </div>
-      </div>
       <${Field} label=${say('昵称', 'Nickname')} micro="NAME" value=${name} maxLength=${24}
         placeholder=${say('留空就用 QQ 号', 'Empty: your QQ number')} onInput=${setName} />
       <label class="field">
@@ -209,6 +232,8 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
     </div>
     ${err ? html`<p class="acc-err t-red">${err}</p>` : null}
     ${saved ? html`<p class="acc-ok t-mint">${saved}</p>` : null}
+    ${gallery ? html`<${CardGallery} value=${skin} onClose=${() => setGallery(false)}
+        onPick=${(id) => { setSkin(id); writeLocal(SKIN_KEY, id); setGallery(false); }} />` : null}
   <//>`;
 }
 
@@ -227,20 +252,6 @@ function AccountSlot({ overlay }) {
     return () => { live = false; };
   }, []);
 
-  const row = account
-    ? html`<div class="title-account-bar title-account-bar--in">
-        <button type="button" class="title-account-bar__avatar-btn" title=${say('编辑名片', 'Edit profile card')}
-          aria-label=${say('编辑名片', 'Edit profile card')} onClick=${() => setMode('profile')}>
-          <${Avatar} account=${account} />
-        </button>
-        <span class="title-account-bar__name">${account.name || account.qq}</span>
-        <${Button} variant="ghost" size="sm" onClick=${() => setMode('profile')}>${say('名片', 'Profile')}<//>
-      </div>`
-    : html`<button type="button" class="title-account-bar" onClick=${() => setMode('signin')}>
-        <${Icon} name="user" class="title-account-bar__icon" />
-        <span>${say('账号登录 / 绑定', 'Sign in / link account')}</span>
-      </button>`;
-
   // 面板挂到 body 级容器：首页登录卡带 backdrop-filter，会生成 stacking context，
   // 留在卡里的弹窗会被后面的「下载完整素材 / 导入素材包」盖住（真机截图实测）。
   useEffect(() => {
@@ -251,6 +262,20 @@ function AccountSlot({ overlay }) {
         onSignedOut=${() => { setAccount(null); setMode(null); }} />`, overlay);
     return () => { render(null, overlay); };
   }, [mode, account, overlay]);
+
+  const row = account
+    ? html`<div class="title-account-bar title-account-bar--in">
+        <button type="button" class="title-account-bar__avatar-btn" title=${say('编辑名片', 'Edit name card')}
+          aria-label=${say('编辑名片', 'Edit name card')} onClick=${() => setMode('profile')}>
+          <${Avatar} account=${account} />
+        </button>
+        <span class="title-account-bar__name">${account.name || account.qq}</span>
+        <${Button} variant="ghost" size="sm" onClick=${() => setMode('profile')}>${say('名片', 'Card')}<//>
+      </div>`
+    : html`<button type="button" class="title-account-bar" onClick=${() => setMode('signin')}>
+        <${Icon} name="user" class="title-account-bar__icon" />
+        <span>${say('账号登录 / 绑定', 'Sign in / link account')}</span>
+      </button>`;
 
   return html`<div class="title-account-bar-row">
     ${row}
