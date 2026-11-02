@@ -74,16 +74,16 @@ function Field({ label, micro, type = 'text', value, onInput, maxLength, placeho
   </label>`;
 }
 
-function Avatar({ account, size = 26 }) {
+function Avatar({ account }) {
   const src = typeof account?.avatar === 'string' ? account.avatar.trim() : '';
   if (!src) return null; // 没头像就整块不画，别留一个破图标
-  return html`<img class="title-account-bar__avatar" src=${src} alt="" width=${size} height=${size} loading="lazy" />`;
+  return html`<img class="acc-hero__avatar" src=${src} alt="" loading="lazy" />`;
 }
 
 /** 卡面画廊：二级弹窗，网格 + 左侧大图预览。选中只改本机。 */
 function CardGallery({ value, onPick, onClose }) {
   const [preview, setPreview] = useState(value || '');
-  return html`<${Modal} open title=${say('卡面画廊', 'Name card gallery')} micro="NAMECARDS" width="min(880px,96vw)"
+  return html`<${Modal} open title=${say('卡面画廊', 'Name card gallery')} micro="NAMECARDS" width="min(8.8rem,96vw)"
       onClose=${onClose}
       actions=${html`
         <${Button} variant="secondary" onClick=${onClose}>${say('取消', 'Cancel')}<//>
@@ -191,7 +191,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   };
 
   if (mode === 'notices') {
-    return html`<${Modal} open title=${say('公告', 'Notices')} micro="NOTICES" width="min(640px,94vw)"
+    return html`<${Modal} open title=${say('公告', 'Notices')} micro="NOTICES" width="min(6.4rem,94vw)"
         onClose=${onClose} actions=${html`<${Button} variant="primary" onClick=${onClose}>${say('关闭', 'Close')}<//>`}>
       ${notices === null ? html`<p class="modal__text">${say('加载中…', 'Loading…')}</p>`
         : notices.length === 0 ? html`<p class="modal__text">${say('暂无公告', 'No notices yet')}</p>`
@@ -203,7 +203,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   }
 
   if (!account) {
-    return html`<${Modal} open title=${say('账号登录 / 绑定', 'Sign in / link account')} micro="ACCOUNT" width="min(460px,94vw)"
+    return html`<${Modal} open title=${say('账号登录 / 绑定', 'Sign in / link account')} micro="ACCOUNT" width="min(4.6rem,94vw)"
         onClose=${onClose}
         actions=${html`
           <${Button} variant="secondary" onClick=${onClose}>${say('关闭', 'Close')}<//>
@@ -220,7 +220,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
     <//>`;
   }
 
-  return html`<${Modal} open title=${say('名片', 'Name card')} micro="CALLSIGN" width="min(560px,95vw)"
+  return html`<${Modal} open title=${say('名片', 'Name card')} micro="CALLSIGN" width="min(5.6rem,95vw)"
       onClose=${onClose}
       actions=${html`
         <${Button} variant="ghost" onClick=${signOut} disabled=${busy}>${say('退出登录', 'Sign out')}<//>
@@ -234,7 +234,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
           : html`<span class="acc-hero__empty">${say('选一张卡面', 'Pick a card art')}</span>`}
       </button>
       <div class="acc-hero__id">
-        <${Avatar} account=${account} size=${44} />
+        <${Avatar} account=${account} />
         <div><b>${account.qq}</b></div>
         <${Button} variant="secondary" onClick=${focusName}>${say('编辑信息', 'Edit profile')}<//>
       </div>
