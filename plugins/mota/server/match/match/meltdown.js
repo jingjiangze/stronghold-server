@@ -146,6 +146,12 @@ export const RELIC_APPLIED_RULES = Object.freeze([
   'spOnDeploy',       // 所有干员部署时失去 15 点技力（同一条 initSp 通道：初始技力减少、夹在 0 以上）
   'shelter',          // 所有我方单位获得 10% 庇护（引擎 dmgTakenMul 通道；低血再 +35% 那半句要战斗内 HP，未接）
   'stunOnDeploy',     // 随机 N 名干员部署时晕眩 10s，N 每回合 +1、最多 4（per-unit relicMods.stunOnDeploy）
+  'openingDebuff',    // 开战最多 5 名随机干员中负面（本条用「晕眩 10s」近似，见 relicStunRule）
+  'startDebuff',      // 开战 10 秒：我方 攻击 −20% / 攻速 −20 / 技力回复 −20%（buff duration 通道）
+  'neuralDps',        // 全场每秒 10 点真实伤害（buff interval/onTick）
+  'fogOnDeploy',      // 部署后 60 秒内每秒 2% 最大生命真实伤害（同上，带 duration）
+  'spRegenStack',     // 每用一次技能永久 +0.4 技力回复，最多 5 层（skillStart 钩子）
+  'atkAfterSkill',    // 技能触发后 1 秒内攻击 +100%（同上）
   'survivor',         // 攻击最高的一名干员 攻/防 +20%，每打完一场再 +20%（per-unit，见 battleInput）
 ]);
 export function relicEffectApplied(effect) {
@@ -623,13 +629,20 @@ export class MatchMeltdown {
    */
   relicStunRule(ps) {
     const list = this.relicRuleParams('stunOnDeploy');
-    if (!list.length) return null;
+    const opening = this.relicRuleParams('openingDebuff');
+    if (!list.length && !opening.length) return null;
     let base = 1, perRound = 0, max = 4, dur = 0;
     for (const ru of list) {
       base = Math.max(base, Number(ru.count) || 1);
       perRound = Math.max(perRound, Number(ru.perRound) || 0);
       max = Math.max(max, Number(ru.max) || 4);
       dur = Math.max(dur, Number(ru.dur) || 10);
+    }
+    // openingDebuff（深蓝之心）「战斗开始时随机干员中负面效果…最多 5 名」：本引擎用「晕眩」代表这一组负面状态
+    for (const ru of opening) {
+      base = Math.max(base, Number(ru.count) || 5);
+      max = Math.max(max, 5);
+      dur = Math.max(dur, 10);
     }
     const round = Math.max(1, Number(this.round) || 1);
     const count = Math.min(max, base + perRound * (round - 1));
@@ -767,14 +780,47 @@ export class MatchMeltdown {
       const low = ru.spLowLp && typeof ru.spLowLp === 'object' ? ru.spLowLp : null;
       if (low && (Number(ps.lp) || 0) < (Number(low.lp) || 10)) spRegenMul *= 1 + Math.min(0, Number(low.pct) || 0);
     }
+    // ---- 战斗内时序类（2026-11-02，全部走引擎 buff/钩子通道，缺省零影响）----
+    // startDebuff（退行的罗辛南特）「战斗开始时我方攻击 −20%、攻速 −20、技力回复 −20%，持续 10 秒」
+    let startDur = 0, startAtkPct = 0, startAspd = 0, startSpMul = 1;
+    for (const ru of this.relicRuleParams('startDebuff')) {
+      startDur = Math.max(startDur, Number(ru.dur) || 10);
+      startAtkPct += Number(ru.atkPct) || 0;
+      startAspd += Number(ru.aspd) || 0;
+      const sp = Number(ru.spRegen);
+      if (Number.isFinite(sp)) startSpMul *= 1 + sp;
+    }
+    // neuralDps（每秒固定伤害）+ fogOnDeploy（部署后限时按最大生命百分比掉血）
+    let flatDps = 0, dotMaxHpPct = 0, dotDur = 0;
+    for (const ru of this.relicRuleParams('neuralDps')) flatDps += Math.max(0, Number(ru.n) || 0);
+    for (const ru of this.relicRuleParams('fogOnDeploy')) {
+      dotMaxHpPct += Math.max(0, Number(ru.ratio) || 0);
+      dotDur = Math.max(dotDur, Number(ru.dur) || 60);
+    }
+    // spRegenStack（技能用一次 +0.4 技力回复）+ atkAfterSkill（技能后 1 秒 +100% 攻）
+    let skillSpPer = 0, skillSpMax = 5, skillAtkWindow = 0, skillAtkMul = 2;
+    for (const ru of this.relicRuleParams('spRegenStack')) {
+      skillSpPer += Math.max(0, Number(ru.per) || 0);
+      skillSpMax = Math.max(skillSpMax, Number(ru.max) || 5);
+    }
+    for (const ru of this.relicRuleParams('atkAfterSkill')) {
+      skillAtkWindow = Math.max(skillAtkWindow, Number(ru.window) || 1);
+      skillAtkMul = Math.max(skillAtkMul, Number(ru.mul) || 2);
+    }
     // shelter（佣兵保单）「所有我方单位获得 10% 庇护，生命低于初始 50% 时额外 35%」——
     // 庇护有通道（引擎 dmgTakenMul），静态这半句接上；低血那半句是**战斗中动态 HP**，对局侧拿不到，未接。
     let shelter = 0;
     for (const ru of this.relicRuleParams('shelter')) shelter += Math.max(0, Number(ru.base) || 0);
-    if (!atk && !hp && !def && !aspdAdd && !initSp && spRegenMul === 1 && !shelter) return null;
+    const hasTimed = startDur || flatDps || dotMaxHpPct || skillSpPer || skillAtkWindow;
+    if (!atk && !hp && !def && !aspdAdd && !initSp && spRegenMul === 1 && !shelter && !hasTimed) return null;
     return { atkMul: 1 + atk, hpMul: 1 + hp, ...(def ? { defMul: 1 + def } : {}), ...(aspdAdd ? { aspdAdd } : {}),
       ...(initSp ? { initSp } : {}), ...(spRegenMul !== 1 ? { spRegenMul } : {}),
-      ...(shelter ? { shelter: Math.min(1, shelter) } : {}) };
+      ...(shelter ? { shelter: Math.min(1, shelter) } : {}),
+      ...(startDur ? { startAtkPct, startAspd, startSpMul, startDur } : {}),
+      ...(flatDps ? { flatDps } : {}),
+      ...(dotMaxHpPct ? { dotMaxHpPct, dotDur } : {}),
+      ...(skillSpPer ? { skillSpPer, skillSpMax } : {}),
+      ...(skillAtkWindow ? { skillAtkWindow, skillAtkMul } : {}) };
   }
 
   /**

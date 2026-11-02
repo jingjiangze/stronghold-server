@@ -70,3 +70,33 @@ test('shelter 走引擎承伤通道（dmgTakenMul）', () => {
   const plain = battle(null);
   assert.equal(plain.allies()[0].s.dmgTakenMul ?? 1, 1, '缺省不动');
 });
+
+test('startDebuff：开战限时 debuff 到期自动消失', () => {
+  const base = battle(null).allies()[0];
+  const h = battle({ startAtkPct: -0.2, startAspd: -20, startSpMul: 0.8, startDur: 5 });
+  const u = h.allies()[0];
+  assert.ok(Math.abs(u.s.atk - base.s.atk * 0.8) < 1e-6, `开战攻击应 ×0.8（${base.s.atk} → ${u.s.atk}）`);
+  assert.ok(Math.abs(u.s.spRecovery - base.s.spRecovery * 0.8) < 1e-6, '技力回复应 ×0.8');
+  h.run(6);
+  assert.ok(Math.abs(u.s.atk - base.s.atk) < 1e-6, `5 秒后攻击应恢复（实得 ${u.s.atk} / ${base.s.atk}）`);
+  assert.ok(Math.abs(u.s.spRecovery - base.s.spRecovery) < 1e-6, '技力回复倍率也应恢复');
+});
+
+test('DoT：每秒固定伤害持续掉血（fogOnDeploy / neuralDps 同一条路）', () => {
+  const h = battle({ flatDps: 10 });
+  const u = h.allies()[0];
+  const hp0 = u.hp;
+  h.run(2);
+  assert.ok(u.hp <= hp0 - 15, `两秒至少掉 15 血（${hp0} → ${u.hp}）`);
+});
+
+test('DoT 带 duration 的版本会在到期后停止（fogOnDeploy 60s）', () => {
+  const h = battle({ dotMaxHpPct: 0.02, dotDur: 1 });
+  const u = h.allies()[0];
+  const hp0 = u.hp;
+  h.run(1.5);
+  const afterDot = u.hp;
+  assert.ok(afterDot < hp0, '限时 DoT 期间应掉血');
+  h.run(2);
+  assert.equal(u.hp, afterDot, '到期后不再掉血');
+});

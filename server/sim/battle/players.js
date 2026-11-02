@@ -210,6 +210,34 @@ export class BattlePlayers {
       if (rm.spRegenMul != null) u.relicSpRegenMul = Math.max(0, n('spRegenMul'));
       if (rm.stunOnDeploy != null) u.relicStunOnDeploy = Math.max(0, n('stunOnDeploy'));
       if (rm.shelter != null) u.relicShelter = Math.max(0, Math.min(1, n('shelter')));
+      // 战斗内时序类：摊平的数值在这里拼回结构体（spec 层只认数值）
+      const opt = (k) => (rm[k] != null && Number.isFinite(Number(rm[k])) ? Number(rm[k]) : null);
+      const sDur = opt('startDur');
+      if (sDur && (opt('startAtkPct') != null || opt('startAspd') != null || opt('startSpMul') != null)) {
+        u.relicStartDebuff = { dur: sDur, atkPct: opt('startAtkPct') ?? 0, aspd: opt('startAspd') ?? 0, spMul: opt('startSpMul') ?? 1 };
+      }
+      const flatDps = opt('flatDps'), dotPct = opt('dotMaxHpPct');
+      if ((flatDps && flatDps > 0) || (dotPct && dotPct > 0)) {
+        u.relicDot = { flat: flatDps > 0 ? flatDps : 0, maxHpPct: dotPct > 0 ? dotPct : 0, dur: opt('dotDur') ?? 0 };
+      }
+      if (opt('skillAtkWindow') || opt('skillSpPer')) {
+        u.relicSkill = { window: opt('skillAtkWindow') ?? 0, mul: opt('skillAtkMul') ?? 2, spPer: opt('skillSpPer') ?? 0, spMax: opt('skillSpMax') ?? 5 };
+      }
+    }
+    if (u.relicSkill) {
+      // 技能触发钩子（atkAfterSkill / spRegenStack）：注册在**单位生成**这一步而不是部署收尾 ——
+      // 部署会重复执行（初部署 / 再部署 / 召唤），挂 deploy 会叠出多份监听。
+      this.on('skillStart', ({ unit: su }) => {
+        if (su !== u) return;
+        const sk = u.relicSkill;
+        if (sk.window > 0) {
+          this.addBuff(u, { key: 'relic:afterSkill', duration: sk.window, refresh: 'replace', mods: { atkPct: Math.max(0, sk.mul - 1) } });
+        }
+        if (sk.spPer > 0) {
+          u.relicSkillUses = Math.min(sk.spMax, (Number(u.relicSkillUses) || 0) + 1);
+          this.addBuff(u, { key: 'relic:spStack', persist: true, allowDead: true, mods: { spRecoveryFlat: sk.spPer * u.relicSkillUses } });
+        }
+      }, { owner: u });
     }
     u.alive = false;
     u.deployed = false;

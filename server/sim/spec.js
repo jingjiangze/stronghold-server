@@ -137,7 +137,10 @@ export function sanitizeUnitLoadout(u) {
   // stunOnDeploy（部署时晕眩秒数）。全部仍走同一条数值白名单，越界值由 battle/players.js 夹取。
   if ('relicMods' in u) {
     const m = u.relicMods;
-    const keys = ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd', 'initSp', 'spRegenMul', 'stunOnDeploy', 'shelter'];
+    const keys = ['atkMul', 'hpMul', 'defMul', 'aspdMul', 'aspdAdd', 'initSp', 'spRegenMul', 'stunOnDeploy', 'shelter',
+      // 2026-11-02：战斗内时序类（开战限时 debuff / 每秒伤害 / 技能触发钩子）——同样摊平成一串数字过白名单
+      'startAtkPct', 'startAspd', 'startSpMul', 'startDur', 'flatDps', 'dotMaxHpPct', 'dotDur',
+      'skillAtkWindow', 'skillAtkMul', 'skillSpPer', 'skillSpMax'];
     const ok = m && typeof m === 'object' && keys.every((k) => m[k] == null || Number.isFinite(Number(m[k])));
     if (!ok) delete u.relicMods;
   }

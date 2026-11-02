@@ -106,7 +106,7 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   assert.equal(relicEffectApplied({ immediate: { funds: 3 } }), true);
   assert.equal(relicEffectApplied({ deployCap: 1 }), true);
   assert.equal(relicEffectApplied({ lpCap: 2 }), true);
-  assert.equal(relicEffectApplied({ rule: { id: 'neuralDps' } }), false, '战斗内机制类 rule 尚未接入');
+  assert.equal(relicEffectApplied({ rule: { id: 'enemyDefShred' } }), false, '仍未接入的 rule 不算生效');
   assert.equal(relicEffectApplied({ rule: { id: 'fundsDrain' } }), true, '经济类 rule 已接入');
   assert.equal(relicEffectApplied({ ally: { atk: 0.1 } }), false, 'ally 类尚未接入');
   assert.equal(relicEffectApplied(null), false);
@@ -115,7 +115,8 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   const applied = relics.filter((r) => relicEffectApplied(r.effect)).length;
   const ruleInert = relics.filter((r) => { const e = r.effect || {}; return !!e.rule && !relicEffectApplied(e); }).length;
   assert.ok(applied >= 30, `有实现效果的藏品过少：${applied}/${relics.length}`);
-  assert.ok(ruleInert >= 5, `rule 类藏品应仍有一批未实装（逐批接入中）：${ruleInert}`);
+  // 逐批接入：门槛只挡「一夜之间全标已实现」这种假绿（2026-11-02 剩 3 条未实装）
+  assert.ok(ruleInert >= 1, `rule 类藏品应仍有未实装项（逐批接入中）：${ruleInert}`);
   assert.equal(applied + relics.filter((r) => !relicEffectApplied(r.effect)).length, relics.length, '未生效 = 总数 - 已生效');
 });
 
