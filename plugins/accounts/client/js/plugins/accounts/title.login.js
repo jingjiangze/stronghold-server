@@ -161,21 +161,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
           <${Button} variant="primary" disabled=${busy} onClick=${signIn}>${pw2 ? say('绑定并登录', 'Link and sign in') : say('登录', 'Sign in')}<//>`}>
       <p class="modal__text">${say('用 QQ 号登录；第一次绑定会以此密码建号，之后默认保留登录。',
         'Sign in with your QQ number. The first time, this password creates the account; afterwards you stay signed in.')}</p>
-      ${skin ? html`<div class="acc-banner"><img src=${namecardUrl(skin)} alt="" loading="lazy"
-        onError=${(e) => { e.currentTarget.style.display = 'none'; }} /></div>` : null}
-    <div class="acc-form">
-      <div class="acc-pick">
-        <span class="field__label">${say('卡面', 'Card art')}<span class="micro">NAMECARD</span></span>
-        <div class="acc-cards">
-          <button type="button" class=${'acc-card-tile' + (skin ? '' : ' is-on')} onClick=${() => setSkin('')}
-            title=${say('默认（不选卡面）', 'Default (no card art)')}><span class="acc-card-tile__none">${say('默认', 'Default')}</span></button>
-          ${NAMECARD_IDS.map((id) => html`<button key=${id} type="button"
-            class=${'acc-card-tile' + (skin === id ? ' is-on' : '')} onClick=${() => setSkin(id)}
-            title=${id}><img src=${namecardThumbUrl(id)} alt="" loading="lazy"
-            onError=${(e) => { e.currentTarget.style.visibility = 'hidden'; }} /></button>`)}
-        </div>
-      </div>
-
+      <div class="acc-form">
         <${Field} label=${say('QQ 号', 'QQ number')} value=${qq} maxLength=${12} inputMode="numeric" autofocus onInput=${setQq} />
         <${Field} label=${say('密码', 'Password')} type="password" value=${pw} maxLength=${64} onInput=${setPw} />
         <${Field} label=${say('确认密码', 'Confirm password')} type="password" value=${pw2} maxLength=${64}
@@ -197,7 +183,20 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
         <div class="t-dim">${say('布阵占用', 'Lineup used')} ${((account.lineup?.used || 0) / 1024 ** 2).toFixed(1)} MiB / ${((account.lineup?.quota || 0) / 1024 ** 3).toFixed(0)} GiB</div>
       </div>
     </div>
+    ${skin ? html`<div class="acc-banner"><img src=${namecardUrl(skin)} alt="" loading="lazy"
+        onError=${(e) => { e.currentTarget.style.display = 'none'; }} /></div>` : null}
     <div class="acc-form">
+      <div class="acc-pick">
+        <span class="field__label">${say('卡面', 'Card art')}<span class="micro">NAMECARD</span></span>
+        <div class="acc-cards">
+          <button type="button" class=${'acc-card-tile' + (skin ? '' : ' is-on')} onClick=${() => setSkin('')}
+            title=${say('默认（不选卡面）', 'Default (no card art)')}><span class="acc-card-tile__none">${say('默认', 'Default')}</span></button>
+          ${NAMECARD_IDS.map((id) => html`<button key=${id} type="button"
+            class=${'acc-card-tile' + (skin === id ? ' is-on' : '')} onClick=${() => setSkin(id)}
+            title=${id}><img src=${namecardThumbUrl(id)} alt="" loading="lazy"
+            onError=${(e) => { e.currentTarget.style.visibility = 'hidden'; }} /></button>`)}
+        </div>
+      </div>
       <${Field} label=${say('昵称', 'Nickname')} micro="NAME" value=${name} maxLength=${24}
         placeholder=${say('留空就用 QQ 号', 'Empty: your QQ number')} onInput=${setName} />
       <label class="field">
