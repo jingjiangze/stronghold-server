@@ -22,7 +22,7 @@ import { createPluginPolicy } from '../server/plugins/policy.js';
 import { writePlugin } from './helpers/pluginFixtures.js';
 import { computeVanillaContent } from '../server/plugins/identity.js';
 import { DATA_SHIM_JS } from '../server/http/static.js';
-import { DIFFICULTIES, ERR, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, ERR, modeIdFor } from '../shared/constants.js';
 import { checkNotOwned, validateC2S } from '../shared/protocol.js';
 import { DEFAULT_VERSION, VERSIONS, versionById } from '../shared/versions.js';
 
@@ -49,7 +49,9 @@ function versionStub({ enabled = ALL, defaultId = DEFAULT_VERSION, roomModes = {
     offered: (id, mode) => {
       if (!ids.includes(id) || !modesOf(id).includes(mode)) return [];
       const modes = data(id).config.modes;
-      return DIFFICULTIES.filter((d) => Object.hasOwn(modes, modeIdFor(mode, d)));
+      // 2026-11-02：难度换成 N1–N20；老版本数据里只有旧 4 档 ⇒ 与生产同款回退
+      const tiers = DIFFICULTIES.filter((d) => Object.hasOwn(modes, modeIdFor(mode, d)));
+      return tiers.length ? tiers : LEGACY_DIFFICULTIES.filter((d) => Object.hasOwn(modes, modeIdFor(mode, d)));
     },
     welcome: () => (ids.length === 1 && ids[0] === DEFAULT_VERSION ? null : ids.map((id) => ({ id, cs: csOf(id) }))),
   };

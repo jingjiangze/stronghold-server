@@ -20,7 +20,7 @@
 // Texts go through t() (docs/I18N.md).
 
 import { DEFAULT_VERSION, VERSIONS, versionById, versionSlug } from '../../shared/versions.js';
-import { DIFFICULTIES, modeIdFor } from '../../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultyRank, modeIdFor } from '../../shared/constants.js';
 import { t, N_ } from '../../shared/i18n.js';
 import { loadPref, savePref, store as appStore } from './store.js';
 
@@ -189,8 +189,11 @@ export function periodLine(id) {
 export function offeredDifficulties(config, roomMode) {
   const modes = isObj(config?.modes) ? config.modes : null;
   if (!modes) return [...DIFFICULTIES];
-  const list = DIFFICULTIES.filter((d) => isObj(modes[modeIdFor(roomMode, d)]));
-  return list.length ? list : [...DIFFICULTIES];
+  const tiers = DIFFICULTIES.filter((d) => isObj(modes[modeIdFor(roomMode, d)]));
+  if (tiers.length) return tiers;
+  // 2026-11-02：老版本的数据里只有旧 4 档 ⇒ 回退到旧档（与 server/versions.js 的 offered 同一条规则）
+  const legacy = LEGACY_DIFFICULTIES.filter((d) => isObj(modes[modeIdFor(roomMode, d)]));
+  return legacy.length ? legacy : [...DIFFICULTIES];
 }
 
 /**
@@ -199,11 +202,12 @@ export function offeredDifficulties(config, roomMode) {
  * @param {string[]} offered @param {string} d
  */
 export function fallbackDifficulty(offered, d) {
-  const list = DIFFICULTIES.filter((x) => offered.includes(x));
-  if (!list.length || list.includes(d)) return d;
-  const i = DIFFICULTIES.indexOf(d);
-  const below = list.filter((x) => DIFFICULTIES.indexOf(x) < i);
-  return below.length ? below[below.length - 1] : list[0];
+  const list = offered.filter((x) => difficultyRank(x) > 0);
+  if (!list.length || list.includes(d) || difficultyRank(d) === 0) return d;
+  // 按难度阶梯序（N1..N20 / 旧档按锚点映射）取「不高于它」的最高一档；都没有就取最低一档
+  const want = difficultyRank(d);
+  const below = list.filter((x) => difficultyRank(x) <= want).sort((a, b) => difficultyRank(a) - difficultyRank(b));
+  return below.length ? below[below.length - 1] : list.slice().sort((a, b) => difficultyRank(a) - difficultyRank(b))[0];
 }
 
 /**

@@ -9,7 +9,7 @@ import { Lobby } from '../server/lobby.js';
 import { SessionRegistry } from '../server/net.js';
 import { getData, getVersionData } from '../server/data.js';
 import { wireOptions } from '../server/match/host/proxy.js';
-import { DIFFICULTIES, ERR, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, ERR, modeIdFor } from '../shared/constants.js';
 import { validateC2S } from '../shared/protocol.js';
 import { DEFAULT_VERSION, VERSIONS, versionById } from '../shared/versions.js';
 
@@ -35,7 +35,9 @@ function versionStub() {
     offered: (id, mode) => {
       if (!versionById(id).roomModes.includes(mode)) return [];
       const modes = data(id).config.modes;
-      return DIFFICULTIES.filter((d) => Object.hasOwn(modes, modeIdFor(mode, d)));
+      // 2026-11-02：难度换成 N1–N20；老版本数据里只有旧 4 档 ⇒ 与生产同款回退
+      const tiers = DIFFICULTIES.filter((d) => Object.hasOwn(modes, modeIdFor(mode, d)));
+      return tiers.length ? tiers : LEGACY_DIFFICULTIES.filter((d) => Object.hasOwn(modes, modeIdFor(mode, d)));
     },
     welcome: () => ids.map((id) => ({ id, cs: id === DEFAULT_VERSION ? VANILLA : CS[id] })),
   };

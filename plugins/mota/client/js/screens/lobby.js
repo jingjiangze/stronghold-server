@@ -25,7 +25,7 @@ import { useHubBackdrop, HubBackdrop, HubRadar, BackdropSettings, BackdropGlyph,
 import { TestMark } from '../ui/testConsole.js';
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
 import { RANDOM_MODE } from '../../../shared/randomMode.js';
 import { html, confirmDialog, Button, Icon, MicroLabel, Panel, TextField, PingPill, Tooltip, Spinner, DifficultyIcon } from '../ui/components.js';
 
@@ -1144,7 +1144,7 @@ export function LobbyScreen() {
     if (id !== 'rogue') setRogueRules(false);
     if (id === 'xie') { pickMode('xie'); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
     // 肉鸽（2026-11-02 业主）：点了直接到难度选择，不再先过一遍「选择同盟方式」面板
-    if (id === 'rogue') { pickMode('coop'); setRogueRules(true); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
+    if (id === 'rogue') { pickMode('coop'); setRogueRules(true); pickDifficulty('N8'); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
     pickMode('versus');
     setVersusRule(id === 'confront' ? 'confront' : 'bounty');
     setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true);

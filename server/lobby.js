@@ -231,7 +231,8 @@
 
 import { aiTakeover, aiTakeoverDirect, resetAiTakeover, reconcileAiTakeover, maybeRandomAiTakeover } from './aiTakeover.js';
 import { randomBytes, randomInt } from 'node:crypto';
-import { DIFFICULTIES, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultyRank, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
+import { getData } from './data.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks, charPotentialChanges, checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
 import { encode, isErrCode, sendRaw, sendSession } from './net.js';
 import { getData as defaultGetData, lookup } from './data.js';
@@ -270,6 +271,7 @@ const UNVERIFIED_CS = 'unverified';
  * the event's room is changed by its creator after 创建同盟, its starting difficulty is not recorded; the event room of
  * research 06 §3.2 shows ♜ 标准模拟 in its footer pill].
  */
+// 服务端「没给难度」时的兜底仍是旧档 FUNNY（老客户端 / 老脚本语义不变）；界面默认档由客户端给（N1 / 肉鸽 N8）。
 export const DEFAULT_DIFFICULTY = 'FUNNY';
 
 /** Official `singleReconnectTime` (s) when the data lacks it (constData, research 01 §1). */
@@ -1005,7 +1007,8 @@ export class Lobby {
     if (!this.versionAvailable(version)) return fail(ERR.VERSION_UNSUPPORTED, 'the data of this version is not available');
     // left out: the default (header); the protocol refuses any other value that is not a difficulty; one the version
     // lacks is lowered (终极 → 绝境)
-    const difficulty = this.fallbackDifficulty(version, mode, DIFFICULTIES.includes(asked) ? asked : DEFAULT_DIFFICULTY);
+    const askedOk = DIFFICULTIES.includes(asked) || LEGACY_DIFFICULTIES.includes(asked);
+    const difficulty = this.fallbackDifficulty(version, mode, askedOk ? asked : DEFAULT_DIFFICULTY);
     const cur = this.roomOf(session);
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
     if (this.rooms.size >= this.opts.maxRooms) return fail(ERR.INTERNAL, 'too many rooms');
@@ -1189,7 +1192,11 @@ export class Lobby {
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
     // the room's version offers it (header "Official versions": 第二期上半 / 第一期 have no 终极)
-    if (!this.offered(room.version, room.mode).includes(difficulty)) return fail(ERR.BAD_TARGET, 'not a mode of this version');
+    // 版本提供的档位；旧 4 档名另外放行（老客户端），但前提是这个版本的数据里确实有那条 mode
+    if (!this.offered(room.version, room.mode).includes(difficulty)
+      && !(LEGACY_DIFFICULTIES.includes(difficulty) && this.hasModeOfVersion(room.version, room.mode, difficulty))) {
+      return fail(ERR.BAD_TARGET, 'not a mode of this version');
+    }
     this.dropReplay(room, session.playerId);
     // a plugin mode chosen (header "Gameplay plugins") carries its own difficulty: picking one leaves it
     if (room.difficulty !== difficulty || room.content?.modeId) {
@@ -1438,19 +1445,23 @@ export class Lobby {
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
     if (room.versionVote) return fail(ERR.VERSION_VOTE);
-    const official = DIFFICULTIES.find((d) => modeIdFor(room.mode, d) === modeId);
+    const official = [...DIFFICULTIES, ...LEGACY_DIFFICULTIES].find((d) => modeIdFor(room.mode, d) === modeId);
     let difficulty = room.difficulty;
     let content = room.content;
     if (official) {
-      // the room's version offers it (header "Official versions")
-      if (!this.offered(room.version, room.mode).includes(official)) return fail(ERR.BAD_TARGET, 'not a mode of this version');
+      // the room's version offers it (header "Official versions")；
+      // 旧 4 档名另放行（该版本数据里确有这条 mode 就行），否则老客户端的「切换模式」会全部被判无效
+      if (!this.offered(room.version, room.mode).includes(official)
+        && !(LEGACY_DIFFICULTIES.includes(official) && this.hasModeOfVersion(room.version, room.mode, official))) {
+        return fail(ERR.BAD_TARGET, 'not a mode of this version');
+      }
       difficulty = official;
       if (content?.modeId) { const rest = { ...content }; delete rest.modeId; content = Object.freeze(rest); }
     } else {
       const mode = Array.isArray(content?.modes) ? content.modes.find((m) => m && m.id === modeId) : null;
       if (!mode) return fail(ERR.BAD_TARGET, 'not a mode of this room');
       if (mode.roomMode !== room.mode) return fail(ERR.BAD_TARGET, `a mode of ${mode.roomMode} rooms`);
-      if (DIFFICULTIES.includes(mode.difficulty)) difficulty = mode.difficulty;
+      if (DIFFICULTIES.includes(mode.difficulty) || LEGACY_DIFFICULTIES.includes(mode.difficulty)) difficulty = mode.difficulty;
       if (content.modeId !== modeId) content = Object.freeze({ ...content, modeId });
     }
     if (difficulty === room.difficulty && content === room.content) return OK;
@@ -1577,8 +1588,29 @@ export class Lobby {
   fallbackDifficulty(v, mode, d) {
     const offered = this.offered(v, mode);
     if (!offered.length || offered.includes(d)) return d;
-    const below = DIFFICULTIES.slice(0, Math.max(0, DIFFICULTIES.indexOf(d))).reverse().find((x) => offered.includes(x));
-    return below || offered[0];
+    // 「选择器里没有」但**该版本的数据里确实有这条 mode**（旧 4 档就是这种情况）⇒ 保留原档，
+    // 这样老房间 / 老客户端 / 默认档 FUNNY 都不会被悄悄改成别的档。
+    if (this.hasModeOfVersion(v, mode, d)) return d;
+    // 按**难度阶梯序**取「不高于它、且这个版本提供」的最高一档；都不高于它就取最低一档。
+    // 这样 N 档 ↔ 旧 4 档能互相映射（N1→FUNNY、N20→HARD/ABYSS…），而不是各自算各自的 index。
+    const want = difficultyRank(d) || 1;
+    const ranked = offered.map((x) => [x, difficultyRank(x)]).filter(([, r]) => r > 0);
+    const below = ranked.filter(([, r]) => r <= want).sort((a, b) => b[1] - a[1])[0];
+    const pick = below || ranked.sort((a, b) => a[1] - b[1])[0];
+    return pick ? pick[0] : offered[0];
+  }
+
+  /**
+   * 这个房间版本的**数据里**是否有该难度的 mode 记录（与「版本是否对外提供」不同：
+   * 旧档名在任何版本的数据里都还在，只是不在选择器里）。`setDifficulty` 用它放行旧客户端。
+   */
+  hasModeOfVersion(v, roomMode, d) {
+    try {
+      const cfg = v === DEFAULT_VERSION || !this.versions ? getData().config
+        : (this.versions.data?.(v)?.config ?? null);
+      if (!cfg) return false;
+      return Object.hasOwn(cfg.modes || {}, modeIdFor(roomMode, d));
+    } catch { return false; }
   }
 
   /**

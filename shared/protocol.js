@@ -1,7 +1,7 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO } from './constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
 import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT, hasPotentialData } from './potential.js';
@@ -500,10 +500,7 @@ export const C2S = {
   // server that does not know the field ignores it (it is only read after a full validateC2S pass).
   hello: { name: (v) => isStr(v, NAME_MAX_LEN) && v.trim().length > 0, token: (v) => v == null || isStr(v, 64), version: (v) => v == null || isInt(v, 0, 1e6),
     noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER), delta: (v) => v == null || isInt(v, 0, 1e6),
-    // 名片代号与卡面（业主 2026-11-02）：重名时显示 `名字#代号`；卡面只是素材 id，图仍在 CDN/本机素材树。
-    tag: (v) => v == null || (typeof v === 'string' && /^[0-9]{4}$/.test(v)),
-    nc: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9._-]{1,32}$/.test(v)),
-    $optional: ['token', 'version', 'noReplace', 'claimAt', 'delta', 'tag', 'nc'] },
+    $optional: ['token', 'version', 'noReplace', 'claimAt', 'delta'] },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
   // test: only the literal true (DESIGN §34.8). Omit it for a normal room — `false` is a bad field, so a
   // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
@@ -516,13 +513,15 @@ export const C2S = {
   // 不覆盖已有键）。只有「模式枚举 + 队伍人数」两项，玩法本体仍全在 plugins/mota。
   // 独立模式 `rogue`（2026-11-01，业主「肉鸽独立模式」）：房间层只认这三/四个字面量，玩法本体在 plugins/rogue
   // （code.matchMixin）+ plugins/mota 的引擎；难度表与座位规则按 coop 家族走（lobby.offered）。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus' || v === 'rogue', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true, version: isVersionId, soloUnlimited: isBool, teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', variant: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)), versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'difficulty', 'version', 'soloUnlimited', 'teamSize', 'variant', 'versusAlt'] },
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus' || v === 'rogue',
+    // 2026-11-02：难度换成 N1–N20，但旧 4 档名仍被接受（老客户端 / 老房间 / 老脚本）——见 LEGACY_DIFFICULTIES
+    difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v), test: (v) => v === true, version: isVersionId, soloUnlimited: isBool, teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', variant: (v) => v == null || (typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(v)), versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'difficulty', 'version', 'soloUnlimited', 'teamSize', 'variant', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   // 大厅快照（人数 + 公开房间列表）：无入参，服务端回一条 lobby.state
   'room.list': {},
   'room.ready': { ready: isBool },
-  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) },
+  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v) },
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
