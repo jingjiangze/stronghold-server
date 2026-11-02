@@ -15,6 +15,7 @@ import { render } from '/vendor/preact.module.js';
 import { useEffect, useState } from '/vendor/hooks.module.js';
 import { html, Button, Modal, Icon } from '/js/ui/components.js';
 import { net } from '/js/net.js';
+import { NAMECARD_IDS, namecardUrl, namecardThumbUrl } from './namecards.js';
 
 const TOKEN_KEY = 'sp.accountToken';
 const NAME_KEY = 'sp.name';
@@ -79,6 +80,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   const [pw2, setPw2] = useState('');
   const [name, setName] = useState(account?.name || '');
   const [color, setColor] = useState(account?.nameStyle?.color || '#4ed8af');
+  const [skin, setSkin] = useState(account?.card?.skin || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [saved, setSaved] = useState('');
@@ -87,6 +89,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
   useEffect(() => {
     setName(account?.name || '');
     setColor(account?.nameStyle?.color || '#4ed8af');
+    setSkin(account?.card?.skin || '');
     setErr(''); setSaved('');
   }, [account, mode]);
 
@@ -123,7 +126,7 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
     try {
       const r = await call('/api/account/profile', {
         method: 'POST',
-        body: { name: trimmed, nameStyle: { color } },
+        body: { name: trimmed, nameStyle: { color }, card: skin ? { skin } : null },
         token: readToken(),
       });
       if (!r.ok) { setErr((ERRORS[r.error] || (() => r.error || say('保存失败', 'Could not save')))()); return; }
@@ -158,7 +161,21 @@ function AccountPanel({ account, mode, onClose, onAccount, onSignedOut }) {
           <${Button} variant="primary" disabled=${busy} onClick=${signIn}>${pw2 ? say('绑定并登录', 'Link and sign in') : say('登录', 'Sign in')}<//>`}>
       <p class="modal__text">${say('用 QQ 号登录；第一次绑定会以此密码建号，之后默认保留登录。',
         'Sign in with your QQ number. The first time, this password creates the account; afterwards you stay signed in.')}</p>
-      <div class="acc-form">
+      ${skin ? html`<div class="acc-banner"><img src=${namecardUrl(skin)} alt="" loading="lazy"
+        onError=${(e) => { e.currentTarget.style.display = 'none'; }} /></div>` : null}
+    <div class="acc-form">
+      <div class="acc-pick">
+        <span class="field__label">${say('卡面', 'Card art')}<span class="micro">NAMECARD</span></span>
+        <div class="acc-cards">
+          <button type="button" class=${'acc-card-tile' + (skin ? '' : ' is-on')} onClick=${() => setSkin('')}
+            title=${say('默认（不选卡面）', 'Default (no card art)')}><span class="acc-card-tile__none">${say('默认', 'Default')}</span></button>
+          ${NAMECARD_IDS.map((id) => html`<button key=${id} type="button"
+            class=${'acc-card-tile' + (skin === id ? ' is-on' : '')} onClick=${() => setSkin(id)}
+            title=${id}><img src=${namecardThumbUrl(id)} alt="" loading="lazy"
+            onError=${(e) => { e.currentTarget.style.visibility = 'hidden'; }} /></button>`)}
+        </div>
+      </div>
+
         <${Field} label=${say('QQ 号', 'QQ number')} value=${qq} maxLength=${12} inputMode="numeric" autofocus onInput=${setQq} />
         <${Field} label=${say('密码', 'Password')} type="password" value=${pw} maxLength=${64} onInput=${setPw} />
         <${Field} label=${say('确认密码', 'Confirm password')} type="password" value=${pw2} maxLength=${64}
