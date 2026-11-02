@@ -2,6 +2,7 @@ import { useState } from '../../vendor/hooks.module.js';
 import { html, Icon } from './components.js';
 import { data, useData } from '../data.js';
 import { t } from '../../../shared/i18n.js';
+import { buildMinimapModel } from './rogueMapModel.js';
 
 /**
  * 肉鸽「地图」浮层（业主 2026-11-02：「地图做成类似局内对话的逻辑，可收缩」）。
@@ -47,43 +48,24 @@ export function RogueMapDock({ pub, disabled = false }) {
   </div>`;
 }
 
-/** 19×21 的静态缩略：可走地面 / 不可走 / 可部署格。返回 null 表示这份数据画不了。 */
 function minimap(stage) {
-  if (!stage || !Array.isArray(stage.rows) || !stage.rows.length) return null;
-  const rows = stage.rows;                    // index 0 = 最下行（引擎坐标）
-  const height = rows.length;
-  const width = Math.max(...rows.map((r) => String(r).length));
-  if (!width) return null;
-  const tiles = stage.tiles && typeof stage.tiles === 'object' ? stage.tiles : {};
-  const walkable = (ch) => {
-    const t = tiles[ch];
-    if (!t) return false;
-    return t.groundPassable === true || String(t.passable || '').includes('WALK');
-  };
-  const cells = [];
-  for (let r = 0; r < height; r++) {
-    // 画的时候把引擎的下标翻过来：最上行 = 最后一排
-    const line = String(rows[r]);
-    for (let c = 0; c < width; c++) {
-      const ok = walkable(line[c]);
-      cells.push({ r: height - 1 - r, c, ok });
-    }
-  }
-  const dep = stage.deployTiles && stage.deployTiles.normal ? stage.deployTiles.normal : null;
-  const marks = [];
-  if (dep) {
-    for (const [r, c] of (Array.isArray(dep.melee) ? dep.melee : [])) marks.push({ r, c, kind: 'melee' });
-    for (const [r, c] of (Array.isArray(dep.rangedOnly) ? dep.rangedOnly : [])) marks.push({ r, c, kind: 'ranged' });
-  }
+  const model = buildMinimapModel(stage);
+  if (!model) return null;
+  const { width, height, floor, marks } = model;
   const px = 6;
   const W = width * px;
   const H = height * px;
+  const cells = [];
+  for (let r = 0; r < height; r++) {
+    for (let c = 0; c < width; c++) cells.push({ x: c, y: height - 1 - r, ok: floor[r][c] });
+  }
+  const dots = marks.map((m) => ({ x: m.c, y: height - 1 - m.r, kind: m.kind }));
   return html`<svg viewBox=${`0 0 ${W} ${H}`} width="100%"
       style=${`display:block;max-width:100%;height:auto;border-radius:4px;background:rgba(255,255,255,.04)`}
       role="img" aria-label=${t('战场缩略图')}>
-    ${cells.map((cell) => html`<rect key=${`${cell.r},${cell.c}`} x=${cell.c * px} y=${cell.r * px} width=${px} height=${px}
+    ${cells.map((cell) => html`<rect key=${`${cell.y},${cell.x}`} x=${cell.x * px} y=${cell.y * px} width=${px} height=${px}
       fill=${cell.ok ? 'rgba(120,200,255,.30)' : 'rgba(255,255,255,.05)'} />`)}
-    ${marks.map((m) => html`<circle key=${`d${m.r},${m.c}`} cx=${m.c * px + px / 2} cy=${m.r * px + px / 2} r=${px * 0.28}
-      fill=${m.kind === 'melee' ? 'rgba(255,196,84,.9)' : 'rgba(140,240,180,.85)'} />`)}
+    ${dots.map((d) => html`<circle key=${`d${d.y},${d.x}`} cx=${d.x * px + px / 2} cy=${d.y * px + px / 2} r=${px * 0.28}
+      fill=${d.kind === 'melee' ? 'rgba(255,196,84,.9)' : 'rgba(140,240,180,.85)'} />`)}
   </svg>`;
 }
