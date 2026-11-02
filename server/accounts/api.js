@@ -42,6 +42,17 @@ function readJson(req) {
   });
 }
 
+/**
+ * 全服布阵库的真实占用（mota 的布阵库，不在账号表里）。读不到就返回 0 —— 管理页要能照常打开。
+ * 动态 import 是为了让账号模块在没装 mota 插件时也能启动。
+ */
+async function libraryUsage() {
+  try {
+    const mod = await import('../../plugins/mota/server/lineupLibrary.js');
+    return { libraryBytes: mod.globalLibraryBytes(), libraryQuotaBytes: mod.lineupQuotaBytes() };
+  } catch { return { libraryBytes: 0, libraryQuotaBytes: null }; }
+}
+
 const bearer = (req) => {
   const h = String(req.headers?.authorization || '');
   return h.toLowerCase().startsWith('bearer ') ? h.slice(7).trim() : '';
@@ -151,7 +162,9 @@ export function createAccountsApi({ store, dataDir, registry = null, log = conso
       }
 
       if (rawPath === '/api/admin/accounts' && (req.method === 'GET' || req.method === 'HEAD')) {
-        sendJson(req, res, 200, { ok: true, accounts: store.list(), quotaBytes: store.quotaBytes });
+        // 布阵占用的真源是 mota 的布阵库（全服一份），不在账号表里；这里按需现读，读不到就是 0。
+        const usage = await libraryUsage();
+        sendJson(req, res, 200, { ok: true, accounts: store.list(), quotaBytes: store.quotaBytes, ...usage });
         return;
       }
 
