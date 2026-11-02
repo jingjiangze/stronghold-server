@@ -48,7 +48,7 @@ export const ADMIN_HTML = `<!doctype html>
   <section id="panel" hidden>
     <div class="card">
       <table>
-        <thead><tr><th>账号</th><th>昵称</th><th>布阵占用</th><th>创建时间</th><th></th></tr></thead>
+        <thead><tr><th>账号</th><th>昵称</th><th>创建时间</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>

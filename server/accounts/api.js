@@ -42,6 +42,31 @@ function readJson(req) {
   });
 }
 
+/**
+ * 全服布阵库的真实占用。口径与 `plugins/mota/server/lineupLibrary.js` 的 `globalLibraryBytes()` 一致：
+ * `SP_LINEUP_LIBRARY` 是目录 ⇒ 目录下所有 `*.jsonl`（排除 `outbox*`）之和；是单文件 ⇒ 该文件大小；
+ * 未配置 / 读不到 ⇒ 0。
+ *
+ * 为什么不直接 import 插件模块：`test/package.test.js` 的打包门禁不允许 `server/**` 依赖 `plugins/**`
+ * （插件不进 npm 包）。远端库（remote spec）不在这里统计，显示 0。
+ */
+function libraryUsage() {
+  const quota = Number(process.env.SP_LINEUP_QUOTA_BYTES) || Number(process.env.SP_ACCOUNT_LINEUP_QUOTA_BYTES) || 20 * 1024 ** 3;
+  const raw = String(process.env.SP_LINEUP_LIBRARY || '').trim();
+  if (!raw) return { libraryBytes: 0, libraryQuotaBytes: quota };
+  let total = 0;
+  try {
+    const st = fs.statSync(raw);
+    if (st.isDirectory()) {
+      for (const name of fs.readdirSync(raw)) {
+        if (!name.endsWith('.jsonl') || name.startsWith('outbox')) continue;
+        try { total += fs.statSync(path.join(raw, name)).size; } catch { /* a file may vanish mid-scan */ }
+      }
+    } else total = st.size;
+  } catch { total = 0; }
+  return { libraryBytes: total, libraryQuotaBytes: quota };
+}
+
 const bearer = (req) => {
   const h = String(req.headers?.authorization || '');
   return h.toLowerCase().startsWith('bearer ') ? h.slice(7).trim() : '';
@@ -151,7 +176,9 @@ export function createAccountsApi({ store, dataDir, registry = null, log = conso
       }
 
       if (rawPath === '/api/admin/accounts' && (req.method === 'GET' || req.method === 'HEAD')) {
-        sendJson(req, res, 200, { ok: true, accounts: store.list(), quotaBytes: store.quotaBytes });
+        // 布阵占用的真源是布阵库（全服一份），不在账号表里；这里按需现读，读不到就是 0。
+        const usage = libraryUsage();
+        sendJson(req, res, 200, { ok: true, accounts: store.list(), quotaBytes: store.quotaBytes, ...usage });
         return;
       }
 

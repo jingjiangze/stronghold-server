@@ -25,20 +25,19 @@ async function load() {
   const data = await api('/api/admin/accounts');
   if (!data.ok) throw new Error(data.error || '读取失败');
   const row = el('summary');
-  const total = data.accounts.reduce((n, a) => n + (a.lineup?.used || 0), 0);
-  row.textContent = `共 ${data.accounts.length} 个账号 · 布阵占用 ${fmt(total)} / ${fmt(data.quotaBytes)}`;
+  // 布阵占用的真源是全服布阵库（mota），账号表里没有每账号的数字。
+  const quota = data.libraryQuotaBytes ?? data.quotaBytes;
+  row.textContent = `共 ${data.accounts.length} 个账号 · 布阵库用量 ${fmt(data.libraryBytes || 0)} / ${fmt(quota || 0)}`;
 
   const body = el('rows');
   body.innerHTML = data.accounts.map((a) => `<tr>
       <td><img src="${esc(a.avatar)}" alt="" width="28" height="28" loading="lazy"> ${esc(a.qq)}</td>
       <td>${esc(a.name) || '<span class="dim">—</span>'}</td>
-      <td class="num">${fmt(a.lineup?.used || 0)}</td>
       <td class="dim">${a.created ? new Date(a.created).toLocaleString() : '—'}</td>
       <td class="ops">
         <button data-act="pw" data-qq="${esc(a.qq)}">改密码</button>
-        <button data-act="bytes" data-qq="${esc(a.qq)}">改占用</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="5" class="dim">还没有账号</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="4" class="dim">还没有账号</td></tr>';
 
   const ann = await api('/api/admin/announcements');
   el('ann').value = JSON.stringify(ann.items || [], null, 2);
@@ -65,12 +64,6 @@ function bind() {
     if (b.dataset.act === 'pw') {
       const password = prompt(`给 ${qq} 设新密码（6–64 位）`);
       if (password) run(async () => { const r = await api('/api/admin/account', { method: 'POST', body: { qq, password } }); if (!r.ok) throw new Error(r.error); await load(); });
-    } else if (b.dataset.act === 'bytes') {
-      const v = prompt(`把 ${qq} 的布阵占用改成多少字节？（0 = 清零）`);
-      const n = Number(v);
-      if (v !== null && Number.isFinite(n) && n >= 0) {
-        run(async () => { const r = await api('/api/admin/account', { method: 'POST', body: { qq, lineupQuotaBytes: n } }); if (!r.ok) throw new Error(r.error); await load(); });
-      }
     }
   });
 
