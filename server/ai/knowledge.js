@@ -64,6 +64,13 @@ export function interestDigest(gd, bandId, gold) {
 }
 
 /** Cache by immutable active content, mode, room rules, plugin offers and language. No live stock or match RNG. */
+/** 提示词里只放本局那条 mode（有 modeId 时）；没有就全量。 */
+function pickModes(modes, modeId) {
+  const all = modes && typeof modes === 'object' ? modes : {};
+  if (typeof modeId === 'string' && all[modeId]) return { [modeId]: all[modeId] };
+  return all;
+}
+
 export function knowledgePack(data, { language = 'zh-CN', modeId, rules = {}, offers = [], contentId = null, overlay, source = playingSource() } = {}) {
   const key = JSON.stringify(stable({ language, modeId, rules, offers, contentId, overlay, source }));
   let entries = cache.get(data);
@@ -126,7 +133,9 @@ export function knowledgePack(data, { language = 'zh-CN', modeId, rules = {}, of
     bands: rows('bands', (r, id) => ({ lp: r.totalHp, effect: short(r.desc), carriesFunds: gd.leftoverKeptBands.includes(id), interest: interestRule(gd, id) })),
     enemies: rows('enemies', r => ({ effect: short(effectText([r.desc, ...(r.abilities || [])])), stats: r.stats, inactiveIn: r.inactiveIn })),
     bosses: rows('bosses', r => ({ enemyKey: r.enemyKey, hpByDifficulty: r.bloodPoint, notes: r.abilities })),
-    difficulties: Object.entries(data.config?.modes || {}).map(([id, r]) => ({ id, difficulty: r.difficulty,
+    // 2026-11-03：modes 从 9 条涨到 69 条（N1–N20 单人/多人 + 肉鸽 20 条）。这里只要**本局这一条**，
+    // 否则英文提示词会顶破 200k 字符上限（实测 200885）。没有给 modeId 时才退回全量（兼容既有调用）。
+    difficulties: Object.entries(pickModes(data.config?.modes, modeId)).map(([id, r]) => ({ id, difficulty: r.difficulty,
       bossRound: r.bossRound, hiddenRound: r.hiddenRound, enemyScale: r.enemyScale, inactiveEnemies: r.inactiveEnemyKeys })),
     // Only public authored cards/rules, never offer RNG, picks or future sampled slots.
     pluginOffers: offers.map(o => ({ pluginId: o.pluginId, id: o.id, cards: o.cards })),

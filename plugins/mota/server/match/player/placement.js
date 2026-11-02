@@ -318,7 +318,7 @@ export class PlayerPlacement {
         this.removeTokensOf(piece.uid);
         this.grantTokensFor(occ);
       } else {
-        let j = freeSlot(this.hand);
+        let j = this.freeHandSlot();
         if (j < 0) j = this.hand.findIndex(ownStack);
         if (j < 0) return fail(ERR.HAND_FULL);
         this.board.delete(loc.key);

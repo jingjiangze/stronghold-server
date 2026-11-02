@@ -108,7 +108,7 @@ test('藏品的「本局是否真生效」标记：enemy/immediate/deployCap/lpC
   assert.equal(relicEffectApplied({ lpCap: 2 }), true);
   assert.equal(relicEffectApplied({ rule: { id: 'noSuchRule' } }), false, '未知 / 未接入的 rule 不算生效');
   assert.equal(relicEffectApplied({ rule: { id: 'fundsDrain' } }), true, '经济类 rule 已接入');
-  assert.equal(relicEffectApplied({ ally: { atk: 0.1 } }), false, 'ally 类尚未接入');
+  assert.equal(relicEffectApplied({ ally: { atk: 0.1 } }), true, 'ally 类已接入（2026-11-03）');
   assert.equal(relicEffectApplied(null), false);
   // 数据侧盘点：87 条里「有已实现效果」的那批要够用，且 rule 类一律标未生效（诚实暴露给 HUD）
   const relics = RELICS.relics;
@@ -126,7 +126,8 @@ test('抽卡池只发「效果已接实现」的藏品（死牌不进三选一�
   const pool = self.relicDraftPool();
   assert.ok(pool.length > 0);
   assert.ok(pool.every((r) => relicEffectApplied(r.effect)), '池子里不许有未实装的藏品');
-  assert.ok(pool.length < self.relicPool().length, '这是过滤后的子集（全池 87 条里应更少）');
+  // 2026-11-03：87 条全部接入后池子 = 全池；这条只保证「不会出现未实装卡」
+  assert.ok(pool.length <= self.relicPool().length, '池子不能比全池还大');
   // 兜底：数据里一条已实现的都没有时，退回全池而不是空池
   const noLive = { gd: { raw: { relics: { relics: [{ id: 'x1', effect: { rule: { id: 'whatever' } } }] } } },
     relicPool: MatchMeltdown.prototype.relicPool, relicDraftPool: MatchMeltdown.prototype.relicDraftPool };
@@ -661,6 +662,67 @@ test('敌方 spawn 级三条 + removeTemp：参数聚合与置旗', () => {
   assert.equal(rt.ps.temp.filter(Boolean).length, 0, '已在临时部署区里的东西被清掉');
 
   for (const id of ['n27', 'n42', 'p29', 'p13', 'n23']) {
+    assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
+  }
+});
+
+test('非 rule 藏品 7 类：ally / allyElite / allyPerBench / income / price / refreshLimit / hand', () => {
+  const mkSelf = (relics, extra = {}) => {
+    const ps = Object.assign({ playerId: 'p0', relics: relics.slice(), funds: 10, hand: [], temp: [], board: new Map() }, extra.ps || {});
+    return {
+      self: Object.assign({
+        gd: { raw: { relics: RELICS }, tierOf: (id) => (extra.tierOf ? extra.tierOf(id) : 0) },
+        round: 1, isRogue: false, players: new Map([[ps.playerId, ps]]),
+        relicRuleParams: MatchMeltdown.prototype.relicRuleParams,
+        relicEffectList: MatchMeltdown.prototype.relicEffectList,
+        relicAllyMul: MatchMeltdown.prototype.relicAllyMul,
+        relicAllyEliteMul: MatchMeltdown.prototype.relicAllyEliteMul,
+        relicChessPriceDelta: MatchMeltdown.prototype.relicChessPriceDelta,
+        relicRefreshCap: MatchMeltdown.prototype.relicRefreshCap,
+        applyRelicRoundEconomy: MatchMeltdown.prototype.applyRelicRoundEconomy,
+      }, extra.self || {}),
+      ps,
+    };
+  };
+
+  // ally：p02 攻+35% 防+35% 生命+45%；n20 攻/生命 −30%
+  const good = mkSelf(['p02']);
+  const m1 = good.self.relicAllyMul(good.ps);
+  assert.ok(Math.abs(m1.atkMul - 1.35) < 1e-9 && Math.abs(m1.hpMul - 1.45) < 1e-9 && Math.abs(m1.defMul - 1.35) < 1e-9, JSON.stringify(m1));
+  const bad = mkSelf(['n20']);
+  const m2 = bad.self.relicAllyMul(bad.ps);
+  assert.ok(Math.abs(m2.atkMul - 0.7) < 1e-9 && Math.abs(m2.hpMul - 0.7) < 1e-9, JSON.stringify(m2));
+
+  // allyPerBench：p19 待部署区每有一名干员 生命/攻击 +16%（最多 160%）
+  const bench = mkSelf(['p19'], { ps: { hand: [{ kind: 'chess', id: 'a' }, null], temp: [{ kind: 'chess', id: 'b' }] } });
+  const m3 = bench.self.relicAllyMul(bench.ps);
+  assert.ok(Math.abs(m3.atkMul - 1.32) < 1e-9 && Math.abs(m3.hpMul - 1.32) < 1e-9, JSON.stringify(m3));
+
+  // allyElite：n31 精锐攻击 ×0.7
+  const elite = mkSelf(['n31']);
+  assert.ok(Math.abs(elite.self.relicAllyEliteMul(elite.ps) - 0.7) < 1e-9);
+
+  // income：p01 进入休整期 +1
+  const income = mkSelf(['p01']);
+  const funds = [];
+  income.ps.addFunds = (n) => funds.push(n);
+  income.self.applyRelicRoundEconomy();
+  assert.deepEqual(funds, [1], `income 应 +1（实得 ${JSON.stringify(funds)}）`);
+
+  // price：p01 干员 −1；n28 五阶以上 +1；n13 首个干员 +2（economy 侧算，这里验 delta）
+  assert.equal(mkSelf(['p01']).self.relicChessPriceDelta(mkSelf(['p01']).ps, 'x'), -1);
+  const t5 = mkSelf(['n28'], { tierOf: () => 5 });
+  assert.equal(t5.self.relicChessPriceDelta(t5.ps, 'y'), 1);
+  const t3 = mkSelf(['n28'], { tierOf: () => 3 });
+  assert.equal(t3.self.relicChessPriceDelta(t3.ps, 'y'), 0);
+
+  // refreshLimit：n15 最多 5 次；hand：n21 −4 能在 effectList 里读到
+  const cap = mkSelf(['n15']);
+  assert.equal(cap.self.relicRefreshCap(cap.ps), 5);
+  const hand = mkSelf(['n21']);
+  assert.deepEqual(hand.self.relicEffectList(hand.ps, 'hand'), [-4], 'hand 是标量 −4');
+
+  for (const id of ['p02', 'n20', 'p19', 'n31', 'p01', 'n28', 'n15', 'n21']) {
     assert.equal(relicEffectApplied(RELICS.relics.find((r) => r.id === id).effect), true, `${id} 应算已实现`);
   }
 });

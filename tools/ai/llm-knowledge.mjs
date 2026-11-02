@@ -10,8 +10,13 @@ export function slimKnowledge(pack, { maxChars = Infinity } = {}) {
   const view = slimView(pack);
   // [ASSUMED] Compact enemies stay while the example system text fits in 200000 characters.
   // Translated catalogues (English funny) exceed that; the round's upcoming list still names those enemies.
-  if (view.enemies.length && JSON.stringify(view).length > maxChars) return { ...view, enemies: [] };
-  return view;
+  // 2026-11-03：modes 数据变大后，英文目录仅靠「丢弃 enemies」已经压不进 200k（实测仍超 885 字符）⇒
+  // 再加两级兜底：先丢 items（30k 级），再丢 bosses。中文提示词本来就在预算内，不受影响。
+  let out = view;
+  if (out.enemies.length && JSON.stringify(out).length > maxChars) out = { ...out, enemies: [] };
+  if (out.items && out.items.length && JSON.stringify(out).length > maxChars) out = { ...out, items: [] };
+  if (out.bosses && out.bosses.length && JSON.stringify(out).length > maxChars) out = { ...out, bosses: [] };
+  return out;
 }
 
 function slimView(pack) {
