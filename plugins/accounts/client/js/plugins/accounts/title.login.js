@@ -306,18 +306,20 @@ function AccountSlot({ overlay }) {
     return () => { render(null, overlay); };
   }, [mode, account, overlay]);
 
-  // 已登录：名片大图（600×185 横幅）当首页门面 + 名字#代号；未登录才给游客入口。
+  // 已登录：照 sp.bbsmc.cn 的首页做法——一张名片卡（卡面图当卡片背景层，头像 + 「已登录账号 · 以此名字进入」
+  // + 名字#代号 + 名片按钮）；未登录才给游客入口。
+  const initial = account ? [...(account.name || account.qq || '?')][0] || '?' : '';
   const row = account
-    ? html`<div class="title-account-card">
-        ${skin
-          ? html`<img class="title-account-card__art" src=${namecardUrl(skin)} alt="" loading="lazy"
-              onError=${(e) => { e.currentTarget.style.display = 'none'; }} />`
-          : null}
-        <div class="title-account-card__id">
-          <${Avatar} account=${account} />
-          <span class="title-account-card__name">${account.name || account.qq}${tag ? html`<span class="acct-tag">#${tag}</span>` : null}</span>
-          <${Button} variant="ghost" size="sm" onClick=${() => setMode('profile')}>${say('名片', 'Card')}<//>
-        </div>
+    ? html`<div class=${`acct-title-card${skin ? ' has-nc' : ''}`}>
+        ${skin ? html`<span class="nc-layer" aria-hidden="true" style=${`--nc:url(${namecardUrl(skin)})`}></span>` : null}
+        <span class="acct-title-card__pic">
+          ${account.avatar ? html`<img src=${account.avatar} alt="" loading="lazy" />` : initial}
+        </span>
+        <span class="acct-title-card__who">
+          <small>${say('已登录账号 · 以此名字进入', 'Signed in · you enter as this name')}</small>
+          <b>${account.name || account.qq}${tag ? html`<span class="acct-tag">#${tag}</span>` : null}</b>
+        </span>
+        <button type="button" class="acct-title-card__btn" onClick=${() => setMode('profile')}>${say('名片', 'Card')}</button>
       </div>`
     : html`<button type="button" class="title-account-bar" onClick=${() => setMode('signin')}>
         <${Icon} name="user" class="title-account-bar__icon" />
