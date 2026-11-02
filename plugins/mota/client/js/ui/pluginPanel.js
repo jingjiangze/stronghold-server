@@ -276,6 +276,7 @@ export function PluginPanel({ open, room, myId, onClose }) {
       ${f.warnings.filter((w) => w.code !== 'app' || classOf(w.params?.id) === 'content').length ? html`<ul class="plugpanel__warnings" aria-label=${t('插件提示')}>
         ${f.warnings.filter((w) => w.code !== 'app' || classOf(w.params?.id) === 'content').map((w, i) => html`<li key=${i}><${Icon} name="warn" />${warningText(w, nameOf, classOf)}</li>`)}
       </ul>` : null}
+      ${Array.isArray(room?.pluginsChanged) && room.pluginsChanged.length ? html`<p class="plugrow__warn" data-testid="plugins-changed"><${Icon} name="warn" />${t('插件的文件在服务器上更新后，重新应用才会生效。')}</p>` : null}
       <p class="set-hint">${t('只影响自己的外观插件在「设置」中开关。')}</p>
       ${uiList.length ? html`<section class="plugpanel__ui" data-testid="ui-recommend">
         <p class="set-hint">${t('界面插件由每位博士在「设置」中自己开关。')}</p>

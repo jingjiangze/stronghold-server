@@ -522,6 +522,8 @@ export class Room {
       ...(this.test ? { test: true } : {}),
       // 「不限时」 (header): omitted unless on, so a default room.state stays identical
       ...(this.soloUnlimited === true ? { soloUnlimited: true } : {}),
+      // 插件文件在服务器上变了、房主还没重新应用（审计 G8）：持久标记，房主离线再回来也看得到（原来只有一条 toast）
+      ...(Array.isArray(this.pluginsChanged) && this.pluginsChanged.length ? { pluginsChanged: [...this.pluginsChanged] } : {}),
       // 房主的界面插件推荐（room.setUiRecommend）：空则省略，默认房间的 room.state 保持不变
       ...(Array.isArray(this.uiRecommend) && this.uiRecommend.length ? { uiRecommend: [...this.uiRecommend] } : {}),
       // 插件平铺进 room.state 的字段（后写的覆盖同名核心键；插件自己保证不冲撞）
@@ -1329,7 +1331,11 @@ export class Lobby {
     const before = room.content;
     const sameSet = (before?.vs ?? null) === (content?.vs ?? null) && (before?.cs ?? null) === (content?.cs ?? null);
     const marks = (c) => JSON.stringify((c?.plugins || []).map((p) => [p.id, !!p.auto, p.settings || null]));
-    if (sameSet && marks(before) === marks(content)) return OK;
+    if (sameSet && marks(before) === marks(content)) {
+      // 同一组插件 = 房主点了「重新应用」：把「文件已更新」的持久标记清掉并广播
+      if (Array.isArray(room.pluginsChanged) && room.pluginsChanged.length) { room.pluginsChanged = null; this.broadcastState(room); }
+      return OK;
+    }
     this.dropReplay(room, session.playerId);
     // another set: a notice still waiting for the end of a match (pluginsChanged) is moot
     if (!sameSet) { room.pluginsChanged = null; room.pluginNoticeKeys = {}; }
