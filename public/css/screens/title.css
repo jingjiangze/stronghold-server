@@ -248,22 +248,11 @@
   font-size: calc(.18 * var(--t));
   letter-spacing: .04em;
   cursor: pointer;
-  transition: border-color 140ms, color 140ms;
+  transition: border-color var(--t-fast), color var(--t-fast);
 }
 .title-account-bar:hover, .title-account-bar:focus-visible { border-color: var(--mint-500); color: var(--text-hi); }
 .title-account-bar--ann { flex: 0 0 auto; padding: 0 .18rem; font-size: calc(.16 * var(--t)); color: var(--text-lo); }
-.title-account-bar--in { justify-content: flex-start; gap: .12rem; cursor: default; }
-.title-account-bar__avatar-btn { flex: none; display: inline-flex; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 50%; }
-.title-account-bar__avatar-btn:hover { box-shadow: 0 0 0 1px var(--mint-500); }
-.title-account-bar__avatar-btn:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 2px; }
-.title-account-bar__avatar { width: .3rem; height: .3rem; border-radius: 50%; flex: none; object-fit: cover; }
 .title-account-bar__icon { width: .2rem; height: .2rem; opacity: .8; }
-.title-account-bar__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-weight: 700; }
-.title-account-bar__nc { flex: none; display: inline-flex; align-items: center; justify-content: center; width: .52rem; height: .32rem; padding: 0; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .4); cursor: pointer; overflow: hidden; }
-.title-account-bar__nc img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.title-account-bar__nc:hover { border-color: var(--mint-500); }
-.title-account-bar__nc:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 1px; }
-.title-account-bar__name .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
 /* 已登录的首页门面（业主 2026-11-02，照 sp.bbsmc.cn 的做法）：一张名片卡 —— 卡面图当卡片背景层
    （复用 UI 包既有的 .has-nc + .nc-layer/--nc 契约），左边头像、中间「已登录账号 · 以此名字进入」+ 名字#代号。
    游客那套（博士代号输入框 + 「不登录也能直接开始」）在 body.sp-account 下整块不出现。 */
@@ -292,12 +281,12 @@ body.sp-account .title-login .field { display: none; }
 .acct-title-card.has-nc:hover, .acct-title-card.has-nc:focus-visible { border-color: rgba(255, 255, 255, .5); }
 .acct-title-card__pic {
   flex: none;
-  width: .52rem;
-  height: .52rem;
+  width: .48rem;
+  height: .48rem;
   display: grid;
   place-items: center;
   overflow: hidden;
-  font-size: calc(.24 * var(--t));
+  font-size: calc(.22 * var(--t));
   font-weight: 700;
   line-height: 1;
   color: #8bdfb0;
@@ -306,10 +295,10 @@ body.sp-account .title-login .field { display: none; }
 }
 .acct-title-card__pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acct-title-card__who { flex: 1; min-width: 0; display: grid; gap: .02rem; }
-.acct-title-card__who small { font-size: calc(.11 * var(--t)); letter-spacing: .06em; color: var(--text-lo); }
+.acct-title-card__who small { font-size: max(calc(.13 * var(--t)), 10px); letter-spacing: .06em; color: var(--text-lo); }
 .acct-title-card.has-nc .acct-title-card__who small { color: #d6dedb; }
-.acct-title-card__who b { font-size: calc(.2 * var(--t)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acct-title-card__who .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
+.acct-title-card__who b { font-size: calc(.18 * var(--t)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-title-card__who .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 500; font-size: .86em; }
 /* 面板里那张卡面大图本身就是「换卡面」的入口（按钮化了，保持图片原样） */
 .acc-hero__art-btn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
 .acc-hero__art-btn:hover .acc-hero__art, .acc-hero__art-btn:focus-visible .acc-hero__art { opacity: .86; }
@@ -318,21 +307,17 @@ body.sp-account .title-login .field { display: none; }
 .acc-hint { flex: 0 0 100%; margin: 0; color: var(--text-lo); font-size: calc(.12 * var(--t)); text-align: center; }
 /* 账号面板内部排版：一律吃主题变量，颜色/字号随「文字大小」缩放 */
 .acc-form { display: flex; flex-direction: column; gap: .14rem; margin-top: .14rem; }
-.acc-head { display: flex; gap: .16rem; align-items: center; margin-bottom: .14rem; }
-.acc-head img { border-radius: 50%; }
 .acc-color { gap: .12rem; }
 .acc-color__input { width: .5rem; flex: none; padding: 0; background: none; border: 0; }
 .acc-color__preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .acc-err, .acc-ok { margin: .12rem 0 0; font-size: calc(.15 * var(--t)); }
-/* 首页：已登录条里的名片缩略按钮（2026-11-02 改版，不再用上方大图） */
-
 /* 名片：顶部大图 + 卡面画廊（素材在 /assets/local/sp-namecards-*，本机没有时由 cdn-local 302 到 CDN） */
 .acc-hero { position: relative; margin: -.02rem 0 .14rem; border: 1px solid var(--line); background: rgba(0, 0, 0, .32); overflow: hidden; }
-.acc-hero__art { display: block; width: 100%; height: auto; }
+.acc-hero__art { display: block; width: 100%; height: auto; max-height: 2.4rem; object-fit: cover; }
 .acc-hero__empty { display: grid; place-items: center; min-height: 1.2rem; color: var(--text-dim); font-size: calc(.14 * var(--t)); }
 .acc-hero__id { display: flex; align-items: center; gap: .12rem; padding: .12rem .14rem; border-top: 1px solid var(--line); background: rgba(8, 10, 9, .72); }
 .acc-hero__id > div { flex: 1; min-width: 0; }
-.acc-hero__id img { border-radius: 50%; flex: none; }
+.acc-hero__avatar { width: .44rem; height: .44rem; border-radius: 50%; flex: none; object-fit: cover; }
 
 /* 卡面画廊：左侧大图预览 + 右侧网格 */
 .nc-gallery { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: .14rem; align-items: start; }
