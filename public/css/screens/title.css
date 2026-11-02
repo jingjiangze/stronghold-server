@@ -259,6 +259,11 @@
 .title-account-bar__avatar { width: .3rem; height: .3rem; border-radius: 50%; flex: none; object-fit: cover; }
 .title-account-bar__icon { width: .2rem; height: .2rem; opacity: .8; }
 .title-account-bar__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-weight: 700; }
+.title-account-bar__nc { flex: none; display: inline-flex; align-items: center; justify-content: center; width: .52rem; height: .32rem; padding: 0; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .4); cursor: pointer; overflow: hidden; }
+.title-account-bar__nc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.title-account-bar__nc:hover { border-color: var(--mint-500); }
+.title-account-bar__nc:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 1px; }
+.title-account-bar__name .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
 /* 条下的小字（游客提示）：站点没有等价类，只有这一条留在页面样式里 */
 .acc-hint { flex: 0 0 100%; margin: 0; color: var(--text-lo); font-size: calc(.12 * var(--t)); text-align: center; }
 /* 账号面板内部排版：一律吃主题变量，颜色/字号随「文字大小」缩放 */
@@ -269,8 +274,7 @@
 .acc-color__input { width: .5rem; flex: none; padding: 0; background: none; border: 0; }
 .acc-color__preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .acc-err, .acc-ok { margin: .12rem 0 0; font-size: calc(.15 * var(--t)); }
-/* 首页：账号条上方的卡面预览 */
-.acc-mini { flex: 0 0 100%; display: block; width: 100%; margin-bottom: .06rem; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); }
+/* 首页：已登录条里的名片缩略按钮（2026-11-02 改版，不再用上方大图） */
 /* 房间页：「我的名片」固定卡片（只在 .room-screen 在场时显示，无需 mota 加标记） */
 .sp-roomcard { display: none; }
 body.sp-in-room .sp-roomcard {
