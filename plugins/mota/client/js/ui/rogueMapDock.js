@@ -30,7 +30,7 @@ export function RogueMapDock({ pub, disabled = false }) {
 
   const mini = open ? minimap(stage) : null;
   return html`<div class="rmap" data-testid="rogue-map-dock"
-      style="position:fixed;right:.6rem;bottom:.6rem;z-index:40;width:min(240px,42vw);font-size:12px;
+      style="position:fixed;right:.6rem;bottom:9.6rem;z-index:40;width:min(240px,42vw);font-size:12px;
              background:rgba(12,14,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#e8eaf0;overflow:hidden">
     <button type="button" data-testid="rogue-map-toggle" onClick=${() => setOpen((v) => !v)}
       aria-expanded=${open}
