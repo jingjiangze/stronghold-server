@@ -1,7 +1,7 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO, TEAMS, EVENT_TARGETS_ALL } from './constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO, TEAMS, EVENT_TARGETS_ALL } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
 import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT, hasPotentialData } from './potential.js';
@@ -519,11 +519,14 @@ export const C2S = {
   // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
   // variant: a rule-set variant of a co-op room, mode_<variant>_<difficulty> ('xie' = 协同共竞, DESIGN §29);
   // absent ⇒ the plain mode_multi_*. Lobby.create 透传给 Room → Match opts（server/lobby.js）。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus', difficulty: (v) => DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
+  // 2026-11-02：mode 放行独立肉鸽模式；难度接受 N1–N20 或旧 4 档名（**浏览器拿到的是这份顶替拷贝**，
+  // 核心 shared/protocol.js 改了这里也要同步，否则 net.request 在本地就把请求拒了）
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus' || v === 'rogue',
+    difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.ready': { ready: isBool },
-  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) },
+  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v) },
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
