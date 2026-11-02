@@ -139,6 +139,21 @@ export function applyNModes(config, bosses) {
   for (const type of ['single', 'multi']) {
     for (let n = 1; n <= 20; n++) out.modes[modeKey(type, n)] = modeFor(config, type, n);
   }
+  // 肉鸽独立模式（2026-11-02）：房间 mode='rogue' 时对局读 `mode_rogue_<难度>`。
+  // 记录 = 多人档的副本（数值同源），只换 modeId / 名字 / 代号；**回合数以这份记录为准**，
+  // 等 R4 拿到官方「整章战斗数」后只改这里（改 ROGUE_ROUNDS 即可），其余代码不用动。
+  for (let n = 1; n <= 20; n++) {
+    const base = out.modes[modeKey('multi', n)];
+    out.modes[`mode_rogue_n${n}`] = {
+      ...base,
+      modeId: `mode_rogue_n${n}`,
+      name: `肉鸽 ${n}`,
+      code: `RG-N${n}`,
+      difficulty: `N${n}`,
+      type: 'MULTI',
+      inScope: false,
+    };
+  }
 
   // bans / rewards / trophies / hiddenCore
   out.bans = out.bans || {};
