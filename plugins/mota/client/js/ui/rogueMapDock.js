@@ -30,7 +30,9 @@ export function RogueMapDock({ pub, disabled = false }) {
 
   const mini = open ? minimap(stage) : null;
   return html`<div class="rmap" data-testid="rogue-map-dock"
-      style="position:fixed;right:.6rem;bottom:9.6rem;z-index:40;width:min(240px,42vw);font-size:12px;
+      // 位置用 inset + 百分比：对局页的祖先可能带 transform（fixed 会相对它定位），bottom 的 rem 偏移在开场阶段算错过，
+      // 改成「右侧中部」后两种情况都落在可预期的位置，也不压底部商店栏
+      style="position:fixed;right:.6rem;top:18%;z-index:40;width:min(240px,42vw);font-size:12px;
              background:rgba(12,14,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#e8eaf0;overflow:hidden">
     <button type="button" data-testid="rogue-map-toggle" onClick=${() => setOpen((v) => !v)}
       aria-expanded=${open}
