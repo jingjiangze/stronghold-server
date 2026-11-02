@@ -273,7 +273,7 @@
 .acc-mini { flex: 0 0 100%; display: block; width: 100%; margin-bottom: .06rem; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); }
 /* 房间页：「我的名片」固定卡片（只在 .room-screen 在场时显示，无需 mota 加标记） */
 .sp-roomcard { display: none; }
-body:has(.room-screen) .sp-roomcard {
+body.sp-in-room .sp-roomcard {
   display: block;
   position: fixed;
   left: .16rem;
