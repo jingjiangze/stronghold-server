@@ -30,9 +30,9 @@ export function RogueMapDock({ pub, disabled = false }) {
 
   const mini = open ? minimap(stage) : null;
   return html`<div class="rmap" data-testid="rogue-map-dock"
-      // 位置用 inset + 百分比：对局页的祖先可能带 transform（fixed 会相对它定位），bottom 的 rem 偏移在开场阶段算错过，
-      // 改成「右侧中部」后两种情况都落在可预期的位置，也不压底部商店栏
-      style="position:fixed;right:.6rem;top:18%;z-index:40;width:min(240px,42vw);font-size:12px;
+      // 位置回到「右下角 .6rem」——这是唯一拿到过真机视觉证据的位置；抬到商店栏上方（bottom 9.6rem）实测会被带 transform 的祖先算出视口外的坐标，
+      // 与商店栏最后一格轻微重叠是已知观感问题，等有 CSS 变量方案再收
+      style="position:fixed;right:.6rem;bottom:.6rem;z-index:40;width:min(240px,42vw);font-size:12px;
              background:rgba(12,14,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#e8eaf0;overflow:hidden">
     <button type="button" data-testid="rogue-map-toggle" onClick=${() => setOpen((v) => !v)}
       aria-expanded=${open}
