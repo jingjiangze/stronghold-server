@@ -264,22 +264,59 @@
 .title-account-bar__nc:hover { border-color: var(--mint-500); }
 .title-account-bar__nc:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 1px; }
 .title-account-bar__name .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
-/* 已登录的首页门面（业主 2026-11-02）：名片大图顶到卡片上沿当横幅，名字#代号压在下面那条；
+/* 已登录的首页门面（业主 2026-11-02，照 sp.bbsmc.cn 的做法）：一张名片卡 —— 卡面图当卡片背景层
+   （复用 UI 包既有的 .has-nc + .nc-layer/--nc 契约），左边头像、中间「已登录账号 · 以此名字进入」+ 名字#代号。
    游客那套（博士代号输入框 + 「不登录也能直接开始」）在 body.sp-account 下整块不出现。 */
 body.sp-account .title-plugin-slot { order: -1; }
 body.sp-account .title-login .field { display: none; }
-.title-account-card { flex: 1 1 100%; min-width: 0; display: block; margin: -.24rem -.28rem 0; }
-.title-account-card__art { display: block; width: 100%; height: auto; aspect-ratio: 600 / 186; object-fit: cover; background: #0b0e0d; }
-.title-account-card__id {
+.acct-title-card {
+  flex: 1 1 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: .1rem;
-  padding: .09rem .12rem;
-  border-top: 1px solid var(--line-2);
-  background: rgba(8, 10, 9, .82);
+  gap: .12rem;
+  padding: .1rem .12rem;
+  text-align: left;
+  border: 1px solid rgba(78, 216, 175, .45);
+  background: linear-gradient(180deg, rgba(14, 28, 23, .7), rgba(7, 14, 12, .78));
 }
-.title-account-card__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-weight: 700; }
-.title-account-card__name .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
+.acct-title-card.has-nc {
+  --nc-shade: linear-gradient(90deg, rgba(8, 11, 11, .84), rgba(8, 11, 11, .5) 55%, rgba(8, 11, 11, .2));
+  border-color: rgba(255, 255, 255, .22);
+}
+.acct-title-card__pic {
+  flex: none;
+  width: .52rem;
+  height: .52rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-size: .24rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #8bdfb0;
+  background: #173a2f;
+  border: 1px solid rgba(78, 216, 175, .45);
+}
+.acct-title-card__pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acct-title-card__who { flex: 1; min-width: 0; display: grid; gap: .02rem; }
+.acct-title-card__who small { font-size: calc(.11 * var(--t)); letter-spacing: .06em; color: var(--text-lo); }
+.acct-title-card.has-nc .acct-title-card__who small { color: #d6dedb; }
+.acct-title-card__who b { font-size: calc(.2 * var(--t)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-title-card__who .acct-tag { margin-left: .04rem; color: var(--text-lo); font-weight: 400; font-size: calc(.12 * var(--t)); }
+.acct-title-card__btn {
+  flex: none;
+  height: .32rem;
+  padding: 0 .12rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: calc(.13 * var(--t));
+  font-weight: 600;
+  color: var(--text-md, #c4d0cb);
+  background: transparent;
+  border: 1px solid var(--line-2);
+}
+.acct-title-card__btn:hover, .acct-title-card__btn:focus-visible { color: #fff; border-color: var(--text-lo); }
 /* 条下的小字（游客提示）：站点没有等价类，只有这一条留在页面样式里 */
 .acc-hint { flex: 0 0 100%; margin: 0; color: var(--text-lo); font-size: calc(.12 * var(--t)); text-align: center; }
 /* 账号面板内部排版：一律吃主题变量，颜色/字号随「文字大小」缩放 */
