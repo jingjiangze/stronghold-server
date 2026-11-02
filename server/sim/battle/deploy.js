@@ -96,6 +96,22 @@ export class BattleDeploy {
       // shelter（庇护）：承伤 ×(1−shelter)。走持久 buff 的 dmgTakenMul，与引擎自带的减伤通道同一条路
       this.addBuff(u, { key: 'relic:shelter', mods: { dmgTakenMul: 1 - Math.min(1, u.relicShelter) }, persist: true, allowDead: true });
     }
+    if (u.relicStartDebuff && initial) {
+      // startDebuff（退行的罗辛南特）：「战斗开始时」我方攻击 −20% / 攻速 −20 / 技力回复 −20%，持续 10 秒。
+      // 只在初部署施加（`initial`），再部署不重来。
+      const sd = u.relicStartDebuff;
+      this.addBuff(u, { key: 'relic:startDebuff', duration: sd.dur, refresh: 'replace',
+        mods: { atkPct: sd.atkPct, aspd: sd.aspd, spRecoveryMul: sd.spMul } });
+    }
+    if (u.relicDot) {
+      // 每秒伤害（fogOnDeploy 部署后 60s 内 2% 最大生命；neuralDps 全场每秒 10 点）——走 buff 的 interval/onTick
+      const d = u.relicDot;
+      const amount = d.flat + d.maxHpPct * (Number(u.s.maxHp) || 0);
+      if (amount > 0) {
+        this.addBuff(u, { key: 'relic:dot', duration: d.dur > 0 ? d.dur : Infinity, refresh: 'replace', interval: 1, visible: true,
+          onTick: ({ battle, unit }) => battle.dealDamage(null, unit, { amount, type: 'true', canDodge: false, ignoreSelect: true, tags: ['dot', 'relic'] }) });
+      }
+    }
     if (u.relicStunOnDeploy > 0) this.applyStatus(u, 'stun', { duration: u.relicStunOnDeploy, ignoreSelect: true });
     return true;
   }

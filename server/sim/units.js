@@ -127,6 +127,11 @@ export class Unit {
     this.relicSpRegenMul = 1;
     this.relicStunOnDeploy = 0;
     this.relicShelter = 0;
+    // 战斗内时序类（同一通道的第二批）：开战限时 debuff / 每秒伤害 / 技能触发后的临时加成与技力叠层
+    this.relicStartDebuff = null;
+    this.relicDot = null;
+    this.relicSkill = null;
+    this.relicSkillUses = 0;
   }
 
   markDirty() { this._dirty = true; }
