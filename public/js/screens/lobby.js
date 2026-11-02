@@ -147,7 +147,8 @@ export function difficultyInfo(roomMode, difficulty) {
     desc: typeof m?.desc === 'string' ? m.desc : t(fallback.desc),
     effects,
     rounds,
-    hidden: difficulty !== 'FUNNY',
+    // 2026-11-02：难度换成 N1–N20 后按数据判（这条 mode 有没有隐藏核心回合）
+    hidden: m ? m.hiddenRound != null : difficulty !== 'FUNNY',
     stageNote: stageNote(Array.isArray(m?.stages) && m.stages.length ? m.stages : STAGE_POOL[difficulty]),
   };
 }

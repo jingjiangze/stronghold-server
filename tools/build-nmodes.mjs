@@ -99,7 +99,7 @@ function modeFor(config, type, n) {
     ...src,
     modeId: modeKey(type, n),
     name: onAnchor ? `${src.name}` : `模拟 ${label}`,
-    code: onAnchor ? src.code : `AC-${label}`,
+    code: `AC-${label}`,   // 统一成 AC-N8 这种，免得锚点档显示旧代号 AC-2 而邻档显示 AC-N9
     sortId: 100 + n,
     difficulty: label,
     // 这 20 条是「难度档」而不是新的玩法模式：不进 studio 可选模式列表（inScope 只作此用）
