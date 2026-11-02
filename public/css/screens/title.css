@@ -297,7 +297,7 @@ body.sp-account .title-login .field { display: none; }
   display: grid;
   place-items: center;
   overflow: hidden;
-  font-size: .24rem;
+  font-size: calc(.24 * var(--t));
   font-weight: 700;
   line-height: 1;
   color: #8bdfb0;
