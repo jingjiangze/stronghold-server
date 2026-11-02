@@ -630,7 +630,6 @@
   letter-spacing: .02em;
 }
 
-
 .matchmaking-count { display: inline-flex; gap: .035rem; color: var(--mint); font-size: max(calc(.12 * var(--t)), 11px); white-space: nowrap; align-items: baseline; }
 .mode-card .matchmaking-count { margin-top: .08rem; }
 
@@ -2526,9 +2525,6 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 
 /* 座位卡顶部 P 编号条按队伍着色 */
 
-
-
-
 .rseat--team-red    .rseat__strip i,
 .rseat--team-yellow .rseat__strip i,
 .rseat--team-blue   .rseat__strip i,
@@ -2960,7 +2956,6 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
   color: var(--text-dim);
   letter-spacing: .02em;
 }
-
 
 .matchmaking-count { display: inline-flex; gap: .035rem; color: var(--mint); font-size: max(calc(.12 * var(--t)), 11px); white-space: nowrap; align-items: baseline; }
 .mode-card .matchmaking-count { margin-top: .08rem; }
@@ -4639,26 +4634,6 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 .tbadge--inline { width: 1.35em; height: 1.35em; margin-right: .2em; vertical-align: middle; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .6)); }
 .hub-ach__rank > .tbadge { width: .34rem; height: .34rem; }
 .splate__rank > .tbadge { width: .44rem; height: .44rem; }
-
-/* 公告板（ui/announcements.js）：大厅常驻细条 + 浮窗。
-   条目按网关的 level 分级上色（info 薄荷 / warning 琥珀 / critical 红），维护类条目另带 is-upcoming / is-live 状态。 */
-.announce-bar {
-  width: min(100%, 8.6rem); display: flex; align-items: center; gap: .1rem;
-  padding: .1rem .16rem; border: 1px solid var(--line-2); border-radius: 2px;
-  background: rgba(16, 20, 18, .82); color: var(--text-md); font-size: .15rem;
-  cursor: pointer; text-align: left;
-}
-.announce-bar .icon { width: .2rem; height: .2rem; flex: none; }
-.announce-bar__tag { flex: none; padding: 0 .08rem; border: 1px solid currentColor; border-radius: 2px; font-size: .13rem; letter-spacing: .02em; }
-.announce-bar__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-hi); }
-.announce-bar__more { flex: none; display: inline-flex; align-items: center; gap: .04rem; font-size: .13rem; color: var(--text-lo); }
-.announce-bar__more .icon { width: .16rem; height: .16rem; }
-.announce-bar--info { border-color: var(--mint-a35); color: var(--mint-500); }
-.announce-bar--warning { border-color: var(--amber-a20); color: var(--amber); background: rgba(40, 24, 6, .72); }
-.announce-bar--critical { border-color: var(--red-a20); color: var(--red-premium); background: rgba(46, 10, 8, .72); }
-.announce-bar.is-live { animation: announce-pulse 2.4s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .announce-bar.is-live { animation: none; } }
-@keyframes announce-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }
 
 .modal__box.announcement-board { width: min(7rem, calc(100vw - 32px)); }
 .announcement-board .modal__body { max-height: min(62vh, 5.6rem); overflow: hidden; display: flex; flex-direction: column; gap: .12rem; }
