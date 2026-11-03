@@ -9,6 +9,8 @@ import { PHASE, ERR, EMOTES, EMOTE_COOLDOWN_MS, GEO } from '../../../shared/cons
 import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
+// 怪物卡池（2026-11-03）：攻方的怪物商店（买卡进投放草稿 / 刷新 / 冻结）
+import { buyMonster, rollMonsterShop, freezeMonster, monsterShopFrame } from '../monsterShop.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
@@ -16,6 +18,10 @@ export class MatchIntents {
       // 对抗模式（2V2 / 4V4）：狩猎期目标 / 布阵 / 悬赏提取、事件期选择
       case 'g.confrontTarget': return this.submitConfrontTarget(ps, msg);
       case 'g.confront': return this.submitConfront(ps, msg);
+      // 怪物卡池（2026-11-03）：怪物商店 —— index 是格子下标（缺省/非整数 ⇒ BAD_TARGET）
+      case 'g.monsterBuy': return this.monsterShopReply(ps, buyMonster(this, ps, Number(msg.index)));
+      case 'g.monsterRefresh': return this.monsterShopReply(ps, rollMonsterShop(this, ps));
+      case 'g.monsterFreeze': return this.monsterShopReply(ps, freezeMonster(this, ps, Number(msg.index)));
       case 'g.hex': return this.hexPick(ps, msg.hexId);
       case 'g.hexReroll': return this.hexReroll(ps, msg.slot);
       case 'g.meltOpen': return this.meltdownRequest(ps);
@@ -108,6 +114,17 @@ export class MatchIntents {
       case 'b.rehearsalResult': this._onRehearsalResult(ps, msg); return OK;
       default: return fail(ERR.BAD_MSG);
     }
+  }
+
+  /**
+   * 怪物商店意图的回包（2026-11-03）。失败照旧返回错误码（platform.js 会把 `{ error }` 原样回给客户端）；
+   * 成功时把商店私有态推一帧 `m.monsterShop` —— 公共帧（match/views.js）刻意不带商店，客户端靠这一帧更新。
+   * 推送失败不影响已经成功的操作。
+   */
+  monsterShopReply(ps, res) {
+    if (res && res.error) return fail(res.error, res.detail);
+    try { this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop frame', e); }
+    return OK;
   }
 
   emote(ps, id) {

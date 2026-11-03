@@ -49,6 +49,21 @@ import { Grid } from '../../sim/grid.js';
 import { compileRoute } from '../../sim/ai.js';
 import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
+// 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
+import { buildMonsterPool } from '../monsterPool.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame } from '../monsterShop.js';
+import { monsterStrategyFor } from '../monsterStrategies.js';
+
+/**
+ * 怪物方 AI 策略 hook 的安全调用（2026-11-03）：策略抛异常绝不能打断 botConfront / 收尾流程，
+ * 记一次日志并返回 null = 「交回引擎既有实现」。
+ * @param {any} m @param {any} strat @param {string} hook @param {any} ps
+ */
+function callStrategyHook(m, strat, hook, ps) {
+  const fn = strat && strat[hook];
+  if (typeof fn !== 'function') return null;
+  try { return fn(m, ps); } catch (e) { m.reportError(`monster strategy ${hook}`, e); return null; }
+}
 
 /**
  * value(enemy, scale) — the 对抗期 STAT scoring formula: HP-primary, attack ×2, defence ×2, resistance ×15, the leader
@@ -522,6 +537,12 @@ export class MatchConfront {
 
   /** 「对抗」档（业主 2026-10-26）：完全由玩家控制出怪。「赏金」档（缺省）= 当前线上那套。 */
   isConfrontRule() { return this.isVersus && this.versusRule === 'confront'; }
+
+  /**
+   * 怪物卡池是否开着（业主 2026-11-03：对抗局默认全开，`opts.monsterShop === false` 关掉回到旧平铺面板）。
+   * 关掉时 enterConfront / botConfront / finishConfront 里的卡池分支全部不执行 —— 行为与改造前逐字节一致。
+   */
+  get monsterShopOn() { return this.isVersus && this.opts?.monsterShop !== false; }
 
   /** 攻方人数（纯玩家出怪时按人均分官方波次价值；取不到时按每队人数兜底）。 */
   attackingTeamSize() {
@@ -1007,6 +1028,18 @@ export class MatchConfront {
     this._confrontRemoved = new Map();
     this.confrontTargets = new Map(); // attacker playerId → target playerId
     this.confrontSubs = new Map();    // attacker playerId → { target, group, position, picks, bosses, ratio, budget }
+    // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队惰性建，Match.js 的构造函数不改）。
+    // 在这里开（step 1）而不是等 step 2：AI 的 botConfront 在 step 2 一开窗就调用，届时商店必须已经就位。
+    if (this.monsterShopOn) {
+      this.monsterPools ||= new Map();
+      for (const ps of this.confrontActors()) {
+        const team = typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0;
+        if (!this.monsterPools.has(team)) this.monsterPools.set(team, buildMonsterPool(this));
+        try { openMonsterShop(this, ps); } catch (e) { this.reportError('monster shop open', e); }
+        // 首帧（2026-11-03）：服务端主动推商店，客户端不必先发一次成功意图才知道开没开（否则死锁）
+        try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop open', e); }
+      }
+    }
     this.setDeadline(this.soloUntimed ? null : VERSUS_CONFRONT.targetSeconds, () => this.finishConfrontTargets());
     for (const t of this.matchTeamIds()) {
       if (t !== attack || !this._allBots(t)) continue;
@@ -1097,6 +1130,12 @@ export class MatchConfront {
     for (const ps of this.confrontActors()) this.assignConfrontTarget(ps, null, true);
     this.setDeadline(0);
     this.confrontStage = 'monster';
+    // 怪物卡池（2026-11-03）：买卡窗口就在这里打开 —— 再给每个攻方推一次首帧（晚进场 / 重连也能拿到卡位）
+    if (this.monsterShopOn) {
+      for (const ps of this.confrontActors()) {
+        try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop open', e); }
+      }
+    }
     // Step 2 has no fixed length of its own: its window is THIS round's prep — the same time the players had to prepare —
     // and it is only a CAP, since maybeFinishConfront ends it early as soon as every alive player has submitted. Untimed
     // when the prep is (a single human — soloUntimed), and then the all-submitted end is the only way it closes.
@@ -1218,13 +1257,32 @@ export class MatchConfront {
   botConfront(ps) {
     if (this.attackingTeam != null && this.teamIdOf(ps) !== this.attackingTeam) return;
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster' || this.confrontSubs.has(ps.playerId)) return;
+    // 怪物卡池（2026-11-03）：只在商店开着时才问策略；`monsterShopOn` 为假 ⇒ strat = null ⇒ 下面全部走旧路径。
+    // 惰性初始化（Match.js 不改）：this.monsterBot 首次用到时才建。
+    const strat = this.monsterShopOn ? (this.monsterBot ||= monsterStrategyFor(this)) : null;
+    if (strat) {
+      const want = callStrategyHook(this, strat, 'pickTargets', ps);
+      // null = 交回引擎：目标仍由 assignConfrontTarget 在 step 1 / step 2 收尾时分配。
+      // 给了 playerId 就按 submitConfrontTarget 的同一套判据落地（存活的对手），非法值一并回落引擎。
+      if (typeof want === 'string') {
+        const target = this.players && typeof this.players.get === 'function' ? this.players.get(want) : null;
+        if (target && target.alive && !target.left && this.teamIdOf(target) !== this.teamIdOf(ps)) this.confrontTargets.set(ps.playerId, want);
+        else this.assignConfrontTarget(ps, null, false);
+      }
+    }
     const groups = this.confrontGroups();
     const budget = this.confrontBudget();
     const cap = this.confrontPlaceCap();
     const rows = [];
     groups.forEach((g, gi) => (g.rows || []).forEach((r) => rows.push({ key: r.key, value: r.value, gi })));
     const picks = [];
-    if (this.isConfrontRule()) {
+    // 投放计划：策略返回 picks 数组就用它（仍会过 _botConfrontPlan + _sanitizeBotPicks）；返回 null 走旧贪心。
+    const planned = strat ? callStrategyHook(this, strat, 'deployPlan', ps) : null;
+    if (Array.isArray(planned)) {
+      for (const p of planned) {
+        if (p && typeof p.enemyKey === 'string') picks.push({ enemyKey: p.enemyKey, gate: p.gate === 'upper' ? 'upper' : 'lower' });
+      }
+    } else if (this.isConfrontRule()) {
       const unitsTarget = Math.max(1, Math.round((this.confrontWaveCount() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize()));
       const filled = fillConfrontPicks({ rows, budget, unitsTarget, cap });
       filled.forEach((f, i) => picks.push({ enemyKey: f.enemyKey, gate: i % 2 ? 'upper' : 'lower' }));
@@ -1336,6 +1394,15 @@ export class MatchConfront {
     if (this.phase !== PHASE.CONFRONT || this.confrontStage === 'roster') return;
     this.setDeadline(0);
     for (const ps of this.confrontActors()) if (!this.confrontSubs.has(ps.playerId)) this.botConfront(ps);
+    // 怪物卡池收尾（2026-11-03）：所有 sub 都已落到 confrontSubs（上面的 botConfront 也要能看到商店），
+    // 再把 ps.monsterShop / ps.monsterDraft 摘掉。关掉时整段不执行。
+    if (this.monsterShopOn) for (const ps of this.confrontActors()) closeMonsterShop(this, ps);
+    // 收尾帧（2026-11-03）：商店已摘掉 ⇒ monsterShopFrame 返回 { open:false, slots: [] }，客户端据此收起面板
+    if (this.monsterShopOn) {
+      for (const ps of this.confrontActors()) {
+        try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop close', e); }
+      }
+    }
     this.confront = new Map(this.confrontSubs);
     this._confrontDoneRound = this.round;
     const rosterMs = Math.max(0, Number(this.huntCfg().rosterMs) || 0);

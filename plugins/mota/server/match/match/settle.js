@@ -46,11 +46,37 @@ export class MatchSettle {
     if (this.revivalEnabled) {
       this.revival = { round: this.round, windowOpen: false, consents: new Map() };
     }
+    // 对抗模式（业主 2026-11-03）：对称血量。两笔扣血都按「投放席位」统计，而这份统计挂在**场的顶层结果**上
+    // （sim Battle._buildResult → compactResult 透传）。注意 this.lastResults 只存 perPlayer（combat.js _finishCombat），
+    // 顶层字段到不了那里 —— 所以这里读 this.fields 的结果，而不是 lastResults。
+    const placedLeaksByPlayer = new Map();   // 守方：自己场上漏过去的投放怪只数
+    const placedKillsByTeam = new Map();     // 攻方：自己投放的怪被击杀只数（跨本回合所有战场汇总到队）
+    if (this.isVersus) {
+      for (const f of this.fields || []) {
+        let fr = f && f.result;
+        if (!fr && f && f.battle && typeof f.battle.result === 'function') { try { fr = f.battle.result(); } catch { fr = null; } }
+        if (!fr || typeof fr !== 'object') continue;
+        if (fr.confrontLeaks) {
+          let n = 0;
+          for (const v of Object.values(fr.confrontLeaks)) n += Math.max(0, Number(v) || 0);
+          if (n > 0) for (const pid of f.players || []) placedLeaksByPlayer.set(pid, (placedLeaksByPlayer.get(pid) || 0) + n);
+        }
+        for (const [seatStr, v] of Object.entries(fr.confrontKills || {})) {
+          const owner = this.order.find((x) => x.seat === Number(seatStr));
+          if (!owner || !owner.alive) continue;
+          const t = this.teamIdOf(owner);
+          placedKillsByTeam.set(t, (placedKillsByTeam.get(t) || 0) + Math.max(0, Number(v) || 0));
+        }
+      }
+    }
     const alive = this.alivePlayers();
     for (const ps of alive) {
       const r = this.lastResults.get(ps.playerId) || { leaked: [], perfect: true, coins: 0, layerGains: {}, killed: 0, damageDealt: 0 };
       const counted = (r.leaked || []).filter((l) => l && l.counted !== false).length;
-      const loss = uniteRan && plan.leakers.includes(ps) ? Math.min(cap, survivors.get(ps.playerId) || 0) : Math.min(cap, counted);
+      // 对抗模式（业主 2026-11-03）：对手投放的怪漏过去也要扣守方血 —— 原来 countInTotal:false 让它「免费泄漏」，
+      // 于是「怪物方赢了对面不扣血」。逐只 1 点，与官方漏怪合并后再吃本回合上限 lpCapPerRound。
+      const placedLeaks = this.isVersus ? (placedLeaksByPlayer.get(ps.playerId) || 0) : 0;
+      const loss = uniteRan && plan.leakers.includes(ps) ? Math.min(cap, survivors.get(ps.playerId) || 0) : Math.min(cap, counted + placedLeaks);
       // 肉鸽 rule 藏品 homeCooked：本回合零损失 = 一场完美作战（计数用于 +10%/场）
       if (loss === 0) { ps.relicPerfectBattles = (Number(ps.relicPerfectBattles) || 0) + 1; }
       // 肉鸽 rule 藏品 kingVessel：零损失**连续**回合数（上一回合没掉目标生命 ⇒ 下一战生命 +80%，连 3 回合 +200%）
@@ -120,6 +146,14 @@ export class MatchSettle {
       this._charDamageTickers(ps, r);
       this.dispatch(ps, 'onBattleResult', { result: r, lpLoss: loss, perfect: counted === 0 && r.perfect !== false, unite: uniteResult || null });
       ps.recompute();
+    }
+    // 对抗模式（业主 2026-11-03）：对称血量 —— 自己投放的怪被击杀，扣自己队伍的共享池（同样受 lpCapPerRound 上限）。
+    // 击杀归属靠 sim 的 confrontKills（按投放席位计数，上面 placedKillsByTeam 汇总），在淘汰判定之前扣。
+    if (this.isVersus && this.teamLps) {
+      for (const [t, n] of placedKillsByTeam) {
+        const lossA = Math.min(cap, n);
+        if (lossA > 0) this._versusTeamLpLoss(t, lossA);
+      }
     }
     // 联防奖励（业主 2026-10-18）：自家阵地与联防都没有穿透才发钱。
     //   全员都防住（没有任何一家漏）→ 高的一档；有人漏但联防 0 穿透 → 低的一档；联防也漏了 → 不发。

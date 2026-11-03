@@ -5,7 +5,8 @@ import { recordPrepLineups } from '../../lineupLibrary.js';
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE } from '../../../shared/constants.js';
-import { botPrepBeginSteps, botPrepEndSteps } from '../bot.js';
+// AI 策略按模式独立（Match.botStrategy，Match 构造期解析）；策略缺失时才回落到 LEGACY_BOT，即本文件改造前调用的那几个函数。
+import { LEGACY_BOT } from '../botContract.js';
 import { testSlice } from '../testTrace.js';
 import { DELAYS } from './common.js';
 
@@ -125,7 +126,7 @@ export class MatchPrep {
     };
     const end = (job) => {
       let gen = null;
-      try { gen = botPrepEndSteps(this, ps, job); } catch (e) { this.reportError(`bot ${ps.playerId}`, e); }
+      try { gen = (this.botStrategy?.prepEnd ?? LEGACY_BOT.prepEnd)(this, ps, job); } catch (e) { this.reportError(`bot ${ps.playerId}`, e); }
       if (!gen) { ready(); return; }
       drive(gen, '', ready);
     };
@@ -149,7 +150,7 @@ export class MatchPrep {
     };
     this.later(this.scaled(DELAYS.BOT_ACTION + i * DELAYS.BOT_STAGGER), () => {
       if (!valid()) return;
-      drive(botPrepBeginSteps(this, ps, { delegate: this.botRehearsalDelegate }), '', (job) => {
+      drive((this.botStrategy?.prepBegin ?? LEGACY_BOT.prepBegin)(this, ps, { delegate: this.botRehearsalDelegate }), '', (job) => {
         if (!job) { end(null); return; }
         // A job is finished when it has nothing left to simulate: the server's own run over the candidates, or — with a
         // delegated one — the host's pick, which MatchRehearsal accepts as soon as it arrives, possibly while the

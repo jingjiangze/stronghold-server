@@ -245,6 +245,9 @@ export class BattleLifecycle {
       perPlayer[ps.playerId] = pp;
     }
     const res = { time: Math.round(this.time * 1000) / 1000, reason: this.reason, perPlayer, killed: this.killed, total: this.total, resolved: this.resolved, errors: this.errorCount };
+    // 对抗投放的结算数据（只增字段，老读者看不到就当没有）：perPlayer 之外，按投放席位汇总
+    if (Object.keys(this.confrontKills).length) res.confrontKills = { ...this.confrontKills };
+    if (Object.keys(this.confrontLeaks).length) res.confrontLeaks = { ...this.confrontLeaks };
     if (this.unspawned && this.unspawned.length) res.unspawned = this.unspawned;
     if (this.sharedBoss) res.bossHpLeft = Math.max(0, this.sharedBoss.hp);
     return res;

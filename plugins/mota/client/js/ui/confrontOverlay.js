@@ -14,6 +14,8 @@ import { Img, GIcon, PlayerAvatar, useGameData } from '../ui/gameComponents.js';
 import { enemyIconUrl, factionIconUrl } from '../ui/assetUrls.js';
 import { useStore } from '../store.js';
 import { toast } from '../ui/toasts.js';
+// 怪物卡池（2026-11-03）：商店的三条意图走与 g.confront 同一个发送通道（gameActions.act：统一错误 toast + busy 计数）
+import { act } from './gameActions.js';
 import { RosterPanel } from './rosterPanel.js';
 import { FOE_NAMES, foeEffect, eliteEffect, eventFoeCard } from './eventFoe.js';
 import { t, N_ } from '../../../shared/i18n.js';
@@ -164,6 +166,9 @@ function EnemyChip({ m, rec, count, onAdd, disabled, blocked, hint }) {
 export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const gd = useGameData();
   const myId = useStore((s) => s.me.playerId);
+  // 怪物卡池（2026-11-03）：攻方商店的私有帧 —— main.js 把 m.monsterShop 路由进 store.match.monsterShop。
+  // 唯一真源在服务端（每次成功买卡 / 刷新 / 冻结都推新帧），这里只读、不本地维护 slots / 草稿。
+  const monsterShop = useStore((s) => (s.match ? s.match.monsterShop : null));
   const conf = pub && pub.confront;
   const [group, setGroup] = useState(null);
   const [picks, setPicks] = useState([]); // [{ enemyKey, gate, routeIndex?, time? }]
@@ -357,6 +362,43 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
   const submitted = !!(mine && mine.committed === true);
   const drafted = !!mine && !submitted;
   const foesPicked = mates.every((p) => targets[p.playerId]);
+  // ---- 怪物卡池（2026-11-03）：攻方怪物商店 ----
+  // `open !== true`（商店没开 / 守方 / 没有这个帧的旧对局）⇒ shopOn=false ⇒ 下面每一处都退化成改造前的行为。
+  const shopOn = !!(monsterShop && monsterShop.open === true);
+  const shopSlots = shopOn && Array.isArray(monsterShop.slots) ? monsterShop.slots : [];
+  const shopDraft = shopOn && monsterShop.draft && Array.isArray(monsterShop.draft.picks) ? monsterShop.draft.picks : [];
+  // 固定 5 格（服务端 MONSTER_SHOP_SLOTS）：帧里的空位是 null，缺的尾部也补成空位
+  const shopCells = shopSlots.length >= 5 ? shopSlots : [...shopSlots, ...new Array(5 - shopSlots.length).fill(null)];
+  const shopLeft = shopOn ? Math.max(0, Number(monsterShop.left) || 0) : 0;
+  const shopBudget = shopOn ? Math.max(0, Number(monsterShop.budget) || 0) : 0;
+  const shopSpent = shopOn ? Math.max(0, Number(monsterShop.spent) || 0) : 0;
+  const shopRefreshPrice = shopOn ? Math.max(0, Number(monsterShop.refreshPrice) || 0) : 0;
+  const shopFree = shopOn ? Math.max(0, Number(monsterShop.freeRefreshes) || 0) : 0;
+  /** 提交用的 picks：服务端草稿优先（商店买到的卡只进 ps.monsterDraft，submitConfront 不合并草稿）；
+   *  草稿为空 ⇒ 回落到下面面板的本地面板选择（改造前的行为，逐字节不变）。 */
+  const submitPicks = shopDraft.length ? shopDraft : picks;
+  /** 商店开着时「保存草稿 / 确认出击」只看草稿；没开商店 ⇒ 仍是 `group != null` 的老判据。 */
+  const canSubmit = group != null || shopDraft.length > 0;
+  /** 面板状态栏 / 确认按钮上的已用价值：商店开着时用服务端口径（含刷新花掉的钱）。 */
+  const shownSpent = shopOn ? shopSpent : spent;
+  const shownBudget = shopOn ? shopBudget : budget;
+  /** 已确认出击后商店锁住（服务端仍会接受，但提交已经落定，再买没有意义）。 */
+  const shopLocked = submitted || busy;
+  const shopBuy = (slot) => {
+    if (!slot || slot.sold === true || shopLocked) return;
+    // 买不起就不发（与面板里灰掉买不起的怪同一个「防止无效请求」口径）
+    if ((Number(slot.price) || 0) > shopLeft) { toast(t('剩余预算不足，买不下这张卡'), 'warn'); return; }
+    void act('g.monsterBuy', { index: slot.index }, { sfx: 'buy' });
+  };
+  const shopFreeze = (slot) => {
+    if (!slot || slot.sold === true || shopLocked) return;
+    void act('g.monsterFreeze', { index: slot.index }, { sfx: 'freeze' });
+  };
+  const shopRefresh = () => {
+    if (shopLocked) return;
+    if (shopFree <= 0 && shopRefreshPrice > shopLeft) return; // 免费次数用完且刷不起：按钮已 disabled
+    void act('g.monsterRefresh', {}, { sfx: 'refresh' });
+  };
   /**
    * 自动选择: fill the budget the way the AI does — the server bot fills by the remaining budget per remaining unit
    * (confrontFill.js, 2026-11-01), the panel's convenience plan walks types in order by value and mixes them; the
@@ -412,15 +454,18 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
     setPosition(lastSquad.position || 'mid');
   };
   const confirm = (commit = true) => {
-    if (!picks.length) return;
+    // 怪物卡池（2026-11-03）：商店买的卡只进服务端草稿（ps.monsterDraft.picks），submitConfront 只认消息里的 picks、
+    // 不合并草稿 —— 所以提交时必须把草稿带上；草稿为空才回落到面板的本地选择（改造前的行为）。
+    const out = submitPicks;
+    if (!out.length) return;
     lastSquad = {
-      keys: picks.map((p) => p.enemyKey),
-      gates: picks.map((p) => p.gate),
-      routes: picks.map((p) => p.routeIndex),
-      times: picks.map((p) => p.time),
+      keys: out.map((p) => p.enemyKey),
+      gates: out.map((p) => p.gate),
+      routes: out.map((p) => p.routeIndex),
+      times: out.map((p) => p.time),
       position,
     };
-    onConfirm(group, position, picks, commit, bosses);
+    onConfirm(group, position, out, commit, bosses);
   };
 
   // 悬赏名单 / 投放公示 (the server's roster hold): the submissions are final, the battles have not started. The pick /
@@ -455,14 +500,14 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
           ${stage === 'monster'
             ? (submitted
               ? html`<span class="spov__turntxt is-done"><${Icon} name="check" />${t('已确认')}</span>`
-              : html`<span class="spov__turntxt${drafted ? ' is-draft' : ''}">${t('已用价值 {spent}/{budget}', { spent, budget })}</span>`)
+              : html`<span class="spov__turntxt${drafted ? ' is-draft' : ''}">${t('已用价值 {spent}/{budget}', { spent: shownSpent, budget: shownBudget })}</span>`)
             : null}
           ${stage === 'monster' && !submitted ? html`<${Button} variant="secondary" size="md" title=${t('按价值自动挑满预算，之后可以手动调整')} onClick=${autoPick}>${t('自动选择')}<//>` : null}
           ${stage === 'monster' && !submitted && lastSquad ? html`<${Button} variant="secondary" size="md" title=${t('沿用上一轮的编队（按本轮预算重新装填）')} onClick=${reuse}>${t('沿用上轮')}<//>` : null}
-          ${stage === 'monster' && !submitted && group != null ? html`<${Button} variant="secondary" size="md" title=${t('先存一份草稿：截止前可以继续改，不会推进阶段')}
-            disabled=${picks.length === 0 || busy} onClick=${() => confirm(false)}>${t('保存草稿')}<//>` : null}
-          ${stage === 'monster' && !submitted && group != null ? html`<${Button} variant="primary" size="lg" icon="check" loading=${busy}
-            disabled=${picks.length === 0} onClick=${() => confirm(true)}>${t('确认出击（{n} 只 · {spent}/{budget}）', { n: picks.length, spent, budget })}<//>` : null}
+          ${stage === 'monster' && !submitted && canSubmit ? html`<${Button} variant="secondary" size="md" title=${t('先存一份草稿：截止前可以继续改，不会推进阶段')}
+            disabled=${submitPicks.length === 0 || busy} onClick=${() => confirm(false)}>${t('保存草稿')}<//>` : null}
+          ${stage === 'monster' && !submitted && canSubmit ? html`<${Button} variant="primary" size="lg" icon="check" loading=${busy}
+            disabled=${submitPicks.length === 0} onClick=${() => confirm(true)}>${t('确认出击（{n} 只 · {spent}/{budget}）', { n: submitPicks.length, spent: shownSpent, budget: shownBudget })}<//>` : null}
         </div>
       </header>
 
@@ -471,6 +516,42 @@ export function ConfrontOverlay({ pub, busy = false, onTarget, onConfirm }) {
         <span class="num t-dim">${t('（剩余价值 {left} / {budget}）', { left: remaining, budget })}</span>
         <span class="t-dim" data-testid="confront-pool-round">${t('可选：第 1–{r} 回合出过的怪', { r: conf.round })}</span>
       </p>` : null}
+
+      ${stage === 'monster' && shopOn ? html`<section class="monster-shop" data-testid="monster-shop">
+        <div class="monster-shop__head">
+          <h3 class="monster-shop__title">${t('怪物商店')}</h3>
+          <span class="monster-shop__stat num" data-testid="monster-shop-budget">${t('预算 {left}/{budget}', { left: shopLeft, budget: shopBudget })}</span>
+          <span class="monster-shop__stat num">${t('刷新 {v}', { v: shopFree > 0 ? t('免费') : shopRefreshPrice })}</span>
+          <span class="monster-shop__stat num" data-testid="monster-shop-draft">${t('草稿 {n} 只', { n: shopDraft.length })}</span>
+          <${Button} variant="secondary" size="sm" title=${t('重发一手（冻结的格保留）')}
+            disabled=${shopLocked || (shopFree <= 0 && shopRefreshPrice > shopLeft)}
+            onClick=${shopRefresh}>${t('刷新')}<//>
+        </div>
+        <div class="monster-shop__slots">
+          ${shopCells.map((s, i) => {
+            if (!s) return html`<div key=${`empty:${i}`} class="monster-shop__slot is-empty" aria-hidden="true"></div>`;
+            const idx = Number.isInteger(s.index) ? s.index : i;
+            const sold = s.sold === true;
+            const frozen = s.frozen === true;
+            return html`<div key=${`${idx}:${s.key}`} data-testid="monster-shop-slot"
+                class=${cx('monster-shop__slot', `monster-shop__tier-${Number(s.tier) || 1}`, sold && 'is-sold', frozen && 'is-frozen')}>
+              <button type="button" class="monster-shop__buy" disabled=${sold || shopLocked}
+                title=${t('{name}（{price}）：点击买下，进投放草稿', { name: s.name || s.key, price: s.price })}
+                onClick=${() => shopBuy({ ...s, index: idx })}
+                onContextMenu=${(e) => { e.preventDefault(); shopFreeze({ ...s, index: idx }); }}>
+                <span class="monster-shop__tier num">T${Number(s.tier) || 1}</span>
+                <span class="monster-shop__name">${s.name || s.key}</span>
+                <span class="monster-shop__price num">${s.price}</span>
+                <span class="monster-shop__stock num">${Number(s.left) || 0}/${Number(s.cap) || 0}</span>
+              </button>
+              <button type="button" class="monster-shop__freeze" disabled=${sold || shopLocked}
+                aria-label=${frozen ? t('解冻') : t('冻结')} title=${frozen ? t('解冻') : t('冻结（刷新时保留这一格）')}
+                onClick=${() => shopFreeze({ ...s, index: idx })}>${frozen ? t('解冻') : '❄'}</button>
+            </div>`;
+          })}
+        </div>
+        <p class="monster-shop__hint t-dim">${t('商店买的卡进投放草稿：提交时以草稿为准，草稿为空才用下面的面板选择')}</p>
+      </section>` : null}
 
       ${stage === 'target' ? html`<div class="confov__targets">
         <div class="confov__foes" ref=${foesRef}>

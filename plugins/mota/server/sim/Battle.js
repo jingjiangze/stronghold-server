@@ -156,6 +156,8 @@ export class Battle {
     // the official LP / 完美作战 reading: every `counted` enemy, runtime splits and summons included.
     this.killedInTotal = 0;
     this.leakedInTotal = 0;
+    this.confrontKills = Object.create(null);   // 对抗投放：confrontSeat → 本场被击杀的投放怪只数
+    this.confrontLeaks = Object.create(null);   // 对抗投放：confrontSeat → 本场泄漏的投放怪只数
     this.errors = [];
     this.errorCount = 0;
     this._errKeys = new Set();

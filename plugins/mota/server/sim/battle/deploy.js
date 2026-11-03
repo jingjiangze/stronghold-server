@@ -155,6 +155,11 @@ export class BattleDeploy {
           this.killedInTotal++;
           if (pp) pp.killedInTotal++;
         }
+        // 对抗投放：这只怪是某位攻方放过来的 —— 它的死记在那位攻方头上（settle 据此扣攻方共享池）
+        if (unit.confrontSeat != null) {
+          const k = String(unit.confrontSeat);
+          this.confrontKills[k] = (this.confrontKills[k] || 0) + 1;
+        }
         if (killer) killer.stats.kills++;
         if (unit.bounty && unit.bounty.coins > 0) this.addCoins(this._bountyPayee(unit, killer), unit.bounty.coins);
       }
@@ -269,6 +274,11 @@ export class BattleDeploy {
       if (e.uniteRuntime) entry.uniteRuntime = true;
       pp.leaked.push(entry);
       if (e.counted || e.isBoss) pp.perfect = false;
+    }
+    // 对抗投放：投放怪没有被杀掉而是漏过去了 —— 记在投放者头上（settle 据此扣守方血；见 match/settle.js）
+    if (e.confrontSeat != null) {
+      const k = String(e.confrontSeat);
+      this.confrontLeaks[k] = (this.confrontLeaks[k] || 0) + 1;
     }
     if (e.counted) this.leakedCount++;
     // of the stage's own list, so the capsule's numerator does not move for it. On a 联防 field it is no LP charge either:

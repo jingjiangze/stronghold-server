@@ -251,6 +251,7 @@ import { MatchRevival } from './match/revival.js';
 import { installTestTrace } from './testTrace.js';
 import { MatchTestCommands } from './match/testCommands.js';
 import { MatchOffers } from './match/offers.js';
+import { botStrategyFor } from './botStrategies.js';
 
 export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS } from './match/common.js';
 
@@ -306,8 +307,13 @@ export class Match {
     this.coopHuntOn = false;   // 同盟狩猎未启用（对抗模式不需要）
     this.teamSize = this.isVersus && Number.isInteger(opts.teamSize) && opts.teamSize > 0 ? opts.teamSize : (this.isVersus ? 2 : 1);
     // 对抗规则档（玩家 2026-10-26）：'bounty' = 赏金（线上那套）/ 'confront' = 对抗（纯玩家出怪）
-    // 「对抗」档两条判据都认：opts.versusRule（直连）或 modeId 前缀（子进程通道，isXie 同款）
-    this.versusRule = this.isVersus && (opts.versusRule === 'confront' || /^mode_confront_/.test(String(opts.modeId || ''))) ? 'confront' : 'bounty';
+    // / 'ai' = AI 对抗（你控怪、AI 布防，数值同赏金档但固定攻守）
+    // 三档原值保留（versus-room 的 versusLobby.js 会下发这三档）；modeId 前缀（子进程通道，isXie 同款）仍映射到 confront
+    this.versusRule = !this.isVersus ? null
+      : (opts.versusRule === 'bounty' || opts.versusRule === 'confront' || opts.versusRule === 'ai') ? opts.versusRule
+      : /^mode_confront_/.test(String(opts.modeId || '')) ? 'confront' : 'bounty';
+    // 按模式独立的 AI 策略（2026-11-03）：未显式指定时按 mode 表解析，默认 legacy = 改造前的行为。
+    this.botStrategy = botStrategyFor(this, opts.botStrategy ?? null);
     /** 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，只放大「守方这一回合遇到的敌人数量」；控怪档恒 1。 */
     this.versusSpeed = this.isVersus && (opts.versusSpeed === 1.5 || opts.versusSpeed === 2) ? opts.versusSpeed : 1;
     // 是否每回合交换攻守（业主 2026-10-26）：缺省 true；「纯对抗」里可以关掉 → 恒为首攻方进攻。

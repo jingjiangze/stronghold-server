@@ -896,6 +896,38 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .confpos__opt.is-on { border-color: var(--mint-400); color: var(--mint-400); background: rgba(23, 249, 183, .08); }
 .confpos__pct { font-size: calc(.11 * var(--t)); color: var(--text-lo); }
 
+/* 怪物卡池（2026-11-03，ui/confrontOverlay.js 的攻方怪物商店）：5 格一行，卡位即按钮；冻结的格右上角 ❄。
+   只在 m.monsterShop.open === true 时渲染 —— 没有这一帧的旧对局 / 守方，面板与改造前完全一致。 */
+.monster-shop { display: flex; flex-direction: column; gap: .06rem; flex: 0 0 auto; margin: .06rem 0 .1rem; padding: .1rem .12rem;
+  border: 1px solid var(--line-3); border-radius: .1rem; background: rgba(255, 255, 255, .05); }
+.monster-shop__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .16rem; }
+.monster-shop__title { margin: 0; font-size: calc(.17 * var(--t)); color: var(--gold-2); }
+.monster-shop__stat { font-size: calc(.12 * var(--t)); color: var(--text-md); }
+.monster-shop__slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .08rem; }
+.monster-shop__slot { position: relative; display: flex; flex-direction: column; border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: .08rem; background: rgba(0, 0, 0, .25); }
+.monster-shop__slot.is-empty { min-height: 1rem; opacity: .3; }
+.monster-shop__slot.is-sold { opacity: .35; pointer-events: none; }
+.monster-shop__slot.is-frozen { border-color: var(--ice); box-shadow: 0 0 .12rem var(--ice-a20); }
+.monster-shop__slot.is-frozen::after { content: '❄'; position: absolute; top: .04rem; right: .06rem;
+  font-size: calc(.12 * var(--t)); color: var(--ice); }
+.monster-shop__buy { flex: 1 1 auto; display: flex; flex-direction: column; gap: .02rem; padding: .1rem .1rem .04rem;
+  border: none; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.monster-shop__buy:disabled { cursor: default; }
+/* 稀有度色边框：T1 灰（默认）→ T5 金 */
+.monster-shop__tier-2 { border-color: #5aa27a; }
+.monster-shop__tier-3 { border-color: #3d78c4; }
+.monster-shop__tier-4 { border-color: #a06fd0; }
+.monster-shop__tier-5 { border-color: var(--gold); }
+.monster-shop__tier { font-size: calc(.12 * var(--t)); font-weight: 700; color: var(--text-md); }
+.monster-shop__name { font-size: calc(.14 * var(--t)); }
+.monster-shop__price { font-size: calc(.12 * var(--t)); color: var(--mint-400); }
+.monster-shop__stock { font-size: calc(.11 * var(--t)); color: var(--text-lo); }
+.monster-shop__freeze { align-self: flex-end; margin: 0 .06rem .06rem 0; padding: .01rem .06rem; cursor: pointer;
+  font-size: calc(.11 * var(--t)); border: 1px solid var(--line-3); border-radius: .05rem; background: transparent; color: var(--text-md); }
+.monster-shop__freeze:disabled { opacity: .4; cursor: default; }
+.monster-shop__hint { margin: 0; font-size: calc(.11 * var(--t)); }
+
 /* 2V2 事件期 overlay (ui/eventOverlay.js) — reuses the .spov shell classes. The monster entry of the round sits on top
    (visible before anyone picks), the four targets and the match's three selections scroll under it. */
 .evov .spov__inner { gap: .1rem; }

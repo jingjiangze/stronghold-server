@@ -13,16 +13,16 @@
       "bytes": 22285
     },
     "client/css/screens/game-panels.css": {
-      "sha256": "5426d4e53f88d17a47a1aaa877e5ce53290b10824be30af77201cc74b64fd372",
-      "bytes": 98004
+      "sha256": "0607cb9055af2c1f49989fdbf73027984f502d39a87496bd2223734048af3a96",
+      "bytes": 100668
     },
     "client/css/screens/game-shop.css": {
       "sha256": "efc2ad36f4c1abf3016b49249a0e87f673dcbbb13b8765ae593d91f99410b38c",
       "bytes": 39457
     },
     "client/css/screens/game.css": {
-      "sha256": "746dd21f6726b55d4cc7267745e95fcd12beda20b325efa2a1869c14b9a54fe0",
-      "bytes": 129847
+      "sha256": "9f0eff0fedb0513721e3d0d046240aa5a7e28bd823857e414c31fcabfe57ecd7",
+      "bytes": 130470
     },
     "client/css/screens/guide.css": {
       "sha256": "aef6cc3b6aaf027b61ddf509f6c75798e5dfbc15afb1497b6d65f034468ecf51",
@@ -61,8 +61,8 @@
       "bytes": 424
     },
     "client/js/main.js": {
-      "sha256": "ccf80cb0c943732abe90b706e75da515dd7ae7d3cd7e6161a63007ac45825d4e",
-      "bytes": 30153
+      "sha256": "2e7cfbb0a9fa16276d49f0f904237ad78752d1d4282fa86ca8fdc2ce42c7ed96",
+      "bytes": 30518
     },
     "client/js/matchDelta.js": {
       "sha256": "854a770d9f3f176caf188447f984fb954b2e210e3bb36d242d3036a45f2b4927",
@@ -241,8 +241,8 @@
       "bytes": 50684
     },
     "client/js/ui/confrontOverlay.js": {
-      "sha256": "eb6a97d60ff4eea155b6b40bfe7e3ed84e938b378b92c2f8eebe44fcc83bfb0d",
-      "bytes": 36149
+      "sha256": "204a28744cdb0c8b3b47784a5c42d8da2e6c7fbdcad4e2523e743387136bdf18",
+      "bytes": 42627
     },
     "client/js/ui/connBanner.js": {
       "sha256": "619e0eea7ddd3b5e7585bcffc2de7a5d0d0cb9f242cb79ef2ad4db7ffd855487",
@@ -321,8 +321,8 @@
       "bytes": 21967
     },
     "client/js/ui/hud.js": {
-      "sha256": "8d9b8730d83e4dfb01d872b6e7f3f8c9dcc9d1ad364447e9b68f4d89395aa812",
-      "bytes": 38441
+      "sha256": "78c0194408002a346d2e0a3c18545f2e1e6138885d457f66a05a299871053ac4",
+      "bytes": 39185
     },
     "client/js/ui/loadoutModel.js": {
       "sha256": "4936cd429a77513b47b213995676dfdf995e3b696f7de02540def208d0de053d",
@@ -625,8 +625,8 @@
       "bytes": 4401
     },
     "server/match/Match.js": {
-      "sha256": "3a49b9ed2f9aeeb2e3f78ea35847af2a8f8bdd5a2c9cd6fb9e37f3f55d1b3075",
-      "bytes": 53832
+      "sha256": "ba3bd1b4b45deb9ed4c3bbbaaacac9d6ffc7f80fef31a01322c8ec062ecc421d",
+      "bytes": 54302
     },
     "server/match/PlayerState.js": {
       "sha256": "15d92ddbf47f7175183220bb6e8297c6c9b824a05fae440efec999b28c45a5af",
@@ -652,9 +652,17 @@
       "sha256": "42d804406290cc04bf1197ca7b27edd5c36e085ddea6e632489d78faaea0a457",
       "bytes": 113162
     },
+    "server/match/botContract.js": {
+      "sha256": "b59da32e5365adfaf1925e0ab524225cc3e3933a97b412c79acd051b2b29167e",
+      "bytes": 3322
+    },
     "server/match/botEmotes.js": {
       "sha256": "d617b26a4db1606cbd6c9d478f5f8c7c53026526b6f13dc7c8d808a735457bf7",
       "bytes": 3450
+    },
+    "server/match/botStrategies.js": {
+      "sha256": "5a54b0c1748ec3cdbfb0cc410b91f59d4ae89f7cb1783f024bac25c71cf50023",
+      "bytes": 2270
     },
     "server/match/builtinMeta.js": {
       "sha256": "8350b5d572bccfa970af40b9dbe2cd21092ee01ed9e48adef22e173d3c150116",
@@ -709,8 +717,8 @@
       "bytes": 24846
     },
     "server/match/match/bossRounds.js": {
-      "sha256": "c20b8d76413dcf690b160ec3ef60372236bf4e95565ebecc77ae8a3d61af355e",
-      "bytes": 29886
+      "sha256": "3e84397c3044ae0d6439045c0074ec1aed774c4b072735325ec5a6a33b2b7d31",
+      "bytes": 30838
     },
     "server/match/match/chaosRoll.js": {
       "sha256": "0c98e2c0d476aba6f722c8b4009dfb93f8de9917e953fa64405731eb67329b9f",
@@ -729,8 +737,8 @@
       "bytes": 1605
     },
     "server/match/match/confront.js": {
-      "sha256": "297c953701b3c54053aff2749f64b733700f2bd122421260ed9c42a1f463cb4c",
-      "bytes": 99617
+      "sha256": "d551f276516f912d9b8b0b3ba7f90fa59f53683e94fa583a8acab3fd16ae5033",
+      "bytes": 104335
     },
     "server/match/match/confrontFill.js": {
       "sha256": "8518d0b6f6f3dd807575e973774298ef1466f6243c3599ff7b34472f2734c730",
@@ -757,8 +765,8 @@
       "bytes": 11680
     },
     "server/match/match/intents.js": {
-      "sha256": "195a80d37ee4ada624cdf044371533ab8c79bb987291cd242366a816093b9dba",
-      "bytes": 12298
+      "sha256": "d1ddb24d7f0ba689aa5c44f03b243113955bf61359ea4c5b8307b2e41516e13e",
+      "bytes": 13502
     },
     "server/match/match/meltdown.js": {
       "sha256": "6fdc9069cf8c852c4dfe559d51f82337199cdc8f1169cd836c0b37f2885f6097",
@@ -777,8 +785,8 @@
       "bytes": 3566
     },
     "server/match/match/phases.js": {
-      "sha256": "133f59dbb6622c5ea1fd6539e1a539d13fa8fed9d21ec1f17a7e9457e6b3f047",
-      "bytes": 32423
+      "sha256": "56056e1d8d322bb8aef2a488a161694233baf4ca08695b7f4b6b0022411c59fd",
+      "bytes": 32645
     },
     "server/match/match/platform.js": {
       "sha256": "229a7f02263d8a2b5a1c5bf3dd16de656a7bc143fff8ee23973f3cbc1db93249",
@@ -789,8 +797,8 @@
       "bytes": 1314
     },
     "server/match/match/prep.js": {
-      "sha256": "7b749a0b93e20f4768acad473f7c9b475f7a1cf585cbf456352b31043985de12",
-      "bytes": 12487
+      "sha256": "20f94362c9ced22140893b1a42cc989381a93b743ed4a4009341e17294b41c38",
+      "bytes": 12708
     },
     "server/match/match/projectEffects.js": {
       "sha256": "40a7bd2df35da6f602ca205f1939c2d97679819cf16e902ea9d36611293ce4c8",
@@ -813,16 +821,16 @@
       "bytes": 11879
     },
     "server/match/match/settle.js": {
-      "sha256": "097fa4e097b63dcbf43cff41163630a7a29daff821450766c800079bcb66d4b9",
-      "bytes": 18272
+      "sha256": "4543ad7351f9481ad73310638c000a3abf5a4b77216c14bbfc39370724771a82",
+      "bytes": 20721
     },
     "server/match/match/setupVote.js": {
       "sha256": "882608ca73c50a9daf7d03a7a74a5fb5654377ac78e9e70d1d39efbf072896d6",
       "bytes": 5181
     },
     "server/match/match/spDraft.js": {
-      "sha256": "02fe5ab934998fefc7af30ae17b455404abed08fb480e459d41f6422dee945f8",
-      "bytes": 14394
+      "sha256": "502c9a7219c16796d48a1fcd5906105cec057494d95842978d47e720bed6aeba",
+      "bytes": 14616
     },
     "server/match/match/testCommands.js": {
       "sha256": "7bf0688a11bb26038220a270361f13d9a7d3cd6dfc1f9f3c029ad082e6dc0013",
@@ -843,6 +851,22 @@
     "server/match/match/watch.js": {
       "sha256": "b5b13a3fcb1f22b2f35a9d9db634ad62806d6646a0cbfc9c37cb66f0a2d6e243",
       "bytes": 13838
+    },
+    "server/match/monsterContract.js": {
+      "sha256": "cbdef4c1f9d59df7c052251aaa3d3cbdeeb07ddcdfa2ddcfe40b5bf8acae09a1",
+      "bytes": 6032
+    },
+    "server/match/monsterPool.js": {
+      "sha256": "681a1817184327d5b01443c50e4289bc1d565b5859d21699692fe237970187f6",
+      "bytes": 8871
+    },
+    "server/match/monsterShop.js": {
+      "sha256": "0b80633dc91d6a6ad1d72f4b245f779a3e6e49a65406746951c819662e543fd9",
+      "bytes": 12674
+    },
+    "server/match/monsterStrategies.js": {
+      "sha256": "3fb36c82a9bc87d0e8f9c2b9c5a03c136ae98111c9313ca48bce7bcba2e4e1d7",
+      "bytes": 7557
     },
     "server/match/operatorTraits.js": {
       "sha256": "b4e7a023e0784c611d71ef97ba9d9ff964095dc56433e6a18cc230a35e00a6bb",
@@ -921,8 +945,8 @@
       "bytes": 6173
     },
     "server/match/unite.js": {
-      "sha256": "ec9aa19ad5d408b95cca3b0a64e7d00394b1e32926a205182af1ae73cd08112b",
-      "bytes": 16179
+      "sha256": "1e1988701418923d00ef3c8dd589b08b2461e7a9ee245cc0a302a7222ddc5e09",
+      "bytes": 16428
     },
     "server/match/waves.js": {
       "sha256": "e1cf16626ef9318ff09006278ad0f27b5cd831d74be765a0fd2466227b69588f",
@@ -1109,8 +1133,8 @@
       "bytes": 1444
     },
     "server/sim/Battle.js": {
-      "sha256": "686d177cd0f9092be6822ea7f2ed4b9b17d60cb83e24e9c288317fee47fde31e",
-      "bytes": 14210
+      "sha256": "1670ef50ccaa5934d70c80f9aa6680a7fc59f71a4ec082c5ba21926dee0bba28",
+      "bytes": 14441
     },
     "server/sim/ai.js": {
       "sha256": "1d8f94a0d794f7119ec9090a61dc22398609329b87140c82272f135b016a1c2d",
@@ -1125,8 +1149,8 @@
       "bytes": 3691
     },
     "server/sim/battle/deploy.js": {
-      "sha256": "0e0f7577ba4ab679b6110a1222e8e34f06facc1bae6b88eae914f838a459ce17",
-      "bytes": 15118
+      "sha256": "8adfbc636299c28290e1c383c29aa4f999a8cb478f0dbb4afd80eb6999e3f659",
+      "bytes": 15716
     },
     "server/sim/battle/displacement.js": {
       "sha256": "7372f5ebf329b920a5a7214d9269ea8b4ae79198b9aa6b1e9c28bc27fe6b5543",
@@ -1145,8 +1169,8 @@
       "bytes": 8172
     },
     "server/sim/battle/lifecycle.js": {
-      "sha256": "36cf9ce7ad12f5047d5ea06b247b2634ef6d41bbe57bbbcda5928b6075361e24",
-      "bytes": 15179
+      "sha256": "30f7ce5874b041da0f3f8d137da9bde3c861897eb1cd655eec56087e031d6af6",
+      "bytes": 15498
     },
     "server/sim/battle/players.js": {
       "sha256": "d90aee2598e8b23db7ee154a9aebdf33b8bf33e049d37075878b3cc7849405cf",
@@ -1157,8 +1181,8 @@
       "bytes": 19463
     },
     "server/sim/battle/spawns.js": {
-      "sha256": "1f75d075862c1b8598a882da1871c9cd5ed84fb4b67607a845feda63f4f602a4",
-      "bytes": 12855
+      "sha256": "7bd31ca26d139c217adbd17a8e18cd8b737c9d8614887da465d465e38e5ee498",
+      "bytes": 13233
     },
     "server/sim/battle/status.js": {
       "sha256": "3e9bdac208907759e07e9e7f2e7eb026af378b7c5468c4372fcf582b3f0faab0",
@@ -2285,8 +2309,8 @@
       "bytes": 13339
     },
     "server/sim/spec.js": {
-      "sha256": "5618e6624eff1ca8ccfaec9f4d5d96112a4184176da8fc2f25ff8f087372c79d",
-      "bytes": 28315
+      "sha256": "2464e69f1e2535484af55c9503c9d95b4d337f9f029159219979e868733015ac",
+      "bytes": 28653
     },
     "server/sim/targeting.js": {
       "sha256": "ae6ea4294a46c130c7dd4eab18e13e074bcb4164299a1c61af37a403090e723c",
@@ -2729,8 +2753,8 @@
       "bytes": 11883
     },
     "shared/protocol.js": {
-      "sha256": "c86d3751179a1a5cad808f746cf02855bef5e398c11d36a8a590f97ca1b691c9",
-      "bytes": 58385
+      "sha256": "638b706772009fc9e1ea61a265e4650e3c252ad6609fa926140bffdffb988e23",
+      "bytes": 58675
     },
     "shared/randomMode.js": {
       "sha256": "d928caa6e6302b8477ccfcf2914e30c6eef5376dcf75e02cc38a2dcc83dd6b89",

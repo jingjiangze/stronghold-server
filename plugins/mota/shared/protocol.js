@@ -616,6 +616,10 @@ export const C2S = {
   'g.meltClose': {},
   'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 128, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), commit: isBool, $optional: ['bosses', 'commit'] },
   'g.confront.withdraw': { gold: (v) => isInt(v, 1, 100000) },
+  // 怪物卡池（2026-11-03）：攻方怪物商店 —— 买卡（进投放草稿）/ 刷新 / 冻结
+  'g.monsterBuy': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
+  'g.monsterRefresh': {},
+  'g.monsterFreeze': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
   'g.event.pick': { target: (v) => EVENT_TARGETS_ALL.includes(v) },
   // 随机地图开关（2026-10-22；房主，开局前）
   'room.setRandomStage': { randomStage: isBool },

@@ -29,7 +29,8 @@ export class BattleSpawns {
       const p = {
         time: Math.max(0, fin(s.time, 0)) + i * interval, enemyKey: s.enemyKey, routeIndex: s.routeIndex ?? 0, route: s.route ?? null,
         mods: s.mods ?? null, sourcePlayerId: s.sourcePlayerId ?? null, bounty: s.bounty ?? null, tag: s.tag ?? null,
-        ownerPlayerId: s.ownerPlayerId ?? null, pos: s.pos ?? null, seq: ++this._spawnSeq, countInTotal: s.countInTotal,
+        ownerPlayerId: s.ownerPlayerId ?? null, confrontSeat: Number.isInteger(s.confrontSeat) ? s.confrontSeat : null,
+        pos: s.pos ?? null, seq: ++this._spawnSeq, countInTotal: s.countInTotal,
       };
       p.counted = p.countInTotal ?? (!(def && def.notCountInTotal) && p.tag !== 'boss' && p.tag !== 'part');
       // inTotal: the enemies THIS STAGE scheduled that count — the HUD capsule's own set (DESIGN §14 "顶栏胶囊"). A
@@ -131,6 +132,9 @@ export class BattleSpawns {
     e.bounty = opts.bounty ?? null;
     e.sourcePlayerId = opts.sourcePlayerId ?? null;
     e.ownerId = opts.ownerPlayerId ?? this._ownerForTile(start);
+    // 对抗投放归属：confrontSeat = 投放者席位（confront.js applyConfront 写入）。只用于「攻方按被击杀扣血」的统计，
+    // 不参与 counted / inTotal / 目标生命值扣血。
+    e.confrontSeat = Number.isInteger(opts.confrontSeat) ? opts.confrontSeat : null;
     e.spawnX = e.x; e.spawnY = e.y;
     e.spawnSeq = ++this._spawnSeq;
     e.deploySeq = ++this._deploySeq;
