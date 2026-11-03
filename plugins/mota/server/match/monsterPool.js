@@ -3,7 +3,11 @@
 // 单位是「一只怪」（spawn count:1），不是整波。
 //
 // 与 pool.js 的 SharedPool 同构（cap / left / take / give / snapshot / totalLeft / 份数加权 roll）：
-// 买走一份就少一份，同队攻方共用一个池（见 match/match/confront.js 的 enterConfront / this.monsterPools）。
+// 买走一份就少一份。池的归属随 `m.monsterMode`：shared（默认）= 同队攻方共用一个池（见
+// match/match/confront.js 的 finishConfrontTargets / this.monsterPools）；solo = 每人一个池（只有该队
+// 第一位存活攻方持有投放权，见 monsterShop.js 的 monsterPoolFor）。
+// 卡池来源（业主 2026-11-04）：每回合 = 该回合的官方出怪（match/match/phases.js 的 `_roundOfficialSpawns`
+// 只读快照），不再是「第 1..N 回合出过的全集合」；快照缺失时回落 confrontGroups / confrontPool。
 //
 // 阶位口径（2026-11-03 实测 data/enemies.json × data/factions.json，confrontPool 120 只）：
 //   · 基础价 = confrontValue(e)（scale 为 1 的无倍率口径，即 R1 量纲）—— 实测区间 8..405，
@@ -158,15 +162,75 @@ export class MonsterPool {
 }
 
 /**
- * 本局「可投放的怪物」全集 = 本回合面板（confrontGroups）给出的那些 key。
- * 用 groups 而不是裸的 confrontPool 有两个理由：
- *   ① 合法性 —— submitConfront 的 `_confrontMember` 只认 groups 的并集，买到的卡必须能提交；
- *   ② 回合闸门 —— 对抗档的 groups 已经过 confrontSeenKeys（只给第 1..N 回合真正出过的怪）。
- * groups 取不到时（非对抗档 / 早期回合没建波）退回官方全池。
+ * 本回合官方出怪的**只读快照**（由 match/match/phases.js 在每回合建波后写入 `m._roundOfficialSpawns`）。
+ * 卡池真源（业主 2026-11-04：每回合卡池 = 该回合的官方出怪，然后随机）。boss 回合 / 老对局 / 未进 ROUND_START
+ * 时没有快照 → null（调用方回落到 confrontGroups / confrontPool）。
+ * @param {object} m
+ * @returns {Set<string>|null} 去重后的 enemyKey；无快照 → null
+ */
+export function officialSpawnKeys(m) {
+  const list = m && m._roundOfficialSpawns;
+  if (!Array.isArray(list) || !list.length) return null;
+  const keys = new Set();
+  for (const s of list) if (s && typeof s.enemyKey === 'string' && s.enemyKey) keys.add(s.enemyKey);
+  return keys.size ? keys : null;
+}
+
+/**
+ * 本回合官方出怪里每个 key 的**合计只数**（份数的口径，见 buildMonsterPool）。
+ * @param {object} m
+ * @returns {Map<string, number>|null} 无快照 → null
+ */
+export function officialSpawnCounts(m) {
+  const list = m && m._roundOfficialSpawns;
+  if (!Array.isArray(list) || !list.length) return null;
+  const counts = new Map();
+  for (const s of list) {
+    if (!s || typeof s.enemyKey !== 'string' || !s.enemyKey) continue;
+    const n = Math.max(1, Number(s.count) || 1);
+    counts.set(s.enemyKey, (counts.get(s.enemyKey) || 0) + n);
+  }
+  return counts.size ? counts : null;
+}
+
+/**
+ * 本回合**合法可投放**的 key 集合 —— 卡池与提交校验的**唯一**判据（复验踩过的坑：买得到的卡必须交得上）。
+ * 优先「本回合官方出怪」（`m._roundOfficialSpawns`，业主 2026-11-04 口径）；没有快照才回落到
+ * `confrontGroups()`（本局第 1..N 回合出过的怪，含非对抗档 / 早期回合的旧行为）。
+ * `submitConfront` 的 `_confrontMember` 与 monsterShop 的发牌 / 购买 / 投放都调这一个函数。
+ *
+ * 返回 null = 两个来源都取不到（match 上没有 confrontGroups / 它抛异常）= 不做闸门（旧行为不受影响）。
+ * 回落路径的缓存挂在 match 上、以 groups 数组的**引用**为键：`confrontGroups()` 按「回合|倍率」重算时会换新数组，
+ * 引用一变缓存自动失效（官方快照路径每次现算，键少、成本可忽略）。
+ * @param {object} m
+ * @returns {Set<string>|null}
+ */
+export function legalKeys(m) {
+  const official = officialSpawnKeys(m);
+  if (official) return official;
+  if (!m || typeof m.confrontGroups !== 'function') return null;
+  let groups;
+  try { groups = m.confrontGroups(); } catch { return null; }
+  const cache = m._monsterLegalKeys;
+  if (cache && cache.groups === groups) return cache.keys;
+  const keys = new Set();
+  for (const g of Array.isArray(groups) ? groups : []) {
+    for (const r of (g && g.rows) || []) if (r && typeof r.key === 'string' && r.key) keys.add(r.key);
+  }
+  m._monsterLegalKeys = { groups, keys };
+  return keys;
+}
+
+/**
+ * 本回合「可投放的怪物」全集：**本回合官方出怪**优先（业主 2026-11-04）；没有快照才回落到
+ * 本回合面板（confrontGroups）的并集（理由：① 合法性 —— `_confrontMember` 只认同一个集合，
+ * 买到的卡必须能提交；② 回合闸门 —— groups 已过 confrontSeenKeys）；再取不到才退回官方全池。
  * @param {object} m
  * @returns {string[]} 排序后的 key（顺序稳定，便于复现）
  */
-function monsterCardKeys(m) {
+export function monsterCardKeys(m) {
+  const official = officialSpawnKeys(m);
+  if (official) return [...official].sort();
   const keys = new Set();
   if (typeof m.confrontGroups === 'function') {
     for (const g of m.confrontGroups() || []) {
@@ -178,14 +242,20 @@ function monsterCardKeys(m) {
 }
 
 /**
- * 用本局数据建一张怪物卡池（每队一张，见 match/match/confront.js 的 enterConfront）。
- * @param {object} m Match 实例（只用 data / confrontGroups / confrontValueOf）
+ * 用本局数据建一张怪物卡池（shared 怪物模式每队一张，solo 每人一张 —— 见 match/match/confront.js 的
+ * finishConfrontTargets 与 monsterShop.js 的 monsterPoolFor）。
+ * 份数口径（业主 2026-11-04）：本回合官方出怪里该 key 的合计只数，**至少 1**、上限仍受阶位份数
+ * `MONSTER_COPIES_BY_TIER` 约束 —— `Math.min(cap, max(官方合计, 1))`。这样「官方只出过 1 只」的怪
+ * 也能买到（不会被阶位/只数卡成 0），而高阶稀有怪仍被封在各自的份数上限内。
+ * 没有官方快照（boss 回合 / 老对局）时沿用旧的阶位份数。
+ * @param {object} m Match 实例（只用 data / _roundOfficialSpawns / confrontGroups / confrontValueOf）
  * @returns {MonsterPool}
  */
 export function buildMonsterPool(m) {
   const entries = [];
   if (!m) return new MonsterPool(entries);
   const enemies = (m.data && m.data.enemies) || {};
+  const officialCounts = officialSpawnCounts(m);
   for (const key of monsterCardKeys(m)) {
     // 价格（本回合量纲）：与预算 / 波次价值 / 提交校验同一个函数
     const price = typeof m.confrontValueOf === 'function' ? Number(m.confrontValueOf(key)) : 0;
@@ -194,7 +264,11 @@ export function buildMonsterPool(m) {
     const rec = enemies[key] || null;
     const base = rec ? confrontValue(rec) : price;
     const tier = monsterTierOf(base);
-    entries.push({ key, cost: price, tier, cap: MONSTER_COPIES_BY_TIER[tier] || 1 });
+    const tierCap = MONSTER_COPIES_BY_TIER[tier] || 1;
+    const officialCount = officialCounts ? (officialCounts.get(key) || 1) : 1;
+    // 官方出了几只就能买几份（至少 1），但不超过阶位份数 —— 见函数头注释
+    const cap = officialCounts ? Math.min(tierCap, Math.max(officialCount, 1)) : tierCap;
+    entries.push({ key, cost: price, tier, cap });
   }
   return new MonsterPool(entries);
 }

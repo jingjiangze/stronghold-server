@@ -131,8 +131,8 @@ const MODE_CARDS = [
   },
   {
     id: 'versus', name: N_('赏金 / 控怪'), badge: 'NEW', en: 'VERSUS', icon: 'sword',
-    desc: N_('2V2 攻防：一队投放怪物、一队布防作战，攻守按回合交换。赏金＝官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金；控怪＝这一波出什么怪、走哪条路线、什么时候进场，全部由你决定。'),
-    points: [N_('固定 2V2（4 席）· 攻守轮换'), N_('赏金 / 控怪 两档 · 控怪可关掉攻守交换 · 事件期挑强化')],
+    desc: N_('2V2 攻防：一队投放怪物、一队布防作战。赏金＝官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金，攻守每回合轮换；控怪＝这一波出什么怪、走哪条路线、什么时候进场，全部由你决定，阵营固定。'),
+    points: [N_('固定 2V2（4 席）'), N_('赏金 / 控怪 两档 · 赏金每回合轮换攻守 · 事件期挑强化')],
   },
   {
     id: 'xie', name: N_('协同共竞'), badge: 'NEW', en: 'JOINT OP', icon: 'dice',
@@ -585,7 +585,7 @@ export function ProtoCard({ roomMode, difficulty, selected, onSelect, matchmakin
 function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficulty, onClose, matchmaking, brief, privateRoom, onPrivate,
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
   testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
-  versusRule = 'bounty', onVersusRule = null, versusAlt = true, onVersusAlt = null,
+  versusRule = 'bounty', onVersusRule = null,
   versusSpeed = 1, onVersusSpeed = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
@@ -647,26 +647,19 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
             <div class="proto-dock__row" role="radiogroup" aria-label=${t('对抗规则')}>
               ${[
                 { key: 'bounty', code: 'B', acc: 'var(--gold-2)', name: t('赏金'), sub: t('替换部分官方出怪'),
-                  title: t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金') },
+                  title: t('赏金：官方出怪为主，你只能替换其中一部分，靠自家怪被击杀拿赏金；攻守每回合轮换') },
                 { key: 'confront', code: 'C', acc: 'var(--orange)', name: t('控怪'), sub: t('出怪 · 路线 · 时机全可控'),
-                  title: t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定') },
-                { key: 'ai', code: 'AI', acc: 'var(--ice)', name: t('AI 对抗'), sub: t('你控怪 · AI 布防'), locked: false,
-                  title: t('AI 对抗：你操作怪物、AI 布防（1–20 人；你与队友坐 team0、AI 坐对面）') },
+                  title: t('控怪：这一波出什么怪、走哪条路线、什么时候进场，全部由你决定；阵营固定，不换边') },
               ].map((r) => html`<button key=${r.key} type="button" role="radio" aria-checked=${versusRule === r.key ? 'true' : 'false'}
                 class=${`vsopt${versusRule === r.key ? ' is-on' : ''}`} style=${`--acc:${r.acc}`}
-                disabled=${!!busy || !!r.locked} title=${r.title}
-                onClick=${() => !r.locked && onVersusRule && onVersusRule(r.key)}>
+                disabled=${!!busy} title=${r.title}
+                onClick=${() => onVersusRule && onVersusRule(r.key)}>
                 <span class="vsopt__code">${r.code}</span>
                 <span class="vsopt__text"><b>${r.name}</b><small>${r.sub}</small></span>
-                ${r.locked ? html`<span class="vsopt__lock">${t('待开放')}</span>` : null}
               </button>`)}
             </div>
             <div class="proto-dock__foot">
-              ${versusRule === 'confront' ? html`<label class="proto-versus__alt">
-                <input type="checkbox" checked=${versusAlt !== false} disabled=${!!busy}
-                  onChange=${(e) => onVersusAlt && onVersusAlt(e.currentTarget.checked)} />
-                <span>${t('每回合交换攻守')}</span></label>` : null}
-              ${versusRule === 'ai' ? html`<span class="proto-dock__hint" style="opacity:.75">${t('固定攻守：你们恒为攻方、AI 恒为守方（不换边）')}</span>` : null}
+              <span class="proto-dock__hint" style="opacity:.75">${versusRule === 'bounty' ? t('赏金档：攻守每回合轮换') : t('控怪档：固定阵营（不换边）')}</span>
               ${versusRule === 'bounty' ? html`<label class="proto-team" title=${t('出怪倍速：这一回合守方遇到的敌人数量的倍数（以当前赏金档为 1×）')}>
                 <span>${t('倍速')}</span>
                 <select value=${String(versusSpeed)} disabled=${!!busy}
@@ -932,10 +925,9 @@ export function LobbyScreen() {
   }, []);
   const [simulation, setSimulation] = useState(lobbySimulationPreference);
   // 对抗模式固定 2V2（4 席）：人数选择已按业主裁决移出本页，改在别处调（当前无可调入口）
-  // 对抗规则档（业主 2026-10-26）：赏金 = 线上那套（官方波次 + 替换份额），对抗 = 纯玩家出怪
+  // 规则档两档（业主 2026-11-04 定两档）：赏金 = 线上那套（官方波次 + 替换份额，攻守每回合轮换），控怪 = 纯玩家出怪、阵营固定；
+  // 攻守是否轮换由服务端强制，本页不再给开关。原第三档已撤（服务端收到未知档会回落成赏金）。
   const [versusRule, setVersusRule] = useState('bounty');
-  // 纯对抗里可以关掉「每回合交换攻守」（业主 2026-10-26）；赏金档恒交替。
-  const [versusAlt, setVersusAlt] = useState(true);
   // 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，控怪档不吃这一项
   const [versusSpeed, setVersusSpeed] = useState(1);
   const [difficulty, setDifficulty] = useState(() => preferredDifficulty(lobbySimulationPreference()));
@@ -1056,7 +1048,8 @@ export function LobbyScreen() {
       ...(randomMode ? { variant } : {}), ...(simulation === 'xie' ? { variant: 'xie' } : {}),
       ...(simulation === 'coop' && rogueRules ? { variant: 'rogue' } : {}),
       ...(simulation === 'versus' ? { teamSize: 2, variant: versusRule,
-        versusAlt: versusRule === 'ai' ? false : (versusRule === 'confront' ? versusAlt !== false : true),
+        // 攻守是否轮换由服务端按档强制（赏金轮换 / 控怪固定），这里只把 wire 发干净，值本身不会被采信。
+        versusAlt: versusRule === 'bounty',
         versusSpeed: versusRule === 'bounty' ? versusSpeed : 1 } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });
@@ -1226,7 +1219,7 @@ export function LobbyScreen() {
       brief=${randomMode ? html`<${FirepowerBrief} variant=${fpVariant} onVariant=${pickVariant} />` : null}
       privateRoom=${privateRoom} onPrivate=${setPrivateRoom} online=${online} maint=${maint} busy=${busy} isSearching=${isSearching}
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
-      versusRule=${versusRule} onVersusRule=${setVersusRule} versusAlt=${versusAlt} onVersusAlt=${setVersusAlt}
+      versusRule=${versusRule} onVersusRule=${setVersusRule}
       versusSpeed=${versusSpeed} onVersusSpeed=${setVersusSpeed}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}

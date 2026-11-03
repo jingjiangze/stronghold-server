@@ -629,7 +629,7 @@ export async function createFieldView(host, options = {}) {
 
   function targetCamera(kind, o) {
     const sz = size();
-    const k = kind === 'hidden' ? 'boss' : (['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
+    const k = kind === 'hidden' ? 'boss' : (['prep', 'spawn', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
     // 肉鸽官方地图嵌在 19×21 画框里：不管服务端给的 normal/boss rect，整张画框就是取景
     let rect = stageRec?.rogueFrame ? camRect() : (o.rect ? normRect(o.rect) : (stdField() ? null : camRect()));
     if (k === 'prep' && stdField()) rect = rect ? { ...rect, r0: Math.min(rect.r0, GEO.HAND_ROW) } : null;

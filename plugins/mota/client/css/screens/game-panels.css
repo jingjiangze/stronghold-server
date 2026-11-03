@@ -789,84 +789,10 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .confov .spov__inner::-webkit-scrollbar-thumb, .evov .spov__inner::-webkit-scrollbar-thumb, .rospov .spov__inner::-webkit-scrollbar-thumb {
   background: rgba(234, 255, 248, .26); border-radius: .04rem;
 }
-.confov__groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: .08rem; margin: .1rem 0; }
-.confgroup { display: flex; flex-direction: column; gap: .05rem; padding: .1rem; border: 2px solid var(--line-3); border-radius: .1rem; background: rgba(255, 255, 255, .05); cursor: pointer; text-align: left; color: inherit; }
-.confgroup.is-sel { border-color: var(--mint-400); }
-.confgroup:disabled { opacity: .55; cursor: default; }
-.confgroup__head { display: flex; justify-content: space-between; align-items: baseline; gap: .05rem; }
-.confgroup__name { font-size: calc(.18 * var(--t)); }
-.confgroup__ficon { width: .24rem; height: .24rem; margin-right: .04rem; vertical-align: -.04rem; object-fit: contain; }
-.confgroup__meta { font-size: calc(.12 * var(--t)); color: var(--text-md); }
-.confgroup__icons { display: flex; flex-wrap: wrap; gap: .03rem; }
-.confgroup__ic { width: .28rem; height: .28rem; display: inline-flex; }
-.confgroup__ic img { width: 100%; height: 100%; object-fit: contain; }
-/* the picking area takes its own content height; the panel (.spov__inner) scrolls when the screen is too short, while
-   a type's pool and the placed list keep their own wheel (the 提交 button stays in the header above them) */
-.confov__body { display: grid; grid-template-columns: 1fr 1fr; gap: .14rem; flex: 0 0 auto; min-height: 0; }
-.confov__pool, .confov__placed { display: flex; flex-direction: column; min-height: 0; }
-.confov__h { font-size: calc(.17 * var(--t)); margin: 0 0 .06rem; flex: 0 0 auto; }
-/* 本回合还能放 n 只 (user 2026-10-17): resident above the picking body — remaining value ÷ the current type's
-   cheapest monster, plus the protocol's picks cap. */
-.confov__remain { display: flex; align-items: baseline; gap: .1rem; flex: 0 0 auto; margin: 0; padding: .04rem .12rem;
-  border-left: 2px solid var(--mint-400); background: rgba(23, 249, 183, .06); font-size: calc(.14 * var(--t)); color: var(--text-md); }
-.confov__remain b { color: var(--mint-400); font-size: calc(.16 * var(--t)); font-weight: 800; }
 .confov .spov__turntxt.is-final { color: var(--gold-2); text-shadow: 0 0 .16rem rgba(242, 189, 62, .4); }
-/* Both picking columns scroll on their own — a thin, half-transparent bar and real touch scrolling on phones — and a
-   max-height in vh keeps the panel inside a landscape phone (the header's 提交 stays reachable). */
-.confov__chips, .confov__list {
-  max-height: min(46vh, calc(4.4 * var(--t)));
-  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin; scrollbar-color: rgba(234, 255, 248, .28) transparent;
-}
-.confov__chips::-webkit-scrollbar, .confov__list::-webkit-scrollbar { width: .08rem; height: .08rem; }
-.confov__chips::-webkit-scrollbar-track, .confov__list::-webkit-scrollbar-track { background: transparent; }
-.confov__chips::-webkit-scrollbar-thumb, .confov__list::-webkit-scrollbar-thumb {
-  background: rgba(234, 255, 248, .26); border-radius: .04rem;
-}
-.confov__chips::-webkit-scrollbar-thumb:hover, .confov__list::-webkit-scrollbar-thumb:hover { background: rgba(234, 255, 248, .42); }
-/* touch: a wide, always-visible track — tapping the track pages the column instead of dragging a 3 px thumb (the two
-   columns each scroll their own panel; user 2026-10-18) */
-@media (pointer: coarse) {
-  .confov__chips, .confov__list { scrollbar-width: auto; }
-  .confov__chips::-webkit-scrollbar, .confov__list::-webkit-scrollbar { width: .16rem; }
-  .confov__chips::-webkit-scrollbar-track, .confov__list::-webkit-scrollbar-track { background: rgba(234, 255, 248, .08); }
-  .confov__chips::-webkit-scrollbar-thumb, .confov__list::-webkit-scrollbar-thumb { background: rgba(234, 255, 248, .34); border-radius: .08rem; }
-}
-.confov__chips { display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: .05rem; flex: 1 1 auto; min-height: 1.2rem; overflow-y: auto; overscroll-behavior: contain; }
-.cchip { display: inline-flex; align-items: center; gap: .04rem; flex: 0 0 auto; max-width: 100%; padding: .03rem .07rem; border: 1px solid var(--line-3); border-radius: .09rem; background: rgba(255, 255, 255, .04); cursor: pointer; color: inherit; }
-.cchip:disabled { opacity: .4; cursor: default; }
-.cchip__icon { width: .3rem; height: .3rem; }
-.cchip__icon img { width: 100%; height: 100%; object-fit: contain; }
-.cchip__name { font-size: calc(.14 * var(--t)); }
-.cchip__val { font-size: calc(.11 * var(--t)); color: var(--text-md); }
-.confov__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .05rem; flex: 1 1 auto; min-height: 1.2rem; overflow-y: auto; overscroll-behavior: contain; }
-.confrow { display: flex; align-items: center; gap: .05rem; padding: .04rem .06rem; border: 1px solid var(--line-3); border-radius: .09rem; }
-.confrow__idx { width: .22rem; text-align: center; color: var(--text-md); }
-.confrow__icon { width: .3rem; height: .3rem; }
-.confrow__icon img { width: 100%; height: 100%; object-fit: contain; }
-.confrow__name { flex: 1; font-size: calc(.14 * var(--t)); }
-.confrow__route { display: flex; gap: .03rem; }
-.confrow__gate { padding: .02rem .05rem; font-size: calc(.11 * var(--t)); border-radius: .05rem; border: 1px solid var(--line-3); background: transparent; color: var(--text-md); cursor: pointer; }
-.confrow__gate.is-on { background: var(--mint-400); color: #06210f; border-color: var(--mint-400); }
-/* 队列: default gate 下路 — TAP the row to switch it, PRESS AND HOLD to drag it in the order */
-.confov__tip { font-size: calc(.12 * var(--t)); margin: 0 0 .06rem; flex: 0 0 auto; }
-.confrow { cursor: pointer; touch-action: none; user-select: none; transition: border-color var(--t-fast), transform var(--t-fast); }
-.confrow__gate2 { min-width: .62rem; text-align: center; padding: .02rem .05rem; font-size: calc(.12 * var(--t)); font-weight: 700; border: 1px solid #c4583d; color: #ffab97; background: rgba(196, 88, 61, .12); }
-.confrow.is-upper .confrow__gate2 { border-color: #3d78c4; color: #8cc6ff; background: rgba(61, 120, 196, .12); }
-.confrow.is-drag { border-color: var(--mint-400); box-shadow: 0 0 .18rem rgba(23, 249, 183, .35); transform: scale(1.02); }
-.confrow.is-over { border-color: var(--gold); box-shadow: 0 0 .18rem rgba(246, 163, 41, .4); }
-.confrow__order { display: flex; gap: .02rem; }
-.confrow__order button { background: transparent; border: none; color: var(--text-md); cursor: pointer; padding: .02rem; }
-.confov__empty, .confov__hint { padding: .2rem; text-align: center; }
-/* narrow screens: 4 type cards and 2 picking columns would be narrower than their own labels; stack them and let the
-   .spov__inner scroll (a portrait phone has ~6rem of usable width inside the overlay) */
-@media (max-width: 900px) {
-  .confov__groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 720px) {
-  .confov__body { grid-template-columns: minmax(0, 1fr); }
-  .confov__chips, .confov__list { max-height: none; }
-}
+/* 投放 UI 已整体搬走（2026-11-04）：型号组 / 卡池 / 已放置 / 出怪位置 / boss 格 / 商店那一整套规则都随之删除
+   （投放走商店条；「查看投放」的已投清单见下面 .confdone）—— 对抗面板只剩「选目标」的提示行。 */
+.confov__hint { padding: .2rem; text-align: center; }
 
 /* 对抗期 step 1: the opponents as '?' frames — team colour + P number only (the client never learns who they are) */
 .confov__targets { display: flex; flex-direction: column; align-items: center; gap: .16rem; padding: .12rem 0 .2rem; }
@@ -889,44 +815,38 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .confov__pairs { display: flex; gap: .3rem; }
 .confpair { display: flex; align-items: center; gap: .06rem; font-size: calc(.14 * var(--t)); color: var(--text-md); }
 .confpair.is-self b { color: var(--mint-400); }
-/* 出怪位置 (25 / 50 / 75 % of the round's monster count) */
-.confpos { display: flex; gap: .08rem; margin-bottom: .06rem; }
-.confpos__opt { display: flex; align-items: center; gap: .06rem; padding: .06rem .12rem; font-size: calc(.14 * var(--t));
-  border: 1px solid var(--line-3); border-radius: .08rem; background: rgba(0, 0, 0, .25); color: var(--text-md); cursor: pointer; }
-.confpos__opt.is-on { border-color: var(--mint-400); color: var(--mint-400); background: rgba(23, 249, 183, .08); }
-.confpos__pct { font-size: calc(.11 * var(--t)); color: var(--text-lo); }
 
-/* 怪物卡池（2026-11-03，ui/confrontOverlay.js 的攻方怪物商店）：5 格一行，卡位即按钮；冻结的格右上角 ❄。
-   只在 m.monsterShop.open === true 时渲染 —— 没有这一帧的旧对局 / 守方，面板与改造前完全一致。 */
-.monster-shop { display: flex; flex-direction: column; gap: .06rem; flex: 0 0 auto; margin: .06rem 0 .1rem; padding: .1rem .12rem;
-  border: 1px solid var(--line-3); border-radius: .1rem; background: rgba(255, 255, 255, .05); }
-.monster-shop__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .16rem; }
-.monster-shop__title { margin: 0; font-size: calc(.17 * var(--t)); color: var(--gold-2); }
-.monster-shop__stat { font-size: calc(.12 * var(--t)); color: var(--text-md); }
-.monster-shop__slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .08rem; }
-.monster-shop__slot { position: relative; display: flex; flex-direction: column; border: 1px solid rgba(255, 255, 255, .14);
-  border-radius: .08rem; background: rgba(0, 0, 0, .25); }
-.monster-shop__slot.is-empty { min-height: 1rem; opacity: .3; }
-.monster-shop__slot.is-sold { opacity: .35; pointer-events: none; }
-.monster-shop__slot.is-frozen { border-color: var(--ice); box-shadow: 0 0 .12rem var(--ice-a20); }
-.monster-shop__slot.is-frozen::after { content: '❄'; position: absolute; top: .04rem; right: .06rem;
-  font-size: calc(.12 * var(--t)); color: var(--ice); }
-.monster-shop__buy { flex: 1 1 auto; display: flex; flex-direction: column; gap: .02rem; padding: .1rem .1rem .04rem;
-  border: none; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.monster-shop__buy:disabled { cursor: default; }
-/* 稀有度色边框：T1 灰（默认）→ T5 金 */
-.monster-shop__tier-2 { border-color: #5aa27a; }
-.monster-shop__tier-3 { border-color: #3d78c4; }
-.monster-shop__tier-4 { border-color: #a06fd0; }
-.monster-shop__tier-5 { border-color: var(--gold); }
-.monster-shop__tier { font-size: calc(.12 * var(--t)); font-weight: 700; color: var(--text-md); }
-.monster-shop__name { font-size: calc(.14 * var(--t)); }
-.monster-shop__price { font-size: calc(.12 * var(--t)); color: var(--mint-400); }
-.monster-shop__stock { font-size: calc(.11 * var(--t)); color: var(--text-lo); }
-.monster-shop__freeze { align-self: flex-end; margin: 0 .06rem .06rem 0; padding: .01rem .06rem; cursor: pointer;
-  font-size: calc(.11 * var(--t)); border: 1px solid var(--line-3); border-radius: .05rem; background: transparent; color: var(--text-md); }
-.monster-shop__freeze:disabled { opacity: .4; cursor: default; }
-.monster-shop__hint { margin: 0; font-size: calc(.11 * var(--t)); }
+/* 攻方「查看投放 / 继续投放」（2026-11-04）—— 入口按钮在攻方状态条 gm__attackwait 里（那条状态条本身
+   pointer-events: none，按钮要把点击收回来），点开的已投清单是右下角一张非模态卡片（.confdone），只展示
+   js/ui/confrontOverlay.js 的 ConfrontDoneCard：已投放的怪 + 剩余价值预算，不再是投放 UI。 */
+.confbtn { pointer-events: auto; margin-top: .04rem; padding: .05rem .22rem; font-size: calc(.13 * var(--t)); font-weight: 800;
+  letter-spacing: .06em; color: #06210f; background: var(--mint-400); border: none; cursor: pointer;
+  clip-path: polygon(.06rem 0, 100% 0, 100% calc(100% - .06rem), calc(100% - .06rem) 100%, 0 100%, 0 .06rem); }
+.confbtn:hover { background: #48ffc9; }
+.confdone { position: absolute; right: .3rem; top: 3rem; z-index: 12; width: min(5.4rem, 44vw);
+  display: flex; flex-direction: column; gap: .06rem; padding: .1rem .14rem .12rem;
+  border: 1px solid var(--line-2); background: rgba(10, 15, 13, .94);
+  box-shadow: 0 .1rem .3rem rgba(0, 0, 0, .55);
+  clip-path: polygon(.12rem 0, 100% 0, 100% calc(100% - .12rem), calc(100% - .12rem) 100%, 0 100%, 0 .12rem); }
+.confdone__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .12rem; }
+.confdone__title { font-size: calc(.16 * var(--t)); color: var(--mint-400); letter-spacing: .04em; }
+.confdone__stat { font-size: calc(.12 * var(--t)); color: var(--text-md); }
+.confdone__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .04rem;
+  max-height: min(28vh, calc(3.2 * var(--t))); overflow-y: auto; overscroll-behavior: contain; }
+.confdone__row { display: flex; align-items: center; gap: .06rem; }
+.confdone__icon { width: .26rem; height: .26rem; flex: none; }
+.confdone__icon img { width: 100%; height: 100%; object-fit: contain; }
+.confdone__name { flex: 1; font-size: calc(.13 * var(--t)); color: #eafff8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.confdone__gate { padding: .01rem .05rem; font-size: calc(.11 * var(--t)); font-weight: 700; border: 1px solid #c4583d; color: #ffab97; background: rgba(196, 88, 61, .12); }
+.confdone__gate.is-upper { border-color: #3d78c4; color: #8cc6ff; background: rgba(61, 120, 196, .12); }
+.confdone__empty { margin: 0; font-size: calc(.12 * var(--t)); }
+.confdone__sum { margin: 0; font-size: calc(.11 * var(--t)); }
+
+/* 投放公示（2026-11-04）：不再弹全屏遮罩，改成右下角一张只读卡片 —— pointer-events: none 让战场的点击照常穿透
+   （公示只有 5 秒，期间玩家还在布阵 / 观战；名单内容不需要滚动或点选）。 */
+.rospov--conf { inset: auto .5rem .5rem auto; width: min(6.4rem, 46vw); max-height: 44vh; z-index: 24; pointer-events: none; }
+.rospov--conf .spov__inner { position: static; overflow-y: auto; padding: .1rem .14rem .12rem;
+  border: 1px solid var(--line-2); background: rgba(10, 15, 13, .9); }
 
 /* 2V2 事件期 overlay (ui/eventOverlay.js) — reuses the .spov shell classes. The monster entry of the round sits on top
    (visible before anyone picks), the four targets and the match's three selections scroll under it. */
@@ -1083,24 +1003,20 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .confclash__row { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .confclash__mid { flex-wrap: wrap; overflow: visible; }
 @media (max-height: 431.98px) {
-  /* landscape phone: the two picking columns keep ≥ 3 rows of chips without pushing the panel past the screen */
-  .confov__remain { font-size: calc(.12 * var(--t)); padding: .02rem .08rem; }
-  .confov__chips, .confov__list { min-height: 0; max-height: 38vh; }
+  /* landscape phone: the clash rows keep their height without pushing the panel past the screen */
   .confclash__inner { gap: .08rem .18rem; max-height: 92vh; }
   .confclash__row { gap: .1rem; }
   .confclash__side { width: 1rem; height: 1.15rem; }
   .confclash__mid img { width: .3rem; height: .3rem; }
+  /* 已投清单在横屏手机上让位给战场：收窄、限高 */
+  .confdone { top: 2.6rem; width: min(4.8rem, 52vw); }
+  .confdone__list { max-height: 24vh; }
 }
 @keyframes clashVeil { 0% { opacity: 0; } 8% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes clashRow { 0% { transform: translateY(.4rem); opacity: 0; } 14% { transform: translateY(0); opacity: 1; } }
 
 /* the hunt overlays keep their phase kicker inside the name column (the grid has no own slot for it) */
 .spov__name .micro { display: block; margin-bottom: .06rem; }
-
-/* 自定义路线 / 投放时刻（ui/confrontOverlay.js 的每只怪一行）：下拉选预设路线，数字框填时刻 */
-.confrow__plan { display: inline-flex; align-items: center; gap: .04rem; }
-.confrow__plan select, .confrow__plan input { height: .26rem; font-size: calc(.12 * var(--t)); background: rgba(0, 0, 0, .4); color: var(--text-md); border: 1px solid var(--line-3); border-radius: .05rem; }
-.confrow__plan input { width: .7rem; }
 
 /* 对抗期局内提示（js/screens/game.js）：攻方等待条与守方来袭清单。
    注意：这些类原本写在 plugins/mota/client/css/screens/game.css，但该文件不在 plugin.json 的 code.client 清单里，

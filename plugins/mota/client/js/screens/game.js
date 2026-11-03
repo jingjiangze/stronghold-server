@@ -99,7 +99,7 @@ import { ChoiceOverlay, spMarks } from '../ui/choiceOverlay.js';
 import { EnemyDrawer } from '../ui/enemyDrawer.js';
 import { Ticker } from '../ui/ticker.js';
 import { EmoteWheel } from '../ui/emotes.js';
-import { ConfrontOverlay, ConfrontClash } from '../ui/confrontOverlay.js';
+import { ConfrontOverlay, ConfrontDoneCard, ConfrontClash } from '../ui/confrontOverlay.js';
 import { HexOverlay, normalizeHexOffer } from '../ui/hexOverlay.js';
 import { RelicOverlay, normalizeRelicOffer } from '../ui/relicOverlay.js';
 import { RogueHud } from '../ui/rogueHud.js';
@@ -199,6 +199,22 @@ export function GameScreen() {
 /** A card of a unit of the battle on screen: a unit's, or a crate's / turret's (a device card with its `unitId`, #228). */
 const inBattleCard = (d) => d?.kind === 'unit' || (d?.kind === 'device' && d.device?.unitId != null);
 
+/**
+ * 攻方默认视角的取景（2026-11-04）：守方棋盘的右上出怪口（rows 8–12 里 cols 10 那一侧），预设见
+ * render/projection.js 的 CAMERA_PRESETS.spawn。`fit: true` 走既有的拟合路径，侧边沿用既有 L / R 语义（右半棋盘按
+ * projection.js 的 col → 20 − col 镜像，与 bossPrep 的右半同一套写法）。只有 `myRole === 'attack'` 的观看者会用到。
+ * @param {'L'|'R'} [side]
+ * @returns {{ kind: 'spawn', opts: { rect: { r0:number, r1:number, c0:number, c1:number }, side: 'L'|'R', fit: boolean } }}
+ */
+const spawnCam = (side) => ({
+  kind: 'spawn',
+  opts: {
+    rect: side === 'R' ? { r0: 8, r1: 12, c0: 10, c1: 15 } : { r0: 8, r1: 12, c0: 5, c1: 10 },
+    side: side === 'R' ? 'R' : 'L',
+    fit: true,
+  },
+});
+
 function MatchScreen() {
   useDocClass('sp-in-match');
   useEffect(() => { preloadPopupArt(); }, []);
@@ -243,6 +259,8 @@ function MatchScreen() {
   const [watching, setWatching] = useState(null);
   // 对抗模式（2V2 / 4V4）的面板忙态
   const [confBusy, setConfBusy] = useState(false);
+  // 攻方「查看投放 / 继续投放」的已投清单（2026-11-04）：投放窗口里由攻方状态条的入口按钮切换，非遮罩
+  const [confDoneOpen, setConfDoneOpen] = useState(false);
   const [eventBusy, setEventBusy] = useState(false);        // fieldId the player chose to watch (null = home)
   const [watchWho, setWatchWho] = useState(null);        // { fieldId, playerId }: the teammate picked with 前往查看
   const [drawer, setDrawer] = useState(null);            // 'enemies' | 'info' | null
@@ -299,6 +317,10 @@ function MatchScreen() {
   const [armedCard, setArmedCard] = useState(null);     // the shop bar's armed card { kind, id } (merge tile cue)
   const cc = isClientCombat(pub);
   const battleState = useStore((s) => s.match.battle, shallowEqual); // local battle runner (client-side combat)
+  // 怪物卡池（2026-11-04）：攻方商店的私有帧 —— main.js 把 m.monsterShop 路由进 store.match.monsterShop，服务端只在
+  // 商店开着时发给攻方。攻方靠它拿回「商店条」的显示权（下面 showShop），守方 / 没有这一帧的旧对局行为不变。
+  const monsterShop = useStore((s) => (s.match ? s.match.monsterShop : null));
+  const monsterShopOpen = !!monsterShop && monsterShop.open === true;
 
   const phase = pub?.phase;
   const mode = phaseMode(phase);
@@ -309,6 +331,13 @@ function MatchScreen() {
   // 攻防角色（2V2/4V4）：attack=本回合只投放怪物，defend=本回合下干员防守；非攻防回合 null
   const myRole = meP?.role || null;
   const mySub = myRole === 'attack' ? (pub?.confront?.subs?.[myId] || null) : null;
+  // 对抗面板的阶段（2026-11-04）：'target' = 选目标 10 秒（模态）/ 'roster' = 投放公示 5 秒 / null = 投放窗口。
+  // 按**原值**读 —— 投放窗口就是 stage === null（server/match/match/views.js 只在 PREP 且选目标已结束时这么发）。
+  const confStage = pub?.confront ? (pub.confront.stage != null ? pub.confront.stage : null) : null;
+  // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条，状态条上留「查看投放 / 继续投放」按钮
+  const confDropWindow = !!pub?.confront && pub.confront.active === true && confStage === null && myRole === 'attack';
+  // 离开投放窗口就收起已投清单（下一回合重新打开，不把上一回合的展开状态带过去）
+  useEffect(() => { if (!confDropWindow) setConfDoneOpen(false); }, [confDropWindow]);
   // a spectator seat watches like an eliminated player (it has no m.private and no row in m.public)
   const alive = spectator ? false : priv ? priv.alive !== false : meP?.alive !== false;
   // 协议已失效 (ui/downedPlate.js): once, when the player's own `alive` — as read from real data, never a reload's empty
@@ -336,7 +365,9 @@ function MatchScreen() {
   const prepLoadoutOpen = ruleOption(roomRules, 'prepLoadout') === 'prep';
   const hasOffers = !!pub?.offers?.length;
   const editable = !offerBlocksPrep(pub?.offers) && phase === PHASE.PREP && !!priv && alive && !priv.ready && !watchingOther && !hasPersonalChoice && myRole !== 'attack';
-  const showShop = !!priv && alive && myRole !== 'attack' && (phase === PHASE.PREP || phase === PHASE.SP_DRAFT || phase === PHASE.ROUND_START) && !watchingOther;
+  // 攻方也画商店条（2026-11-04）：他这一回合不摆干员，但要用怪物卡池买 / 投放怪物 —— 只放开**显示**，editable 不动
+  // （攻方依旧不能摆干员）。没有怪物商店帧时与改造前逐字节一致：myRole === 'attack' ⇒ 整条不画。
+  const showShop = !!priv && alive && (myRole !== 'attack' || monsterShopOpen) && (phase === PHASE.PREP || phase === PHASE.SP_DRAFT || phase === PHASE.ROUND_START) && !watchingOther;
   const layersDisabled = phase === PHASE.UNITE || isBossPhase(phase);
   const sp = phase === PHASE.SP_DRAFT ? normalizeSp(pub?.sp, players) : null;
   const total = phaseTotalSeconds(pub, gd.config, myId);
@@ -407,6 +438,10 @@ function MatchScreen() {
   live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
+  // 攻方默认视角（2026-11-04）：攻防回合的进攻方没有自己的棋盘，投放窗口（PREP）与 COMBAT 观战都把镜头放在守方棋盘的
+  // 右上出怪口（模块级的 spawnCam + render/projection.js 的 CAMERA_PRESETS.spawn）。
+  // 判据是显式的 `myRole === 'attack'`：守方与 coop（myRole 为 null）永不进入这两个分支 —— 相机请求与改造前逐字节一致。
+  const attackView = myRole === 'attack';
   // the own prep board: the normal board, or — in the prep of a boss round — the player's half of the boss field
   // (research 09 §1.2: the right-hand player's board mirrored; gameLogic prepCamera). The DOM fallback view keeps the
   // own board's layout there (every coordinate the UI handles is a board coordinate either way) and draws the tiles of
@@ -579,7 +614,8 @@ function MatchScreen() {
         // the battle we just left (or whatever was stored before mount) must not be re-entered next combat;
         // an m.field that arrives during prep (the upcoming battle) is a new object and will be entered
         staleFieldRef.current = field;
-        const pc = prepCameraFor(pub, myId, shopFolded, stageLayout);
+        // 攻方（进攻方）没有自己的棋盘：投放窗口的镜头落在守方棋盘的右上出怪口（见上方 attackView / spawnCam）
+        const pc = attackView ? spawnCam('L') : prepCameraFor(pub, myId, shopFolded, stageLayout);
         setCam(pc.kind, pc.opts);
         prepCamSeen.current = prepCamKey;
         viewModeRef.current = 'prep';
@@ -636,8 +672,15 @@ function MatchScreen() {
     // a lone player's boss field (solo modes, the odd player of a co-op Final Assault: the `_s` templates route every
     // enemy to the left objective) is framed on its own half like the ‹ › half view; pairs start on 全景
     const lone = kind === 'boss' && members.length === 1;
-    setCam(kind, helperHalf ? layerCamera(field, helperHalf, side)
-      : lone ? { rect: field.rect, side, half: true } : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}) });
+    // 攻方（进攻方）在 COMBAT 观战里没有自己的 field：取景落在守方棋盘的右上出怪口（attackView / spawnCam）。
+    // 守方、coop 与观战席位走下面原样的一支 —— 非攻方分支的取景参数与改造前完全一致。
+    if (attackView) {
+      const sc = spawnCam(side);
+      setCam(sc.kind, sc.opts);
+    } else {
+      setCam(kind, helperHalf ? layerCamera(field, helperHalf, side)
+        : lone ? { rect: field.rect, side, half: true } : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}) });
+    }
     audio.setFieldUnits(field.units);
     if (early && early.length) {
       // replay state-bearing events only (a burst of stale hit sparks / damage numbers would look wrong)
@@ -660,7 +703,7 @@ function MatchScreen() {
       hudRef.current = snapHud(earlySnap);
       setHud(hudRef.current);
     }
-  }, [view, showPrep, priv, editable, field, combat, mode, watchingOther, watching, holdSeq]);
+  }, [view, showPrep, priv, editable, field, combat, mode, watchingOther, watching, holdSeq, attackView]);
 
   // the round start (PR #416 by @Cromemadnd; the maintainer's confirmation from official play, 2026-10-13): the own board's
   // pieces replay their Start clip and landing sound one after another in deployment order — once per round, in 回合开始, on
@@ -769,9 +812,10 @@ function MatchScreen() {
     if (!view || viewModeRef.current !== 'prep' || !showPrep) return;
     if (live.current.facing) cancelFacingRef.current();
     setSel(null);
-    const pc = prepCameraFor(pub, myId, shopFolded, stageLayout);
+    // 攻方没有自己的棋盘：投放窗口保持默认视角（spawn），不被「本回合的棋盘相机」抢回去
+    const pc = attackView ? spawnCam('L') : prepCameraFor(pub, myId, shopFolded, stageLayout);
     setCam(pc.kind, pc.opts);
-  }, [view, prepCamKey, showPrep]);
+  }, [view, prepCamKey, showPrep, attackView]);
 
   // the shop bar folded (收起) or unfolded on the own prep board (public issue #5: the board did not grow, while the
   // battle and scouting views had no bar to make room for): the official shop-collapsed camera or the shop camera
@@ -786,6 +830,8 @@ function MatchScreen() {
   // during the held drag makes that release frame return null; the zoom stays owed until the pen closes
   // (deployZoomRemember). [ASSUMED] no official source settles that order.
   useEffect(() => {
+    // 攻方没有自己的棋盘：折叠 / 部署缩放的镜头不适用（否则商店条的 收起/展开 会把 spawn 视角抢回 prep）
+    if (attackView) return;
     const step = deployZoomStep(deployZoomedRef.current, deployFold);
     const next = prepDeployCamera({
       pub, myId, deployFold, releaseDeploy: step.release, folded: shopFolded,
@@ -797,15 +843,17 @@ function MatchScreen() {
     deployZoomedRef.current = deployZoomRemember(step, { next, pen });
     // the fold zoom and the restore fly with the short FOLD_CAMERA_MS, not a generic camera flight
     if (next) setCam(next.kind, { ...next.opts, ms: FOLD_CAMERA_MS });
-  }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);
+  }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey, attackView]);
 
   // 联防 / 最终攻势: the ‹ › pill moves the camera between the field's halves and 全景 (research 09 §3.1)
   useEffect(() => {
+    // 攻方的 COMBAT 观战固定用默认视角（spawn），不被半场分层的镜头覆盖
+    if (attackView) return;
     if (!view || !field || !field.local || !isCombatPhase(phase)) return;
     if (!cameraLayers(field, pub, myId).length) return;
     const kind = field.kind === 'hidden' ? 'boss' : field.kind;
     setCam(kind, layerCamera(field, layer, sidesOf(field)[myId] || 'L'));
-  }, [layer]);
+  }, [layer, attackView]);
 
   // 前往查看 of a teammate on a two-half shared field (a 联防 leaker / an eliminated spectator tapping a helper or a pair
   // player): the camera goes to that player's half, so the ‹ › pill reads "👁 name" like the strip's tag (DESIGN §20.15;
@@ -1800,6 +1848,7 @@ function MatchScreen() {
 
       ${showShop ? html`<${ShopBar} priv=${priv} editable=${editable} collapsed=${barCollapsed} refreshBusy=${refreshBusy} onCollapse=${setCollapsed}
         barRef=${barRef} offBonds=${offBonds} econ=${econ}
+        monsterShop=${myRole === 'attack' ? monsterShop : null}
         onOpenShop=${String(pub?.modeId || '').startsWith('mode_xie_') ? () => { net.request('g.meltOpen', {}).catch(() => {}); } : null}
         onBuy=${buy} onLevel=${() => actions.levelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
@@ -1844,9 +1893,9 @@ function MatchScreen() {
       ${showMetrics && metricsOpen ? html`<${CombatMetricsPanel} myId=${myId} onClose=${() => setMetricsOpen(false)} />` : null}
       ${pub?.phase === PHASE.EVENT ? html`<${EventOverlay} pub=${pub} busy=${eventBusy}
         onPick=${async (target) => { setEventBusy(true); try { await actions.eventPick(target); } finally { setEventBusy(false); } }} />` : null}
-      ${pub?.confront && ((myRole === 'attack' && (pub.confront.active || pub.confront.roster)) || (myRole === 'defend' && pub.confront.roster)) ? html`<${ConfrontOverlay} pub=${pub} busy=${confBusy}
-        onTarget=${async (targetPlayerId) => { setConfBusy(true); try { await actions.confrontTarget(targetPlayerId); } finally { setConfBusy(false); } }}
-        onConfirm=${async (group, position, picks, commit, bosses) => { setConfBusy(true); try { await actions.confront(group, position, picks, commit, bosses); } finally { setConfBusy(false); } }} />` : null}
+      ${pub?.confront && ((myRole === 'attack' && pub.confront.active === true && confStage === 'target') || confStage === 'roster')
+        ? html`<${ConfrontOverlay} pub=${pub} busy=${confBusy}
+        onTarget=${async (targetPlayerId) => { setConfBusy(true); try { await actions.confrontTarget(targetPlayerId); } finally { setConfBusy(false); } }} />` : null}
       ${pub?.confront && pub.confront.applied ? html`<${ConfrontClash} pub=${pub} />` : null}
       ${myRole === 'attack' && (phase === PHASE.ROUND_START || phase === PHASE.PREP || phase === PHASE.COMBAT || phase === PHASE.SETTLE) ? html`<div class="gm__attackwait" role="status" data-testid="attack-wait">
         <div class="gm__attackwait__in">
@@ -1854,8 +1903,12 @@ function MatchScreen() {
           <div class="gm__attackwait__t"><${Icon} name="sword" />${t('本回合你是进攻方')}</div>
           <p>${t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
           ${mySub ? html`<span class="num">${t('本回合投放 {n} 只', { n: mySub.total })}</span>` : html`<span class="t-dim">${t('等待投放结算')}</span>`}
+          ${confDropWindow ? html`<button type="button" class="confbtn" aria-expanded=${confDoneOpen} aria-controls="confront-done-card"
+            data-testid="confront-done-toggle" onClick=${() => setConfDoneOpen((v) => !v)}>
+            ${confDoneOpen ? t('收起已投清单') : t('查看投放 / 继续投放')}</button>` : null}
         </div>
       </div>` : null}
+      ${confDropWindow && confDoneOpen ? html`<${ConfrontDoneCard} pub=${pub} shop=${monsterShop} />` : null}
       ${myRole === 'defend' && phase === PHASE.PREP && Array.isArray(priv?.incoming) && priv.incoming.length ? html`<div class="gm__incoming" data-testid="incoming">
         <div class="gm__incoming__in">
           <div class="gm__incoming__t"><${Icon} name="sword" />${t('来袭怪物')} <b class="num">${priv.incoming.length}</b></div>

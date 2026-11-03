@@ -306,11 +306,10 @@ export class Match {
     this.roomVariant = typeof opts.variant === 'string' ? opts.variant : null;
     this.coopHuntOn = false;   // 同盟狩猎未启用（对抗模式不需要）
     this.teamSize = this.isVersus && Number.isInteger(opts.teamSize) && opts.teamSize > 0 ? opts.teamSize : (this.isVersus ? 2 : 1);
-    // 对抗规则档（玩家 2026-10-26）：'bounty' = 赏金（线上那套）/ 'confront' = 对抗（纯玩家出怪）
-    // / 'ai' = AI 对抗（你控怪、AI 布防，数值同赏金档但固定攻守）
-    // 三档原值保留（versus-room 的 versusLobby.js 会下发这三档）；modeId 前缀（子进程通道，isXie 同款）仍映射到 confront
+    // 对抗规则档（玩家 2026-10-26 / 2026-11-04 定两档）：'bounty' = 赏金（线上那套）/ 'confront' = 对抗（纯玩家出怪）
+    // modeId 前缀（子进程通道，isXie 同款）仍映射到 confront；其余（含已撤的 'ai'）一律回落 bounty
     this.versusRule = !this.isVersus ? null
-      : (opts.versusRule === 'bounty' || opts.versusRule === 'confront' || opts.versusRule === 'ai') ? opts.versusRule
+      : (opts.versusRule === 'bounty' || opts.versusRule === 'confront') ? opts.versusRule
       : /^mode_confront_/.test(String(opts.modeId || '')) ? 'confront' : 'bounty';
     // 按模式独立的 AI 策略（2026-11-03）：未显式指定时按 mode 表解析，默认 legacy = 改造前的行为。
     this.botStrategy = botStrategyFor(this, opts.botStrategy ?? null);
@@ -324,6 +323,8 @@ export class Match {
     this.defenderTeam = null;
     /** 本回合的狩猎期（投放）是否已经结束：防止守方 PREP 结束后又跳回 CONFRONT。 */
     this._confrontDoneRound = 0;
+    /** 本回合的目标选择是否已经做完（enterConfront → finishConfrontTargets）：PREP 结束时据此决定冻结投放还是回 CONFRONT。 */
+    this._confrontTargetsRound = 0;
     this.difficulty = opts.difficulty;
     this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
     this.seed = (Number(opts.seed) >>> 0) || 1;

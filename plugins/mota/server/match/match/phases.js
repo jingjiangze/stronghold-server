@@ -446,6 +446,7 @@ export class MatchPhases {
     this.attackingTeam = role ? role.attack : null;
     this.defenderTeam = role ? role.defend : null;
     this._confrontDoneRound = 0;
+    this._confrontTargetsRound = 0;
     // 战场刷新（业主 2026-10-22 定稿）：
     //   * 「随机地图」开着（默认）：协同共竞**每回合**抽一张新图（原有规则）；其他玩法沿用官方规则（开局一张，只在 boss 关换）。
     //   * 关掉：开局前已经随机抽了一张（Match 的 setupMatchWaves），整局不换，**只在 boss 关（含隐藏 boss 关）刷新一次**。
@@ -470,6 +471,8 @@ export class MatchPhases {
     this.sp = null;
     this.wave = null;
     this.bossWaves = null;
+    // 卡池快照跟随波次一起在回合边界清掉（boss 回合不建普通波次 ⇒ 保持 null，卡池回落 confrontGroups）。
+    this._roundOfficialSpawns = null;
     // 对抗模式：上一回合的 狩猎期 / 事件期状态不得漏进本回合的 PREP / 视图
     if (this.isVersus) {
       this.confrontStage = null; this.confront = null; this.confrontSubs = null; this.confrontTargets = null;
@@ -491,6 +494,10 @@ export class MatchPhases {
     } else {
       // stageId: a workshop stage may bind its own wave table to a round (shared/waveAuthoring.js; waves.js buildNormalWave)
       this.wave = buildNormalWave(this.gd, this.rngWaves, this.factions, r, this.stageId);
+      // 怪物卡池真源（业主 2026-11-04）：本回合卡池 = **该回合的官方出怪**，然后随机。
+      // 只读快照（enemyKey + count）：**不得原地修改 this.wave.spawns** —— 那是守方战斗输入，
+      // 波次价值 / 替换份额 / 预算全以它为准；卡池只另存一份「本回合官方出了哪些怪、各几只」。
+      this._roundOfficialSpawns = (this.wave?.spawns || []).map((s) => ({ enemyKey: s.enemyKey, count: Math.max(1, Number(s.count) || 1) }));
       // 对抗：记下本回合真正生成的怪 —— 狩猎期「只能选该回合往前出过的怪」以它为真源（业主 2026-10-26）
       if (this.isVersus) {
         try { this.confrontRecordWave(r, this.wave); } catch (e) { this.reportError('confrontRecordWave', e); }

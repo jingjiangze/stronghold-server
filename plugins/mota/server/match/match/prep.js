@@ -11,10 +11,13 @@ import { testSlice } from '../testTrace.js';
 import { DELAYS } from './common.js';
 
 export class MatchPrep {
-  /** 本回合参加休整的玩家：攻防回合只有守方（攻方只投放）；普通回合全体存活玩家。 */
+  /**
+   * 本回合参加休整的玩家：**全体存活玩家**。
+   * 攻防回合也一样 —— 攻方在目标选择结束（finishConfrontTargets）后就进入这同一个 PREP：攻方用商店 / 投放，
+   * 守方照常布防，两边共用一个 deadline（gd.prepTime(round)），不再有独立的怪物投放窗口。
+   */
   prepPlayers() {
-    if (typeof this.isRoleRound !== 'function' || !this.isRoleRound()) return this.alivePlayers();
-    return this.defenders();
+    return this.alivePlayers();
   }
 
   enterPrep() {
@@ -31,14 +34,8 @@ export class MatchPrep {
       this.dispatch(ps, 'onPrepStart', { round: this.round });
       ps.recompute();
     }
-    // 攻方本回合没有战场：不进入休整，只做待合并装备的清理并直接 Ready，等待守方开打。
-    for (const ps of this.alivePlayers()) {
-      if (prep.includes(ps)) continue;
-      try { ps.checkItemMerges(); } catch { /* ignore */ }
-      ps.recompute();
-      ps.ready = true;
-      ps.dirty();
-    }
+    // 攻方不再有「跳过休整、直接 Ready」的特例：攻守同进本 PREP（prepPlayers 已含全体存活玩家），
+    // 商店的开张在 finishConfrontTargets（目标选择结束时）已经完成。
     // A co-op room waits for every alive seat's Ready (maybeEndPrep), so a human able to press it must have a
     // deadline — otherwise that human's silence stalls the match forever (docs/PS100-MIGRATION.md §5, the
     // 「1 真人 + N AI」 room: `prepFallbackGuard`). `soloUntimed` still governs the OTHER phases (INFO_CHECK,
@@ -230,13 +227,16 @@ export class MatchPrep {
     } else if (r === this.gd.hiddenRound) {
       this.startFinalAssault(true);
     } else if (this.isRoleRound && this.isRoleRound() && this._confrontDoneRound !== this.round) {
-      // 防御性兜底：攻防回合若还没投放，先回到攻方投放，再进守方休整
-      this.enterConfront();
+      // 攻防回合：目标选择在 PREP 开头就做完了（finishConfrontTargets → enterPrep），所以 PREP 结束时**不再**回 CONFRONT，
+      // 而是冻结投放（finishConfront：收尾未提交者 → this.confront → 悬赏名单 → COMBAT）。
+      // 只有「本回合还没做过目标选择」的旧/异常路径才回 CONFRONT 补做（防御性兜底，enterConfront 的 target 分支）。
+      if (this._confrontTargetsRound === this.round) this.finishConfront();
+      else this.enterConfront();
     } else {
       this.startCombat();
     }
   }
 
-  /** 攻方投放结束后的守方休整（与 enterPrep 同一套逻辑，仅参战名单不同）。 */
+  /** 兼容入口：攻方投放结束后的休整（= enterPrep；当前流程里攻守同进一个 PREP，不再单独经过这里）。 */
   enterDefenderPrep() { this.enterPrep(); }
 }

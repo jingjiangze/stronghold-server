@@ -10,7 +10,7 @@ import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
 // 怪物卡池（2026-11-03）：攻方的怪物商店（买卡进投放草稿 / 刷新 / 冻结 / 撤回草稿）
-import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, monsterShopFrame } from '../monsterShop.js';
+import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, placeMonster, monsterShopFrame } from '../monsterShop.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
@@ -24,6 +24,8 @@ export class MatchIntents {
       case 'g.monsterFreeze': return this.monsterShopReply(ps, freezeMonster(this, ps, Number(msg.index)));
       // 撤回一张投放草稿（复验修复 1.4）：index 是草稿下标；库存退回本队的池
       case 'g.monsterDrop': return this.monsterShopReply(ps, dropMonster(this, ps, Number(msg.index)));
+      // 点卡即投放（业主 2026-11-04）：卡直接投到上/下出怪口，count 可选（缺省 1）；用掉后该格自动补位
+      case 'g.monsterPlace': return this.monsterShopReply(ps, placeMonster(this, ps, Number(msg.index), msg.gate, msg.count == null ? 1 : Number(msg.count)));
       case 'g.hex': return this.hexPick(ps, msg.hexId);
       case 'g.hexReroll': return this.hexReroll(ps, msg.slot);
       case 'g.meltOpen': return this.meltdownRequest(ps);

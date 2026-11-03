@@ -31,7 +31,7 @@ import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, HexBadge, TierChip, Tooltip, MicroLabel } from './components.js';
 import { Img, BondGlyph, CoinGlyph, GIcon, RichText } from './gameComponents.js';
 import { priceTone, mergeProgress, mergeTarget, shopBlockReason, chessLoadout, offerHeader, briefingBondTip, ownStandIn, standInLoadout, standInLabel, standInTip, standInForText, ownDiyRecord, diyGetter } from './gameLogic.js';
-import { itemIconUrl, profIconUrl, uiUrl, skillIconUrl, skillRecordIconUrl, moduleTypeIconUrl } from './assetUrls.js';
+import { itemIconUrl, profIconUrl, uiUrl, skillIconUrl, skillRecordIconUrl, moduleTypeIconUrl, enemyIconUrl } from './assetUrls.js';
 import { portraitUrlOf, currentAppearanceLookup } from './portraitChain.js';
 import { data, useData } from '../data.js';
 import { hotkeyLabelOf } from './settings.js';
@@ -43,7 +43,7 @@ import { longPress, heldClick } from './longPress.js';
 // 协同经济的三个动作 (后勤项目/表决/救济) 一直写成裸 `actions.xxx`：这个模块从来没 import 过 actions，
 // 点下去只会抛 ReferenceError 并被上层吞掉 —— 表现就是「按钮点了没反应」(user report 2026-10-17)。
 // gameActions 只依赖 net/toasts/audio，反向不依赖本文件，不成环。
-import { actions } from './gameActions.js';
+import { actions, act } from './gameActions.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -167,6 +167,94 @@ function SkillBadge({ chess, lo, standIn = false }) {
     <${Img} src=${src} fallback=${slot ? html`<span class="scard__sglyph num">${slot}</span>` : html`<${GIcon} name="bolt" />`} />
     ${mod && mod.typeName ? html`<span class="scard__mod" data-type=${mod.typeName}><${Img} src=${moduleTypeIconUrl(data.get('local'), mod.typeName)} class="scard__modicon" />${mod.typeName}</span>` : null}
   </span>`;
+}
+
+/**
+ * 投放数量的上限（怪物卡池，2026-11-04）：`min(20, 库存 left, floor(本回合剩余预算 / 单价))` —— 与服务端的夹紧**同源**
+ * （server/match/monsterShop.js `placeMonster`：`Math.min(20, pool.left(key), Math.max(0, affordable), want)`，
+ * `affordable = price > 0 ? Math.floor(left / price) : 0`）。所以这里算出来的就是服务端会接受的最大只数；
+ * 返回 0 ⇒ 一只都投不了（卡面按 is-disabled 画）。
+ * @param {{ price?:number, left?:number }} slot 私有帧 `m.monsterShop.slots[i]`
+ * @param {number} budget 本回合剩余预算（`m.monsterShop.left`）
+ * @returns {number}
+ */
+export function monsterPlaceCap(slot, budget) {
+  const price = Math.max(0, Number(slot?.price) || 0);
+  const stock = Math.max(0, Number(slot?.left) || 0);
+  const rest = Math.max(0, Number(budget) || 0);
+  const affordable = price > 0 ? Math.floor(rest / price) : 0;
+  return Math.max(0, Math.min(20, stock, affordable));
+}
+
+/**
+ * 怪物卡（对抗·攻方商店，2026-11-04）：外壳照 `ChessCard` —— 同一套 `.scard` + `scard--t<tier>`（测试按
+ * `.shopbar__cards .scard` 选卡，CSS 的边框/悬停/冻结/已售一套全部复用），卡面换成怪物：图标
+ * `enemyIconUrl`（assetUrls.js:157）、名称、阶、单价、库存 `left/cap`。点卡 = 选中并打开下方的「选门 + 选数量」浮层；
+ * 右键 = 冻结这一格（触摸屏用浮层里的 冻结 按钮）。
+ * @param {{ slot:{ index:number, key:string, name:string, tier:number, price:number, frozen?:boolean, left:number, cap:number },
+ *   idx:number, selected?:boolean, frozen?:boolean, poor?:boolean,
+ *   onPick:(slot:any)=>void, onFreeze:(slot:any)=>void }} props
+ */
+export function MonsterCard({ slot, idx, selected = false, frozen = false, poor = false, onPick, onFreeze }) {
+  // 与 ChessCard 同一个理由：图标表随 assets 清单在运行时到货，早画的卡会永远停在空图标上
+  useData('assets');
+  const m = data.get('assets');
+  const tier = Number(slot?.tier) || 1;
+  const price = Math.max(0, Number(slot?.price) || 0);
+  const left = Math.max(0, Number(slot?.left) || 0);
+  const cap = Math.max(0, Number(slot?.cap) || 0);
+  const name = slot?.name || slot?.key || '';
+  const stock = `${left}/${cap}`;
+  return html`<button type="button" class=${cx('scard', `scard--t${tier}`, 'scard--monster', frozen && 'is-frozen', selected && 'is-armed', poor && 'is-disabled')}
+      data-shop-slot=${idx} data-monster-key=${slot?.key}
+      title=${t('{name}：点击选择投放的门与数量，右键冻结这一格', { name })}
+      onClick=${() => onPick(slot)} onContextMenu=${(e) => { e.preventDefault(); onFreeze(slot); }}
+      aria-label=${t('{name}，价格 {price}，库存 {left}/{cap}', { name, price, left, cap })} aria-pressed=${String(!!selected)}>
+    <span class="scard__bg" aria-hidden="true"></span>
+    <span class="scard__top">
+      <${TierChip} tier=${tier} size="md" />
+      <${HexBadge} value=${price} tone=${poor ? 'dark' : 'gold'} size="md" class=${cx('scard__price', poor && 'is-poor')} title=${t('价格')} />
+    </span>
+    <span class="scard__art" aria-hidden="true"><${Img} src=${enemyIconUrl(m, slot?.key)} class="scard__monicon" eager=${true} fallback=${html`<${GIcon} name="skull" />`} /></span>
+    <span class="scard__body">
+      <span class="scard__name">${name}</span>
+      <span class="scard__class"><span>T${tier}</span></span>
+    </span>
+    <span class="scard__stock">${stock}</span>
+    ${frozen ? html`<span class="scard__ice" aria-hidden="true"><${Icon} name="snow" /></span>` : null}
+  </button>`;
+}
+
+/**
+ * 怪物卡下方的「选门 + 选数量」浮层（同 ShopBar 内渲染，不是全局 modal）：两个门按钮、数量步进（− / + / 直接输入，
+ * 夹在 `[1, min(20, 库存, 预算能买的只数)]`）、投放、冻结、取消。
+ * @param {{ slot:any, cap:number, count:number, gate:'upper'|'lower', frozen:boolean,
+ *   onGate:(g:'upper'|'lower')=>void, onCount:(n:number)=>void, onPlace:(slot:any, gate:string, count:number)=>void,
+ *   onFreeze:(slot:any)=>void, onClose:()=>void }} props
+ */
+function MonsterPickPanel({ slot, cap, count, gate, frozen, onGate, onCount, onPlace, onFreeze, onClose }) {
+  const max = Math.max(0, Number(cap) || 0);
+  const n = Math.max(0, Math.min(max, Math.trunc(Number(count) || 0)));
+  const step = (d) => onCount(Math.max(1, Math.min(max, (n || 1) + d)));
+  return html`<div class="mshop-pop" role="dialog" aria-label=${t('投放 {name}', { name: slot?.name || '' })}>
+    <div class="mshop-pop__head"><b>${slot?.name || slot?.key || ''}</b><span class="num">${Number(slot?.price) || 0}</span></div>
+    <div class="mshop-pop__gates" role="group" aria-label=${t('投放位置')}>
+      <button type="button" class=${cx('mshop-pop__gate', gate === 'upper' && 'is-on')} onClick=${() => onGate('upper')}>${t('上位门')}</button>
+      <button type="button" class=${cx('mshop-pop__gate', gate === 'lower' && 'is-on')} onClick=${() => onGate('lower')}>${t('下位门')}</button>
+    </div>
+    <div class="mshop-pop__count">
+      <button type="button" class="mshop-pop__step" disabled=${n <= 1} onClick=${() => step(-1)} aria-label=${t('减少一只')}>-</button>
+      <input class="mshop-pop__num" type="number" inputMode="numeric" min="1" max=${max} value=${n > 0 ? String(n) : ''}
+        onInput=${(e) => onCount(Number(e.target.value))} aria-label=${t('数量')} />
+      <button type="button" class="mshop-pop__step" disabled=${n >= max} onClick=${() => step(1)} aria-label=${t('增加一只')}>+</button>
+      <span class="mshop-pop__cap">${t('上限 {max}', { max })}</span>
+    </div>
+    <div class="mshop-pop__acts">
+      <button type="button" class="mshop-pop__place" disabled=${max < 1} onClick=${() => onPlace(slot, gate, n)}>${t('投放')}</button>
+      <button type="button" class="mshop-pop__freeze" onClick=${() => onFreeze(slot)}>${frozen ? t('解冻') : t('冻结')}</button>
+      <button type="button" class="mshop-pop__cancel" onClick=${onClose}>${t('取消')}</button>
+    </div>
+  </div>`;
 }
 
 /**
@@ -404,11 +492,14 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
  * @param {{ priv:any, editable:boolean, collapsed:boolean, refreshBusy?:boolean, onCollapse:(c:boolean)=>void,
  *   onBuy:(i:number)=>void, onLevel:Function, onRefresh:Function, onFreeze:Function, onDetail:(id:string, kind?:string, hint?:string|null)=>void,
  *   onDetailClose?: () => void, onRefuse?: (reason: string) => void, barRef:any,
- *   reward?: any, onReward?: (idx:number)=>void, onRewardLater?: Function, offBonds?: Set<string>|null }} props — offBonds:
- *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards
+ *   reward?: any, onReward?: (idx:number)=>void, onRewardLater?: Function, offBonds?: Set<string>|null,
+ *   monsterShop?: any }} props — offBonds:
+ *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards.
+ *   monsterShop: 对抗·攻方商店的私有帧 `m.monsterShop`（game.js 传入；只有攻方会收到 open:true 的帧 —— 服务端
+ *   `monsterShopFrame` 只发给 confrontActors）。缺省 null / `open !== true` ⇒ 每一处分支都走改造前的老路。
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
-  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null }) {
+  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null, monsterShop = null }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -421,6 +512,15 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   const frzReason = editable ? null : shopBlockReason('freeze', { priv, editable });
   const free = Number(shop.freeRefreshes) || 0;
   const showReward = !!(reward && Array.isArray(reward.slots) && reward.slots.length);
+  // 怪物卡池（2026-11-04）：攻方这一回合的商店。`open !== true`（守方 / 商店没开 / 没有这一帧的旧对局）⇒ monsterOn
+  // 为假 ⇒ 下面的干员卡、刷新、冻结全部照旧，一条新分支都不进。
+  const monsterOn = !!monsterShop && monsterShop.open === true;
+  const monsterSlots = monsterOn && Array.isArray(monsterShop.slots) ? monsterShop.slots : [];
+  const monsterLeft = monsterOn ? Math.max(0, Number(monsterShop.left) || 0) : 0;
+  const mRefPrice = monsterOn ? Math.max(0, Number(monsterShop.refreshPrice) || 0) : 0;
+  const mFreeRef = monsterOn ? Math.max(0, Number(monsterShop.freeRefreshes) || 0) : 0;
+  // 免费次数用完且剩余预算不够刷新的价钱 ⇒ 刷新灰掉（与卡面「投不起就灰」同一个口径）
+  const mRefBlocked = monsterOn ? (mFreeRef <= 0 && mRefPrice > monsterLeft) : false;
 
   // A completed upgrade changes the level, so its confirmation cannot carry into the next upgrade.
   const levelKey = `lv:${shop.level ?? 1}`;
@@ -439,6 +539,29 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   const armedSig = armedSlot ? `${armedSlot.kind}:${armedSlot.id}` : '';
   useEffect(() => { onArm?.(armedSlot ? { kind: armedSlot.kind === 'item' ? 'item' : 'chess', id: armedSlot.id } : null); }, [armedSig]);
   useEffect(() => () => onArm?.(null), []);
+  // 怪物卡池的浮层状态（hook 必须排在 collapsed 的提前 return 之前）：{ index, count } + 粘住的门选择。
+  // 新回合 / 一次刷新之后浮层自动收起 —— 那时锚点卡可能已经换了内容（服务端重发牌）。
+  const [mPick, setMPick] = useState(null);
+  const [mGate, setMGate] = useState('lower');
+  useEffect(() => { if (!monsterOn) setMPick(null); }, [monsterOn]);
+  useEffect(() => { setMPick(null); }, [monsterShop?.round, monsterShop?.refreshes]);
+  /** 点卡 = 选中（再点同一张收起）；浮层读的是**当前帧**的这一格，刷新后不会停在旧卡上。 */
+  const openMonsterPick = (slot) => {
+    if (!slot) return;
+    const index = Number(slot.index);
+    setMPick((cur) => (cur && cur.index === index ? null : { index, count: 1 }));
+  };
+  const setMCount = (count) => setMPick((cur) => (cur ? { ...cur, count } : cur));
+  /** 投放：夹到 [1, cap] 再发（cap 与服务端同源，见 monsterPlaceCap）；一只都投不起就说清原因。 */
+  const placeMonster = (slot, gate, count) => {
+    if (!slot) return;
+    const max = monsterPlaceCap(slot, monsterLeft);
+    if (max < 1) { onRefuse?.(t('剩余预算不足，投不下一只')); return; }
+    const n = Math.max(1, Math.min(max, Math.trunc(Number(count) || 1)));
+    void act('g.monsterPlace', { index: Number(slot.index), gate: gate === 'upper' ? 'upper' : 'lower', count: n }, { sfx: 'drop' });
+  };
+  const freezeMonsterSlot = (slot) => { if (slot) void act('g.monsterFreeze', { index: Number(slot.index) }, { sfx: 'freeze' }); };
+  const refreshMonsterShop = () => { if (!mRefBlocked) void act('g.monsterRefresh', {}, { sfx: 'refresh' }); };
   /** First tap arms + opens the detail; the second buys (or says why it can't). */
   const tapCard = (kind, idx, slot, detailKind, reason, buy) => {
     const key = armKey(kind, idx, slot);
@@ -462,30 +585,51 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   }
 
   const hk = { refresh: hotkeyLabelOf('refresh'), freeze: hotkeyLabelOf('freeze') }; // the player's keys (设置 → 快捷键)
-  return html`<section class=${cx('shopbar', frozen && 'is-frozen', !editable && 'is-locked', showReward && 'has-reward', armed && 'has-armed')} ref=${barRef} aria-label=${t('调度中心')}>
+  return html`<section class=${cx('shopbar', frozen && 'is-frozen', !editable && !monsterOn && 'is-locked', showReward && 'has-reward', armed && 'has-armed')} ref=${barRef} aria-label=${t('调度中心')}>
     ${/* 协同经济 sits ABOVE the tools row, not inside it: as a grid item spanning both columns it sized the columns
          and blew 冻结/刷新 up to fill them (user report 2026-10-09). Its own row keeps the buttons packed right. */ null}
     ${econ ? html`<div class="shopbar__econ"><${EconStrip} econ=${econ} editable=${editable} onRefuse=${onRefuse} onOpenShop=${onOpenShop} /></div>` : null}
     <div class="shopbar__tools">
       <span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>
-      <button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
+      ${/* 怪物卡池开着时：商店级「冻结」不适用（冻结是按格子的，见卡面右键 / 浮层按钮）⇒ 不画；刷新改发 g.monsterRefresh */ null}
+      ${monsterOn ? null : html`<button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
         title=${frzReason || (frozen ? t('解冻商店 · {key}', { key: hk.freeze }) : t('冻结商店（下回合保留） · {key}', { key: hk.freeze }))}>
         <${Img} src=${uiUrl(data.get('assets'), frozen ? 'shopPanel/frozen_icon2' : 'shopPanel/frozen_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="snow" />`} />
         <span>${frozen ? t('解冻') : t('冻结')}</span><kbd>${hk.freeze}</kbd>
-      </button>
-      <button type="button" class="toolbtn toolbtn--amber" disabled=${!!refReason || refreshBusy} onClick=${onRefresh} title=${refReason || (refreshBusy ? t('正在刷新…') : t('刷新商店 · {key}', { key: hk.refresh }))}>
+      </button>`}
+      ${monsterOn ? html`<button type="button" class="toolbtn toolbtn--amber" disabled=${mRefBlocked} onClick=${refreshMonsterShop}
+          title=${mRefBlocked ? t('免费刷新次数已用完，剩余预算也不够刷新') : t('刷新怪物卡池（剩余预算 {left}）', { left: monsterLeft })}>
+        <${Img} src=${uiUrl(data.get('assets'), 'shopPanel/refresh_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="refresh" />`} />
+        <span>${t('刷新')}</span>
+        ${mFreeRef > 0 ? html`<span class="toolbtn__free">${t('免费 ×{free}', { free: mFreeRef })}</span>` : html`<${HexBadge} value=${mRefPrice} tone=${mRefBlocked ? 'dark' : 'gold'} size="sm" />`}
+      </button>`
+        : html`<button type="button" class="toolbtn toolbtn--amber" disabled=${!!refReason || refreshBusy} onClick=${onRefresh} title=${refReason || (refreshBusy ? t('正在刷新…') : t('刷新商店 · {key}', { key: hk.refresh }))}>
         <${Img} src=${uiUrl(data.get('assets'), 'shopPanel/refresh_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="refresh" />`} />
         <span>${t('刷新')}</span>
         ${free > 0 ? html`<span class="toolbtn__free">${t('免费 ×{free}', { free })}</span>` : html`<${HexBadge} value=${shop.refreshPrice ?? 1} tone=${refReason || refreshBusy ? 'dark' : 'gold'} size="sm" />`}
         <kbd>${hk.refresh}</kbd>
-      </button>
+      </button>`}
     </div>
     <div class="shopbar__row">
       <${LevelCard} shop=${shop} reason=${lvReason} armed=${armed === levelKey} onTap=${tapLevel} />
       ${showReward ? html`<${RewardCards} offer=${reward} priv=${priv} editable=${editable} onPick=${onReward} onDetail=${onDetail} onLater=${onRewardLater}
           armed=${armed} onTap=${tapCard} offBonds=${offBonds} />`
         : html`<div class="shopbar__cards">
-        ${chessSlots.map(({ s, i }) => {
+        ${monsterOn
+          ? monsterSlots.map((s, i) => {
+            // 空格 / 已售：沿用干员卡那一套空栏位与 SOLD OUT 外壳，不另造视觉
+            if (!s) return html`<${EmptyCard} key=${`me${i}`} />`;
+            if (s.sold) return html`<${SoldCard} key=${`ms${i}`} />`;
+            const cap = monsterPlaceCap(s, monsterLeft);
+            const open = !!mPick && mPick.index === Number(s.index);
+            return html`<div class="mshop-anchor" key=${`m${i}:${s.key}`}>
+              <${MonsterCard} slot=${s} idx=${i} poor=${cap < 1} frozen=${slotFrozen(s, false)} selected=${open}
+                onPick=${openMonsterPick} onFreeze=${freezeMonsterSlot} />
+              ${open ? html`<${MonsterPickPanel} slot=${s} cap=${cap} count=${mPick.count} gate=${mGate} frozen=${slotFrozen(s, false)}
+                onGate=${setMGate} onCount=${setMCount} onPlace=${placeMonster} onFreeze=${freezeMonsterSlot} onClose=${() => setMPick(null)} />` : null}
+            </div>`;
+          })
+          : chessSlots.map(({ s, i }) => {
           if (!s) return html`<${EmptyCard} key=${`e${i}`} />`;
           if (s.sold) return html`<${SoldCard} key=${`s${i}`} />`;
           const reason = shopBlockReason('buy', { priv, editable, slot: s, ...LOOKUPS });

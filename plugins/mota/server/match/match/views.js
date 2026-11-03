@@ -121,14 +121,21 @@ export class MatchViews {
       // 事件期（R4/R5/R6 起）：EventOverlay 读 pub.event —— eventView() 以前从未被合并，事件期面板永远不显示。
       ...(this.huntMode ? { event: this.eventView() } : {}),
       // 狩猎期：只带本队可见的提交（对手由 messaging 屏蔽）；名单公示用 roster.until 播动画
+      // 2026-11-04：投放窗口 = 攻守回合的 PREP（选目标已结束、投放公示未开始 ⇒ confrontStage == null）。此时 this.confront
+      // 还没冻结（phases.js 每回合清成 null，finishConfront 才快照），面板必须读活的 confrontSubs；COMBAT / SETTLE 才读冻结值。
       ...(this.isVersus && this.confrontActive && this.confrontActive()
-        && (this.phase === PHASE.CONFRONT || (this.confront && this.confront.size)) ? (() => {
-        const src = this.phase === PHASE.CONFRONT ? (this.confrontSubs || new Map()) : (this.confront || new Map());
+        && (this.phase === PHASE.CONFRONT
+          || (this.phase === PHASE.PREP && this.confrontStage == null && typeof this.isRoleRound === 'function' && this.isRoleRound())
+          || (this.confront && this.confront.size)) ? (() => {
+        // 投放中（CONFRONT 选目标 / PREP 投放）读活数据；其余阶段读冻结快照
+        const placing = this.phase === PHASE.CONFRONT
+          || (this.phase === PHASE.PREP && this.confrontStage == null && typeof this.isRoleRound === 'function' && this.isRoleRound());
+        const src = placing ? (this.confrontSubs || new Map()) : (this.confront || new Map());
         const subs = {};
         for (const [pid, s2] of src) subs[pid] = s2 ? { group: s2.group, position: s2.position || null, picks: s2.picks || [], total: (s2.picks || []).length, target: s2.target || null, coins: this.confrontBountyOf(s2.picks), committed: s2.committed === true } : null;
         return {
           confront: {
-            active: this.phase === PHASE.CONFRONT,
+            active: placing,
             stage: this.phase === PHASE.CONFRONT ? (this.confrontStage || 'target') : null,
             roster: this.phase === PHASE.CONFRONT && this.confrontStage === 'roster' ? { until: this.deadline, ms: VERSUS_CONFRONT.rosterMs } : null,
             round: this.round,

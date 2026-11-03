@@ -1,17 +1,18 @@
 // server/match/match/confront.js — Match methods: the 狩猎期. Two modes share this module:
 //
-//   2V2 ('versus') — PHASE.CONFRONT. From the drawn contest round on, after each side's prep, every ALIVE player
-//   intervenes once, against ONE opposing player:
+//   2V2 ('versus') — PHASE.CONFRONT (targets) → PHASE.PREP (placement, shared with the defense). From the drawn contest
+//   round on, every ALIVE player intervenes once, against ONE opposing player:
 //
-//   step 1 (targets, VERSUS_CONFRONT.targetSeconds): each player names the opponent they attack. Inside a team it is
-//     first come, first served — whoever submits first picks, and the teammate is given the opponent that is left (A
-//     takes C, B gets D), so the two teams are paired one-to-one and every player both attacks and is attacked. The step
-//     ends once every alive player holds a target (both sides — a side that finished early waits) or its window runs out.
-//   step 2 (monsters): each player fills their own VALUE BUDGET with monsters of ONE of the 6 groups, each on a gate
-//     (上路 'upper' / 下路 'lower') and all inserted at one place in the wave (position: front / mid / back = 25 / 50 /
-//     75 % of the round's monster count). The step has no fixed length of its own: its window is THIS round's prep time
-//     (untimed when the prep is) and it is a CAP only — submitting ends it as soon as EVERY alive player has
-//     (maybeFinishConfront), so the sides never wait on a player who is already done.
+//   step 1 (targets, PHASE.CONFRONT, VERSUS_CONFRONT.targetSeconds): each player names the opponent they attack. Inside a
+//     team it is first come, first served — whoever submits first picks, and the teammate is given the opponent that is
+//     left (A takes C, B gets D), so the two teams are paired one-to-one and every player both attacks and is attacked. The
+//     step ends once every alive player holds a target (both sides — a side that finished early waits) or its window runs out.
+//   step 2 (monsters, 2026-11-04 单一 deadline): finishConfrontTargets opens the attackers' monster shop and enters the
+//     SAME PREP the defenders prepare in (deadline = gd.prepTime(round), attackers press Ready too). Each attacker fills
+//     their own VALUE BUDGET with monsters of ONE of the 6 groups, each on a gate (上路 'upper' / 下路 'lower') and all
+//     inserted at one place in the wave (position: front / mid / back = 25 / 50 / 75 % of the round's monster count).
+//     There is no separate placement window any more: the submissions freeze when the PREP ends (finishConfront →
+//     this.confront), so nobody waits on a second clock.
 //
 //   同盟狩猎 (co-op, COOP_HUNT) — no phase, no submissions: the SYSTEM fills each alive player's 狩猎期 with its own
 //   deployment (coopHuntPlans), using the same rhythm / budget / bounty tables (huntCfg). The prey is INSERTED into that
@@ -50,7 +51,7 @@ import { compileRoute } from '../../sim/ai.js';
 import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
-import { buildMonsterPool } from '../monsterPool.js';
+import { buildMonsterPool, legalKeys } from '../monsterPool.js';
 import { openMonsterShop, closeMonsterShop, monsterShopFrame } from '../monsterShop.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
 
@@ -539,10 +540,43 @@ export class MatchConfront {
   isConfrontRule() { return this.isVersus && this.versusRule === 'confront'; }
 
   /**
+   * 投放窗口（2026-11-04 单一 deadline）：攻守回合的 PREP —— 目标选择已经结束（`confrontStage == null`），
+   * 且不在投放公示（`'roster'`）里。`g.confront` / AI 的 botConfront / 怪物商店都用它当阶段闸门。
+   */
+  confrontWindowOpen() {
+    return this.phase === PHASE.PREP && this.confrontStage == null && typeof this.isRoleRound === 'function' && this.isRoleRound();
+  }
+
+  /**
    * 怪物卡池是否开着（业主 2026-11-03：对抗局默认全开，`opts.monsterShop === false` 关掉回到旧平铺面板）。
-   * 关掉时 enterConfront / botConfront / finishConfront 里的卡池分支全部不执行 —— 行为与改造前逐字节一致。
+   * 关掉时 enterConfront 之后的卡池分支（finishConfrontTargets 的开张 / botConfront / finishConfront 的收尾）全部不执行
+   * —— 行为与改造前逐字节一致。
    */
   get monsterShopOn() { return this.isVersus && this.opts?.monsterShop !== false; }
+
+  /**
+   * 怪物模式的归属口径（业主 2026-11-04，经房间选项 `opts.monsterMode` 透传；Match.js 不改）：
+   *   · `'shared'`（缺省）：**共有出怪** —— 同队共用一个出怪池，且同队攻方共用同一个目标（对面遇到的怪由怪物方一起出）；
+   *   · `'solo'`：**单人怪物模式** —— 池按人、且只有该队第一位存活攻方持有投放权（其余攻方的商店不开）。
+   * 房间侧要能让房主选这个字段，见报告：versusLobby.js 的 matchOptions 需要补一行。
+   */
+  get monsterMode() { return this.opts?.monsterMode === 'solo' ? 'solo' : 'shared'; }
+
+  /**
+   * 这名玩家是否有投放权（solo 怪物模式：每队只交给**第一位存活攻方**；shared：全体攻方都有）。
+   * 座位顺序 = `this.order`（attackers() / _aliveOf() 都按它过滤，见 infra.js）。
+   * monsterShop.js 的所有开张 / 购买 / 投放闸门都问这一个判定（避免两份「第一位」实现漂移）。
+   * @param {object} ps
+   * @returns {boolean}
+   */
+  monsterPlaceActor(ps) {
+    if (!ps || ps.alive === false || ps.left === true) return false;
+    if (this.monsterMode !== 'solo') return true;
+    if (this.attackingTeam != null && typeof this.teamIdOf === 'function' && this.teamIdOf(ps) !== this.attackingTeam) return false;
+    const team = typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0;
+    const first = this.confrontActors().find((p) => p && (typeof this.teamIdOf !== 'function' || this.teamIdOf(p) === team));
+    return !!first && first.playerId === ps.playerId;
+  }
 
   /** 攻方人数（纯玩家出怪时按人均分官方波次价值；取不到时按每队人数兜底）。 */
   attackingTeamSize() {
@@ -1016,7 +1050,8 @@ export class MatchConfront {
   }
 
   /** Enter the 对抗期: step 1 (targets) opens. A team of BOTS decides at once; a team holding a human waits for it — the
-   *  human picks first and the bot teammate is filled in only then (or when the window closes). */
+   *  human picks first and the bot teammate is filled in only then (or when the window closes). Step 2 is this round's
+   *  PREP (finishConfrontTargets), not a phase of its own. */
   enterConfront() {
     this.phase = PHASE.CONFRONT;
     this.confrontStage = 'target';
@@ -1028,24 +1063,8 @@ export class MatchConfront {
     this._confrontRemoved = new Map();
     this.confrontTargets = new Map(); // attacker playerId → target playerId
     this.confrontSubs = new Map();    // attacker playerId → { target, group, position, picks, bosses, ratio, budget }
-    // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队建，Match.js 的构造函数不改）。
-    // 每回合**重建**（2026-11-04 复验修复 1）：合法怪物集合按回合变（confrontGroups 的回合闸门 + 每回合 4 类型组
-    // 重抽），池若「建过就复用」就会把上一回合口径下的卡一路卖到后面几回合 —— 那些卡提交时会被
-    // `_confrontMember` 判成 `illegal 对抗期 pick`。重建的代价是「上回合被买走的份数」被清空，这是**预期**的
-    // 补货语义（每回合满库存），不是 bug。
-    // 在这里开（step 1）而不是等 step 2：AI 的 botConfront 在 step 2 一开窗就调用，届时商店必须已经就位。
-    if (this.monsterShopOn) {
-      this.monsterPools ||= new Map();
-      // 每队**只建一次**（同队必须共用同一个池，否则队友看不到对方买走的份数 / 退回来的份数）
-      const teams = new Set();
-      for (const ps of this.confrontActors()) teams.add(typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0);
-      for (const team of teams) this.monsterPools.set(team, buildMonsterPool(this));
-      for (const ps of this.confrontActors()) {
-        try { openMonsterShop(this, ps); } catch (e) { this.reportError('monster shop open', e); }
-        // 首帧（2026-11-03）：服务端主动推商店，客户端不必先发一次成功意图才知道开没开（否则死锁）
-        try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop open', e); }
-      }
-    }
+    // 怪物卡池（2026-11-03）：这里只做阶段准备，**不再**开张商店 —— 2026-11-04 起投放窗口就是本回合的 PREP，
+    // 商店在目标选择结束那一刻开（finishConfrontTargets），买卡 / 提交 / 冻结全程同一个 deadline。
     this.setDeadline(this.soloUntimed ? null : VERSUS_CONFRONT.targetSeconds, () => this.finishConfrontTargets());
     for (const t of this.matchTeamIds()) {
       if (t !== attack || !this._allBots(t)) continue;
@@ -1110,13 +1129,38 @@ export class MatchConfront {
       }
       return best;
     };
-    const pickFor = (playerId) => {
+    /** 本队第一个已分配的目标（没有 → null）。shared 出怪「同队共用一个 target」的取值点。 */
+    const teamTarget = () => {
+      for (const mate of this._aliveOf(team)) {
+        const t = this.confrontTargets.get(mate.playerId);
+        if (t != null) return t;
+      }
+      return null;
+    };
+    /** 按既有规则给一个还没目标的玩家选对手；`allowWant` 为假时忽略指名（队友代分配那一次）。 */
+    const chooseFor = (playerId, allowWant) => {
       if (this.confrontTargets.has(playerId)) return;
       const free = oppIds.filter((pid) => !takenBy(team).includes(pid));
-      const chosen = typeof want === 'string' && playerId === ps.playerId && free.includes(want)
+      const chosen = allowWant && typeof want === 'string' && playerId === ps.playerId && free.includes(want)
         ? want
         : (free.length ? weakestOf(free) : leastAttacked());
-      if (chosen) this.confrontTargets.set(playerId, chosen);
+      if (chosen != null) this.confrontTargets.set(playerId, chosen);
+    };
+    const pickFor = (playerId) => {
+      if (this.confrontTargets.has(playerId)) return;
+      // 共有出怪（monsterMode === 'shared'，默认；业主 2026-11-04）：同队攻方共用同一个 target ——
+      // 取该队第一个已分配的目标；本队还没人分配就按既有规则给「队里第一位」分配，其余沿用它的目标。
+      if (this.monsterMode === 'shared') {
+        const shared = teamTarget();
+        if (shared != null) { this.confrontTargets.set(playerId, shared); return; }
+        const first = this._aliveOf(team)[0];
+        if (first && first.playerId !== playerId) {
+          chooseFor(first.playerId, true);
+          const t = this.confrontTargets.get(first.playerId);
+          if (t != null) { this.confrontTargets.set(playerId, t); return; }
+        }
+      }
+      chooseFor(playerId, true);
     };
     pickFor(ps.playerId);
     if (!fillMates) return;
@@ -1130,41 +1174,65 @@ export class MatchConfront {
     if (alive.length && alive.every((p) => this.confrontTargets.has(p.playerId))) this.finishConfrontTargets();
   }
 
-  /** Close step 1 (anyone the window caught out gets what is left) and open step 2, whose window is this round's prep. */
+  /**
+   * Close step 1 (anyone the window caught out gets what is left) and enter step 2 = THIS round's PREP (2026-11-04):
+   * every alive player prepares from now on, with ONE deadline (`gd.prepTime(round)`, armed by enterPrep). The attackers'
+   * monster shop opens here — the placement window IS the prep, there is no separate 'monster' stage.
+   */
   finishConfrontTargets() {
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'target') return;
     for (const ps of this.confrontActors()) this.assignConfrontTarget(ps, null, true);
     this.setDeadline(0);
-    this.confrontStage = 'monster';
-    // 怪物卡池（2026-11-03）：买卡窗口就在这里打开 —— 再给每个攻方推一次首帧（晚进场 / 重连也能拿到卡位）
+    // 目标选择已经做完：PREP 结束时就冻结投放（endPrep → finishConfront），不再回 CONFRONT。
+    this._confrontTargetsRound = this.round;
+    // 投放窗 = 本回合的 PREP：stage 先清掉（PREP 里的冻结收尾与商店闸门都以「stage == null」判定目标选择已结束）。
+    this.confrontStage = null;
+    // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队建，Match.js 的构造函数不改）。
+    // 每回合**重建**（2026-11-04 复验修复 1）：合法怪物集合按回合变（confrontGroups 的回合闸门 + 每回合 4 类型组
+    // 重抽），池若「建过就复用」就会把上一回合口径下的卡一路卖到后面几回合 —— 那些卡提交时会被
+    // `_confrontMember` 判成 `illegal 对抗期 pick`。重建的代价是「上回合被买走的份数」被清空，这是**预期**的
+    // 补货语义（每回合满库存），不是 bug。
+    // 开张时机（2026-11-04）：目标选择结束这一刻，且**在进 PREP 之前**就位 —— 同步调度下 PREP 可能立刻结束，
+    // 那时 finishConfront 的收尾（关店 / 补 bot 投放）必须已经能看到商店。
     if (this.monsterShopOn) {
-      for (const ps of this.confrontActors()) {
+      this.monsterPools ||= new Map();
+      const solo = this.monsterMode === 'solo';
+      // 池的键：shared = teamId（同队必须共用同一个池，否则队友看不到对方买走的份数 / 退回来的份数）；
+      // solo = playerId（业主 2026-11-04「单人怪物模式」：池按人）。
+      const poolKeyOf = (ps) => (solo
+        ? ps.playerId
+        : (typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0));
+      // 谁开店：shared = 全体攻方；solo = 每队只有第一位存活攻方（monsterPlaceActor）—— 其余攻方的商店不开。
+      const actors = this.confrontActors().filter((ps) => !solo || this.monsterPlaceActor(ps));
+      const keys = new Set();
+      for (const ps of actors) keys.add(poolKeyOf(ps));
+      for (const key of keys) this.monsterPools.set(key, buildMonsterPool(this));
+      for (const ps of actors) {
+        try { openMonsterShop(this, ps); } catch (e) { this.reportError('monster shop open', e); }
+        // 首帧（2026-11-03）：服务端主动推商店，客户端不必先发一次成功意图才知道开没开（否则死锁）
         try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop open', e); }
       }
+      // solo：没开店的队友也要收一帧「关着」的收尾帧，面板才不会沿用上一回合的货架
+      if (solo) {
+        for (const ps of this.confrontActors()) {
+          if (actors.includes(ps)) continue;
+          try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop open', e); }
+        }
+      }
     }
-    // Step 2 has no fixed length of its own: its window is THIS round's prep — the same time the players had to prepare —
-    // and it is only a CAP, since maybeFinishConfront ends it early as soon as every alive player has submitted. Untimed
-    // when the prep is (a single human — soloUntimed), and then the all-submitted end is the only way it closes.
-    this.setDeadline(this.soloUntimed ? null : this.gd.prepTime(this.round), () => this.finishConfront());
+    // 进本回合的 PREP：全体存活玩家同一个 deadline（gd.prepTime(round)），攻方也在这里点准备。
+    this.enterPrep();
     for (const ps of this.confrontActors()) if (ps.botControlled) this.botConfront(ps);
     this.markPublic();
-    this.maybeFinishConfront();
-  }
-
-  /** Step 2 ends when EVERY attacker has CONFIRMED (草稿不算). Its window is the round's prep time, so a player may keep
-   *  editing until the deadline (业主 2026-10-27：提交与确认出击拆成两步，截止前可改投放)。 */
-  maybeFinishConfront() {
-    if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster') return;
-    const alive = this.confrontActors();
-    if (alive.length && alive.every((p) => this.confrontSubs.get(p.playerId)?.committed === true)) this.finishConfront();
   }
 
   /** `g.confront { group, position, picks, bosses, commit }` in step 2: the monsters a player throws at their target.
    *  `bosses` (the 事件期 boss 格, user 2026-10-21) is optional — an old client never sends it. `commit` splits the flow in
    *  two (业主 2026-10-27): without it the submission is a **draft** that may be overwritten any number of times until the
-   *  deadline; with it the placement is final and the phase advances once every attacker has confirmed. */
+   *  PREP ends; with it the placement is final (the prep itself ends on Ready / its deadline — 2026-11-04 单一 deadline,
+   *  不再由「全员已确认」提前收尾). */
   submitConfront(ps, { group, position, picks, bosses, commit }) {
-    if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster') return fail(ERR.WRONG_PHASE);
+    if (!this.confrontWindowOpen()) return fail(ERR.WRONG_PHASE);
     if (!ps.alive) return fail(ERR.ELIMINATED);
     if (this.attackingTeam != null && this.teamIdOf(ps) !== this.attackingTeam) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters');
     // 已确认出击 = 定局，不能再改；草稿可以反复覆盖（这一步以前是 ALREADY 一刀切，见 2026-10-27 的交互改版）
@@ -1183,9 +1251,8 @@ export class MatchConfront {
     const sub = { ...member.sub, committed: commit === true };
     this.confrontSubs.set(ps.playerId, sub);
     // 收尾异常不得吞掉一次**已经成功**的提交（业主 2026-10-26：线上点提交恒报 INTERNAL，
-    // 而 pick 其实已入库）。阶段收尾出错记日志、照常返回 OK。
+    // 而 pick 其实已入库）。2026-11-04 起提交不再提前结束阶段：投放窗口 = 本回合 PREP，由 Ready / deadline 收尾。
     try { this.markPublic(); } catch (e) { this.reportError('confront markPublic', e); }
-    try { this.maybeFinishConfront(); } catch (e) { this.reportError('confront finish', e); }
     return OK;
   }
 
@@ -1205,7 +1272,11 @@ export class MatchConfront {
    */
   _confrontMember(ps, group, position, picks, bosses = []) {
     const list = this.confrontGroups();
-    const allowed = new Set(list.flatMap((g) => g.rows.map((r) => r.key)));
+    // 合法集合与卡池**同源**（业主 2026-11-04）：同一个 `legalKeys`（monsterPool.js 导出，monsterShop 也调它）——
+    // 优先本回合官方出怪（`_roundOfficialSpawns`），没有快照才回落 groups 并集。这样「买得到 / 点得动」的卡
+    // 一定交得上（复验踩过的坑：两份实现各算一套 ⇒ 卡进得了草稿但提交必被拒）。
+    const allowed = legalKeys(this)
+      || new Set(list.flatMap((g) => ((g && g.rows) || []).map((r) => r && r.key)).filter(Boolean));
     const arr = Array.isArray(picks) ? picks : [];
     const pos = VERSUS_CONFRONT.positions.includes(position) ? position : null;
     if (!pos) return null;
@@ -1262,7 +1333,10 @@ export class MatchConfront {
    *  事件期 boss 格（2026-11-01 P1）：开放时按金币降序取到 `confrontBossCap()` 只 —— 原「AI 恒空」的 [ASSUMED] 作废。 */
   botConfront(ps) {
     if (this.attackingTeam != null && this.teamIdOf(ps) !== this.attackingTeam) return;
-    if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'monster' || this.confrontSubs.has(ps.playerId)) return;
+    // solo 怪物模式（业主 2026-11-04）：只有该队第一位存活攻方投放 —— 其余攻方也不补投放，
+    // 否则 bot 的引擎回落路径会绕过「商店不开」把队友的投放直接写进 confrontSubs。
+    if (this.monsterMode === 'solo' && !this.monsterPlaceActor(ps)) return;
+    if (!this.confrontWindowOpen() || this.confrontSubs.has(ps.playerId)) return;
     // 怪物卡池（2026-11-03）：只在商店开着时才问策略；`monsterShopOn` 为假 ⇒ strat = null ⇒ 下面全部走旧路径。
     // 惰性初始化（Match.js 不改）：this.monsterBot 首次用到时才建。
     const strat = this.monsterShopOn ? (this.monsterBot ||= monsterStrategyFor(this)) : null;
@@ -1328,8 +1402,8 @@ export class MatchConfront {
     // 插件可用 `server.modules.matchClass()` 包装 Match 覆写 `_botConfrontPlan` 做更强的决策（不碰引擎）。
     // 复审计 2026-10-27：bot 路径原先直接写库、绕过 _confrontMember 的全部校验
     // （time / routeIndex / 路线长度 / routeCost 预算）。这里走同一套判据，非法字段就地纠正。
-    // 复审计 2026-10-27：即使一条都买不起也必须写 sub —— `maybeFinishConfront` 要求「人人有 sub」，
-    // 否则阶段要空等满 prepTime（65s）才由 deadline 收尾。
+    // 复审计 2026-10-27：即使一条都买不起也必须写 sub —— 投放收尾（finishConfront）会给每个还没有 sub 的攻方
+    // 补一份 bot 投放，缺 sub 的那一队在 PREP 结束时才补，不如这里就给全。
     const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
     this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses, total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
     this.markPublic();
@@ -1395,13 +1469,15 @@ export class MatchConfront {
   }
 
   /**
-   * Step 2 is over (its window ran out): anyone missing a submission gets a bot one, then the roster (悬赏名单) is held
-   * for VERSUS_CONFRONT.rosterMs before the battles start (CONFRONT_ROSTER_MS, user 2026-10-17 addendum). Without the
-   * hold (rosterMs 0) the old path goes straight to COMBAT.
+   * The PREP is over (endPrep, 2026-11-04): anyone still missing a submission gets a bot one, the shops close and the
+   * placements FREEZE into `this.confront` — once, for this round. Then the roster (悬赏名单) is held for
+   * VERSUS_CONFRONT.rosterMs before the battles start (CONFRONT_ROSTER_MS, user 2026-10-17 addendum); without the hold
+   * (rosterMs 0) the battles start at once.
    */
   finishConfront() {
-    if (this.phase !== PHASE.CONFRONT || this.confrontStage === 'roster') return;
+    if (this.phase !== PHASE.PREP || this.confrontStage != null) return;
     this.setDeadline(0);
+    this.confrontSubs ||= new Map();
     for (const ps of this.confrontActors()) if (!this.confrontSubs.has(ps.playerId)) this.botConfront(ps);
     // 怪物卡池收尾（2026-11-03）：所有 sub 都已落到 confrontSubs（上面的 botConfront 也要能看到商店），
     // 再把 ps.monsterShop / ps.monsterDraft 摘掉。关掉时整段不执行。
@@ -1416,8 +1492,10 @@ export class MatchConfront {
     this._confrontDoneRound = this.round;
     const rosterMs = Math.max(0, Number(this.huntCfg().rosterMs) || 0);
     if (rosterMs > 0) {
-      // the phase stays CONFRONT (stage 'roster'): m.public.confront still carries the applied submissions, and
-      // m.public.confront.roster = { until, ms } lets the client play its 5 s announcement before COMBAT.
+      // 公示期沿用改造前的阶段口径：phase = CONFRONT + stage 'roster'。休整已经结束（ps.endPrep 已跑），把阶段切回来
+      // 让休整意图（g.ready / g.buy / 商店 / 投放）与「取消准备」都被阶段闸门挡住，同时客户端照旧用
+      // m.public.confront.roster = { until, ms } 播 5 s 名单。
+      this.phase = PHASE.CONFRONT;
       this.confrontStage = 'roster';
       this.confrontRosterAt = this.sched.now();
       this.setDeadline(rosterMs / 1000, () => this.finishConfrontRoster());
@@ -1425,15 +1503,15 @@ export class MatchConfront {
       return;
     }
     this.confrontStage = null;
-    this.enterDefenderPrep();
+    this.startCombat();
   }
 
-  /** The roster hold expired: the DEFENDING team now prepares against the placed monsters. */
+  /** The roster hold expired: the battles start (the PREP itself already ended; the freeze happened in finishConfront). */
   finishConfrontRoster() {
     if (this.phase !== PHASE.CONFRONT || this.confrontStage !== 'roster') return;
     this.setDeadline(0);
     this.confrontStage = null;
-    this.enterDefenderPrep();
+    this.startCombat();
   }
 
   /**

@@ -439,3 +439,52 @@
 
 /* 装备出处（业主 2026-10-27）：商店卡面注明这件装备来自哪个类目 */
 .melt__source { margin-top: .04rem; font-size: max(.13rem, 9.5px); letter-spacing: .04em; color: #7f8583; }
+
+/* ---- 怪物卡（对抗·攻方商店，2026-11-04, js/ui/shopBar.js MonsterCard） -------------------------- */
+/* 外壳沿用 .scard / .scard--t1…t6（上面 89–158 行的边框、悬停、is-frozen、is-disabled、scard--sold 一套全部照用），
+   只换卡面：怪物图标居中，右下角一行库存 left/cap。 */
+/* 外框同时抹掉干员立绘那条底部渐隐蒙版（.scard__art 的 mask-image，见上方 109–110 行）—— 怪物图标是完整图形，不该被切边 */
+.scard--monster .scard__art { left: 0; right: 0; top: .34rem; bottom: .46rem; height: auto; width: auto;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  -webkit-mask-image: none; mask-image: none; }
+.scard--monster .scard__art img { width: 78%; height: 78%; object-fit: contain; }
+/* 图标缺失时 Img 退回 GIcon(skull)：同一块居中区域里要占得住位置，不能缩成 1em */
+.scard--monster .scard__art .icon { width: 46%; height: 46%; color: rgba(255, 255, 255, .35); }
+/* 库存角标：字号与 .scard__bond / .scard__class 同一档（.13rem）—— 派单原文写的是 .46rem，那在 1.56rem 宽的卡面上
+   是 46px，会盖住名字与图标，故按同排文字的档位落地（已写进交付报告）。 */
+.scard__stock { position: absolute; right: .06rem; bottom: .06rem; z-index: 3; font-size: .13rem; font-family: var(--font-num);
+  letter-spacing: .04em; opacity: .78; pointer-events: none; }
+
+/* 选中卡 + 浮层的锚：浮层挂在卡片这一格外层上（同 ShopBar 内渲染，不是全局 modal） */
+.mshop-anchor { position: relative; display: flex; }
+/* 选门 / 选数量的浮层。`.shopbar` 贴屏幕底（bottom: .2rem），浮层若画在卡片**下方**会整块落到屏幕外，故贴卡片上方展开
+   （bottom: 100% = 卡片顶边），左右与卡片左边对齐。 */
+.mshop-pop { position: absolute; z-index: 5; right: 0; bottom: calc(100% + .08rem); width: 2.16rem;
+  display: flex; flex-direction: column; gap: .06rem; padding: .08rem;
+  background: rgba(8, 11, 10, .97); border: 1px solid var(--gold);
+  box-shadow: 0 .06rem .24rem rgba(0, 0, 0, .65); }
+.mshop-pop__head { display: flex; align-items: baseline; justify-content: space-between; gap: .08rem;
+  font-size: .16rem; color: var(--text-hi); }
+.mshop-pop__head b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mshop-pop__head .num { color: var(--gold); font-family: var(--font-num); font-weight: 700; }
+.mshop-pop__gates { display: flex; gap: .06rem; }
+.mshop-pop__gate { flex: 1 1 0; padding: .03rem 0; border: 1px solid var(--line); border-radius: .05rem; background: rgba(255, 255, 255, .04);
+  color: var(--text-hi); font: inherit; font-size: .15rem; cursor: pointer; }
+.mshop-pop__gate:hover { border-color: var(--gold); }
+.mshop-pop__gate.is-on { border-color: var(--gold); background: rgba(255, 198, 0, .16); color: var(--gold); }
+.mshop-pop__count { display: flex; align-items: center; gap: .05rem; }
+.mshop-pop__step { width: .3rem; height: .3rem; border: 1px solid var(--line); border-radius: .05rem; background: rgba(255, 255, 255, .04);
+  color: var(--text-hi); font: inherit; font-size: .18rem; line-height: 1; cursor: pointer; }
+.mshop-pop__step:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.mshop-pop__step:disabled { opacity: .4; cursor: default; }
+.mshop-pop__num { flex: 1 1 0; width: 100%; min-width: 0; height: .3rem; padding: 0 .06rem; border: 1px solid var(--line); border-radius: .05rem;
+  background: rgba(0, 0, 0, .55); color: var(--text-hi); font: inherit; font-family: var(--font-num); font-size: .16rem; text-align: center; }
+.mshop-pop__cap { font-size: .12rem; color: var(--text-lo); white-space: nowrap; }
+.mshop-pop__acts { display: flex; gap: .06rem; }
+.mshop-pop__place, .mshop-pop__freeze, .mshop-pop__cancel { flex: 1 1 0; padding: .04rem 0; border-radius: .05rem; font: inherit; font-size: .15rem; cursor: pointer; }
+.mshop-pop__place { border: 1px solid var(--gold); background: rgba(255, 198, 0, .16); color: var(--gold); font-weight: 700; }
+.mshop-pop__place:hover:not(:disabled) { background: rgba(255, 198, 0, .28); }
+.mshop-pop__place:disabled { opacity: .45; cursor: not-allowed; }
+.mshop-pop__freeze { border: 1px solid var(--ice); background: rgba(159, 212, 255, .12); color: var(--ice); }
+.mshop-pop__cancel { border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--text-hi); }
+.mshop-pop__freeze:hover, .mshop-pop__cancel:hover { filter: brightness(1.2); }

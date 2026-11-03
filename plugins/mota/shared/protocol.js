@@ -621,6 +621,8 @@ export const C2S = {
   'g.monsterRefresh': {},
   'g.monsterFreeze': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
   'g.monsterDrop': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8 },
+  // 点卡即投放（业主 2026-11-04）：index = 商店格，gate = 上/下出怪口，count = 只数（可选，缺省 1）
+  'g.monsterPlace': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8, gate: (v) => v === 'upper' || v === 'lower', count: (v) => Number.isInteger(v) && v >= 1 && v <= 20, $optional: ['count'] },
   'g.event.pick': { target: (v) => EVENT_TARGETS_ALL.includes(v) },
   // 随机地图开关（2026-10-22；房主，开局前）
   'room.setRandomStage': { randomStage: isBool },
