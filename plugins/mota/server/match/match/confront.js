@@ -1028,13 +1028,19 @@ export class MatchConfront {
     this._confrontRemoved = new Map();
     this.confrontTargets = new Map(); // attacker playerId → target playerId
     this.confrontSubs = new Map();    // attacker playerId → { target, group, position, picks, bosses, ratio, budget }
-    // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队惰性建，Match.js 的构造函数不改）。
+    // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队建，Match.js 的构造函数不改）。
+    // 每回合**重建**（2026-11-04 复验修复 1）：合法怪物集合按回合变（confrontGroups 的回合闸门 + 每回合 4 类型组
+    // 重抽），池若「建过就复用」就会把上一回合口径下的卡一路卖到后面几回合 —— 那些卡提交时会被
+    // `_confrontMember` 判成 `illegal 对抗期 pick`。重建的代价是「上回合被买走的份数」被清空，这是**预期**的
+    // 补货语义（每回合满库存），不是 bug。
     // 在这里开（step 1）而不是等 step 2：AI 的 botConfront 在 step 2 一开窗就调用，届时商店必须已经就位。
     if (this.monsterShopOn) {
       this.monsterPools ||= new Map();
+      // 每队**只建一次**（同队必须共用同一个池，否则队友看不到对方买走的份数 / 退回来的份数）
+      const teams = new Set();
+      for (const ps of this.confrontActors()) teams.add(typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0);
+      for (const team of teams) this.monsterPools.set(team, buildMonsterPool(this));
       for (const ps of this.confrontActors()) {
-        const team = typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0;
-        if (!this.monsterPools.has(team)) this.monsterPools.set(team, buildMonsterPool(this));
         try { openMonsterShop(this, ps); } catch (e) { this.reportError('monster shop open', e); }
         // 首帧（2026-11-03）：服务端主动推商店，客户端不必先发一次成功意图才知道开没开（否则死锁）
         try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop open', e); }
@@ -1276,6 +1282,9 @@ export class MatchConfront {
     const rows = [];
     groups.forEach((g, gi) => (g.rows || []).forEach((r) => rows.push({ key: r.key, value: r.value, gi })));
     const picks = [];
+    // 商店计划（2026-11-04 复验修复 3b）：契约声明了 shopPlan 就必须真的调用 —— 它的副作用是 ps.monsterDraft.picks，
+    // 下面 deployPlan 才可能拿到「这一回合买到的卡」。返回值只用于诊断/测试，允许 null；异常已在 callStrategyHook 里吞掉。
+    if (strat) callStrategyHook(this, strat, 'shopPlan', ps);
     // 投放计划：策略返回 picks 数组就用它（仍会过 _botConfrontPlan + _sanitizeBotPicks）；返回 null 走旧贪心。
     const planned = strat ? callStrategyHook(this, strat, 'deployPlan', ps) : null;
     if (Array.isArray(planned)) {

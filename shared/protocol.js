@@ -680,6 +680,10 @@ export const S2C = [
   'm.layer',
   // m.unitStats { seq, round, units: [unitStatsEntry] } — the answer to g.unitStats (the requester only)
   'm.unitStats',
+  // m.monsterShop { open, round, slots, draft, budget, spent, left, refreshPrice, freeRefreshes, refreshes } — the
+  // 怪物卡池 shop of one 对抗 actor (server/match/monsterShop.js monsterShopFrame, the requester only), and the
+  // closing { open: false, round, slots: [], draft } frame that tells its client to put the panel away
+  'm.monsterShop',
   // client-side combat (DESIGN §14): b.start { battleId, fieldId, kind, spec, authoritative, startAt, serverNow, elapsed,
   // speed, watch? } · b.pool { hp, max, teamLp, acked: { [fieldId]: cumulative boss damage counted } } ·
   // b.end { battleId, fieldId, reason }

@@ -9,8 +9,8 @@ import { PHASE, ERR, EMOTES, EMOTE_COOLDOWN_MS, GEO } from '../../../shared/cons
 import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
-// 怪物卡池（2026-11-03）：攻方的怪物商店（买卡进投放草稿 / 刷新 / 冻结）
-import { buyMonster, rollMonsterShop, freezeMonster, monsterShopFrame } from '../monsterShop.js';
+// 怪物卡池（2026-11-03）：攻方的怪物商店（买卡进投放草稿 / 刷新 / 冻结 / 撤回草稿）
+import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, monsterShopFrame } from '../monsterShop.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
@@ -22,6 +22,8 @@ export class MatchIntents {
       case 'g.monsterBuy': return this.monsterShopReply(ps, buyMonster(this, ps, Number(msg.index)));
       case 'g.monsterRefresh': return this.monsterShopReply(ps, rollMonsterShop(this, ps));
       case 'g.monsterFreeze': return this.monsterShopReply(ps, freezeMonster(this, ps, Number(msg.index)));
+      // 撤回一张投放草稿（复验修复 1.4）：index 是草稿下标；库存退回本队的池
+      case 'g.monsterDrop': return this.monsterShopReply(ps, dropMonster(this, ps, Number(msg.index)));
       case 'g.hex': return this.hexPick(ps, msg.hexId);
       case 'g.hexReroll': return this.hexReroll(ps, msg.slot);
       case 'g.meltOpen': return this.meltdownRequest(ps);

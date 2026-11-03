@@ -163,8 +163,14 @@ export class MatchInfra {
     if (!this.isVersus || !this.teamLps) return;
     for (const t of this.matchTeamIds()) {
       const pool = this.teamLps.get(t) ?? 0;
-      const members = this.order.filter((p) => this.teamIdOf(p) === t);
-      const n = members.length || 1;
+      // 只拆给**存活**队员（2026-11-04 复验修复 5）：淘汰者的 ps.lp 必须留在 0。此前把阵亡者也当分母/受体，
+      // 于是阵亡者被写回非 0（踩 audit 的「eliminated with LP」）且 Σ alive lp 永远小于池（踩 startFinalAssault 的
+      // `team LP != Σ alive LP`）。
+      const members = this.order.filter((p) => p.alive && this.teamIdOf(p) === t);
+      // 整队全灭（或池归零到没人可领）：本队一个字段都不写，直接看下一队 —— 不能整体 return，否则另一队
+      // 在同一次调用里也拿不到回写。
+      if (!members.length) continue;
+      const n = members.length;
       const base = Math.floor(pool / n);
       members.forEach((p, i) => { p.lp = base + (i < pool - base * n ? 1 : 0); });
     }

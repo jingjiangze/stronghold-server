@@ -17,10 +17,7 @@
 
 import { CONFRONT_VALUE_DIV } from './match/confront.js';
 import { defineMonsterStrategy, createMonsterRegistry } from './monsterContract.js';
-import {
-  openMonsterShop, rollMonsterShop, buyMonster, monsterBudgetLeft,
-  MONSTER_FREE_REFRESHES, MONSTER_MAX_PAID_REFRESHES,
-} from './monsterShop.js';
+import { openMonsterShop, rollMonsterShop, buyMonster, monsterBudgetLeft } from './monsterShop.js';
 
 /** 一条警告只打一次（多回合重复刷屏没有信息量）。 */
 const warned = new Set();
@@ -68,25 +65,24 @@ function bestSlot(m, ps) {
 }
 
 /**
- * 买卡循环：反复买「最划算、买得起」的一格；一格都买不起就刷新（免费次数用完后最多自费
- * MONSTER_MAX_PAID_REFRESHES 次）。副作用只有 ps.monsterShop / ps.monsterDraft.picks。
+ * 买卡循环：反复买「最划算、买得起」的一格；一格都买不起就刷新。
+ * 刷新上限（1 次免费 + 最多 MONSTER_MAX_PAID_REFRESHES 次自费）**由商店自己记账**（monsterShop.js 的
+ * rollMonsterShop，人类走同一条路径）；这里不再自己数次数（2026-11-04 复验修复 2：两份计数会漂移，且玩家侧
+ * 原先无上限）。商店拒绝刷新（WRONG_PHASE / 预算不足）就收手。
+ * 副作用只有 ps.monsterShop / ps.monsterDraft.picks。
  * @returns {number[]} 买到的格下标（诊断 / 测试用）
  */
 function cardpoolShopPlan(m, ps) {
   const bought = [];
   if (!ps || !ps.monsterShop) return bought;
-  const maxRefreshes = MONSTER_FREE_REFRESHES + MONSTER_MAX_PAID_REFRESHES;
-  let refreshes = 0;
   for (let guard = 0; guard < 64; guard++) {
     const idx = bestSlot(m, ps);
     if (idx != null) {
       const res = buyMonster(m, ps, idx);
       if (res && res.ok) { bought.push(idx); continue; }
     }
-    if (refreshes >= maxRefreshes) break;
     const rolled = rollMonsterShop(m, ps, { free: false });
     if (!rolled || rolled.error) break;
-    refreshes++;
   }
   return bought;
 }
