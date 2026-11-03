@@ -255,7 +255,11 @@ const ENEMY_COLS = Object.freeze(['spawned', 'killed', 'leaked', 'dmg', 'taken']
 const CHESS = Object.values(data.chess).sort((a, b) => byId(a.chessId, b.chessId));
 const VISIBLE = CHESS.filter((c) => c.visible);
 // the battle stages (data/stages.json also keeps the escaped levels' two maps, kind 'unite', which no field uses)
-const STAGES = Object.keys(data.stages).filter((id) => data.stages[id].kind !== 'unite').sort(byId);
+// 2026-11-03：肉鸽官方地图（rogue_*）不进 golden 语料 —— 它们尺寸/部署窗口与本作正式战场不同，
+// 且 golden 的 DIY 布局要求「5 个棋子都放得下」，小图会直接不满足；肉鸽地图另有 test/rogue-stages 与实机验收。
+const STAGES = Object.keys(data.stages)
+  .filter((id) => data.stages[id].kind !== 'unite' && !String(id).startsWith('rogue_'))
+  .sort(byId);
 const BANDS = Object.keys(data.bands).sort(byId);
 const EQUIPS = Object.values(data.items).filter((i) => i.itemType === 'EQUIP').map((i) => i.id).sort(byId);
 const BOSSES = Object.keys(data.bosses).sort((a, b) => Number(a.replace(/\D/g, '')) - Number(b.replace(/\D/g, '')));

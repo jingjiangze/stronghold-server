@@ -144,6 +144,10 @@ export function applyNModes(config, bosses) {
   // 等 R4 拿到官方「整章战斗数」后只改这里（改 ROGUE_ROUNDS 即可），其余代码不用动。
   for (let n = 1; n <= 20; n++) {
     const base = out.modes[modeKey('multi', n)];
+    const prev = config.modes ? config.modes[`mode_rogue_n${n}`] : null;
+    // 官方肉鸽地图池由 tools/build-rogue-maps.mjs 写入（`rogue_*`）；重跑本生成器时**必须保留**，否则会把池子冲回 autochess 场景
+    const pool = prev && Array.isArray(prev.stages) && prev.stages.length && prev.stages.every((id) => String(id).startsWith('rogue_'))
+      ? prev.stages.slice() : base.stages;
     out.modes[`mode_rogue_n${n}`] = {
       ...base,
       modeId: `mode_rogue_n${n}`,
@@ -152,6 +156,7 @@ export function applyNModes(config, bosses) {
       difficulty: `N${n}`,
       type: 'MULTI',
       inScope: false,
+      stages: pool,
     };
   }
 
