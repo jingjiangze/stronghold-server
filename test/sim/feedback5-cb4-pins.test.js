@@ -128,7 +128,9 @@ function leaderField(bossId, { solo = true, stageId = 'act1autochess_m01', round
 }
 
 test('item 29: 铳 patrols (3,9) → (2,3) → (5,9) on every boss field over walkable tiles (the pair\'s copy the mirrored points); 卢西恩 loops without reaching the goal', () => {
-  const stages = Object.keys(DATA.stages).filter((id) => DATA.stages[id].active !== false && DATA.stages[id].weight > 0);
+  // 2026-11-03：肉鸽官方地图没有本作的 boss 半场（Boss 回合沿用本图），只校验 autochess 的 8 张正式战场
+  const stages = Object.keys(DATA.stages).filter((id) => !String(id).startsWith('rogue_')
+    && DATA.stages[id].active !== false && DATA.stages[id].weight > 0);
   assert.equal(stages.length, 8);
   for (const stageId of stages) {
     for (const solo of [true, false]) {

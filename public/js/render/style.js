@@ -36,7 +36,9 @@ export const GLYPH = Object.freeze({
 export const TILEKEY_GLYPH = Object.freeze({
   tile_forbidden: '#', tile_road: 'r', tile_floor: 'f', tile_wall: 'h', tile_fence_bound: 'b', tile_fence: 'b',
   tile_achand: 'a', tile_start: 'S', tile_end: 'E', tile_telin: 'I', tile_telout: 'O', tile_mire: 'm',
-  tile_smog: 'g', tile_deepsea: 'd', tile_infection: 'i', tile_grass: 'r', tile_hole: '#',
+  tile_smog: 'g', tile_deepsea: 'd', tile_infection: 'i', tile_grass: 'r',
+  // 2026-11-03：官方肉鸽的坑洞是「低洼、不可站、可飞越」，此前映射到 '#'（抬升 0.3 的禁区块）画出来像一堵墙
+  tile_hole: 'd',
 });
 
 export const COLORS = Object.freeze({
