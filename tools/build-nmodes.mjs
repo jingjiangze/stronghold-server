@@ -214,6 +214,22 @@ export function applyNModes(config, bosses) {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 
+/**
+ * 内容集里 **mota 插件自带的 `data/config.json` 会覆盖根 data/config.json**（contentSet.js：code.data 的 config 胜出）。
+ * 不跟着同步的话，对局侧读到的还是插件里那份旧配置（没有 N 档、没有肉鸽 mode）——线上表现为
+ * 「modeId 是 mode_rogue_n8，但 stage 池空、回合数回落 14」。
+ */
+export function syncMotaConfig(root = ROOT) {
+  const src = path.join(root, 'data', 'config.json');
+  const dst = path.join(root, 'plugins', 'mota', 'data', 'config.json');
+  if (!fs.existsSync(dst)) return false;
+  const body = fs.readFileSync(src);
+  if (fs.readFileSync(dst).equals(body)) return false;
+  fs.writeFileSync(dst, body);
+  console.log('nmodes: 同步 plugins/mota/data/config.json（内容集里插件那份会覆盖根配置）');
+  return true;
+}
+
 function main(argv) {
   const check = argv.includes('--check');
   const dry = argv.includes('--dry');
@@ -227,8 +243,10 @@ function main(argv) {
   if (check) {
     const sameCfg = fs.readFileSync(cfgPath, 'utf8').trim() === cfgText;
     const sameBoss = fs.readFileSync(bossPath, 'utf8').trim() === bossText;
-    if (!sameCfg || !sameBoss) {
-      console.error(`nmodes: data out of date (config ${sameCfg ? 'ok' : 'differs'}, bosses ${sameBoss ? 'ok' : 'differs'})`);
+    const dst = path.join(ROOT, 'plugins', 'mota', 'data', 'config.json');
+    const sameMota = !fs.existsSync(dst) || fs.readFileSync(dst, 'utf8').trim() === cfgText;
+    if (!sameCfg || !sameBoss || !sameMota) {
+      console.error(`nmodes: data out of date (config ${sameCfg ? 'ok' : 'differs'}, bosses ${sameBoss ? 'ok' : 'differs'}, mota ${sameMota ? 'ok' : 'differs'})`);
       process.exitCode = 1;
     } else console.log('nmodes: up to date');
     return;
@@ -241,6 +259,7 @@ function main(argv) {
   if (dry) { console.log(summary); return; }
   fs.writeFileSync(cfgPath, cfgText);
   fs.writeFileSync(bossPath, bossText);
+  syncMotaConfig();
   console.log(summary);
   console.log('nmodes: wrote data/config.json + data/bosses.json');
 }
