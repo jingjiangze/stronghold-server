@@ -223,10 +223,25 @@ export function syncMotaConfig(root = ROOT) {
   const src = path.join(root, 'data', 'config.json');
   const dst = path.join(root, 'plugins', 'mota', 'data', 'config.json');
   if (!fs.existsSync(dst)) return false;
-  const body = fs.readFileSync(src);
-  if (fs.readFileSync(dst).equals(body)) return false;
-  fs.writeFileSync(dst, body);
-  console.log('nmodes: 同步 plugins/mota/data/config.json（内容集里插件那份会覆盖根配置）');
+  const base = JSON.parse(fs.readFileSync(src, 'utf8'));
+  const prev = JSON.parse(fs.readFileSync(dst, 'utf8'));
+  // 以**根配置为准**，但保留插件独有的键（实测只有 `economy.rogueTeam`：肉鸽团队储备那套规则块）
+  const next = { ...prev, ...base };
+  next.economy = { ...(prev.economy && typeof prev.economy === 'object' ? prev.economy : {}),
+    ...(base.economy && typeof base.economy === 'object' ? base.economy : {}) };
+  // modes 也要合并：插件在**模式记录内部**还带自己的键（如 `teamEconomy`：协同共竞/肉鸽的团队储备规则块），
+  // 整份覆盖会把它们冲掉（econ-loan-policy 等测试直接读插件配置）。
+  const nextModes = {};
+  for (const [id, m] of Object.entries(base.modes || {})) {
+    const pm = prev.modes && prev.modes[id];
+    nextModes[id] = pm ? { ...pm, ...m } : m;
+  }
+  for (const [id, pm] of Object.entries(prev.modes || {})) if (!(id in nextModes)) nextModes[id] = pm;
+  next.modes = nextModes;
+  const text = JSON.stringify(next);
+  if (fs.readFileSync(dst, 'utf8').trim() === text) return false;
+  fs.writeFileSync(dst, text);
+  console.log('nmodes: 同步 plugins/mota/data/config.json（根配置为准，保留插件独有的 economy 键）');
   return true;
 }
 
@@ -244,7 +259,13 @@ function main(argv) {
     const sameCfg = fs.readFileSync(cfgPath, 'utf8').trim() === cfgText;
     const sameBoss = fs.readFileSync(bossPath, 'utf8').trim() === bossText;
     const dst = path.join(ROOT, 'plugins', 'mota', 'data', 'config.json');
-    const sameMota = !fs.existsSync(dst) || fs.readFileSync(dst, 'utf8').trim() === cfgText;
+    let sameMota = true;
+    if (fs.existsSync(dst)) {
+      const prev = JSON.parse(fs.readFileSync(dst, 'utf8'));
+      const merged = { ...prev, ...nextConfig };
+      merged.economy = { ...(prev.economy || {}), ...(nextConfig.economy || {}) };
+      sameMota = fs.readFileSync(dst, 'utf8').trim() === JSON.stringify(merged);
+    }
     if (!sameCfg || !sameBoss || !sameMota) {
       console.error(`nmodes: data out of date (config ${sameCfg ? 'ok' : 'differs'}, bosses ${sameBoss ? 'ok' : 'differs'}, mota ${sameMota ? 'ok' : 'differs'})`);
       process.exitCode = 1;
