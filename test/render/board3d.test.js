@@ -134,6 +134,8 @@ describe('board geometry (layout.js)', () => {
     for (const id of ACTIVE) {
       const st = stages[id];
       for (const area of [AREAS.normal, AREAS.unite, AREAS.boss]) {
+        // 2026-11-03：官方肉鸽地图只占普通半场（19×21 画框上方为禁区），没有 BOSS 半场可建
+        if (String(id).startsWith('rogue_') && area === AREAS.boss) continue;
         const b = buildBoard(st, { area });
         for (const [name, g] of Object.entries(b.buckets)) {
           const n = g.position.length / 3;
@@ -153,7 +155,8 @@ describe('board geometry (layout.js)', () => {
           assert.ok(ux * vy - uy * vx > 0, `${id}: top triangle faces up`);
           tops++;
         }
-        assert.ok(tops > 100, `${id} tops`);
+        // 肉鸽官方小图（5×12 / 7×9）的三角数天然少于 19×21 战场：只要求「有可画的顶面」
+        assert.ok(tops > (String(id).startsWith('rogue_') ? 0 : 100), `${id} tops`);
         const G = b.grid;
         // Gates come from the whole grid, not from the drawn tiles (the enemy half's start gate is outside the
         // current area); a boss field keeps only the gates inside AREAS.boss.

@@ -71,7 +71,7 @@ export class MatchBoss {
     const reuse = this.bossWaves && this.bossWaves.length === groups.length && this.bossWaves.every((w, i) => w.players.join() === groups[i].map((p) => p.playerId).join());
     this.fields = groups.map((g, i) => {
       const solo = this.isSolo || g.length === 1;
-      const wave = reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo });
+      const wave = reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo }, this.stageId);
       // one spawn list per field, shared by the field's players' onBattleStart handlers (edit it in place)
       const spawns = wave.spawns.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
       // bounties with battles left (a multi-round card lasts MULTI_ROUND_BOUNTY_BATTLES) follow their player into the
@@ -94,7 +94,8 @@ export class MatchBoss {
         modeId: this.modeId,
         round: this.round,
         stageId: this.stageId,
-        rect: { ...GEO.BOSS_RECT },
+        // 肉鸽（mode_rogue_*）的 BOSS 回合按普通场打：官方地图嵌在普通窗口，上方 boss 半场是禁区
+        rect: { ...(String(this.gd.modeId).startsWith('mode_rogue_') ? GEO.NORMAL_RECT : GEO.BOSS_RECT) },
         timeLimit: Infinity,
         players: inputs,
         spawns: this._sanitizeSpawns(spawns),

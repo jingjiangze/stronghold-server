@@ -27,7 +27,7 @@ const data = (m = mode(), s = stage()) => ({ config: { modes: { [modeId]: m } },
 
 test('every official battle stage has no deployable boss centre (including the three inactive maps)', () => {
   const official = getData();
-  const stages = Object.values(official.stages).filter(s => s.kind !== 'unite');
+  const stages = Object.values(official.stages).filter(s => s.kind !== 'unite' && !String(s.id).startsWith('rogue_'));
   assert.equal(stages.length, 11);
   for (const s of stages) {
     assert.deepEqual(bossCentreWarnings({ stages: { [s.id]: s }, config: { modes: { coop: { ...mode(), stages: [s.id] } } } }), [], s.id);

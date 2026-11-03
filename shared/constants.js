@@ -49,6 +49,7 @@ const LEGACY_COLORS = { FUNNY: '#f6a329', NORMAL: '#e85a1a', HARD: '#e73118', AB
 /** 20 档的色阶：在 4 个锚点颜色之间线性插值，保证从暖橙到预警红平滑过渡。 */
 const TIER_DIFFICULTY_COLORS = (() => {
   const hex = (s) => parseInt(s.slice(1), 16);
+  /** @type {Array<[number, string]>} */
   const anchors = [[1, '#f6a329'], [8, '#e85a1a'], [14, '#e73118'], [20, '#ff0024']];
   const out = {};
   for (let n = 1; n <= 20; n++) {

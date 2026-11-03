@@ -86,6 +86,8 @@ export function assetCoverage({ root, sets = versionAssetData(root), assets = re
         model: status(model(spine(rec.enemyKey))) }, rec.enemyKey);
     }
     for (const [id, rec] of Object.entries(d.stages)) {
+      // 2026-11-03：官方肉鸽地图（rogue_*）复用本作地形/2D 画框，没有独立版本场景资源
+      if (String(id).startsWith('rogue_')) continue;
       const scene = Object.values(local.groups?.[`scene/${id}`] || {}).find((r) => r.kind === 'Scene');
       add('stage', id, rec.name, { scene: /_escaped_/.test(id) ? 'shared board (same as default)'
         : status(files ? present(scene?.path) : EXPECTED_LOCAL_GROUPS.includes(`scene/${id}`)) });
