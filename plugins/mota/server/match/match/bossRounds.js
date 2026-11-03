@@ -94,7 +94,8 @@ export class MatchBoss {
         modeId: this.modeId,
         round: this.round,
         stageId: this.stageId,
-        rect: { ...GEO.BOSS_RECT },
+        // 肉鸽（mode_rogue_*）的 BOSS 回合按普通场打：官方地图嵌在普通窗口，上方 boss 半场是禁区
+        rect: { ...(String(this.gd.modeId).startsWith('mode_rogue_') ? GEO.NORMAL_RECT : GEO.BOSS_RECT) },
         timeLimit: Infinity,
         players: inputs,
         spawns: this._sanitizeSpawns(spawns),

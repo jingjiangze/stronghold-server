@@ -370,9 +370,14 @@ function entriesView(gd, pick) {
  * @returns {{ templateId: string|null, spawns: object[], routes: object[], extraRoutes: object[], timeLimit: number,
  *   overrides: object, pick: object|null, entries: { ground: object|null, fly: object|null }, actions: object[] }}
  */
-export function buildNormalWave(gd, rng, factions, round) {
+export function buildNormalWave(gd, rng, factions, round, stageId = null) {
   const rc = gd.roundCfg(round);
-  const templateId = rc && typeof rc.template === 'string' ? rc.template : null;
+  // 肉鸽（mode_rogue_*）：每张图自带出怪表 `waves['rogue_<stageId>']`（tools/build-rogue-maps.mjs 生成）；
+  // 有就用它，没有才回落到回合模板（老数据/纯 autochess 内容集不受影响）。
+  const rogueStage = typeof gd.modeId === 'string' && gd.modeId.startsWith('mode_rogue_') && typeof stageId === 'string' && stageId
+    ? `rogue_${String(stageId).replace(/^rogue_/, '')}` : null;
+  const rogueTpl = rogueStage ? gd.wave(rogueStage) : null;
+  const templateId = rogueTpl ? rogueStage : (rc && typeof rc.template === 'string' ? rc.template : null);
   const tpl = templateId ? gd.wave(templateId) : null;
   const timeLimit = gd.combatTimeLimit(round);
   if (!tpl) return { templateId, spawns: [], routes: [], extraRoutes: [], timeLimit, overrides: {}, pick: null, entries: { ground: null, fly: null }, actions: [] };
@@ -395,7 +400,12 @@ export function buildNormalWave(gd, rng, factions, round) {
  * Boss / hidden round template for one boss field; escorts follow the pick of the round's own slot.
  * @param {{ bossId: string, solo: boolean }} opts solo → `_s` template (lone player or solo mode)
  */
-export function buildBossWave(gd, rng, factions, round, { bossId, solo }) {
+export function buildBossWave(gd, rng, factions, round, { bossId, solo }, stageId = null) {
+  // 肉鸽（mode_rogue_*）：每张官方地图自带出怪表，Boss 回合没有「半场」可换 ⇒ 直接按这张图打（用本作已知敌人的基础模板）。
+  if (typeof gd.modeId === 'string' && gd.modeId.startsWith('mode_rogue_') && typeof stageId === 'string' && stageId
+    && gd.wave(`rogue_${String(stageId).replace(/^rogue_/, '')}`)) {
+    return buildNormalWave(gd, rng, factions, round, stageId);
+  }
   const rc = gd.roundCfg(round);
   const map = rc && rc.bossTemplates && typeof rc.bossTemplates === 'object' ? rc.bossTemplates : {};
   let templateId = typeof map[bossId] === 'string' ? map[bossId] : null;

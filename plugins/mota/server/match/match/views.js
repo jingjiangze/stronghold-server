@@ -540,7 +540,8 @@ export class MatchViews {
     if (!g) return meta;
     const mate = this.bossMateView(ps);
     const own = units.map((u) => this._onBossHalf(u, g.side));
-    return { ...meta, kind: 'boss', rect: { ...this.layout.battle.boss }, side: g.side, units: mate ? [...own, ...mate.units] : own, ...(mate ? { mate: { playerId: mate.playerId, side: mate.side } } : {}) };
+    const rogue = String(this.gd.modeId).startsWith('mode_rogue_');
+    return { ...meta, kind: 'boss', rect: { ...(rogue ? this.layout.battle.normal : this.layout.battle.boss) }, side: rogue ? undefined : g.side, units: mate ? [...own, ...mate.units] : own, ...(mate ? { mate: { playerId: mate.playerId, side: rogue ? undefined : mate.side } } : {}) };
   }
 
   /** A prep UnitInfo (board, bench or temp row) placed on side 'L' | 'R' of the boss field (bossFieldPlacement). */

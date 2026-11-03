@@ -202,6 +202,8 @@ export class MatchInfra {
    * @returns {'normal'|'bossL'|'bossR'}
    */
   deployFieldOf(ps) {
+    // 肉鸽（mode_rogue_*）的官方地图嵌在普通窗口里：BOSS 回合仍按普通场部署/作战，不走 bossL/bossR 半场
+    if (typeof this.gd?.modeId === 'string' && this.gd.modeId.startsWith('mode_rogue_')) return 'normal';
     const g = this.bossGroupOf(ps);
     return !g ? 'normal' : g.side === 'R' ? 'bossR' : 'bossL';
   }
