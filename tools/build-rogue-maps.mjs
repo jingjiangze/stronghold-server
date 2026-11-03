@@ -15,7 +15,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { convertRogueLevel, wavesOf, routesInFrame } from './rogue-stages.mjs';
+import { convertRogueLevel, wavesOf, routesInFrame, frameOf, FRAME } from './rogue-stages.mjs';
+import { syncMotaConfig } from './build-nmodes.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -50,6 +51,10 @@ export function convertOne(lv, file, names = new Map(), baseWave = null) {
   const idn = idOfFile(file);
   if (!idn) return null;
   if (!lv || !lv.mapData || !Array.isArray(lv.mapData.map) || !lv.mapData.map.length) return null;
+  // 超出 19×21 画框的图显式跳过：frameOf 的偏移会被夹到 0，超出的列/行在画框里根本不存在，
+  // 静默截断会丢地形、丢 S/E 与路径起点（实测 b-7 8×25、b-8 9×36），所以这里直接放弃。
+  const frame = frameOf(lv);
+  if (frame.h > FRAME.rows || frame.w > FRAME.cols) return null;
   const name = (lv.levelId && names.get(String(lv.levelId).toLowerCase())) || idn.id;
   const stage = convertRogueLevel(lv, { id: idn.id, name, active: true, modes: [] });
   stage.weight = 1;
@@ -64,6 +69,10 @@ export function convertOne(lv, file, names = new Map(), baseWave = null) {
     wave.characterLimit = baseWave.characterLimit;
     wave.maxPlayTime = baseWave.maxPlayTime > 0 ? baseWave.maxPlayTime : official.maxPlayTime;
     wave.baseTemplate = baseWave.id || null;
+    // 出怪换成本作模板后，totalCount 必须跟着实际 spawns 重算（口径同 wavesOf），否则会留着官方值
+    wave.totalCount = wave.spawns
+      .filter((s) => !s.action || String(s.action).toUpperCase() === 'SPAWN')
+      .reduce((n, s) => n + (Number(s.count) || 1), 0);
   }
   wave.officialCount = official.totalCount;
   return { id: idn.id, stage, wave };
@@ -111,9 +120,13 @@ function main(argv) {
   for (const k of Object.keys(waves)) if (k.startsWith('rogue_')) delete waves[k];
 
   let added = 0, skipped = 0;
+  const skippedWide = [];
   for (const f of files) {
     let lv = null;
     try { lv = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { skipped += 1; continue; }
+    // 超宽/超高图单独计数（与解析失败等 skipped 分开），convertOne 内部也会拒绝
+    const fr = lv && lv.mapData && Array.isArray(lv.mapData.map) && lv.mapData.map.length ? frameOf(lv) : null;
+    if (fr && (fr.h > FRAME.rows || fr.w > FRAME.cols)) { skippedWide.push(path.basename(f)); continue; }
     const one = convertOne(lv, f, names, baseWave);
     if (!one) { skipped += 1; continue; }
     stages[one.id] = one.stage;
@@ -131,11 +144,13 @@ function main(argv) {
     if (JSON.stringify(mode.stages) !== before) modesTouched += 1;
   }
 
-  console.log(`nmodes-rogue: ${files.length} 个关卡文件 → ${added} 张图 / ${skipped} 个跳过；池子 ${rogueIds.length} 张；改了 ${modesTouched} 条 mode_rogue_n* 的 stages`);
+  const wideNote = skippedWide.length ? `；skippedWide: ${skippedWide.length} [${skippedWide.join(', ')}]` : '；skippedWide: 0';
+  console.log(`nmodes-rogue: ${files.length} 个关卡文件 → ${added} 张图 / ${skipped} 个跳过${wideNote}；池子 ${rogueIds.length} 张；改了 ${modesTouched} 条 mode_rogue_n* 的 stages`);
   if (dry) return;
   fs.writeFileSync(stagesPath, JSON.stringify(stages));
   fs.writeFileSync(wavesPath, JSON.stringify(waves));
   fs.writeFileSync(cfgPath, JSON.stringify(config));
+  syncMotaConfig();   // 内容集里插件那份 config 会覆盖根配置（见 build-nmodes.syncMotaConfig）
   console.log('nmodes-rogue: 写入 data/stages.json / data/waves.json / data/config.json');
 }
 
