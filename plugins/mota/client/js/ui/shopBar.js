@@ -205,6 +205,11 @@ export function MonsterCard({ slot, idx, selected = false, frozen = false, poor 
   const cap = Math.max(0, Number(slot?.cap) || 0);
   const name = slot?.name || slot?.key || '';
   const stock = `${left}/${cap}`;
+  // 卡面图标：图标表随 assets 清单在运行时到货（上面的 useData），key 在清单里没有图标 / 文件 404 时都要有东西可看。
+  // `enemyIconUrl` 拿不到 URL（清单未到货、该 key 没有 icon）时返回 null ⇒ <Img> 直接画 fallback；404 由 <Img> 的
+  // onError 换同一个 fallback。占位骷髅的尺寸写在 css 里是**显式 rem**（不是百分比）—— 2026-11-04 视觉验收第 1 条
+  // 的空白卡面，占位节点当年只靠 1em 的淡色 glyph，等同于没画。
+  const iconUrl = enemyIconUrl(m, slot?.key);
   return html`<button type="button" class=${cx('scard', `scard--t${tier}`, 'scard--monster', frozen && 'is-frozen', selected && 'is-armed', poor && 'is-disabled')}
       data-shop-slot=${idx} data-monster-key=${slot?.key}
       title=${t('{name}：点击选择投放的门与数量，右键冻结这一格', { name })}
@@ -215,7 +220,7 @@ export function MonsterCard({ slot, idx, selected = false, frozen = false, poor 
       <${TierChip} tier=${tier} size="md" />
       <${HexBadge} value=${price} tone=${poor ? 'dark' : 'gold'} size="md" class=${cx('scard__price', poor && 'is-poor')} title=${t('价格')} />
     </span>
-    <span class="scard__art" aria-hidden="true"><${Img} src=${enemyIconUrl(m, slot?.key)} class="scard__monicon" eager=${true} fallback=${html`<${GIcon} name="skull" />`} /></span>
+    <span class="scard__art" aria-hidden="true"><${Img} src=${iconUrl} class="scard__monicon" eager=${true} fallback=${html`<span class="scard__artfallback"><${GIcon} name="skull" /></span>`} /></span>
     <span class="scard__body">
       <span class="scard__name">${name}</span>
       <span class="scard__class"><span>T${tier}</span></span>
@@ -223,6 +228,17 @@ export function MonsterCard({ slot, idx, selected = false, frozen = false, poor 
     <span class="scard__stock">${stock}</span>
     ${frozen ? html`<span class="scard__ice" aria-hidden="true"><${Icon} name="snow" /></span>` : null}
   </button>`;
+}
+
+/**
+ * 怪物模式里没发到牌的格子（2026-11-04 视觉验收第 2 条）：`dealSlots` 池里没货时把这一格置 null，旧实现沿用
+ * 干员栏的 EmptyCard —— 它带着 `scard--sold`，斜纹 + 居中排布与「已售罄」几乎一样，看起来像「买完了」。
+ * 这里不套 `scard--sold`：独立的 `scard--monster-empty` 画成虚线空框 + 淡色破折号（css/screens/game-shop.css），
+ * 与 SoldCard 的斜纹 / SOLD OUT 明确分开；不带 data-shop-slot，不参与双点购买。
+ */
+function MonsterEmptyCard() {
+  return html`<div class="scard scard--monster-empty" role="img" aria-label=${t('空栏位：本回合没有这种怪可投放')}
+    title=${t('空栏位：本回合没有这种怪可投放')}><span class="scard--monster-empty__dash" aria-hidden="true">—</span></div>`;
 }
 
 /**
@@ -624,8 +640,8 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
         : html`<div class="shopbar__cards">
         ${monsterOn
           ? monsterSlots.map((s, i) => {
-            // 空格 / 已售：沿用干员卡那一套空栏位与 SOLD OUT 外壳，不另造视觉
-            if (!s) return html`<${EmptyCard} key=${`me${i}`} />`;
+            // 空格：独立的虚线空框（MonsterEmptyCard，与「已售罄」区分）；已售：SOLD OUT 外壳照旧
+            if (!s) return html`<${MonsterEmptyCard} key=${`me${i}`} />`;
             if (s.sold) return html`<${SoldCard} key=${`ms${i}`} />`;
             const cap = monsterPlaceCap(s, monsterLeft);
             const open = !!mPick && mPick.index === Number(s.index);

@@ -446,14 +446,35 @@
 /* 外框同时抹掉干员立绘那条底部渐隐蒙版（.scard__art 的 mask-image，见上方 109–110 行）—— 怪物图标是完整图形，不该被切边 */
 .scard--monster .scard__art { left: 0; right: 0; top: .34rem; bottom: .46rem; height: auto; width: auto;
   display: flex; align-items: center; justify-content: center; pointer-events: none;
+  /* 淡淡的底光：图标还没画出来（清单未到货 / 图片仍在加载）时这里也不是一块死黑的空洞 */
+  background: radial-gradient(60% 55% at 50% 42%, rgba(255, 255, 255, .07), transparent 72%);
   -webkit-mask-image: none; mask-image: none; }
 .scard--monster .scard__art img { width: 78%; height: 78%; object-fit: contain; }
+/* 图标缺失（enemyIconUrl 为 null：清单未到货 / 该 key 没有 icon；或文件 404 被 <Img> 换掉）时的占位图形：
+   <Img> 的 fallback 节点（js/ui/shopBar.js MonsterCard）—— 淡色骷髅 + 虚线空框。
+   尺寸必须是**显式 rem**：.scard__art 的高度是 top/bottom 拉伸出来的 auto，百分比高度在部分引擎里会退化成
+   1em，占位图形小到看不出来，卡面就等于空白（2026-11-04 视觉验收第 1 条）。 */
+.scard--monster .scard__art .scard__artfallback { position: absolute; inset: 0; top: 0; right: 0; height: auto; width: auto;
+  display: grid; place-items: center; color: rgba(255, 255, 255, .42); pointer-events: none; }
+.scard--monster .scard__art .scard__artfallback::before { content: ''; position: absolute; inset: .1rem;
+  border: 1px dashed rgba(255, 255, 255, .2); border-radius: .06rem; }
+.scard--monster .scard__art .scard__artfallback .icon { width: .56rem; height: .56rem; }
 /* 图标缺失时 Img 退回 GIcon(skull)：同一块居中区域里要占得住位置，不能缩成 1em */
 .scard--monster .scard__art .icon { width: 46%; height: 46%; color: rgba(255, 255, 255, .35); }
 /* 库存角标：字号与 .scard__bond / .scard__class 同一档（.13rem）—— 派单原文写的是 .46rem，那在 1.56rem 宽的卡面上
    是 46px，会盖住名字与图标，故按同排文字的档位落地（已写进交付报告）。 */
 .scard__stock { position: absolute; right: .06rem; bottom: .06rem; z-index: 3; font-size: .13rem; font-family: var(--font-num);
   letter-spacing: .04em; opacity: .78; pointer-events: none; }
+
+/* 怪物模式的空槽位（2026-11-04 视觉验收第 2 条）：池里没货时服务端把这一格置 null（monsterShop.js dealSlots），
+   旧实现沿用干员栏的 EmptyCard —— 它带 .scard--sold，斜纹 + 居中排布与「已售罄」几乎一样。这里改画成**虚线空框 +
+   淡色破折号**，不套 .scard--sold（斜纹 / SOLD OUT 是「买走了」的视觉）。 */
+.scard--monster-empty { background: rgba(8, 11, 10, .32); border: 1px dashed var(--line-2); justify-content: center; align-items: center; }
+.scard--monster-empty__dash { font-family: var(--font-num); font-size: .42rem; line-height: 1; color: rgba(255, 255, 255, .16); user-select: none; }
+/* 空槽位不是可点的卡：压住 .scard:not(.is-disabled):not(.scard--sold):hover / :active 的抬升与亮边。
+   那条规则是 4 个类（.scard + 两个 :not + :hover），下面两条同样 4 个类且更靠后 ⇒ 同权后写者胜。 */
+.shopbar__cards .scard.scard--monster-empty:hover,
+.shopbar__cards .scard.scard--monster-empty:active { transform: none; border-color: var(--line-2); box-shadow: none; cursor: default; }
 
 /* 选中卡 + 浮层的锚：浮层挂在卡片这一格外层上（同 ShopBar 内渲染，不是全局 modal） */
 .mshop-anchor { position: relative; display: flex; }

@@ -336,6 +336,10 @@ function MatchScreen() {
   const confStage = pub?.confront ? (pub.confront.stage != null ? pub.confront.stage : null) : null;
   // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条，状态条上留「查看投放 / 继续投放」按钮
   const confDropWindow = !!pub?.confront && pub.confront.active === true && confStage === null && myRole === 'attack';
+  // 投放窗口里「已投 N 只」读的是**本回合草稿**（m.monsterShop.draft.picks，点卡投放每投一只加一条）——
+  // 这时还没有提交，m.confront.subs[myId] 不存在，旧文案只能画「等待投放结算」（2026-11-04 视觉验收第 3 条）。
+  // 投放结束后（stage 进入 roster、active 变 false、或进 COMBAT / SETTLE）仍走下面的 mySub.total。
+  const dropPlaced = monsterShopOpen && Array.isArray(monsterShop.draft?.picks) ? monsterShop.draft.picks.length : 0;
   // 离开投放窗口就收起已投清单（下一回合重新打开，不把上一回合的展开状态带过去）
   useEffect(() => { if (!confDropWindow) setConfDoneOpen(false); }, [confDropWindow]);
   // a spectator seat watches like an eliminated player (it has no m.private and no row in m.public)
@@ -1900,9 +1904,13 @@ function MatchScreen() {
       ${myRole === 'attack' && (phase === PHASE.ROUND_START || phase === PHASE.PREP || phase === PHASE.COMBAT || phase === PHASE.SETTLE) ? html`<div class="gm__attackwait" role="status" data-testid="attack-wait">
         <div class="gm__attackwait__in">
           <span class="gm__attackwait__micro">${'HUNTING PHASE // ' + t('进攻')}</span>
-          <div class="gm__attackwait__t"><${Icon} name="sword" />${t('本回合你是进攻方')}</div>
-          <p>${t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
-          ${mySub ? html`<span class="num">${t('本回合投放 {n} 只', { n: mySub.total })}</span>` : html`<span class="t-dim">${t('等待投放结算')}</span>`}
+          ${/* 投放窗口开着（active && stage === null）时这一回合还没结束：文案说「正在投放」+ 已投只数（草稿），
+               不能再说「怪物已投放，等待…」—— 那时玩家一只都还没投（2026-11-04 视觉验收第 3 条） */ null}
+          <div class="gm__attackwait__t"><${Icon} name="sword" />${t('本回合你是进攻方')}${confDropWindow ? html`<span class="t-dim">· ${t('正在投放')}</span>` : null}</div>
+          <p>${confDropWindow ? t('点下方怪物卡投放到上/下门。') : t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
+          ${confDropWindow
+            ? html`<span class="num">${t('已投 {n} 只', { n: dropPlaced })}</span>`
+            : mySub ? html`<span class="num">${t('本回合投放 {n} 只', { n: mySub.total })}</span>` : html`<span class="t-dim">${t('等待投放结算')}</span>`}
           ${confDropWindow ? html`<button type="button" class="confbtn" aria-expanded=${confDoneOpen} aria-controls="confront-done-card"
             data-testid="confront-done-toggle" onClick=${() => setConfDoneOpen((v) => !v)}>
             ${confDoneOpen ? t('收起已投清单') : t('查看投放 / 继续投放')}</button>` : null}

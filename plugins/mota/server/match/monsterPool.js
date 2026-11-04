@@ -242,13 +242,40 @@ export function monsterCardKeys(m) {
 }
 
 /**
+ * 这一回合**该队**的存活攻方人数 —— 共享出怪下的份数下限（见 buildMonsterPool）。
+ * 只用 `m.attackingTeam` 与 `m.teamIdOf` 现算（座位表取 `m.alivePlayers()`，没有就用 `m.order` 过滤）：
+ * 非攻防回合（`attackingTeam == null`）、老对局、取不到座位表 → 1（老行为）。
+ * solo 怪物模式**不**按队算（那是每人一个池，见 monsterShop.js 的 monsterPoolFor）—— 由 buildMonsterPool 在调用处
+ * 取 1，本函数仍回答「该队有几个攻方」这个问题。
+ * @param {object} m
+ * @returns {number} >= 1
+ */
+export function teamAttackerCount(m) {
+  if (!m || m.attackingTeam == null || typeof m.teamIdOf !== 'function') return 1;
+  const list = typeof m.alivePlayers === 'function'
+    ? m.alivePlayers()
+    : (Array.isArray(m.order) ? m.order.filter((p) => p && p.alive !== false && p.left !== true) : []);
+  let n = 0;
+  for (const ps of Array.isArray(list) ? list : []) if (m.teamIdOf(ps) === m.attackingTeam) n += 1;
+  return Math.max(1, n);
+}
+
+/**
  * 用本局数据建一张怪物卡池（shared 怪物模式每队一张，solo 每人一张 —— 见 match/match/confront.js 的
  * finishConfrontTargets 与 monsterShop.js 的 monsterPoolFor）。
  * 份数口径（业主 2026-11-04）：本回合官方出怪里该 key 的合计只数，**至少 1**、上限仍受阶位份数
- * `MONSTER_COPIES_BY_TIER` 约束 —— `Math.min(cap, max(官方合计, 1))`。这样「官方只出过 1 只」的怪
- * 也能买到（不会被阶位/只数卡成 0），而高阶稀有怪仍被封在各自的份数上限内。
+ * `MONSTER_COPIES_BY_TIER` 约束。这样「官方只出过 1 只」的怪也能买到（不会被阶位/只数卡成 0），
+ * 而高阶稀有怪仍被封在各自的份数上限内。
+ * **份数 = 官方合计 × 该池的购买者人数**（2026-11-04 视觉验收第 4 条，业主补充口径「相乘」）：shared 模式下
+ * 同一份卡池由同队所有攻方一起买（monsterShop.js 的 monsterPoolFor 按 teamId 取池），只按「官方合计」发份数时，
+ * 先开的队友（含同队 AI）会把卡买光，同队另一个人开手就是 `0/2` —— 每个攻方都要能各买一份满额：
+ * `cap = min(阶位份数, max(1, 官方合计 × 该队攻方人数))`。仍受阶位份数封顶，R1 不会爆量
+ * （tier1 = 8 份封顶）。
+ * solo 模式每人一个池、只有该队第一位存活攻方有权投放（monsterShop.js 的 placeActorOk），购买者恒为 1 ⇒
+ * 份数不按队放大，只按官方合计。
  * 没有官方快照（boss 回合 / 老对局）时沿用旧的阶位份数。
- * @param {object} m Match 实例（只用 data / _roundOfficialSpawns / confrontGroups / confrontValueOf）
+ * @param {object} m Match 实例（只用 data / _roundOfficialSpawns / confrontGroups / confrontValueOf /
+ *   attackingTeam / teamIdOf / monsterMode）
  * @returns {MonsterPool}
  */
 export function buildMonsterPool(m) {
@@ -256,6 +283,9 @@ export function buildMonsterPool(m) {
   if (!m) return new MonsterPool(entries);
   const enemies = (m.data && m.data.enemies) || {};
   const officialCounts = officialSpawnCounts(m);
+  // 这个池的购买者人数：shared = 同队每个攻方各买一份（按队人数放大）；solo = 每人一个池、只有 1 个购买者。
+  // 拿不到人数时是 1（老行为）。
+  const buyers = m.monsterMode === 'solo' ? 1 : teamAttackerCount(m);
   for (const key of monsterCardKeys(m)) {
     // 价格（本回合量纲）：与预算 / 波次价值 / 提交校验同一个函数
     const price = typeof m.confrontValueOf === 'function' ? Number(m.confrontValueOf(key)) : 0;
@@ -266,8 +296,8 @@ export function buildMonsterPool(m) {
     const tier = monsterTierOf(base);
     const tierCap = MONSTER_COPIES_BY_TIER[tier] || 1;
     const officialCount = officialCounts ? (officialCounts.get(key) || 1) : 1;
-    // 官方出了几只就能买几份（至少 1），但不超过阶位份数 —— 见函数头注释
-    const cap = officialCounts ? Math.min(tierCap, Math.max(officialCount, 1)) : tierCap;
+    // 官方出了几只 × 每个购买者各一份（至少 1），但不超过阶位份数 —— 见函数头注释
+    const cap = officialCounts ? Math.min(tierCap, Math.max(1, officialCount * buyers)) : tierCap;
     entries.push({ key, cost: price, tier, cap });
   }
   return new MonsterPool(entries);
