@@ -11,10 +11,14 @@
 // `_roundOfficialSpawns` 只读快照）；赏金档 = 面板并集（confrontGroups 的行 key 并集，见 officialForRule）——
 // 赏金档实测「官方 key ∩ 面板 = 0」；快照/面板都缺失时回落 confrontPool。
 //
-// 阶位口径（2026-11-03 实测 data/enemies.json × data/factions.json，confrontPool 120 只）：
-//   · 基础价 = confrontValue(e)（scale 为 1 的无倍率口径，即 R1 量纲）—— 实测区间 8..405，
-//     分位 p25 / p50 / p75 / p90 = 50 / 87 / 152 / 226。
-//   · 分档切点 MONSTER_TIER_BANDS = [25, 50, 100, 200] → tier1..5，实测每档 5 / 26 / 34 / 40 / 15 只。
+// 阶位口径（2026-11-04 并入 242 条肉鸽怪后重切，6 档）：
+//   · 切点只在**池子集**上算，不在全 491 条上算：池子集 = confrontPool(data/factions.json) ∩ data/enemies.json
+//     = **120 只**（buildMonsterPool 没有官方快照时的来源；全 491 条里有 boss 的 attrPower 离群 2.5M，会把分位拉坏）。
+//   · 分位口径用 attrPower（官方强度式：atk×5 + maxHp + def×3 + res×3，见 data/enemies.json 的 attrPower）；
+//     confrontValue = round(stat / 120)，两者只差 ÷120 与取整，所以切点按 attrPower 算完后 ÷120 存**基础价量纲**。
+//     实测：池子集 attrPower 排序取第 20/40/60/80/100 位 = 4730 / 6840 / 10390 / 16100 / 21150，
+//     ÷120 取整 → 切点 [39, 57, 87, 134, 176]（≈ 每 1/6 一档）。实测每档 20 / 20 / 21 / 20 / 19 / 20 只。
+//   · 旧切点 [25, 50, 100, 200]（2026-11-03）在同一个池子集上实测 5 / 26 / 34 / 40 / 15 —— 严重偏斜，已废弃。
 //   · 定阶只看**基础价**，不看本回合价：本回合价随 gd.enemyScale 的 hp/atk 倍率整体上浮，同一只怪会在后期
 //     跳档；阶位是怪物的固有稀有度（与「这一回合卖多少钱」分开）。
 //   · 卡面价格仍由 m.confrontValueOf(key) 取（本回合量纲，含特性档位分）—— 预算判据因此与既有逻辑同尺度。
@@ -26,13 +30,14 @@
 import { confrontPool, confrontValue } from './match/confront.js';
 
 /**
- * 价格分档切点（基础价口径，见文件头）。`cost > band` 逐级 +1 ⇒ 5 档。
+ * 价格分档切点（基础价口径，见文件头）。`cost > band` 逐级 +1 ⇒ 6 档（`length + 1`）。
+ * 池子集 120 只上按 attrPower 六等分位、÷120 取整：20/40/60/80/100 位 = 4730/6840/10390/16100/21150。
  * @type {readonly number[]}
  */
-export const MONSTER_TIER_BANDS = Object.freeze([25, 50, 100, 200]);
+export const MONSTER_TIER_BANDS = Object.freeze([39, 57, 87, 134, 176]);
 
-/** 每阶的份数（**仅在没有官方出怪快照时**的回落值：boss 回合 / 老对局）。tier1 → 8 … tier5 → 1。 */
-export const MONSTER_COPIES_BY_TIER = Object.freeze({ 1: 8, 2: 6, 3: 4, 4: 2, 5: 1 });
+/** 每阶的份数（**仅在没有官方出怪快照时**的回落值：boss 回合 / 老对局）。tier1 → 8 … tier6 → 1（单调不增）。 */
+export const MONSTER_COPIES_BY_TIER = Object.freeze({ 1: 8, 2: 6, 3: 4, 4: 3, 5: 2, 6: 1 });
 
 /**
  * 卡池份数的**全局比例**（业主 2026-11-04 裁决：卡池份数 = 官方该回合只数 × 1.5，按队算）。
@@ -42,13 +47,13 @@ export const MONSTER_COPIES_BY_TIER = Object.freeze({ 1: 8, 2: 6, 3: 4, 4: 2, 5:
  */
 export const MONSTER_POOL_COPIES_SHARE = 1.5;
 
-/** 最高阶（= 分档切点数 + 1）。 */
+/** 最高阶（= 分档切点数 + 1；当前 5 个切点 ⇒ 6 档）。 */
 export const MONSTER_MAX_TIER = MONSTER_TIER_BANDS.length + 1;
 
 /**
  * 价格 → 阶位（1..MONSTER_MAX_TIER）。非有限 / 非正数一律按 tier1 处理（与 confrontValue 的下限 1 一致）。
  * @param {number} cost 基础价（confrontValue 口径；不是混了本回合倍率的价格）
- * @returns {number} 1..5
+ * @returns {number} 1..6
  */
 export function monsterTierOf(cost) {
   const v = Number(cost);

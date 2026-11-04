@@ -1,14 +1,27 @@
 // plugins/mota/server/match/monsterBonds.js — 怪物方的**独立盟约**（攻方专属，业主 2026-11-04 口径）。
 //
-// 业主口径（2026-11-04）：**攻方完全没有干员盟约、没有干员商店，只有怪物方的独立盟约** —— 7 条按类型 + 3 条通用，
-// 层数制，**只影响本回合**。所以本模块与 `bondsMeta.js`（干员盟约：整局持久、ps.layers / ps.bonds 被 invariants.js
-// 钉死）是**平行结构**，两套数据 / 状态 / installer 一律不共用：
+// 业主口径（2026-11-04，v2 按阵营）：**攻方完全没有干员盟约、没有干员商店，只有怪物方的独立盟约** ——
+// 20 条**按阵营**（data/monster-factions.json 的 20 个 id）+ 3 条通用，层数制，**只影响本回合**。
+// 所以本模块与 `bondsMeta.js`（干员盟约：整局持久、ps.layers / ps.bonds 被 invariants.js 钉死）是**平行结构**，
+// 两套数据 / 状态 / installer 一律不共用：
 //   · 状态 `m.monsterBonds` = Map<key, Record<bondId, layers>>，key 与怪物池同口径（monsterMode === 'solo' ? playerId
 //     : teamId，见 monsterPool.js monsterPoolFor）—— 共享池时同队两名攻方的层数合成一份；
 //   · 生命周期**每回合重置**（match/match/phases.js 的回合边界调 closeMonsterBondRound）；
 //   · 涨层 = `monsterShop.js` 的 placeMonster / buyMonster（只算攻方投放的怪，官方波次不算），dropMonster 回退；
 //   · 效果 = spawn 的 `mods` 乘区（hpMul / atkMul / defMul / resMul / speedMul / aspdMul），在 match/match/confront.js 的
 //     applyConfront（投放怪）与 _confrontBossSpawns（事件期 boss）合并；资金类（增援 / 回收）在回合收尾发放。
+//
+// 【阵营归属（2026-11-04）】只认 `data/monster-factions.json` 的 `map`（敌人 key → 阵营 id 数组）：一只怪属于哪些
+// 阵营是**数据**，不是从 acType / rank 现推的。读法与 `gamedata.js` 同源：GameData 的 `raw` 就是 server/data.js
+// `loadData()` 把 data/*.json 按 basename 装进来的对象（`gd.raw['monster-factions']`）；拿不到 `gd.raw` 的直测 / stub
+// 走同一个 `getData()` 单例（与 builtinMeta.js 的懒取法一致），**不另造读数层**。没有阵营的怪（map 未覆盖）不进任何
+// 阵营条，只在 3 条通用条里计数。
+//
+// 【阈值（2026-11-04 重定）】阵营条不再用绝对 [2,4,6]：按该阵营在**本回合可投放池**（monsterPool.js 的
+// monsterCardKeys，对抗档 = 本回合官方出怪 / 赏金档 = 面板并集）里的**只数** n 取比例：
+//   t1 = max(1, ceil(n × 0.15))，t2 = max(t1+1, ceil(n × 0.30))，t3 = max(t2+1, ceil(n × 0.45))
+// 池子小的阵营阈值低（3 只就能吃到一阶，补偿可选卡少），池子大的阵营阈值高。n = 0（本回合这只阵营没牌）时
+// 回落到 [1,2,3]（此时也投不出这只阵营，阈值只是形态占位）。3 条通用条仍是绝对阈值（见各自的常量）。
 //
 // 【aspdMul（攻速乘区）】2026-11-04 起两棵 sim 树的 `spawns.js`（`server/sim/battle/spawns.js` 与
 // `plugins/mota/server/sim/battle/spawns.js`）的 enemy mods 都认 `aspdMul`：`aspd = def.aspd * (m.aspdMul ?? 1)`，
@@ -17,13 +30,15 @@
 // 守卫：`m.monsterShopOn === false`（opts.monsterShop === false / 非对抗局）时**整段不跑** —— 不建状态、不发帧、
 // 不发放资金，旧对局的行为与字节完全不变。
 
-import { officialSpawnCounts } from './monsterPool.js';
+import { monsterCardKeys, officialSpawnCounts } from './monsterPool.js';
 // 怪物资金账户的唯一入口（业主 2026-11-04 裁决 2）：shared 落队级账户、solo 落个人账户。
 // 与 monsterShop.js 互为 import（它 import 本文件的 addMonsterBonds / monsterBondView）：两边都只在函数体内取用，
 // 模块顶层不互相求值（与 monsterPool ↔ match/confront 的循环同一口径），因此安全。
 import { addMonsterFundsTo } from './monsterShop.js';
+// data/*.json 的进程级单例（server/data.js 的再导出）；只在拿不到 gd.raw 的直测 / stub 路径上懒取一次。
+import { getData } from '../data.js';
 
-/** 层数阈值（tier1 / tier2 / tier3）。层数 = 该类型**本回合投放过的只数**；常量可调。 */
+/** 层数阈值（通用条用；阵营条的阈值按池子集动态算，见文件头与 monsterBondThresholds）。 */
 export const MONSTER_BOND_THRESHOLDS = [2, 4, 6];
 /** 会战只看「同队有几名攻方投过」（2V2 上限 2 人 / 4V4 上限 4 人），阈值因此单独一张。 */
 export const MONSTER_BOND_CONCERT_THRESHOLDS = [2, 3, 4];
@@ -42,30 +57,71 @@ export const MONSTER_BOND_TIER_MUL = [0, 1, 1.5, 2];
 /** 会战的固定加成（同队两名攻方都投过 ≥1 只即生效）。 */
 export const MONSTER_BOND_CONCERT_BONUS = 0.05;
 
-/** 隐形判据的 tag 白名单（enemies.json 现在的隐形怪都靠 acType = INVISIBLE；tag 只是兜底口径）。 */
-const STEALTH_TAGS = new Set(['invisible', 'stealth', 'cloak']);
+/** data/monster-factions.json 在 loadData() 里的 basename（server/data.js 的键 = 文件名去掉 .json）。 */
+const FACTION_DATA_KEY = 'monster-factions';
 
-const hasTag = (enemyRec, tag) => {
-  const tags = Array.isArray(enemyRec && enemyRec.tags) ? enemyRec.tags : [];
-  return tags.some((t) => String(t).toLowerCase() === tag);
-};
+/** 直测 / stub 路径的懒取缓存：null = 还没取，false = 取失败或文件缺失。 */
+let factionDataFallback = null;
 
 /**
- * 10 条盟约的固定定义（业主口径：7 条按类型 + 3 条通用）。`classify` 是**纯函数**，只看敌人数据
- * （data/enemies.json 的记录：`isFlyEnemy` / `acType` / `rank` / `tags`），不看本回合抽到哪个 confrontGroups
- * （那是「本回合抽到的组」，与怪物本身是什么类型无关）；`classify: null` = 通用条，由投放统计算出层数。
+ * `data/monster-factions.json`（只读）。优先 `gd.raw[FACTION_DATA_KEY]` —— GameData 的 raw 就是 server/data.js
+ * `loadData()` 的产物（data/*.json 按 basename 装、deepFreeze），与 gamedata.js 的 factions getter 同一套读法，
+ * 不另造读数层；stub / 直测没有 raw 时用 getData() 单例懒取一次（builtinMeta.js 的同一手法）。
+ * @param {object} gd GameData（或用 gd.enemy(key) 的 stub）
+ * @returns {{ map?: Object<string, string[]> }|null}
+ */
+function monsterFactionData(gd) {
+  const raw = gd && gd.raw;
+  const own = raw && typeof raw === 'object' ? raw[FACTION_DATA_KEY] : null;
+  if (own && typeof own === 'object' && own.map && typeof own.map === 'object') return own;
+  if (factionDataFallback === null) {
+    try {
+      const data = getData({ log: { warn() {}, error() {}, info() {} } });
+      factionDataFallback = (data && data[FACTION_DATA_KEY]) || false;
+    } catch { factionDataFallback = false; }
+  }
+  return factionDataFallback || null;
+}
+
+/**
+ * 一只怪属于哪些阵营（`data/monster-factions.json` 的 map；没有 = []）。纯数据查询，不看敌人属性。
+ * @param {object} gd GameData / stub @param {string} enemyKey
+ * @returns {string[]} 阵营 id 列表（map 里按 id 排序）
+ */
+export function monsterFactionIds(gd, enemyKey) {
+  const data = monsterFactionData(gd);
+  const list = data && typeof enemyKey === 'string' ? data.map[enemyKey] : null;
+  return Array.isArray(list) ? list.filter((id) => typeof id === 'string' && id) : [];
+}
+
+/**
+ * 23 条盟约的固定定义（业主 2026-11-04 裁决 v2：20 条按**阵营** + 3 条通用）。
+ * 阵营条的 id == data/monster-factions.json 的阵营 id（也是 MONSTER_BOND_MODS 的键）；归属判据是 map 命中，
+ * 不再看 acType / rank / tags。阵营条的 `thresholds` **不写死** —— 按本回合可投放池里该阵营的只数算
+ * （见 monsterBondThresholds），所以这里只有 3 条通用条带绝对阈值。
  */
 export const MONSTER_BOND_DEFS = [
-  // ---- 7 条按类型 ----
-  { id: 'air', name: '空袭', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.isFlyEnemy === true },
-  // 潜伏：acType = INVISIBLE（data/enemies.json 的隐形怪，如 enemy_1009_lurker）；tag 兜底见 STEALTH_TAGS
-  { id: 'stealth', name: '潜伏', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'INVISIBLE' || hasTag(e, 'invisible') || hasTag(e, 'stealth') || hasTag(e, 'cloak') },
-  { id: 'refract', name: '折射', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'REFLECTION' },
-  { id: 'element', name: '元素', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'ELEMENT' },
-  { id: 'dot', name: '灼蚀', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'DOT' },
-  // 频次：acType = TIMES。效果走攻速乘区 aspdMul（攻速快 = 更难，两棵 sim 树都认，见文件头）
-  { id: 'tempo', name: '频次', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'TIMES' },
-  { id: 'elite', name: '特化', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.rank === 'ELITE' || e.rank === 'BOSS' },
+  // ---- 20 条按阵营（顺序 = 0.4.3 factions.json 的 types 顺序；monsterBondIdForEnemy 取第一条命中的） ----
+  { id: 'REUNION', name: '整合运动', faction: 'REUNION' },
+  { id: 'URSUS', name: '乌萨斯', faction: 'URSUS' },
+  { id: 'DEEP_POOL', name: '深池', faction: 'DEEP_POOL' },
+  { id: 'VICTORIA', name: '维多利亚', faction: 'VICTORIA' },
+  { id: 'SARKAZ', name: '萨卡兹', faction: 'SARKAZ' },
+  { id: 'LEITHANIEN', name: '莱塔尼亚', faction: 'LEITHANIEN' },
+  { id: 'YAN', name: '大炎', faction: 'YAN' },
+  { id: 'SEA_BORN', name: '海嗣', faction: 'SEA_BORN' },
+  { id: 'KAZIMIERZ', name: '卡西米尔', faction: 'KAZIMIERZ' },
+  { id: 'KJERAG', name: '谢拉格', faction: 'KJERAG' },
+  { id: 'SIRACUSA', name: '叙拉古', faction: 'SIRACUSA' },
+  { id: 'LATERANO', name: '拉特兰', faction: 'LATERANO' },
+  { id: 'IBERIA', name: '伊比利亚', faction: 'IBERIA' },
+  { id: 'SIESTA', name: '汐斯塔安保', faction: 'SIESTA' },
+  { id: 'SARGON', name: '萨尔贡', faction: 'SARGON' },
+  { id: 'BOLIVAR', name: '玻利瓦尔', faction: 'BOLIVAR' },
+  { id: 'DURIN', name: '杜林', faction: 'DURIN' },
+  { id: 'HIGASHI', name: '东国', faction: 'HIGASHI' },
+  { id: 'SAMI', name: '萨米', faction: 'SAMI' },
+  { id: 'COLUMBIA', name: '哥伦比亚', faction: 'COLUMBIA' },
   // ---- 3 条通用 ----
   // 增援：投放只数 ≥ 官方只数 × 1.5（层数 = 投放只数），效果走资金返还
   { id: 'reinforce', name: '增援', thresholds: MONSTER_BOND_THRESHOLDS, classify: null, kind: 'funds' },
@@ -76,28 +132,124 @@ export const MONSTER_BOND_DEFS = [
 ];
 
 /**
- * 效果表（乘区）：每条的「每层增量」与单条上限。`key` 只允许 spawn mods 认的六个键
+ * 效果表（乘区）：每条阵营的「每层增量」与单条上限。`key` 只允许 spawn mods 认的六个键
  * （server/sim/battle/spawns.js 的 `mm()`：hpMul / atkMul / defMul / resMul / speedMul / aspdMul）。
  * 乘数语义 = 1 + Δ（sim 里 `base.maxHp * m.hpMul`），所以 Δ 是**加法叠加**的百分比。
+ *
+ * 数值依据（写死的是**基线池**口径：data/factions.json 的 confrontPool 120 只，见 monsterPool.js 文件头）：
+ *   · 每层 per 按该阵营在这 120 只里的只数 n 给：n ≥ 10 → 0.03，5..9 → 0.04，0..4 → 0.05
+ *     （池子小 = 可选牌少，单层给得重一些补偿）；单条上限 cap = 0.3（0.03 要 10 层、0.05 要 6 层到顶）。
+ *   · 六个乘区按 n 降序**轮转分配**（hp → atk → def → res → speed → aspd），避免同队多阵营全部堆同一个乘区；
+ *     并列时按 MONSTER_BOND_DEFS 的顺序。
+ *   · 基线分布（实测）：SARKAZ 19 / COLUMBIA 16 / DEEP_POOL 15 / REUNION 13 / SEA_BORN 9 / YAN 8 / BOLIVAR 8 /
+ *     KJERAG 4 / URSUS 3 / SIRACUSA 3 / IBERIA 3 / LATERANO 2 / SIESTA 1 / 其余 7 个阵营 0。
  */
 export const MONSTER_BOND_MODS = {
-  air: { key: 'speedMul', per: 0.05, cap: 0.25 },
-  stealth: { key: 'hpMul', per: 0.04, cap: 0.5 },
-  refract: { key: 'defMul', per: 0.06, cap: 0.6 },
-  element: { key: 'atkMul', per: 0.04, cap: 0.5 },
-  dot: { key: 'hpMul', per: 0.03, cap: 0.5 },
-  // 频次：攻速快 = 更难（每层 +5% 攻速，上限与其它条一致）
-  tempo: { key: 'aspdMul', per: 0.05, cap: 0.5 },
-  elite: { key: 'atkMul', per: 0.03, cap: 0.5 },
+  // n=19 → per 0.03，rank0 → hpMul
+  SARKAZ: { key: 'hpMul', per: 0.03, cap: 0.3 },
+  // n=16 → 0.03，rank1 → atkMul
+  COLUMBIA: { key: 'atkMul', per: 0.03, cap: 0.3 },
+  // n=15 → 0.03，rank2 → defMul
+  DEEP_POOL: { key: 'defMul', per: 0.03, cap: 0.3 },
+  // n=13 → 0.03，rank3 → resMul
+  REUNION: { key: 'resMul', per: 0.03, cap: 0.3 },
+  // n=9 → 0.04，rank4 → speedMul
+  SEA_BORN: { key: 'speedMul', per: 0.04, cap: 0.3 },
+  // n=8 → 0.04，rank5 → aspdMul
+  YAN: { key: 'aspdMul', per: 0.04, cap: 0.3 },
+  // n=8 → 0.04，rank6 → hpMul
+  BOLIVAR: { key: 'hpMul', per: 0.04, cap: 0.3 },
+  // n=4 → 0.05，rank7 → atkMul
+  KJERAG: { key: 'atkMul', per: 0.05, cap: 0.3 },
+  // n=3 → 0.05，rank8 → defMul
+  URSUS: { key: 'defMul', per: 0.05, cap: 0.3 },
+  // n=3 → 0.05，rank9 → resMul
+  SIRACUSA: { key: 'resMul', per: 0.05, cap: 0.3 },
+  // n=3 → 0.05，rank10 → speedMul
+  IBERIA: { key: 'speedMul', per: 0.05, cap: 0.3 },
+  // n=2 → 0.05，rank11 → aspdMul
+  LATERANO: { key: 'aspdMul', per: 0.05, cap: 0.3 },
+  // n=1 → 0.05，rank12 → hpMul
+  SIESTA: { key: 'hpMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank13 → atkMul
+  VICTORIA: { key: 'atkMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank14 → defMul
+  LEITHANIEN: { key: 'defMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank15 → resMul
+  KAZIMIERZ: { key: 'resMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank16 → speedMul
+  SARGON: { key: 'speedMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank17 → aspdMul
+  DURIN: { key: 'aspdMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank18 → hpMul
+  HIGASHI: { key: 'hpMul', per: 0.05, cap: 0.3 },
+  // n=0 → 0.05，rank19 → atkMul
+  SAMI: { key: 'atkMul', per: 0.05, cap: 0.3 },
 };
 
 const defById = new Map(MONSTER_BOND_DEFS.map((d) => [d.id, d]));
 
-/** 某条盟约的阈值表（未知 id 用默认 2/4/6）。 */
-function thresholdsOf(id) {
-  const d = defById.get(id);
-  return d && Array.isArray(d.thresholds) && d.thresholds.length ? d.thresholds : MONSTER_BOND_THRESHOLDS;
+/** 阵营条的三阶阈值比例（层数 = 本回合投放只数 n；见 factionThresholdsOf）。 */
+export const MONSTER_BOND_FACTION_THRESHOLD_SHARES = Object.freeze([0.15, 0.3, 0.45]);
+
+/**
+ * 阵营条的阈值（按该阵营在本回合可投放池里的**只数** n 取比例）：纯函数。
+ *   t1 = max(1, ceil(n × 0.15))，t2 = max(t1+1, ceil(n × 0.30))，t3 = max(t2+1, ceil(n × 0.45))
+ * 严格递增（`max(t1+1, …)`）保证三阶不会塌成同一层；n = 0 → [1,2,3]（形态占位，该阵营本回合无牌）。
+ * @param {number} poolCount 该阵营在本回合可投放池里的只数
+ * @returns {number[]} 三阶阈值
+ */
+export function factionThresholdsOf(poolCount) {
+  const n = Math.max(0, Math.floor(Number(poolCount) || 0));
+  const [s1, s2, s3] = MONSTER_BOND_FACTION_THRESHOLD_SHARES;
+  const t1 = Math.max(1, Math.ceil(n * s1));
+  const t2 = Math.max(t1 + 1, Math.ceil(n * s2));
+  const t3 = Math.max(t2 + 1, Math.ceil(n * s3));
+  return [t1, t2, t3];
 }
+
+/**
+ * 本回合可投放池里**每个阵营的只数**（阈值分母）。来源与怪物池同口径：`monsterCardKeys(m)` 的合法集合；
+ * 有官方快照（对抗档）时按该 key 的官方合计只数计，赏金档 / 无快照按每 key 1 只计。
+ * 缓存挂在 match 上：官方快照数组 / 面板 groups 数组的**引用**或回合号一变就失效（与 monsterPool.js legalKeys 同法）。
+ * @param {object} m
+ * @returns {Map<string, number>} 阵营 id → 只数（无阵营的 key 不计）
+ */
+function factionPoolCounts(m) {
+  if (!m) return new Map();
+  const official = Array.isArray(m._roundOfficialSpawns) && m._roundOfficialSpawns.length ? m._roundOfficialSpawns : null;
+  const stamp = official || (m._monsterLegalKeys && m._monsterLegalKeys.groups) || null;
+  const cache = m._bondFactionPool;
+  if (cache && cache.stamp === stamp && cache.round === m.round) return cache.counts;
+  let keys = [];
+  try { keys = monsterCardKeys(m) || []; } catch { keys = []; }
+  const spawnCounts = officialSpawnCounts(m);
+  const counts = new Map();
+  for (const key of keys) {
+    const ids = monsterFactionIds(m.gd, key);
+    if (!ids.length) continue;
+    const n = Math.max(1, Number(spawnCounts && spawnCounts.get(key)) || 1);
+    for (const id of ids) counts.set(id, (counts.get(id) || 0) + n);
+  }
+  m._bondFactionPool = { stamp, round: m.round, counts };
+  return counts;
+}
+
+/**
+ * 某条盟约的阈值表：阵营条按本回合池子动态算，通用条用定义上的绝对阈值。
+ * @param {object} m @param {string} id
+ * @returns {number[]}
+ */
+export function monsterBondThresholds(m, id) {
+  const d = defById.get(id);
+  if (!d) return MONSTER_BOND_THRESHOLDS;
+  if (Array.isArray(d.thresholds) && d.thresholds.length) return d.thresholds;
+  const counts = factionPoolCounts(m);
+  return factionThresholdsOf(counts.get(d.id) || 0);
+}
+
+/** 内部别名（旧调用点少写一个参数名）。 */
+function thresholdsOf(m, id) { return monsterBondThresholds(m, id); }
 
 /**
  * 层数 → 阶（tier）：达到几个阈值就是几阶（0 = 未激活）。纯函数。
@@ -142,40 +294,34 @@ function allPlayers(m) {
 }
 
 /**
- * 一只怪属于哪几条**类型**盟约（可同时属于多条，例如飞行 ELITE）。纯函数，只看敌人数据。
- * @param {object} gd GameData（用 gd.enemy(key)）/ 或 { enemy(key) }
+ * 一只怪属于哪几条**阵营**盟约（可同时属于多条，例如 1010_demon 同时是 REUNION 与 SARKAZ）。
+ * 判据 = `data/monster-factions.json` 的 map 命中，不看敌人属性。纯数据查询，不抛异常。
+ * @param {object} gd GameData（用 gd.raw）/ 或用 gd.enemy(key) 的 stub（会回落到 getData() 单例）
  * @param {string} enemyKey
- * @returns {string[]} 盟约 id 列表（顺序 = MONSTER_BOND_DEFS）
+ * @returns {string[]} 盟约 id 列表（顺序 = MONSTER_BOND_DEFS，便于稳定取「第一条」）
  */
 export function monsterBondIdsOf(gd, enemyKey) {
-  let rec = null;
-  try { rec = gd && typeof gd.enemy === 'function' ? gd.enemy(enemyKey) : null; } catch { rec = null; }
-  if (!rec) return [];
+  const ids = new Set(monsterFactionIds(gd, enemyKey));
+  if (!ids.size) return [];
   const out = [];
-  for (const def of MONSTER_BOND_DEFS) if (typeof def.classify === 'function' && def.classify(rec)) out.push(def.id);
+  for (const def of MONSTER_BOND_DEFS) if (def.faction && ids.has(def.id)) out.push(def.id);
   return out;
 }
 
 /**
- * 一只怪属于**第一条**类型盟约（商店卡面的小徽标用；业主 2026-11-04 报障：卡片要显示名称与怪物盟约）。
- * 顺序 = MONSTER_BOND_DEFS（飞行 ELITE 这类同时命中多条时取第一条命中的）；`classify: null` 的通用条
- * （增援 / 会战 / 回收）不参与 —— 它们不是怪物本身的属性。纯函数，只读敌人数据；取不到该怪 → null。
- * @param {object} gd GameData（用 gd.enemy(enemyKey)）/ 或 { enemy(key) }
- * @param {string} enemyKey
- * @returns {string|null} 盟约 id（'air' / 'refract' …）
+ * 一只怪属于**第一条**阵营盟约（商店卡面的小徽标用；业主 2026-11-04 报障：卡片要显示名称与怪物盟约）。
+ * 顺序 = MONSTER_BOND_DEFS（同时命中多个阵营时取第一条命中的）；3 条通用（增援 / 会战 / 回收）不参与 ——
+ * 它们不是怪物本身的属性。命不中（map 未覆盖这只怪）→ null。
+ * @param {object} gd GameData / stub @param {string} enemyKey
+ * @returns {string|null} 盟约 id（'REUNION' / 'SARKAZ' …）
  */
 export function monsterBondIdForEnemy(gd, enemyKey) {
-  let rec = null;
-  try { rec = gd && typeof gd.enemy === 'function' ? gd.enemy(enemyKey) : null; } catch { rec = null; }
-  if (!rec) return null;
-  for (const def of MONSTER_BOND_DEFS) {
-    if (typeof def.classify === 'function' && def.classify(rec)) return def.id;
-  }
-  return null;
+  const ids = monsterBondIdsOf(gd, enemyKey);
+  return ids.length ? ids[0] : null;
 }
 
 /**
- * 盟约 id → 显示名（'air' → '空袭'）。未知 id 原样返回（调用方只管显示，不做判据）；空 → null。
+ * 盟约 id → 显示名（'REUNION' → '整合运动'）。未知 id 原样返回（调用方只管显示，不做判据）；空 → null。
  * @param {string|null} id
  * @returns {string|null}
  */
@@ -206,7 +352,7 @@ function recordOf(m, ps) {
 }
 
 /**
- * 投放涨层（monsterShop.js 的 placeMonster / buyMonster 成功后调用）：类型盟约各 + 投放只数，
+ * 投放涨层（monsterShop.js 的 placeMonster / buyMonster 成功后调用）：该怪命中的**阵营盟约**各 + 投放只数，
  * 通用「增援」也按投放只数累加；同时记下总只数 / 总花费 / 每名攻方投了几只（会战与资金分摊要用）。
  * 只算**攻方投放的怪**（官方波次不进这里）。
  * @param {object} m @param {object} ps
@@ -382,7 +528,7 @@ export function monsterBondMods(m, ps) {
   }
   // 会战：同队两名攻方都投过 ≥1 只 → 全队速度 +5%（一阶；更上层数由 concert 的阈值决定，效果仍是这一个固定值）
   const placing = Object.keys(st.byPlayer || {}).filter((pid) => (Number(st.byPlayer[pid]) || 0) > 0).length;
-  if (monsterBondTier(placing, thresholdsOf('concert')) > 0) delta.speedMul = (delta.speedMul || 0) + MONSTER_BOND_CONCERT_BONUS;
+  if (monsterBondTier(placing, thresholdsOf(m, 'concert')) > 0) delta.speedMul = (delta.speedMul || 0) + MONSTER_BOND_CONCERT_BONUS;
   const keys = Object.keys(delta);
   if (!keys.length) return null;
   const out = {};
@@ -416,7 +562,7 @@ export function monsterBondView(m, ps) {
   for (const def of MONSTER_BOND_DEFS) {
     const n = Math.max(0, Number(layers[def.id]) || 0);
     if (!(n > 0)) continue;
-    const tier = monsterBondTier(n, thresholdsOf(def.id));
+    const tier = monsterBondTier(n, thresholdsOf(m, def.id));
     rows.push({ id: def.id, name: def.name, layers: n, tier, active: tier > 0 });
   }
   return rows.length ? rows : null;
@@ -455,7 +601,7 @@ export function closeMonsterBondRound(m) {
     // 增援：超出「官方只数 × 1.5」的部分按均价 ×20% 返还（× 层数档倍率）
     const placed = Math.max(0, Number(rec.placed) || 0);
     const surplus = Math.max(0, placed - official * MONSTER_BOND_SURPLUS_SHARE);
-    const tierR = monsterBondTier(Math.max(0, Number(rec.layers.reinforce) || 0), thresholdsOf('reinforce'));
+    const tierR = monsterBondTier(Math.max(0, Number(rec.layers.reinforce) || 0), thresholdsOf(m, 'reinforce'));
     if (surplus > 0 && tierR > 0) {
       const avg = placed > 0 ? (Number(rec.cost) || 0) / placed : 0;
       const amount = surplus * avg * MONSTER_BOND_SURPLUS_REFUND * (MONSTER_BOND_TIER_MUL[tierR] || 1);
@@ -463,7 +609,7 @@ export function closeMonsterBondRound(m) {
     }
     // 回收：settle 已经按 MONSTER_LEAK_REWARD 发过全额，这里只发「额外 +50%」
     const leaked = leaksForKey(m, key);
-    const tierV = monsterBondTier(leaked, thresholdsOf('recover'));
+    const tierV = monsterBondTier(leaked, thresholdsOf(m, 'recover'));
     if (leaked > 0 && tierV > 0) {
       const amount = leaked * MONSTER_LEAK_REWARD_BASE * MONSTER_BOND_LEAK_EXTRA * (MONSTER_BOND_TIER_MUL[tierV] || 1);
       for (const ps of mine) pay(ps, amount * shareOf(ps));
