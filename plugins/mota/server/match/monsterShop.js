@@ -7,9 +7,12 @@
 // 可选数量；`buyMonster`（旧面板）保留，等价于「投到 lower、1 只」。两者**用掉后该格立即补位**（refillSlot）。
 //
 // 钱的量纲：单价 = 该怪官方波次价值 × MONSTER_PRICE_FACTOR（默认 1），刷新价 MONSTER_REFRESH_PRICE 同量纲。
-// 钱从哪来（业主 2026-11-04 裁决）：攻方有**独立的怪物资金账户** `ps.monsterFunds`，来源 = 每回合军费
+// 钱从哪来（业主 2026-11-04 裁决）：攻方有**独立的怪物资金账户**，来源 = 每回合军费
 // （match/confront.js grantMonsterFunds）+ 击杀 / 漏过奖励（match/settle.js），**跨回合结转**；
-// 买卡 / 刷新 / 投放都是**显式扣款**（`ps.spendMonsterFunds`，全有或全无），撤回草稿退款。
+// 买卡 / 刷新 / 投放都是**显式扣款**（`spendMonsterFundsFrom`，全有或全无），撤回草稿退款。
+// 账户归属（业主 2026-11-04 裁决 2「共同出怪 = 同队一份资金」）：shared（缺省）落**队级账户**
+// `m.teamMonsterFunds`（Map<teamId, number>），solo 落 `ps.monsterFunds`；读 / 写一律走
+// monsterFundsOf / addMonsterFundsTo / spendMonsterFundsFrom（见下方「怪物资金账户」一节）。
 // 它不进守方的 funds / 统计（`econSplitLeftover` 不会清零它）。提交时 `_confrontMember` 的预算判据读同一个账户，
 // 所以「买得起 = 交得上」，而刷新只会让余额更少，绝不会让已买的卡交不上。
 //
@@ -36,6 +39,8 @@ import { PHASE, ERR } from '../../shared/constants.js';
 import { OK, fail } from './match/common.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { buildMonsterPool, legalKeys } from './monsterPool.js';
+// 怪物盟约（2026-11-04 业主口径：攻方只有怪物方的独立盟约）：投放 / 购买涨层，撤回退层，帧里带一份视图。
+import { addMonsterBonds, dropMonsterBonds, monsterBondView } from './monsterBonds.js';
 
 // 合法集合的唯一判据在 monsterPool.js（卡池同源）：这里只转出，避免两份实现漂移。
 export { legalKeys };
@@ -95,6 +100,102 @@ export function monsterPoolFor(m, ps) {
   if (!m.monsterPools) m.monsterPools = new Map();
   if (!m.monsterPools.has(key)) m.monsterPools.set(key, buildMonsterPool(m));
   return m.monsterPools.get(key);
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 怪物资金账户（业主 2026-11-04 裁决）：共同出怪 = 同队共用一个池 + **一份资金**。
+//   · shared（缺省）→ 队级账户 `m.teamMonsterFunds`（Map<teamId, number>，惰性建表）；
+//     `ps.monsterFunds` 只作**镜像**（同队每个成员写回同一个值，帧 / 旧读数照旧）；
+//   · solo → 落 `ps.monsterFunds`（每人一份，与改造前逐字节一致）。
+// 所有增减都必须走 monsterFundsOf / addMonsterFundsTo / spendMonsterFundsFrom —— 它们是账户的唯一入口（读 / 加 / 扣）。
+// 清单外的模块（match/match/settle.js 的击杀 / 漏过奖励）不必各改一行：Match 构造期把 PlayerState 的
+// addMonsterFunds / spendMonsterFunds 改道到这三个访问器（见 Match.js 构造函数）。
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** 队级怪物资金表（惰性；key = teamId）。 */
+export function teamMonsterFunds(m) {
+  if (!m) return new Map();
+  if (!m.teamMonsterFunds) m.teamMonsterFunds = new Map();
+  return m.teamMonsterFunds;
+}
+
+/** 这一席的钱归队（shared）还是归人（solo）。商店关着时恒按个人（账户根本不参与）。 */
+function fundsShared(m, ps) {
+  return !!(m && ps && m.monsterShopOn === true && m.monsterMode !== 'solo');
+}
+
+/** 这一席所在的队 id（取不到 → 0，与 teamIdOf 的兜底一致）。 */
+function fundsTeamKey(m, ps) {
+  const t = m && typeof m.teamIdOf === 'function' ? m.teamIdOf(ps) : 0;
+  return Number.isFinite(Number(t)) ? Number(t) : 0;
+}
+
+/**
+ * 把队级余额写进**同队每个成员**的 `ps.monsterFunds`（镜像：帧 / 旧读数与账户恒等）。
+ * @param {object} m @param {object} ps
+ * @returns {number} 写进去的余额
+ */
+function syncTeamMonsterFunds(m, ps) {
+  const key = fundsTeamKey(m, ps);
+  const funds = Math.max(0, Number(teamMonsterFunds(m).get(key)) || 0);
+  const seats = m && Array.isArray(m.order) ? m.order : [];
+  for (const mate of seats) {
+    if (!mate || typeof m.teamIdOf !== 'function' || m.teamIdOf(mate) !== key) continue;
+    if (Number(mate.monsterFunds) === funds) continue;
+    mate.monsterFunds = funds;
+    if (typeof mate.dirty === 'function') mate.dirty();
+  }
+  return funds;
+}
+
+/**
+ * 这一席此刻的**怪物资金余额**（唯一的读数入口：帧、购买闸门、提交预算都问它）。
+ * @param {object} m @param {object} ps
+ * @returns {number} >= 0
+ */
+export function monsterFundsOf(m, ps) {
+  if (!ps) return 0;
+  if (!fundsShared(m, ps)) return Math.max(0, Number(ps.monsterFunds) || 0);
+  const key = fundsTeamKey(m, ps);
+  const book = teamMonsterFunds(m);
+  // 播种：队里第一次读这笔钱时，从该成员的现余额起算（老对局 / 迁移过来的个人账户不会被抹掉）。
+  if (!book.has(key)) book.set(key, Math.max(0, Number(ps.monsterFunds) || 0));
+  return Math.max(0, Number(book.get(key)) || 0);
+}
+
+/**
+ * 入账（军费 / 击杀与漏过奖励 / 盟约返款）。shared → 队账户（同队成员镜像同步）；solo → ps.monsterFunds。
+ * @param {object} m @param {object} ps @param {number} n
+ * @returns {number} 实际入账的数（非正 / 非法 → 0）
+ */
+export function addMonsterFundsTo(m, ps, n) {
+  if (!ps) return 0;
+  if (!fundsShared(m, ps)) return typeof ps.addMonsterFunds === 'function' ? ps.addMonsterFunds(n) : 0;
+  const v = Number.isFinite(n) ? Math.trunc(n) : 0;
+  if (!(v > 0)) return 0;
+  const key = fundsTeamKey(m, ps);
+  const book = teamMonsterFunds(m);
+  book.set(key, monsterFundsOf(m, ps) + v);
+  syncTeamMonsterFunds(m, ps);
+  return v;
+}
+
+/**
+ * 扣款（买卡 / 刷新 / 投放），**全有或全无**：余额不够就一分不扣、返回 false。
+ * shared → 队账户；solo → ps.spendMonsterFunds。
+ * @param {object} m @param {object} ps @param {number} n
+ * @returns {boolean} 是否扣款成功
+ */
+export function spendMonsterFundsFrom(m, ps, n) {
+  if (!ps) return false;
+  if (!fundsShared(m, ps)) return typeof ps.spendMonsterFunds === 'function' ? ps.spendMonsterFunds(n) : false;
+  const v = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+  if (!(v > 0)) return true;
+  const cur = monsterFundsOf(m, ps);
+  if (v > cur) return false;
+  teamMonsterFunds(m).set(fundsTeamKey(m, ps), cur - v);
+  syncTeamMonsterFunds(m, ps);
+  return true;
 }
 
 /**
@@ -176,12 +277,12 @@ export function monsterPriceOf(m, key) {
 /**
  * 本回合这个攻方还能花多少 —— 直接读**怪物资金账户**（业主 2026-11-04：攻方有独立账户、跨回合结转，
  * 买 / 刷新 / 投放都是显式扣款，不再拿「回合预算 − Σpicks」重算）。
+ * 账户归属走 `monsterFundsOf`：shared 模式 = 队级账户（同队两人读到同一个数），solo = 个人账户。
  * 四个字段保留（帧兼容，老客户端只读 `left`）：`budget` = 余额，`picks` / `refresh` 恒 0（已经记账在余额里）。
  * @returns {{ budget: number, picks: number, refresh: number, left: number }}
  */
 export function monsterBudgetLeft(m, ps) {
-  void m;
-  const funds = Math.max(0, Number(ps && ps.monsterFunds) || 0);
+  const funds = monsterFundsOf(m, ps);
   return { budget: funds, picks: 0, refresh: 0, left: funds };
 }
 
@@ -197,6 +298,8 @@ export function monsterShopFrame(m, ps) {
       return (rec && rec.name) || key;
     } catch { return key; }
   };
+  // 怪物盟约（2026-11-04）：本回合投放累积出来的层数（空 → null，帧里省略该字段，老帧形状不变）
+  const bonds = shopEnabled(m) ? monsterBondView(m, ps) : null;
   return {
     t: 'm.monsterShop',
     open: true,
@@ -213,7 +316,8 @@ export function monsterShopFrame(m, ps) {
     // 只有**商店真开着**（m.monsterShopOn）才出现 —— `opts.monsterShop === false` 的帧里一个新字段都不加，
     // 老客户端/旧对局的帧逐字节不变。
     ...(shopEnabled(m) ? {
-      funds: Math.max(0, Number(ps.monsterFunds) || 0),
+      // shared 模式下同队两人读到同一个余额（队级账户，见 monsterFundsOf）
+      funds: monsterFundsOf(m, ps),
       grant: Math.max(0, Number(ps.monsterGrant) || 0),
       earned: Math.max(0, Number(ps.monsterEarned) || 0),
     } : {}),
@@ -232,6 +336,8 @@ export function monsterShopFrame(m, ps) {
       picks: ((ps.monsterDraft && ps.monsterDraft.picks) || []).map((p) => ({ enemyKey: p.enemyKey, gate: p.gate })),
       position: (ps.monsterDraft && ps.monsterDraft.position) || 'mid',
     },
+    // 怪物盟约条（客户端 `.gm__bonds` 在攻方回合改读这一份）；空则整个键不出现
+    ...(bonds ? { bonds } : {}),
   };
 }
 
@@ -392,7 +498,8 @@ export function rollMonsterShop(m, ps, { free = false } = {}) {
   const price = free || useFree ? 0 : MONSTER_REFRESH_PRICE;
   if (price > 0) {
     // 显式扣款（业主 2026-11-04）：自费刷新花的是怪物资金；余额不够就一分不扣、不重抽、不记自费次数。
-    if (!ps.spendMonsterFunds(price)) return fail(ERR.CONFRONT_BUDGET, 'refresh price over the monster funds'); // i18n-ignore
+    // 账户走访问器：shared 扣队级账户，solo 扣个人账户。
+    if (!spendMonsterFundsFrom(m, ps, price)) return fail(ERR.CONFRONT_BUDGET, 'refresh price over the monster funds'); // i18n-ignore
   }
   if (useFree) shop.freeRefreshes = Math.max(0, (Number(shop.freeRefreshes) || 0) - 1);
   if (price > 0) shop.paidRefreshes = Math.max(0, Number(shop.paidRefreshes) || 0) + 1;
@@ -434,14 +541,16 @@ export function buyMonster(m, ps, idx) {
   const price = monsterPriceOf(m, slot.key);
   if (!(price > 0)) return fail(ERR.BAD_TARGET, 'unknown monster'); // i18n-ignore
   // 显式扣款（业主 2026-11-04）：先扣钱、再动库存 —— 钱不够时连库存都不碰。
-  if (!ps.spendMonsterFunds(price)) return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); // i18n-ignore
+  if (!spendMonsterFundsFrom(m, ps, price)) return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); // i18n-ignore
   const taken = pool.take(slot.key, 1);
-  if (taken < 1) { ps.addMonsterFunds(price); return fail(ERR.SOLD_OUT, 'stock empty'); } // i18n-ignore
+  if (taken < 1) { addMonsterFundsTo(m, ps, price); return fail(ERR.SOLD_OUT, 'stock empty'); } // i18n-ignore
   const key = slot.key;
   if (!ps.monsterDraft) ps.monsterDraft = { picks: [], position: 'mid' };
   if (!Array.isArray(ps.monsterDraft.picks)) ps.monsterDraft.picks = [];
   // 业主口径：买到就进草稿；投放时刻 / 门由 submitConfront（或 AI 的 _botConfrontPlan）再定
   ps.monsterDraft.picks.push({ enemyKey: key, gate: 'lower', time: null });
+  // 怪物盟约（2026-11-04）：这一只算进「本回合投放的某一类型」的层数（官方波次不进这里）
+  addMonsterBonds(m, ps, { enemyKey: key, count: 1, price });
   // 用掉自动补位（业主 2026-11-04）：这一格立刻重抽一张新卡（旧面板照旧能买，只是不再显示 sold 格）
   refillSlot(m, ps, idx, key);
   return { ok: true, index: idx, key, price, left: monsterBudgetLeft(m, ps).left, picks: ps.monsterDraft.picks.length };
@@ -492,11 +601,13 @@ export function placeMonster(m, ps, index, gate, count = 1) {
   const placed = pool.take(key, units);
   if (placed < 1) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
   // 显式扣款：按**实际投下的只数**结算；扣不动就把刚取走的库存还回去（全有或全无）
-  if (!ps.spendMonsterFunds(price * placed)) { pool.give(key, placed); return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); } // i18n-ignore
+  if (!spendMonsterFundsFrom(m, ps, price * placed)) { pool.give(key, placed); return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); } // i18n-ignore
   if (!ps.monsterDraft) ps.monsterDraft = { picks: [], position: 'mid' };
   if (!Array.isArray(ps.monsterDraft.picks)) ps.monsterDraft.picks = [];
   // count 条草稿：门由这次点击决定，时刻留给 submitConfront / _botConfrontPlan 再定
   for (let i = 0; i < placed; i++) ps.monsterDraft.picks.push({ enemyKey: key, gate, time: null });
+  // 怪物盟约（2026-11-04）：按**实际投下的只数**涨层（类型盟约 + 增援）
+  addMonsterBonds(m, ps, { enemyKey: key, count: placed, price });
   // 用掉自动补位：这一格换成一张新卡（池里没货就置 null）
   const slotAfter = refillSlot(m, ps, index, key);
   return { ok: true, placed, key, left: monsterBudgetLeft(m, ps).left, picks: ps.monsterDraft.picks.length, slot: slotAfter };
@@ -543,9 +654,11 @@ export function dropMonster(m, ps, index) {
   // 退款（业主 2026-11-04）：撤回一张已付过款的草稿 = 把那笔钱退回怪物资金（单价按当前口径，与买它时同源）。
   if (key) {
     pool.give(key, 1);
-    ps.addMonsterFunds(monsterPriceOf(m, key));
+    addMonsterFundsTo(m, ps, monsterPriceOf(m, key));
+    // 怪物盟约（2026-11-04）：撤回把这一只的层数 / 只数退回去（资金只在回合收尾发，不涉及追回）
+    dropMonsterBonds(m, ps, key, 1);
   }
-  return { ok: true, index, key, left: key ? pool.left(key) : 0, picks: picks.length, funds: Math.max(0, Number(ps.monsterFunds) || 0) };
+  return { ok: true, index, key, left: key ? pool.left(key) : 0, picks: picks.length, funds: monsterFundsOf(m, ps) };
 }
 
 /**

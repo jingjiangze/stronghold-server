@@ -561,6 +561,35 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
 }
 
 /**
+ * 怪物盟约条（2026-11-04 业主口径：**攻方只有怪物方的独立盟约**，没有干员盟约）。
+ *
+ * 数据 = 私有帧 `m.monsterShop.bonds`（server/match/monsterBonds.js monsterBondView）：`[{ id, name, layers, tier,
+ * active }]`，空时服务端整个键都不发。观感复用干员盟约条的 `.bstrip` / `.bslot`（screens/game.css），这里只补
+ * `.mbond*` 的怪物侧配色与层数角标 —— 所以老的网格 / 折叠 / 指针规则一行都不用改。
+ *
+ * `bonds` 为空（还没投放 / 商店没开 / 旧对局）时画一行空态「本回合尚未投放」，**不**退回干员盟约。
+ * @param {{ bonds?: any[]|null }} props
+ */
+export function MonsterBondStrip({ bonds = null }) {
+  const rows = (Array.isArray(bonds) ? bonds : []).filter((b) => b && (Number(b.layers) || 0) > 0);
+  if (!rows.length) {
+    return html`<div class="bstrip bstrip--empty mbonds" data-monster-bonds="1">
+      <${MicroLabel}>MONSTER BONDS</${MicroLabel}><span>${t('本回合尚未投放')}</span></div>`;
+  }
+  return html`<div class="bstrip mbonds" role="list" aria-label=${t('怪物盟约')} data-monster-bonds="1">
+    ${rows.map((b) => html`<div key=${b.id} role="listitem" data-bond=${b.id} data-tier=${b.tier || 0}
+        class=${cx('bslot', 'mbond', b.active && 'is-active')}
+        title=${t('{name}：{layers} 层 · {tier} 阶', { name: b.name, layers: b.layers, tier: Number(b.tier) || 0 })}>
+      <span class="mbond__disc" aria-hidden="true"><${GIcon} name="skull" /></span>
+      <span class="mbond__body">
+        <span class="mbond__name">${b.name}</span>
+        <span class="mbond__layers num">${b.layers}<small>${Number(b.tier) > 0 ? ` · ${b.tier}阶` : ''}</small></span>
+      </span>
+    </div>`)}
+  </div>`;
+}
+
+/**
  * The bar.
  * @param {{ priv:any, editable:boolean, collapsed:boolean, refreshBusy?:boolean, onCollapse:(c:boolean)=>void,
  *   onBuy:(i:number)=>void, onLevel:Function, onRefresh:Function, onFreeze:Function, onDetail:(id:string, kind?:string, hint?:string|null)=>void,

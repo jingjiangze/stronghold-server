@@ -13,6 +13,8 @@ import { createRng, deriveSeed } from '../../sim/rng.js';
 // AI 策略按模式独立（Match.botStrategy，Match 构造期解析）；策略缺失时才回落到 LEGACY_BOT 的 botPickBand。
 import { LEGACY_BOT } from '../botContract.js';
 import { OK, fail, DELAYS, BAND_TURN_SECONDS } from './common.js';
+// 怪物盟约（2026-11-04 业主口径）：只影响本回合 ⇒ 每回合在回合边界收尾 + 清空。
+import { closeMonsterBondRound } from '../monsterBonds.js';
 
 /**
  * 「试玩时直接发到手上」—— 哪些干员要在第一回合进手牌（业主 2026-10-08 提的开关）。
@@ -464,6 +466,10 @@ export class MatchPhases {
       this.pickBossStage(r);
     }
     this._revivalHeld = false; // 救援冻结是一次性的（每回合最多挂起一次）
+    // 怪物盟约（2026-11-04 业主口径：只影响本回合）：资金类盟约（增援 / 回收）要读**上一回合**的战果 ——
+    // `this.fields` 的 confrontLeaks 与 `_roundOfficialSpawns` 的官方只数，所以必须在下面清 fields / 快照**之前**收尾；
+    // 函数本身也把 m.monsterBonds 清空（这就是「每回合重置」）。`monsterShopOn` 为假 ⇒ no-op。
+    if (this.monsterShopOn === true) closeMonsterBondRound(this);
     this.fields = [];
     this.watchers.clear();
     this.unitePlan = null;
@@ -477,6 +483,9 @@ export class MatchPhases {
     if (this.isVersus) {
       this.confrontStage = null; this.confront = null; this.confrontSubs = null; this.confrontTargets = null;
       this._confrontRemoved = null;
+      // 怪物盟约（2026-11-04）：本回合从零开始（收尾 / 清空已在上面 closeMonsterBondRound 做过；这里兜一道，
+      // 保证任何一条到达这里的路径都不会把上一回合的层数带进 PREP / 帧）。
+      this.monsterBonds = null;
     }
     // 熔毁代价的「每回合全属性」档：每回合把 debt.round 累加进 growth（业主 2026-10-26 接线）
     if (this.melt && this.melt.debt) {

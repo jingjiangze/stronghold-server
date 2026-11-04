@@ -86,7 +86,7 @@ import { useFieldView } from '../ui/fieldHost.js';
 import { TopBar, liveLp, ownLeaks, uniteRemaining, tempInfo, tempReadyReason } from '../ui/hud.js';
 import { BondStrip, BondPopup } from '../ui/bondStrip.js';
 import { TeamPanel } from '../ui/teamPanel.js';
-import { ShopBar } from '../ui/shopBar.js';
+import { ShopBar, MonsterBondStrip } from '../ui/shopBar.js';
 import { BorrowPlate } from '../ui/borrowPlate.js';
 import { RevivePlate } from '../ui/revivePlate.js';
 import { econBarModel } from '../ui/econBar.js';
@@ -325,6 +325,8 @@ function MatchScreen() {
   // 对抗面板的阶段（2026-11-04）：'target' = 选目标 10 秒（模态）/ 'roster' = 投放公示 5 秒 / null = 投放窗口。
   // 按**原值**读 —— 投放窗口就是 stage === null（server/match/match/views.js 只在 PREP 且选目标已结束时这么发）。
   const confStage = pub?.confront ? (pub.confront.stage != null ? pub.confront.stage : null) : null;
+  // 规则档（2026-11-04 业主裁决）：目标选择遮罩**只在赏金档出**；对抗档（'confront'）服务端跳过目标选择，客户端不弹模态。
+  const confBounty = pub?.confront?.versusRule === 'bounty';
   // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条，状态条上留「查看投放 / 继续投放」按钮
   const confDropWindow = !!pub?.confront && pub.confront.active === true && confStage === null && myRole === 'attack';
   // 投放窗口里「已投 N 只」读的是**本回合草稿**（m.monsterShop.draft.picks，点卡投放每投一只加一条）——
@@ -1820,8 +1822,12 @@ function MatchScreen() {
             setBondsCollapsed(!bondsCollapsed);
           }}><${Icon} name=${bondsCollapsed ? 'chevronRight' : 'chevronLeft'} /></button>
         <div id="match-bond-strip" class="gm__bond-list" hidden=${bondsCollapsed}>
-          <${BondStrip} bonds=${stripBonds} layersDisabled=${layersDisabled} openId=${bondPop && bondPop.ownerId === strip.ownerId ? bondPop.bondId : null}
-            owner=${strip.name} onOpen=${(id) => openBond(id, strip.ownerId, 'strip')} />
+          ${/* 攻方回合（2026-11-04 业主口径）：他**没有**干员盟约，只有怪物方的独立盟约 —— 这条闸门按角色判，
+               不看 strip 指向谁：COMBAT 里攻方 watch 的是守方的战场，此时 stripBonds 是**守方**的干员盟约，同样不画。 */ null}
+          ${myRole === 'attack'
+            ? html`<${MonsterBondStrip} bonds=${monsterShop && monsterShop.round === pub?.round ? (monsterShop.bonds || null) : null} />`
+            : html`<${BondStrip} bonds=${stripBonds} layersDisabled=${layersDisabled} openId=${bondPop && bondPop.ownerId === strip.ownerId ? bondPop.bondId : null}
+            owner=${strip.name} onOpen=${(id) => openBond(id, strip.ownerId, 'strip')} />`}
         </div>
       </div>
 
@@ -1856,7 +1862,8 @@ function MatchScreen() {
         reward=${phase === PHASE.PREP && !rewardMin ? priv?.shop?.rewardOffer || null : null}
         onReward=${(i) => actions.reward(i)} onRewardLater=${() => setRewardMin(true)} onArm=${setArmedCard} />` : null}
 
-      ${phase === PHASE.PREP && priv?.shop?.rewardOffer ? html`<${RewardOverlay} priv=${priv} minimized=${rewardMin || barCollapsed}
+      ${/* 攻方没有干员商店 ⇒ 晋升奖励（RewardOverlay）对他没有意义：点了也只会得到 WRONG_PHASE（2026-11-04 业主口径） */ null}
+      ${phase === PHASE.PREP && myRole !== 'attack' && priv?.shop?.rewardOffer ? html`<${RewardOverlay} priv=${priv} minimized=${rewardMin || barCollapsed}
         onMinimize=${(m) => { setRewardMin(m); if (!m) setCollapsed(false); }} />` : null}
 
       ${combat || mode === 'settle' ? html`<${CombatHud} pub=${pub} myId=${myId} watching=${watchingNow} hud=${hud} myDone=${!!myDone && alive}
@@ -1892,7 +1899,7 @@ function MatchScreen() {
       ${showMetrics && metricsOpen ? html`<${CombatMetricsPanel} myId=${myId} onClose=${() => setMetricsOpen(false)} />` : null}
       ${pub?.phase === PHASE.EVENT ? html`<${EventOverlay} pub=${pub} busy=${eventBusy}
         onPick=${async (target) => { setEventBusy(true); try { await actions.eventPick(target); } finally { setEventBusy(false); } }} />` : null}
-      ${pub?.confront && ((myRole === 'attack' && pub.confront.active === true && confStage === 'target') || confStage === 'roster')
+      ${pub?.confront && ((myRole === 'attack' && confBounty && pub.confront.active === true && confStage === 'target') || confStage === 'roster')
         ? html`<${ConfrontOverlay} pub=${pub} busy=${confBusy}
         onTarget=${async (targetPlayerId) => { setConfBusy(true); try { await actions.confrontTarget(targetPlayerId); } finally { setConfBusy(false); } }} />` : null}
       ${pub?.confront && pub.confront.applied ? html`<${ConfrontClash} pub=${pub} />` : null}

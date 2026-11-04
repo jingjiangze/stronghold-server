@@ -7,6 +7,9 @@
 //     team it is first come, first served — whoever submits first picks, and the teammate is given the opponent that is
 //     left (A takes C, B gets D), so the two teams are paired one-to-one and every player both attacks and is attacked. The
 //     step ends once every alive player holds a target (both sides — a side that finished early waits) or its window runs out.
+//     规则档（业主 2026-11-04）：**只有赏金档（versusRule === 'bounty'）有这一步**；对抗档（versusRule === 'confront'）
+//     没有目标选择模态 —— enterConfront 直接自动分配目标（assignConfrontTarget）并 finishConfrontTargets → 本回合 PREP
+//     + 开商店。客户端因此只在 bounty 档渲染遮罩（ui/confrontOverlay.js）。
 //   step 2 (monsters, 2026-11-04 单一 deadline): finishConfrontTargets opens the attackers' monster shop and enters the
 //     SAME PREP the defenders prepare in (deadline = gd.prepTime(round), attackers press Ready too). Each attacker fills
 //     their own VALUE BUDGET with monsters of ONE of the 6 groups, each on a gate (上路 'upper' / 下路 'lower') and all
@@ -52,7 +55,9 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo } from '../monsterShop.js';
+// 怪物盟约（2026-11-04 业主口径）：攻方投放的怪吃自己这一回合攒出来的乘区，与 roundMods 相乘（只乘不覆盖）。
+import { monsterBondMods, mergeMonsterBondMods } from '../monsterBonds.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
 
 /**
@@ -681,6 +686,8 @@ export class MatchConfront {
    * 金额 = `round(官方波次价值 × CONFRONT_VOLUME_SHARE ÷ 攻方人数)`，**对每个攻方各发一份** ——
    * 两人合计 = 1.5 × 波次价值，正好买得下「官方只数 × 1.5」的整池（份数与钱同一个 1.5 口径，
    * 见 monsterPool.js 的 buildMonsterPool）。
+   * 账户（业主 2026-11-04 裁决 2）：shared 模式下这 N 份都进**同一个队级账户**（`m.teamMonsterFunds`，
+   * 见 monsterShop.js 的 addMonsterFundsTo），全队总军费仍是 1.5 × 波次价值；solo 各自进 `ps.monsterFunds`。
    * 发放点 = `finishConfrontTargets`（目标选择刚结束：攻方名单 / 人数 / 本回合波次都已确定）。
    * 只在 `monsterShopOn && isRoleRound()` 时发；调用方本来就套在这道闸门里，这里再判一次是为了防止
    * 将来有人在别的阶段调它（`opts.monsterShop === false` ⇒ 一行都不跑，账户恒 0）。
@@ -690,11 +697,13 @@ export class MatchConfront {
     if (!this.monsterShopOn || typeof this.isRoleRound !== 'function' || this.isRoleRound() !== true) return 0;
     const amount = Math.max(0, Math.round((this.confrontWaveValue() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize()));
     for (const ps of this.confrontActors()) {
-      if (!ps || typeof ps.addMonsterFunds !== 'function') continue;
+      if (!ps) continue;
       // 帧上的「本回合军费 / 本回合奖励」每回合重置一次（奖励在 settle 里累加）
       ps.monsterGrant = amount;
       ps.monsterEarned = 0;
-      ps.addMonsterFunds(amount);
+      // 账户走访问器（业主 2026-11-04 裁决 2）：shared → 同队一份队级账户（每人各发一份 = 全队拿到
+      // 「波次价值 × 1.5」，正好买得下同队那一整池）；solo → 各人自己的 ps.monsterFunds。
+      addMonsterFundsTo(this, ps, amount);
     }
     return amount;
   }
@@ -725,16 +734,22 @@ export class MatchConfront {
    * 一份投放最多能值多少（2026-11-04 怪物资金口径）：**商店开着时读攻方的怪物资金账户**，
    * 而不是每回合现算的 `confrontBudget()`。账户是跨回合结转的，拿回合预算当上限会把「存下来的钱」判成超支。
    *
-   * 额度 = `ps.monsterFunds` + 同一份草稿里**已经付过款**的价值：草稿里的卡在 `buyMonster` / `placeMonster`
-   * 时就已经扣过钱了（余额已经少了那一笔），提交时把这一笔加回额度，才不会「买满余额的那次提交被自己的付款卡住」。
+   * 额度 = `monsterFundsOf(m, ps)`（shared = 队级账户 / solo = 个人账户）+ 同一份草稿里**已经付过款**的价值：
+   * 草稿里的卡在 `buyMonster` / `placeMonster` 时就已经扣过钱了（余额已经少了那一笔），提交时把这一笔加回额度，
+   * 才不会「买满余额的那次提交被自己的付款卡住」。
    * 取不到账户（老对局 / 守方 / bot 直接写 sub）⇒ 回落到旧的 `confrontBudget()`，行为逐字节不变。
    * @param {object} ps
    * @returns {number}
    */
   confrontPurchaseLimit(ps) {
-    if (!this.monsterShopOn || !ps || !Number.isFinite(Number(ps.monsterFunds))) return this.confrontBudget();
+    if (!this.monsterShopOn || !ps) return this.confrontBudget();
+    // 取不到账户（老对局 / 没有怪物账户的席位）⇒ 回落到旧的回合预算，行为逐字节不变。
+    // shared 模式读的是队级账户（恒为数字），不需要这道兜底。
+    if (this.monsterMode !== 'shared' && !Number.isFinite(Number(ps.monsterFunds))) return this.confrontBudget();
+    // 账户读数走 monsterFundsOf（业主 2026-11-04 裁决 2）：shared = 队级账户余额（同队两人同额），solo = 个人账户。
+    const funds = monsterFundsOf(this, ps);
     const draft = ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
-    return Math.max(0, Number(ps.monsterFunds) || 0) + this.confrontSpent(draft);
+    return Math.max(0, Number(funds) || 0) + this.confrontSpent(draft);
   }
 
   /**
@@ -1095,7 +1110,12 @@ export class MatchConfront {
 
   /** Enter the 对抗期: step 1 (targets) opens. A team of BOTS decides at once; a team holding a human waits for it — the
    *  human picks first and the bot teammate is filled in only then (or when the window closes). Step 2 is this round's
-   *  PREP (finishConfrontTargets), not a phase of its own. */
+   *  PREP (finishConfrontTargets), not a phase of its own.
+   *
+   *  规则档（业主 2026-11-04）：
+   *   · 赏金档（`versusRule === 'bounty'`，缺省）→ 保留目标选择模态（10 s）；
+   *   · 对抗档（`versusRule === 'confront'`）→ **没有目标选择**：进来就自动分配目标（assignConfrontTarget，shared
+   *     模式同队共用同一个 target）并直接 finishConfrontTargets → 本回合 PREP + 开商店，客户端不再有遮罩。 */
   enterConfront() {
     this.phase = PHASE.CONFRONT;
     this.confrontStage = 'target';
@@ -1109,6 +1129,14 @@ export class MatchConfront {
     this.confrontSubs = new Map();    // attacker playerId → { target, group, position, picks, bosses, ratio, budget }
     // 怪物卡池（2026-11-03）：这里只做阶段准备，**不再**开张商店 —— 2026-11-04 起投放窗口就是本回合的 PREP，
     // 商店在目标选择结束那一刻开（finishConfrontTargets），买卡 / 提交 / 冻结全程同一个 deadline。
+    if (this.isConfrontRule()) {
+      // 对抗档：跳过目标选择（业主 2026-11-04「遮罩只在悬赏模式出」）。confrontStage 仍是 'target'
+      // 只为通过 finishConfrontTargets 的阶段闸门；它立刻被清成 null 并进 PREP。
+      for (const ps of this.alivePlayers()) ps.ready = false;
+      this.markPublic();
+      this.finishConfrontTargets();
+      return;
+    }
     this.setDeadline(this.soloUntimed ? null : VERSUS_CONFRONT.targetSeconds, () => this.finishConfrontTargets());
     for (const t of this.matchTeamIds()) {
       if (t !== attack || !this._allBots(t)) continue;
@@ -1240,8 +1268,8 @@ export class MatchConfront {
     // 那时 finishConfront 的收尾（关店 / 补 bot 投放）必须已经能看到商店。
     if (this.monsterShopOn) {
       // 军费（业主 2026-11-04 裁决）：此刻攻方 / 人数 / 本回合波次都已确定 —— 给每个攻方发一份
-      // 「官方波次价值 × 1.5 ÷ 攻方人数」，进 ps.monsterFunds（跨回合结转）。必须在开店 / 推首帧**之前**，
-      // 否则第一帧显示的余额还是 0。
+      // 「官方波次价值 × 1.5 ÷ 攻方人数」，shared 模式进队级账户、solo 进 ps.monsterFunds（跨回合结转）。
+      // 必须在开店 / 推首帧**之前**，否则第一帧显示的余额还是 0。
       this.grantMonsterFunds();
       this.monsterPools ||= new Map();
       const solo = this.monsterMode === 'solo';
@@ -1867,6 +1895,8 @@ export class MatchConfront {
     // 3) the placed monsters, together at the chosen position. `confrontSeat` is DISPLAY only (the target's client
     //    outlines them and prints P<n> under them) — `sourcePlayerId` stays untouched, it drives the 联防 leak billing.
     const mods = roundMods(scale);
+    // 怪物盟约（2026-11-04）：投放者这一回合攒的乘区乘在官方乘区上（monsterShopOn 为假 → merge 原样返回）
+    const spawnMods = mergeMonsterBondMods(mods, monsterBondMods(this, this._confrontSubOwner(sub)));
     const start = this._confrontInsertTime(spawns, sub.position);
     const sentBy = Number.isInteger(sub.seat) ? sub.seat : null;
     // 赏金 (final rule, user 2026-10-17): the FIRST four bounty phases pay a fixed 1/1/2/2 by the kill ratio
@@ -1892,7 +1922,7 @@ export class MatchConfront {
         time: Number.isFinite(p.time) ? p.time : start + i * 1,
         enemyKey: p.enemyKey, count: 1, interval: 0,
         routeIndex: Number.isInteger(p.routeIndex) ? p.routeIndex : this.confrontRouteFor(p.enemyKey, p.gate),
-        mods: { ...mods }, ownerPlayerId: ps.playerId, confrontSeat: sentBy, confrontPlaced: true,
+        mods: { ...spawnMods }, ownerPlayerId: ps.playerId, confrontSeat: sentBy, confrontPlaced: true,
         // 狩猎模拟: a placed monster leaks FOR FREE — `countInTotal: false` is exactly that (the flag drives both the
         // LP charge and the 完美作战 counter), so only killing it matters: the bounty below pays the killer.
         countInTotal: false,
@@ -1922,18 +1952,35 @@ export class MatchConfront {
     const bosses = Array.isArray(sub.bosses) ? sub.bosses : [];
     if (!bosses.length) return list;
     const mods = roundMods(this.confrontScale());
+    // 怪物盟约（2026-11-04）：事件期 boss 也是投放者投的，吃同一份乘区
+    const spawnMods = mergeMonsterBondMods(mods, monsterBondMods(this, this._confrontSubOwner(sub)));
     const sentBy = Number.isInteger(sub.seat) ? sub.seat : null;
     let time = list.reduce((n, s) => Math.max(n, Number(s && s.time) || 0), 0) + 10;
     for (const p of bosses) {
       list.push({
         time: time++, enemyKey: p.enemyKey, count: 1, interval: 0,
         routeIndex: this.confrontRouteFor(p.enemyKey, p.gate),
-        mods: { ...mods }, ownerPlayerId: ps.playerId, confrontSeat: sentBy, confrontPlaced: true,
+        mods: { ...spawnMods }, ownerPlayerId: ps.playerId, confrontSeat: sentBy, confrontPlaced: true,
         countInTotal: false,
         bounty: { coins: this.confrontBossCoin(p.enemyKey), ownerPlayerId: ps.playerId, bank: false },
       });
     }
     return list;
+  }
+
+  /**
+   * 投放者（攻方）的 PlayerState：`this.confront` / `this.confrontSubs` 都是 `Map<playerId, sub>`，而
+   * `applyConfront` / `_confrontBossSpawns` 只拿到 sub 本身 —— 靠**引用相等**反查回攻方，怪物盟约的乘区按他算。
+   * 取不到（直测 / 老对局 / sub 不在表里）→ null（盟约乘区整段不生效，与改造前一致）。
+   * @param {object} sub
+   * @returns {object|null}
+   */
+  _confrontSubOwner(sub) {
+    if (!sub) return null;
+    const map = this.confront && this.confront.size ? this.confront : this.confrontSubs;
+    if (!map || typeof map.entries !== 'function') return null;
+    for (const [pid, s] of map) if (s === sub) return this.players.get(pid) || null;
+    return null;
   }
 
   /** The insertion time of a position: walk the ORIGINAL wave by count to the 25 / 50 / 75 % mark. */

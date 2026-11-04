@@ -1,7 +1,9 @@
 // 对抗期 overlay (2V2, PHASE.CONFRONT) — 2026-11-04 起只剩两块：
 //   'target'（选目标）：限时 10 秒的必选题，保持模态（.spov__veil）。对手以 '?' + P 编号 + 队伍色列出，队内先到先得
-//     （服务端把剩下的那个发给队友）。
+//     （服务端把剩下的那个发给队友）。**只在赏金档（pub.confront.versusRule === 'bounty'）出现** —— 业主 2026-11-04：
+//     对抗档没有目标选择（服务端 enterConfront 直接自动分配目标 → 进 PREP），遮罩不弹。
 //   'roster'（投放公示）：5 秒的只读名单 —— 右下角一张卡片（.rospov--conf，pointer-events: none），不拦截战场点击。
+//     两档都有（对抗档的服务端 finishConfront 同样会挂这 5 秒公示）。
 // 投放窗口（pub.confront.active === true && stage === null）整块不渲染：投放走商店条（ui/shopBar.js 的 MonsterCard
 // → g.monsterPlace：点一下投 1 只 / 长按多选 / 拖到上门·下门），游戏页的攻方状态条只留一个「查看投放 / 继续投放」入口
 // （本文件的 ConfrontDoneCard，每一行可撤回 → g.monsterDrop）。服务端 submitConfront 仍在（bot 与旧客户端会用），
@@ -141,7 +143,9 @@ export function ConfrontOverlay({ pub, busy = false, onTarget }) {
   const conf = pub && pub.confront;
   // 阶段按**原值**读：投放窗口是 stage === null（旧写法 `conf.stage || 'target'` 会把它误判成选目标）
   const stage = conf && conf.stage != null ? conf.stage : null;
-  const picking = !!conf && conf.active === true && stage === 'target';
+  // 业主 2026-11-04：目标选择遮罩**只在赏金档出**。对抗档（versusRule === 'confront'）服务端已经跳过目标选择
+  // （confront.js 的 enterConfront 直接自动分配目标 → 进 PREP），这里再按规则档兜一道，任何残留的 'target' 帧都不弹模态。
+  const picking = !!conf && conf.versusRule === 'bounty' && conf.active === true && stage === 'target';
   const roster = !!conf && stage === 'roster';
   // 选目标列表横滑：对手多（10V10 有 10 个）时要能横向滑；滚动条已隐藏，靠滚轮/拖动/触控。
   // hooks 无条件调用 —— 投放窗口整块不渲染，阶段切换时渲染次数会变。

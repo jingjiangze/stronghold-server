@@ -532,3 +532,33 @@
 @media (prefers-reduced-motion: reduce) {
   .scard.is-picked { animation: none; }
 }
+
+/* ==========================================================================================
+   怪物盟约条（2026-11-04 业主口径：攻方**只有怪物方的独立盟约**，没有干员盟约）。
+   容器仍是 HUD 里的 `.gm__bonds` / `.gm__bond-list`，观感复用干员盟约条的 `.bstrip` / `.bslot`
+   （screens/game.css：网格、折叠、指针规则一行都不用改）—— 这里只补怪物侧的一块主体盘 + 层数角标，
+   数据来自 ui/shopBar.js 的 MonsterBondStrip（服务端 server/match/monsterBonds.js monsterBondView）。
+   ========================================================================================== */
+.mbonds .bslot.mbond {
+  display: flex; align-items: center; gap: .06rem; padding: .04rem .08rem .04rem .04rem;
+  background: linear-gradient(180deg, rgba(20, 26, 23, .92), rgba(8, 11, 10, .95));
+  border: 1px solid var(--line-2); border-left: 2px solid var(--line-3);
+}
+/* 已激活（达到一阶）的怪物盟约：琥珀边 + 一点外辉，与干员条的 mint 区分开 */
+.mbonds .bslot.mbond.is-active { border-left-color: var(--amber); box-shadow: 0 0 .14rem rgba(246, 163, 41, .25); }
+.mbond__disc {
+  flex: none; width: .34rem; height: .34rem; display: grid; place-items: center;
+  background: rgba(246, 163, 41, .1); border: 1px solid rgba(246, 163, 41, .35);
+}
+.mbond__disc .icon { width: .22rem; height: .22rem; color: rgba(255, 255, 255, .55); }
+.mbonds .bslot.mbond.is-active .mbond__disc { background: rgba(246, 163, 41, .22); }
+.mbonds .bslot.mbond.is-active .mbond__disc .icon { color: #fff; }
+.mbond__body { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.mbond__name { font-size: .15rem; font-weight: 800; color: var(--text-md); white-space: nowrap; }
+.mbonds .bslot.mbond.is-active .mbond__name { color: var(--amber); }
+.mbond__layers { font-size: .15rem; font-weight: 700; color: var(--text-lo); }
+.mbond__layers small { font-size: .12rem; color: var(--text-dim); margin-left: .02rem; }
+.mbonds .bslot.mbond.is-active .mbond__layers { color: var(--mint-400); }
+/* 空态（本回合尚未投放）：`.bstrip--empty` 已经把虚线框画好了，这里只把文字压成一行 */
+.mbonds.bstrip--empty { gap: .08rem; flex-wrap: nowrap; white-space: nowrap; }
+

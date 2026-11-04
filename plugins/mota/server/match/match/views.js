@@ -13,6 +13,8 @@ import { bountySpawns, previewOf, gateOf } from '../waves.js';
 import { timelineAt } from '../fields.js';
 import { bossFieldPlacement } from '../finalAssault.js';
 import { battleProgress } from '../../sim/spec.js';
+// 攻方回合（2026-11-04 业主口径）：公共行的干员盟约同样置空（与 m.private 同一个判据）。
+import { isAttackerRound } from '../monsterBonds.js';
 
 /** Milliseconds since the match started. A stamp before the start, or a bad stamp, is 0. The stored log keeps the epoch. */
 function auditClock(at, startedAt) {
@@ -269,7 +271,8 @@ export class MatchViews {
       // nobody can watch an eliminated player (g.watch refuses them, they have no field) and the result screen reads
       // m.result's own bonds, so their layers would only cost every m.public bytes for the rest of the match
       // (the mode-off bonds with members included, `off: true`, as in m.private — bondsMeta.offBondCounts)
-      bonds: ps.alive ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
+      // 攻方回合（2026-11-04 业主口径）：他这一回合只有怪物方盟约 ⇒ 公共行也给 []（队友 / 观战不再看到干员盟约条）。
+      bonds: ps.alive && !isAttackerRound(this, ps) ? bondList(this.gd, ps.bondsView(), { off: offBondCounts(ps.gd || this.gd, ps) }) : [],
       fieldId: this.fieldOf(ps),
       status: this.statusOf(ps),
       autoplay: ps.autoplay,

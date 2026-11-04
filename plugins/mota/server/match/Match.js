@@ -252,6 +252,8 @@ import { installTestTrace } from './testTrace.js';
 import { MatchTestCommands } from './match/testCommands.js';
 import { MatchOffers } from './match/offers.js';
 import { botStrategyFor } from './botStrategies.js';
+// 怪物资金账户的唯一入口（业主 2026-11-04 裁决 2「共同出怪 = 同队一份资金」）：见下方构造函数的改道安装。
+import { addMonsterFundsTo, spendMonsterFundsFrom } from './monsterShop.js';
 
 export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS } from './match/common.js';
 
@@ -511,6 +513,12 @@ export class Match {
     this.eventUsedAlly = new Set(); this.eventUsedFoe = new Set();
     this.foeEvent = null; this.eventFoeHistory = []; this._eventDoneRound = 0;
     this.confront = null; this.confrontSubs = null; this.confrontTargets = null; this.confrontStage = null;
+    /**
+     * 队级怪物资金账户（业主 2026-11-04 裁决 2）：key = teamId，value = 余额（shared 模式；solo 不用）。
+     * 惰性建表（monsterShop.js 的 teamMonsterFunds），这里只声明字段。
+     * @type {Map<number, number>|null}
+     */
+    this.teamMonsterFunds = null;
 
     /** @type {Map<string, PlayerState>} */
     this.players = new Map();
@@ -522,6 +530,21 @@ export class Match {
     }
     if (!this.players.size) throw new TypeError('Match: seats required');
     this.order = [...this.players.values()].sort((a, b) => a.seat - b.seat);
+    /**
+     * 队级怪物资金（业主 2026-11-04 裁决 2「共同出怪 = 同队一份资金」）：shared 模式下同队共用一个账户
+     * （`m.teamMonsterFunds`，见 monsterShop.js 的 monsterFundsOf / addMonsterFundsTo / spendMonsterFundsFrom）。
+     *
+     * 这里把每个席位的 `addMonsterFunds` / `spendMonsterFunds` 改道到 Match 侧访问器 —— 本次改动清单之外的模块
+     * （match/match/settle.js 的击杀 / 漏过奖励）因此自动进同一个账户，不必各自改一行；solo 模式不装改道，
+     * `ps.monsterFunds` 就是唯一账户（与改造前逐字节一致）。只在商店开着时装：`opts.monsterShop === false` 与
+     * 非对抗局一行都不跑。
+     */
+    if (this.isVersus && this.monsterShopOn === true && this.monsterMode !== 'solo') {
+      for (const ps of this.order) {
+        ps.addMonsterFunds = (n) => addMonsterFundsTo(this, ps, n);
+        ps.spendMonsterFunds = (n) => spendMonsterFundsFrom(this, ps, n);
+      }
+    }
     /**
      * Spectator seats (opts.spectators / addSpectator): playerId → a stand-in every watch path treats like an eliminated
      * human (alive false; no PlayerState, never a field's player or authority).
