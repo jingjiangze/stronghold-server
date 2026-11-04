@@ -702,8 +702,9 @@ export class MatchConfront {
    * 发本回合的**怪物军费**（业主 2026-11-04 裁决：攻方有独立的怪物资金账户，跨回合结转）。
    *
    * 金额 = `round(官方波次价值 × CONFRONT_VOLUME_SHARE ÷ 攻方人数)`，**对每个攻方各发一份** ——
-   * 两人合计 = 1.5 × 波次价值，正好买得下「官方只数 × 1.5」的整池（份数与钱同一个 1.5 口径，
-   * 见 monsterPool.js 的 buildMonsterPool）。
+   * 两人合计 = 1.5 × 波次价值。**「1.5 倍出怪量」现在就由这笔军费保证**（业主 2026-11-05：库存份数改按官方
+   * 干员商店 poolCopies 等比换算，见 monsterPool.js 的 MONSTER_COPIES_BY_TIER；份数不再跟着官方只数走，
+   * 库存也不再是 1.5× 的约束）。
    * 账户（业主 2026-11-04 裁决 2）：shared 模式下这 N 份都进**同一个队级账户**（`m.teamMonsterFunds`，
    * 见 monsterShop.js 的 addMonsterFundsTo），全队总军费仍是 1.5 × 波次价值；solo 各自进 `ps.monsterFunds`。
    * 发放点 = `finishConfrontTargets`（目标选择刚结束：攻方名单 / 人数 / 本回合波次都已确定）。
@@ -720,7 +721,7 @@ export class MatchConfront {
       ps.monsterGrant = amount;
       ps.monsterEarned = 0;
       // 账户走访问器（业主 2026-11-04 裁决 2）：shared → 同队一份队级账户（每人各发一份 = 全队拿到
-      // 「波次价值 × 1.5」，正好买得下同队那一整池）；solo → 各人自己的 ps.monsterFunds。
+      // 「波次价值 × 1.5」，也就是本回合「1.5 倍出怪量」的资金保证）；solo → 各人自己的 ps.monsterFunds。
       addMonsterFundsTo(this, ps, amount);
     }
     return amount;
@@ -1360,10 +1361,12 @@ export class MatchConfront {
     // 投放窗 = 本回合的 PREP：stage 先清掉（PREP 里的冻结收尾与商店闸门都以「stage == null」判定目标选择已结束）。
     this.confrontStage = null;
     // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队建，Match.js 的构造函数不改）。
-    // 每回合**重建**（2026-11-04 复验修复 1）：合法怪物集合按回合变（confrontGroups 的回合闸门 + 每回合 4 类型组
-    // 重抽），池若「建过就复用」就会把上一回合口径下的卡一路卖到后面几回合 —— 那些卡提交时会被
-    // `_confrontMember` 判成 `illegal 对抗期 pick`。重建的代价是「上回合被买走的份数」被清空，这是**预期**的
-    // 补货语义（每回合满库存），不是 bug。
+    // 池来源（业主 2026-11-05）：`data/enemies.json` 全表（排除 tokenOnly），不再只取本回合官方出怪 ——
+    // 见 monsterPool.js 的 monsterPoolKeys；合法性（能不能提交）仍按回合走 `legalKeys`，与池来源解耦。
+    // 每回合**重建**（2026-11-04 复验修复 1，仍保留）：① 卡价是**本回合量纲**（confrontValueOf 含回合倍率与特性档位分），
+    // 复用旧池会把上一回合的价格一路卖到后面几回合；② 合法集合按回合变（confrontGroups 的回合闸门 + 每回合 4 类型组
+    // 重抽），货架只摆合法集（monsterShop 的 illegalExcludes），旧池混进不在本回合 groups 里的怪也会变成死卡。
+    // 重建的代价是「上回合被买走的份数」被清空，这是**预期**的补货语义（每回合满库存），不是 bug。
     // 开张时机（2026-11-04）：目标选择结束这一刻，且**在进 PREP 之前**就位 —— 同步调度下 PREP 可能立刻结束，
     // 那时 finishConfront 的收尾（关店 / 补 bot 投放）必须已经能看到商店。
     if (this.monsterShopOn) {
@@ -1458,9 +1461,10 @@ export class MatchConfront {
    */
   _confrontMember(ps, group, position, picks, bosses = []) {
     const list = this.confrontGroups();
-    // 合法集合与卡池**同源**（业主 2026-11-04）：同一个 `legalKeys`（monsterPool.js 导出，monsterShop 也调它）——
-    // 优先本回合官方出怪（`_roundOfficialSpawns`），没有快照才回落 groups 并集。这样「买得到 / 点得动」的卡
-    // 一定交得上（复验踩过的坑：两份实现各算一套 ⇒ 卡进得了草稿但提交必被拒）。
+    // 合法集合是**提交合法性**的唯一判据（monsterPool.js 导出，monsterShop 的购买 / 投放 / 发牌也调它）——
+    // 优先本回合官方出怪（`_roundOfficialSpawns`），没有快照才回落 groups 并集。业主 2026-11-05「只放宽池/库存，
+    // 不改提交合法性」：池来源已放宽到 data/enemies.json 全表，但货架只摆合法集里的怪，所以「买得到 / 点得动」
+    // 的卡仍然一定交得上（复验踩过的坑：两份实现各算一套 ⇒ 卡进得了草稿但提交必被拒）。
     const allowed = legalKeys(this)
       || new Set(list.flatMap((g) => ((g && g.rows) || []).map((r) => r && r.key)).filter(Boolean));
     const arr = Array.isArray(picks) ? picks : [];
