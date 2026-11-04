@@ -156,6 +156,35 @@ export function monsterBondIdsOf(gd, enemyKey) {
   return out;
 }
 
+/**
+ * 一只怪属于**第一条**类型盟约（商店卡面的小徽标用；业主 2026-11-04 报障：卡片要显示名称与怪物盟约）。
+ * 顺序 = MONSTER_BOND_DEFS（飞行 ELITE 这类同时命中多条时取第一条命中的）；`classify: null` 的通用条
+ * （增援 / 会战 / 回收）不参与 —— 它们不是怪物本身的属性。纯函数，只读敌人数据；取不到该怪 → null。
+ * @param {object} gd GameData（用 gd.enemy(enemyKey)）/ 或 { enemy(key) }
+ * @param {string} enemyKey
+ * @returns {string|null} 盟约 id（'air' / 'refract' …）
+ */
+export function monsterBondIdForEnemy(gd, enemyKey) {
+  let rec = null;
+  try { rec = gd && typeof gd.enemy === 'function' ? gd.enemy(enemyKey) : null; } catch { rec = null; }
+  if (!rec) return null;
+  for (const def of MONSTER_BOND_DEFS) {
+    if (typeof def.classify === 'function' && def.classify(rec)) return def.id;
+  }
+  return null;
+}
+
+/**
+ * 盟约 id → 显示名（'air' → '空袭'）。未知 id 原样返回（调用方只管显示，不做判据）；空 → null。
+ * @param {string|null} id
+ * @returns {string|null}
+ */
+export function monsterBondName(id) {
+  if (typeof id !== 'string' || !id) return null;
+  const def = defById.get(id);
+  return def ? def.name : id;
+}
+
 /** 本回合的盟约记录（懒建）。空记录 = `{ round, layers:{}, placed:0, cost:0, byPlayer:{} }`。 */
 export function monsterBondState(m, ps) {
   const key = monsterBondKey(m, ps);

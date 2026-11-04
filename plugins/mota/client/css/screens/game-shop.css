@@ -465,6 +465,11 @@
    是 46px，会盖住名字与图标，故按同排文字的档位落地（已写进交付报告）。 */
 .scard__stock { position: absolute; right: .06rem; bottom: .06rem; z-index: 3; font-size: .13rem; font-family: var(--font-num);
   letter-spacing: .04em; opacity: .78; pointer-events: none; }
+/* 怪物盟约徽标（2026-11-04 业主：卡片要显示名称与羁绊）：沿用 .scard__bond 的 tag 观感（.13rem / mint），
+   只把内边距、描边与字重按卡面调一档。它和阶数同一行（.scard__class，名字下面那一行）⇒ 不额外占高度、
+   也不压右下角的库存角标。帧里没有 `bond` 键时这个节点根本不渲染（js/ui/shopBar.js MonsterCard）。 */
+.scard--monster .scard__mbond { gap: 0; padding: 0 .06rem; border: 1px solid rgba(78, 216, 175, .4);
+  border-radius: .04rem; background: rgba(78, 216, 175, .12); font-weight: 700; line-height: 1.3; white-space: nowrap; }
 
 /* 怪物模式的空槽位（2026-11-04 视觉验收第 2 条）：池里没货时服务端把这一格置 null（monsterShop.js dealSlots），
    旧实现沿用干员栏的 EmptyCard —— 它带 .scard--sold，斜纹 + 居中排布与「已售罄」几乎一样。这里改画成**虚线空框 +

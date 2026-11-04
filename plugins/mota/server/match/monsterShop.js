@@ -40,7 +40,8 @@ import { OK, fail } from './match/common.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { buildMonsterPool, legalKeys } from './monsterPool.js';
 // 怪物盟约（2026-11-04 业主口径：攻方只有怪物方的独立盟约）：投放 / 购买涨层，撤回退层，帧里带一份视图。
-import { addMonsterBonds, dropMonsterBonds, monsterBondView, captureMonsterBondLeaks } from './monsterBonds.js';
+// `monsterBondIdForEnemy` / `monsterBondName` 只给卡面徽标用（业主 2026-11-04 报障：卡片要显示该怪的怪物盟约）。
+import { addMonsterBonds, dropMonsterBonds, monsterBondView, captureMonsterBondLeaks, monsterBondIdForEnemy, monsterBondName } from './monsterBonds.js';
 
 // 合法集合的唯一判据在 monsterPool.js（卡池同源）：这里只转出，避免两份实现漂移。
 export { legalKeys };
@@ -325,17 +326,24 @@ export function monsterShopFrame(m, ps) {
       grant: Math.max(0, Number(ps.monsterGrant) || 0),
       earned: Math.max(0, Number(ps.monsterEarned) || 0),
     } : {}),
-    slots: (shop.slots || []).map((s, index) => (s ? {
-      index,
-      key: s.key,
-      name: nameOf(s.key),
-      tier: s.tier,
-      price: s.price,
-      frozen: s.frozen === true,
-      sold: s.sold === true,
-      left: pool.left(s.key),
-      cap: pool.cap(s.key),
-    } : null)),
+    slots: (shop.slots || []).map((s, index) => {
+      if (!s) return null;
+      // 这只怪属于哪条怪物盟约（纯函数，只看敌人数据，取第一条命中的类型条）。空 ⇒ 帧里**省略** `bond` 键，
+      // 老帧形状与老客户端逐字节不变（业主 2026-11-04：卡面要显示名称与羁绊）。
+      const bondId = monsterBondIdForEnemy(m && m.gd, s.key);
+      return {
+        index,
+        key: s.key,
+        name: nameOf(s.key),
+        tier: s.tier,
+        price: s.price,
+        frozen: s.frozen === true,
+        sold: s.sold === true,
+        left: pool.left(s.key),
+        cap: pool.cap(s.key),
+        ...(bondId ? { bond: { id: bondId, name: monsterBondName(bondId) } } : {}),
+      };
+    }),
     draft: {
       // `id` = 草稿条目的稳定 id（撤回按它定位）；老对局 / 老存档的条目没有 id ⇒ null（客户端回落到下标，不崩）
       picks: ((ps.monsterDraft && ps.monsterDraft.picks) || []).map((p) => ({ id: Number.isInteger(p && p.id) ? p.id : null, enemyKey: p && p.enemyKey, gate: p && p.gate })),
@@ -347,7 +355,41 @@ export function monsterShopFrame(m, ps) {
 }
 
 /**
- * 发一手牌：冻结格保留，其余重抽（同一次发牌内不重复；池里没货 / 不合本回合口径就留空格 null）。
+ * 一格卡牌对象（发牌 / 补位共用）：卡的属性只由 key 决定，与「第几轮抽到它的」无关。
+ * @param {object} m @param {object} pool @param {string} key
+ * @returns {{ key: string, tier: number, price: number, frozen: boolean, sold: boolean }}
+ */
+function slotCardOf(m, pool, key) {
+  return {
+    key,
+    tier: pool.tier(key) || 1,
+    price: monsterPriceOf(m, key),
+    frozen: false,
+    sold: false,
+  };
+}
+
+/**
+ * 「池里有、但不在本回合合法集合里」的 key（`pool.roll` 只认 exclude、不认 allow，所以换算成 exclude）。
+ * 两轮抽卡都要排这一层；第二轮的「允许重复」只放开 `taken`，**不**放开它（死卡不能发到货架上）。
+ * @param {object} pool @param {Set<string>|null} legal
+ * @returns {Set<string>}
+ */
+function illegalExcludes(pool, legal) {
+  const ex = new Set();
+  if (!legal) return ex;
+  for (const key of Object.keys(pool.snapshot())) if (!legal.has(key)) ex.add(key);
+  return ex;
+}
+
+/**
+ * 发一手牌：冻结格保留，其余重抽。
+ * **两轮**（业主 2026-11-04 报障：本回合合法集合只有 2~3 个 key，旧实现「同一次发牌内不重复」只能填 2~3 格，
+ * 其余恒 null）：
+ *   · 第一轮：尽量不重复（排除 = 已占的 key + 不合本回合口径的 key），与旧行为一致；
+ *   · 第二轮：仍然为 null 的格**允许重复抽**（同一个 key 可以出现在多个格），只排不合口径的 key ——
+ *     `pool.roll` 只认 `left > 0`，而发牌**不扣库存**（扣库存在 buy / place），所以重复发同一张卡不会多扣份数；
+ *   · 两轮都抽不到（池真的空了）才留 null。
  * 只从「本回合合法集合 ∩ 池里有货」抽：卡池若是在别的回合口径下建的（或池里混进了不在 groups 里的怪），
  * 也不会把死卡发到货架上（复验修复 1.3）。冻结格同样要过闸门 —— 不合法的冻结格按未冻结处理、直接重抽。
  * 不检查阶段、不扣钱 —— 只给 openMonsterShop 与 rollMonsterShop 用。
@@ -362,35 +404,33 @@ function dealSlots(m, ps) {
   const taken = new Set();
   for (const s of slots) if (keep(s)) taken.add(s.key);
   // 池里不在本回合合法集合内的 key 一律排除（pool.roll 只认 exclude，不认 allow —— 这里换算成 exclude）
-  const excludeSet = () => {
-    if (!legal) return taken;
-    const ex = new Set(taken);
-    for (const key of Object.keys(pool.snapshot())) if (!legal.has(key)) ex.add(key);
-    return ex;
-  };
+  const illegal = illegalExcludes(pool, legal);
+  // 第一轮：尽量不重复
   for (let i = 0; i < slots.length; i++) {
     const cur = slots[i];
     if (keep(cur)) continue;
-    const key = pool.roll(rng, { exclude: excludeSet() });
+    const key = pool.roll(rng, { exclude: new Set([...illegal, ...taken]) });
     if (key == null) { slots[i] = null; continue; }
     taken.add(key);
-    slots[i] = {
-      key,
-      tier: pool.tier(key) || 1,
-      price: monsterPriceOf(m, key),
-      frozen: false,
-      sold: false,
-    };
+    slots[i] = slotCardOf(m, pool, key);
+  }
+  // 第二轮：仍为 null 的格允许重复（不再排 taken）；只排不合本回合口径的 key
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i] != null) continue;
+    const key = pool.roll(rng, { exclude: illegal });
+    if (key == null) continue;                     // 池真的空了：留 null
+    slots[i] = slotCardOf(m, pool, key);
   }
   return slots;
 }
 
 /**
  * 单格补位（业主 2026-11-04「点卡即投放，用掉后该格自动补位」）：把 `idx` 这一格重抽一张新卡。
- * 规则与 dealSlots 同一套：只从「本回合合法集合 ∩ 池里有货」抽；跳过**其他格已占的 key**（同一次发牌内不重复）
- * 与**本格刚用掉的那张卡**（`usedKey`，避免同一格立刻重复上一张；它的剩余份数仍在池里，刷新可以再抽到）。
+ * 规则与 dealSlots 同一套（**两轮**）：第一轮只从「本回合合法集合 ∩ 池里有货」抽，跳过**其他格已占的 key**
+ * （同一次发牌内不重复）与**本格刚用掉的那张卡**（`usedKey`，避免同一格立刻重复上一张；它的剩余份数仍在池里，
+ * 刷新可以再抽到）；第一轮抽不到（合法集只有一两个 key、都被别格占了）→ 第二轮**允许重复**，只排不合口径的 key。
  * 冻结是「这一格这张卡」的属性：新卡不继承冻结（与 dealSlots 的 keep 判据一致 —— 冻结只对未售出且仍合法的那张卡生效）。
- * 池里没货 → 该格置 null。
+ * 两轮都抽不到（池里没货）→ 该格置 null。
  * @param {object} m @param {object} ps @param {number} idx @param {string|null} [usedKey]
  * @returns {{ key: string, tier: number, price: number, frozen: boolean, sold: boolean }|null}
  */
@@ -408,21 +448,12 @@ function refillSlot(m, ps, idx, usedKey = null) {
   }
   if (typeof usedKey === 'string' && usedKey) taken.add(usedKey);
   // 池里不在本回合合法集合内的 key 一律排除（pool.roll 只认 exclude，不认 allow —— 这里换算成 exclude）
-  const excludeSet = () => {
-    if (!legal) return taken;
-    const ex = new Set(taken);
-    for (const key of Object.keys(pool.snapshot())) if (!legal.has(key)) ex.add(key);
-    return ex;
-  };
-  const key = pool.roll(rng, { exclude: excludeSet() });
+  const illegal = illegalExcludes(pool, legal);
+  // 第一轮：不重复（已占 + 本格刚用掉的 + 不合口径）；第二轮：允许重复，只排不合口径的
+  const first = pool.roll(rng, { exclude: new Set([...illegal, ...taken]) });
+  const key = first != null ? first : pool.roll(rng, { exclude: illegal });
   if (key == null) { shop.slots[idx] = null; return null; }
-  shop.slots[idx] = {
-    key,
-    tier: pool.tier(key) || 1,
-    price: monsterPriceOf(m, key),
-    frozen: false,
-    sold: false,
-  };
+  shop.slots[idx] = slotCardOf(m, pool, key);
   return shop.slots[idx];
 }
 

@@ -19,8 +19,9 @@
 // a special refresh (凯瑟琳 定向投放's 3 items, 娜仁图亚, 寻呼模块, 信标, 松果) takes the same place under its own name, an
 // item slot drawn as an item card (player report #6 after 0.1.0).
 // 对抗·攻方（2026-11-04）另有怪物卡池（`monsterShop`，只有攻方拿得到 open:true 的帧）：点一下投 1 只、长按进多选态、
-// 拖到上门 / 下门一次性投放（业主 2026-11-04 裁决，旧的「选门 + 选数量」浮层已删除）；撤销在攻方状态条的已投清单里
-// （ui/confrontOverlay.js ConfrontDoneCard → `g.monsterDrop`）。`monsterOn === false` 时每一处分支都走改造前的老路。
+// 拖到上门 / 下门一次性投放（业主 2026-11-04 裁决，旧的「选门 + 选数量」浮层已删除）；撤销在攻方状态条的「撤回上一只」
+// 按钮里（screens/game.js → `g.monsterDrop`；投放方不再显示已投名单 —— 名单只给对面 / 守方看）。
+// `monsterOn === false` 时每一处分支都走改造前的老路。
 // Every operator card shows the skill it will fight with — the player's 干员调配 loadout (m.private.loadout, DESIGN
 // §16): the skill icon above the name, mint-framed with 已调配 in its title when it is not the default skill (and the
 // module type of an elite card, with its official type icon when the local-client art has it). A chess the player does
@@ -258,7 +259,8 @@ function halfRegionPoly(poly, gate) {
 /**
  * 怪物卡（对抗·攻方商店，2026-11-04；交互按业主 2026-11-04 的裁决重做）：外壳照 `ChessCard` —— 同一套 `.scard` +
  * `scard--t<tier>`（测试按 `.shopbar__cards .scard` 选卡，CSS 的边框 / 悬停 / 冻结 / 已售一套全部复用），卡面换成怪物：
- * 图标 `enemyIconUrl`、名称、阶、单价、库存 `left/cap`。
+ * 图标 `enemyIconUrl`、名称、阶、单价、库存 `left/cap`，以及**怪物盟约徽标**（`slot.bond = { id, name }`，业主
+ * 2026-11-04：卡片要显示名称与羁绊；帧里没有该键就不渲染，老卡面不变）。
  * 三条路径，都不经过任何「先选门 → 再确认」的浮层：
  *   点一下       → `onTap`（ShopBar：投 1 只到上一次成功投放的门）
  *   长按 ≥550ms  → `onHold`（进多选态；这一下不算点击 —— longPress 的 heldClick 吞掉随后的 click）
@@ -280,6 +282,9 @@ export function MonsterCard({ slot, idx, multi = false, picked = false, dragging
   const left = Math.max(0, Number(slot?.left) || 0);
   const cap = Math.max(0, Number(slot?.cap) || 0);
   const name = slot?.name || slot?.key || '';
+  // 怪物盟约徽标（业主 2026-11-04）：服务端帧 `m.monsterShop.slots[].bond = { id, name }`（monsterShop.js
+  // monsterShopFrame）；没有该键（老帧 / 这怪不属于任何类型条）⇒ null，卡面与改造前逐字节相同
+  const bond = slot && slot.bond && typeof slot.bond.name === 'string' && slot.bond.name ? slot.bond : null;
   const stock = `${left}/${cap}`;
   // 卡面图标：图标表随 assets 清单在运行时到货（上面的 useData），key 在清单里没有图标 / 文件 404 时都要有东西可看。
   // `enemyIconUrl` 拿不到 URL（清单未到货、该 key 没有 icon）时返回 null ⇒ <Img> 直接画 fallback；404 由 <Img> 的
@@ -311,7 +316,9 @@ export function MonsterCard({ slot, idx, multi = false, picked = false, dragging
     <span class="scard__art" aria-hidden="true"><${Img} src=${iconUrl} class="scard__monicon" eager=${true} fallback=${html`<span class="scard__artfallback"><${GIcon} name="skull" /></span>`} /></span>
     <span class="scard__body">
       <span class="scard__name">${name}</span>
-      <span class="scard__class"><span>T${tier}</span></span>
+      <span class="scard__class"><span>T${tier}</span>
+        ${bond ? html`<span class="scard__bond scard__mbond" data-bond=${bond.id} title=${t('怪物盟约：{name}', { name: bond.name })}>${bond.name}</span>` : null}
+      </span>
     </span>
     <span class="scard__stock">${stock}</span>
     ${frozen ? html`<span class="scard__ice" aria-hidden="true"><${Icon} name="snow" /></span>` : null}

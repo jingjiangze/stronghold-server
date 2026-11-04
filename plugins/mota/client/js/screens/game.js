@@ -99,7 +99,7 @@ import { ChoiceOverlay, spMarks } from '../ui/choiceOverlay.js';
 import { EnemyDrawer } from '../ui/enemyDrawer.js';
 import { Ticker } from '../ui/ticker.js';
 import { EmoteWheel } from '../ui/emotes.js';
-import { ConfrontOverlay, ConfrontDoneCard, ConfrontClash } from '../ui/confrontOverlay.js';
+import { ConfrontOverlay, ConfrontClash } from '../ui/confrontOverlay.js';
 import { HexOverlay, normalizeHexOffer } from '../ui/hexOverlay.js';
 import { RelicOverlay, normalizeRelicOffer } from '../ui/relicOverlay.js';
 import { RogueHud } from '../ui/rogueHud.js';
@@ -115,7 +115,7 @@ import { SettingsModal, settingsStore, useSettings } from '../ui/settings.js';
 import { ExitModal, AwayOverlay, awayStore } from '../ui/matchChrome.js';
 import { RoundPopup, PhasePopup, phasePopupOf, roundsToBoss, preloadPopupArt } from '../ui/matchPopups.js';
 import { openGuide } from '../ui/guide.js';
-import { actions, onRefreshBusy } from '../ui/gameActions.js';
+import { actions, act, onRefreshBusy } from '../ui/gameActions.js';
 import { FacingWheel, holdPiece, setPieceDir, syncPieceDirs, showRange, useTileScreen } from '../ui/facingWheel.js';
 import { Underframe, underframeRect, TempRowNotice, warmPlateMasks } from '../ui/underframe.js';
 import { StandInTags } from './game/standInTags.js';
@@ -250,8 +250,9 @@ function MatchScreen() {
   const [watching, setWatching] = useState(null);
   // 对抗模式（2V2 / 4V4）的面板忙态
   const [confBusy, setConfBusy] = useState(false);
-  // 攻方「查看投放 / 继续投放」的已投清单（2026-11-04）：投放窗口里由攻方状态条的入口按钮切换，非遮罩
-  const [confDoneOpen, setConfDoneOpen] = useState(false);
+  // 攻方投放状态条的「撤回上一只」（业主 2026-11-04：投放方**不看**已投名单，但必须保留撤销能力）——
+  // 一次只撤最后一条草稿，飞行中禁用（服务端 dropMonster 会退款 / 退库存，成功后推帧 ⇒ 只数自己变回来）
+  const [dropUndoBusy, setDropUndoBusy] = useState(false);
   const [eventBusy, setEventBusy] = useState(false);        // fieldId the player chose to watch (null = home)
   const [watchWho, setWatchWho] = useState(null);        // { fieldId, playerId }: the teammate picked with 前往查看
   const [drawer, setDrawer] = useState(null);            // 'enemies' | 'info' | null
@@ -327,14 +328,28 @@ function MatchScreen() {
   const confStage = pub?.confront ? (pub.confront.stage != null ? pub.confront.stage : null) : null;
   // 规则档（2026-11-04 业主裁决）：目标选择遮罩**只在赏金档出**；对抗档（'confront'）服务端跳过目标选择，客户端不弹模态。
   const confBounty = pub?.confront?.versusRule === 'bounty';
-  // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条，状态条上留「查看投放 / 继续投放」按钮
+  // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条；状态条上只留「已投 N 只」与「撤回上一只」
+  // 两个东西 —— 已投**名单**只给对面（守方的 conf.roster 公示 / priv.incoming 预览），投放方自己不看清单
+  // （业主 2026-11-04：投放方不显示投放名单）。
   const confDropWindow = !!pub?.confront && pub.confront.active === true && confStage === null && myRole === 'attack';
   // 投放窗口里「已投 N 只」读的是**本回合草稿**（m.monsterShop.draft.picks，点卡投放每投一只加一条）——
   // 这时还没有提交，m.confront.subs[myId] 不存在，旧文案只能画「等待投放结算」（2026-11-04 视觉验收第 3 条）。
   // 投放结束后（stage 进入 roster、active 变 false、或进 COMBAT / SETTLE）仍走下面的 mySub.total。
-  const dropPlaced = monsterShopOpen && Array.isArray(monsterShop.draft?.picks) ? monsterShop.draft.picks.length : 0;
-  // 离开投放窗口就收起已投清单（下一回合重新打开，不把上一回合的展开状态带过去）
-  useEffect(() => { if (!confDropWindow) setConfDoneOpen(false); }, [confDropWindow]);
+  const dropPicks = monsterShopOpen && Array.isArray(monsterShop.draft?.picks) ? monsterShop.draft.picks : [];
+  const dropPlaced = dropPicks.length;
+  // 「撤回上一只」撤的就是草稿的**最后一条**（带它的稳定 id：多端并发撤回不会撤错行，服务端优先按 id 定位）
+  const lastDropPick = dropPlaced ? dropPicks[dropPlaced - 1] : null;
+  /**
+   * 撤回最后投放的那一只：`g.monsterDrop { index, id? }` → 服务端摘掉那一条、把库存与投放资金退回
+   * （server/match/monsterShop.js dropMonster）。成功后服务端推帧 ⇒ 草稿变短、只数自己变回来（不本地删）。
+   */
+  const undoLastDrop = () => {
+    if (!lastDropPick || dropUndoBusy) return;
+    const index = dropPlaced - 1;
+    const payload = Number.isInteger(lastDropPick.id) ? { index, id: lastDropPick.id } : { index };
+    setDropUndoBusy(true);
+    void act('g.monsterDrop', payload, { sfx: 'back' }).finally(() => setDropUndoBusy(false));
+  };
   // a spectator seat watches like an eliminated player (it has no m.private and no row in m.public)
   const alive = spectator ? false : priv ? priv.alive !== false : meP?.alive !== false;
   // 协议已失效 (ui/downedPlate.js): once, when the player's own `alive` — as read from real data, never a reload's empty
@@ -1912,15 +1927,15 @@ function MatchScreen() {
           <p>${confDropWindow
             ? t('点一下投 1 只 · 长按多选 · 拖到上门 / 下门')
             : t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
+          ${/* 投放方**不看**已投名单（业主 2026-11-04：名单只给对面 / 守方），状态条上只留只数 + 一个撤回入口 */ null}
           ${confDropWindow
-            ? html`<span class="num">${t('已投 {n} 只', { n: dropPlaced })}</span>`
+            ? html`<span class="num">${t('已投 {n} 只', { n: dropPlaced })}</span>
+              ${dropPlaced > 0 ? html`<button type="button" class="confbtn" data-testid="monster-undo-last"
+                disabled=${dropUndoBusy} onClick=${undoLastDrop}
+                title=${t('撤回最后投放的那一只：库存与投放资金退回')}>${t('撤回上一只')}</button>` : null}`
             : mySub ? html`<span class="num">${t('本回合投放 {n} 只', { n: mySub.total })}</span>` : html`<span class="t-dim">${t('等待投放结算')}</span>`}
-          ${confDropWindow ? html`<button type="button" class="confbtn" aria-expanded=${confDoneOpen} aria-controls="confront-done-card"
-            data-testid="confront-done-toggle" onClick=${() => setConfDoneOpen((v) => !v)}>
-            ${confDoneOpen ? t('收起已投清单') : t('查看投放 / 继续投放')}</button>` : null}
         </div>
       </div>` : null}
-      ${confDropWindow && confDoneOpen ? html`<${ConfrontDoneCard} pub=${pub} shop=${monsterShop} />` : null}
       ${myRole === 'defend' && phase === PHASE.PREP && Array.isArray(priv?.incoming) && priv.incoming.length ? html`<div class="gm__incoming" data-testid="incoming">
         <div class="gm__incoming__in">
           <div class="gm__incoming__t"><${Icon} name="sword" />${t('来袭怪物')} <b class="num">${priv.incoming.length}</b></div>
