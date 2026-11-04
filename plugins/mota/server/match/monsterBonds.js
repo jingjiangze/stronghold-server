@@ -1,8 +1,9 @@
 // plugins/mota/server/match/monsterBonds.js — 怪物方的**独立盟约**（攻方专属，业主 2026-11-04 口径）。
 //
 // 业主口径（2026-11-04，v2 按阵营）：**攻方完全没有干员盟约、没有干员商店，只有怪物方的独立盟约** ——
-// 21 条**按阵营**（data/monster-factions.json 的 21 个 id：0.4.3 的 20 个 + 业主 2026-11-04 新增的「源石协议」
-// ORIGINIUM）+ 3 条通用，层数制，**只影响本回合**。
+// 22 条**按阵营**（data/monster-factions.json 的 22 个 id：0.4.3 的 20 个 + 业主 2026-11-04 新增的「源石协议」
+// ORIGINIUM（第 21 个）+ 业主 2026-11-05 新增的「假想敌协议」IMAGINARY（第 22 个，假想敌 SP01–SP18 系列单列））
+// + 3 条通用，层数制，**只影响本回合**。
 // 所以本模块与 `bondsMeta.js`（干员盟约：整局持久、ps.layers / ps.bonds 被 invariants.js 钉死）是**平行结构**，
 // 两套数据 / 状态 / installer 一律不共用：
 //   · 状态 `m.monsterBonds` = Map<key, Record<bondId, layers>>，key 与怪物池同口径（monsterMode === 'solo' ? playerId
@@ -97,13 +98,14 @@ export function monsterFactionIds(gd, enemyKey) {
 }
 
 /**
- * 24 条盟约的固定定义（业主 2026-11-04 裁决 v2：21 条按**阵营** + 3 条通用）。
+ * 25 条盟约的固定定义（业主 2026-11-04 裁决 v2：21 条按**阵营** + 3 条通用；2026-11-05 追加「假想敌协议」
+ * IMAGINARY 后 = 22 条按阵营 + 3 条通用）。
  * 阵营条的 id == data/monster-factions.json 的阵营 id（也是 MONSTER_BOND_MODS 的键）；归属判据是 map 命中，
  * 不再看 acType / rank / tags。阵营条的 `thresholds` **不写死** —— 按本回合可投放池里该阵营的只数算
  * （见 monsterBondThresholds），所以这里只有 3 条通用条带绝对阈值。
  */
 export const MONSTER_BOND_DEFS = [
-  // ---- 21 条按阵营（前 20 条顺序 = 0.4.3 factions.json 的 types 顺序；monsterBondIdForEnemy 取第一条命中的） ----
+  // ---- 22 条按阵营（前 20 条顺序 = 0.4.3 factions.json 的 types 顺序；monsterBondIdForEnemy 取第一条命中的） ----
   // 第 21 条「源石协议」= 业主 2026-11-04 新增（源石虫 / 源石造物单独一类），**追加在末尾**：既有 20 条的相对顺序
   // 不变，所以同时命中多阵营的老怪（如 1010_demon = REUNION+SARKAZ）的「第一条命中」与卡面徽标不受影响。
   { id: 'REUNION', name: '整合运动', faction: 'REUNION' },
@@ -127,8 +129,12 @@ export const MONSTER_BOND_DEFS = [
   { id: 'SAMI', name: '萨米', faction: 'SAMI' },
   { id: 'COLUMBIA', name: '哥伦比亚', faction: 'COLUMBIA' },
   // 第 21 条（业主 2026-11-04 裁决）：源石协议 —— 专收源石虫 / 源石造物系（data 侧 32 只，见 monster-factions.json
-  // 的 rules 段第 1 条）。追加在末尾，不插队（见上方「21 条按阵营」注释）。
+  // 的 rules 段第 1 条）。追加在末尾，不插队（见上方「22 条按阵营」注释）。
   { id: 'ORIGINIUM', name: '源石协议', faction: 'ORIGINIUM' },
+  // 第 22 条（业主 2026-11-05 裁决）：假想敌协议 —— 「假想敌」SP01–SP18 系列单列成营（enemy_9006…enemy_9023 及其
+  // 部件，data 侧 21 只），不再与整合运动 / 源石协议混放。同样**追加在末尾**：既有 21 条的相对顺序不变，
+  // 老怪的「第一条命中」与卡面徽标不受影响（IMAGINARY 的 21 只都是单阵营，与老阵营无交集）。
+  { id: 'IMAGINARY', name: '假想敌协议', faction: 'IMAGINARY' },
   // ---- 3 条通用 ----
   // 增援：投放只数 ≥ 官方只数 × 1.5（层数 = 投放只数），效果走资金返还
   { id: 'reinforce', name: '增援', thresholds: MONSTER_BOND_THRESHOLDS, classify: null, kind: 'funds' },
@@ -153,6 +159,8 @@ export const MONSTER_BOND_DEFS = [
  *   · 2026-11-04 补全 194 条后（map 491/491）基线池的增量只有两处：REUNION 13 → 20（17 只无阵营的里有 7 只落兜底）、
  *     ORIGINIUM 0 → 10（源石虫 2 + 源石植物 2 + 假想敌 6）。既有 20 条的键位与 per **不重排**（重排会改既有阵营的
  *     实机乘区、且与「按本回合池子只数取比例」的阈值口径无关），新阵营按下面 ORIGINIUM 条目的注释取同级值。
+ *   · 2026-11-05（业主裁决「假想敌系列独立为 IMAGINARY」）后的基线池 120 只：ORIGINIUM 10 → 4（假想敌 6 只移出），
+ *     IMAGINARY 0 → 6；其余阵营不变（REUNION 仍是 20 —— 本次归位的 vt* / mh* / cs* / redace* 都不在这 120 只里）。
  */
 export const MONSTER_BOND_MODS = {
   // n=19 → per 0.03，rank0 → hpMul
@@ -201,6 +209,12 @@ export const MONSTER_BOND_MODS = {
   // 备查（未采用的另一口径）：补全后基线池 120 只里 ORIGINIUM 实测 10 只，若按本文件上面「n ≥ 10 → 0.03」的分档
   // 应给 0.03；业主口径是「不重排既有 20 条、与相邻阵营同级」，故本条取 0.05。要切回 n 分档时只改这一行即可。
   ORIGINIUM: { key: 'defMul', per: 0.05, cap: 0.3 },
+  // 假想敌协议（业主 2026-11-05 新增，第 22 条）：键按六键轮转**续位** —— rank20 ORIGINIUM 是 defMul，rank21 回到 resMul。
+  // per/cap 取「与相邻阵营同级」：末位三条（HIGASHI / SAMI / ORIGINIUM）都是 0.05 / 0.3，本条同档，cap 也同是 0.3
+  // （cap 相同 ⇒ 到顶层数只由 per 决定：0.05 需 6 层）。
+  // 备查（未采用的另一口径）：2026-11-05 后的基线池 120 只里 IMAGINARY 实测 6 只，若按本文件上面「n=5..9 → 0.04」
+  // 的分档应给 0.04；业主口径是「不重排既有条目、与相邻阵营同级」，故本条取 0.05。要切回 n 分档时只改这一行即可。
+  IMAGINARY: { key: 'resMul', per: 0.05, cap: 0.3 },
 };
 
 const defById = new Map(MONSTER_BOND_DEFS.map((d) => [d.id, d]));

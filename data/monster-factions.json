@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "source": "0.4.3 upstream-043-content factions.json (category=faction: entries/pool/branches) + enemies.json contractTrainingTags；20 阵营（0.4.3）+ 源石协议 ORIGINIUM（业主 2026-11-04 新增，第 21 个）+ 规则补全 194 条（业主裁决：不留空，491/491 全覆盖）；规则顺序与命中数见 rules 段，前缀实测见 prefixTable 段，原 99 条候选见 proposed（已采纳）",
+  "version": 3,
+  "source": "0.4.3 upstream-043-content factions.json (category=faction: entries/pool/branches) + enemies.json contractTrainingTags；20 阵营（0.4.3）+ 源石协议 ORIGINIUM（业主 2026-11-04 新增，第 21 个）+ 规则补全 194 条（业主裁决：不留空，491/491 全覆盖）；规则顺序与命中数见 rules 段，前缀实测见 prefixTable 段，原 99 条候选见 proposed（已采纳）；假想敌系列独立为 IMAGINARY（业主 2026-11-05 裁决，第 22 个阵营）；vt* / mh* / cs* / redace* 按业主裁决归位（vt*→VICTORIA、mh*→SEA_BORN、cs*→LEITHANIEN、redace*→SARGON；mer* 保持 REUNION）",
   "factions": {
     "REUNION": {
       "name": "整合运动",
@@ -85,6 +85,10 @@
     "ORIGINIUM": {
       "name": "源石协议",
       "nameEn": "Originium Protocol"
+    },
+    "IMAGINARY": {
+      "name": "假想敌协议",
+      "nameEn": "Imaginary Enemy Protocol"
     }
   },
   "rules": [
@@ -243,13 +247,13 @@
       "VICTORIA"
     ],
     "enemy_10028_vtswd": [
-      "REUNION"
+      "VICTORIA"
     ],
     "enemy_10029_vtshld": [
-      "REUNION"
+      "VICTORIA"
     ],
     "enemy_10030_vtwand": [
-      "REUNION"
+      "VICTORIA"
     ],
     "enemy_10031_cnvsld": [
       "SIRACUSA"
@@ -666,10 +670,10 @@
       "ORIGINIUM"
     ],
     "enemy_1136_redace": [
-      "REUNION"
+      "SARGON"
     ],
     "enemy_1136_redace_2": [
-      "REUNION"
+      "SARGON"
     ],
     "enemy_1141_merbow": [
       "REUNION"
@@ -1119,13 +1123,13 @@
       "ORIGINIUM"
     ],
     "enemy_1306_mhtrtl_2": [
-      "REUNION"
+      "SEA_BORN"
     ],
     "enemy_1309_mhboar_2": [
-      "REUNION"
+      "SEA_BORN"
     ],
     "enemy_1311_mhkryk_2": [
-      "REUNION"
+      "SEA_BORN"
     ],
     "enemy_1313_wdfmr": [
       "REUNION"
@@ -1418,22 +1422,22 @@
       "SARKAZ"
     ],
     "enemy_2009_csaudc": [
-      "REUNION"
+      "LEITHANIEN"
     ],
     "enemy_2010_csdcr": [
-      "REUNION"
+      "LEITHANIEN"
     ],
     "enemy_2014_csicer": [
-      "REUNION"
+      "LEITHANIEN"
     ],
     "enemy_2015_csicem": [
-      "REUNION"
+      "LEITHANIEN"
     ],
     "enemy_2016_csphtm": [
-      "REUNION"
+      "LEITHANIEN"
     ],
     "enemy_2017_csphts": [
-      "REUNION"
+      "LEITHANIEN"
     ],
     "enemy_2021_syfish": [
       "SEA_BORN"
@@ -1628,67 +1632,67 @@
       "REUNION"
     ],
     "enemy_9006_actoxi": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9007_acelem": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9008_acbunn": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9009_acfort": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9010_acpupp": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9011_acrefr": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9012_acloon": [
-      "YAN"
+      "IMAGINARY"
     ],
     "enemy_9013_acstmk": [
-      "REUNION"
+      "IMAGINARY"
     ],
     "enemy_9013_acstmk_2": [
-      "REUNION"
+      "IMAGINARY"
     ],
     "enemy_9014_acstma": [
-      "REUNION"
+      "IMAGINARY"
     ],
     "enemy_9015_acstmb": [
-      "REUNION"
+      "IMAGINARY"
     ],
     "enemy_9016_acstmr": [
-      "REUNION"
+      "IMAGINARY"
     ],
     "enemy_9017_achunt": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9017_achunt_2": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9018_actrpa": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9019_actrpb": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9020_actrpc": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9021_acduml": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9021_acduml_2": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9022_acdumm": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9023_acdums": [
-      "ORIGINIUM"
+      "IMAGINARY"
     ],
     "enemy_9032_aclionk": [
       "VICTORIA"
