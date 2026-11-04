@@ -200,20 +200,11 @@ export function GameScreen() {
 const inBattleCard = (d) => d?.kind === 'unit' || (d?.kind === 'device' && d.device?.unitId != null);
 
 /**
- * 攻方默认视角的取景（2026-11-04）：守方棋盘的右上出怪口（rows 8–12 里 cols 10 那一侧），预设见
- * render/projection.js 的 CAMERA_PRESETS.spawn。`fit: true` 走既有的拟合路径，侧边沿用既有 L / R 语义（右半棋盘按
- * projection.js 的 col → 20 − col 镜像，与 bossPrep 的右半同一套写法）。只有 `myRole === 'attack'` 的观看者会用到。
- * @param {'L'|'R'} [side]
- * @returns {{ kind: 'spawn', opts: { rect: { r0:number, r1:number, c0:number, c1:number }, side: 'L'|'R', fit: boolean } }}
+ * 拖拽投放的取景（2026-11-04）：攻方在上门 (12,10) / 下门 (9,10) 里挑一个，所以拖住怪物卡期间换成**整块战场**的矩形
+ * （rows 9–12 是战场、cols 2–10 把两扇门与场上站位都收进来），与守方看到的 normal 战场同一个范围，只是走拟合路径
+ * (`fit: true`) 好让两个门在商店条折叠后都留在视野内。
  */
-const spawnCam = (side) => ({
-  kind: 'spawn',
-  opts: {
-    rect: side === 'R' ? { r0: 8, r1: 12, c0: 10, c1: 15 } : { r0: 8, r1: 12, c0: 5, c1: 10 },
-    side: side === 'R' ? 'R' : 'L',
-    fit: true,
-  },
-});
+const DROP_CAM = { kind: 'normal', opts: { rect: { r0: 9, r1: 12, c0: 2, c1: 10 }, side: 'L', fit: true } };
 
 function MatchScreen() {
   useDocClass('sp-in-match');
@@ -442,10 +433,8 @@ function MatchScreen() {
   live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
-  // 攻方默认视角（2026-11-04）：攻防回合的进攻方没有自己的棋盘，投放窗口（PREP）与 COMBAT 观战都把镜头放在守方棋盘的
-  // 右上出怪口（模块级的 spawnCam + render/projection.js 的 CAMERA_PRESETS.spawn）。
-  // 判据是显式的 `myRole === 'attack'`：守方与 coop（myRole 为 null）永不进入这两个分支 —— 相机请求与改造前逐字节一致。
-  const attackView = myRole === 'attack';
+  // 攻方（攻防回合的进攻方）没有自己的棋盘，但取景与「观战该 field」完全一致：投放窗口落回自己的 prep 请求分支，
+  // COMBAT 观战落回 field.kind 的那一支 —— 不再有攻方专属的相机覆盖（2026-11-04 业主改判：要守方战场全景）。
   // the own prep board: the normal board, or — in the prep of a boss round — the player's half of the boss field
   // (research 09 §1.2: the right-hand player's board mirrored; gameLogic prepCamera). The DOM fallback view keeps the
   // own board's layout there (every coordinate the UI handles is a board coordinate either way) and draws the tiles of
@@ -481,6 +470,21 @@ function MatchScreen() {
     if (penRef.current.on) { penRef.current.on = false; setPen(false); setCollapsed(penRef.current.collapsed); }
     view?.setCamera(kind, opts);
   }, [view]);
+  // 拖拽投放的取景（2026-11-04）：攻方在上门 (12,10) / 下门 (9,10) 里挑一个，拖住怪物卡期间换成 DROP_CAM（整块战场，
+  // 两扇门都在视野里），商店条由 ShopBar 自己走 onCollapse → setCollapsed 折叠。松手把**拖之前的**取景原样还回去。
+  // 只有攻方商店会调它（ui/shopBar.js 的 monsterOn 分支）⇒ 守方 / coop 的相机请求与改造前逐字节一致。
+  const dropCamPrev = useRef(null);
+  const setDropCam = useCallback((on) => {
+    if (on) {
+      if (!dropCamPrev.current) dropCamPrev.current = camRef.current;
+      setCam(DROP_CAM.kind, DROP_CAM.opts);
+      return;
+    }
+    const back = dropCamPrev.current;
+    if (!back) return;
+    dropCamPrev.current = null;
+    setCam(back.kind, back.opts);
+  }, [setCam]);
   // 休整期 only; never while a piece is being placed (the wheel sits on a tile of the board camera)
   const penAvail = phase === PHASE.PREP && !!view && viewKind !== 'loading';
   /** Pan to the enemy preview pen (on) or back to the camera in use before (off). */
@@ -618,8 +622,8 @@ function MatchScreen() {
         // the battle we just left (or whatever was stored before mount) must not be re-entered next combat;
         // an m.field that arrives during prep (the upcoming battle) is a new object and will be entered
         staleFieldRef.current = field;
-        // 攻方（进攻方）没有自己的棋盘：投放窗口的镜头落在守方棋盘的右上出怪口（见上方 attackView / spawnCam）
-        const pc = attackView ? spawnCam('L') : prepCameraFor(pub, myId, shopFolded, stageLayout);
+        // 攻方（进攻方）没有自己的棋盘，投放窗口与观战该 field 取同一套景：走下面原样的 prep 请求分支
+        const pc = prepCameraFor(pub, myId, shopFolded, stageLayout);
         setCam(pc.kind, pc.opts);
         prepCamSeen.current = prepCamKey;
         viewModeRef.current = 'prep';
@@ -676,15 +680,9 @@ function MatchScreen() {
     // a lone player's boss field (solo modes, the odd player of a co-op Final Assault: the `_s` templates route every
     // enemy to the left objective) is framed on its own half like the ‹ › half view; pairs start on 全景
     const lone = kind === 'boss' && members.length === 1;
-    // 攻方（进攻方）在 COMBAT 观战里没有自己的 field：取景落在守方棋盘的右上出怪口（attackView / spawnCam）。
-    // 守方、coop 与观战席位走下面原样的一支 —— 非攻方分支的取景参数与改造前完全一致。
-    if (attackView) {
-      const sc = spawnCam(side);
-      setCam(sc.kind, sc.opts);
-    } else {
-      setCam(kind, helperHalf ? layerCamera(field, helperHalf, side)
-        : lone ? { rect: field.rect, side, half: true } : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}) });
-    }
+    // 攻方（进攻方）在 COMBAT 观战里没有自己的 field，取景与「观战该 field」完全一致：走下面这一支原样的 kind/rect
+    setCam(kind, helperHalf ? layerCamera(field, helperHalf, side)
+      : lone ? { rect: field.rect, side, half: true } : { rect: field.rect, side, ...(field.prep ? { shop: false } : {}) });
     audio.setFieldUnits(field.units);
     if (early && early.length) {
       // replay state-bearing events only (a burst of stale hit sparks / damage numbers would look wrong)
@@ -707,7 +705,7 @@ function MatchScreen() {
       hudRef.current = snapHud(earlySnap);
       setHud(hudRef.current);
     }
-  }, [view, showPrep, priv, editable, field, combat, mode, watchingOther, watching, holdSeq, attackView]);
+  }, [view, showPrep, priv, editable, field, combat, mode, watchingOther, watching, holdSeq]);
 
   // the round start (PR #416 by @Cromemadnd; the maintainer's confirmation from official play, 2026-10-13): the own board's
   // pieces replay their Start clip and landing sound one after another in deployment order — once per round, in 回合开始, on
@@ -816,10 +814,10 @@ function MatchScreen() {
     if (!view || viewModeRef.current !== 'prep' || !showPrep) return;
     if (live.current.facing) cancelFacingRef.current();
     setSel(null);
-    // 攻方没有自己的棋盘：投放窗口保持默认视角（spawn），不被「本回合的棋盘相机」抢回去
-    const pc = attackView ? spawnCam('L') : prepCameraFor(pub, myId, shopFolded, stageLayout);
+    // 攻方没有自己的棋盘，投放窗口与观战该 field 取同一套景（下面原样的 prep 请求）
+    const pc = prepCameraFor(pub, myId, shopFolded, stageLayout);
     setCam(pc.kind, pc.opts);
-  }, [view, prepCamKey, showPrep, attackView]);
+  }, [view, prepCamKey, showPrep]);
 
   // the shop bar folded (收起) or unfolded on the own prep board (public issue #5: the board did not grow, while the
   // battle and scouting views had no bar to make room for): the official shop-collapsed camera or the shop camera
@@ -834,8 +832,6 @@ function MatchScreen() {
   // during the held drag makes that release frame return null; the zoom stays owed until the pen closes
   // (deployZoomRemember). [ASSUMED] no official source settles that order.
   useEffect(() => {
-    // 攻方没有自己的棋盘：折叠 / 部署缩放的镜头不适用（否则商店条的 收起/展开 会把 spawn 视角抢回 prep）
-    if (attackView) return;
     const step = deployZoomStep(deployZoomedRef.current, deployFold);
     const next = prepDeployCamera({
       pub, myId, deployFold, releaseDeploy: step.release, folded: shopFolded,
@@ -847,17 +843,15 @@ function MatchScreen() {
     deployZoomedRef.current = deployZoomRemember(step, { next, pen });
     // the fold zoom and the restore fly with the short FOLD_CAMERA_MS, not a generic camera flight
     if (next) setCam(next.kind, { ...next.opts, ms: FOLD_CAMERA_MS });
-  }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey, attackView]);
+  }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);
 
   // 联防 / 最终攻势: the ‹ › pill moves the camera between the field's halves and 全景 (research 09 §3.1)
   useEffect(() => {
-    // 攻方的 COMBAT 观战固定用默认视角（spawn），不被半场分层的镜头覆盖
-    if (attackView) return;
     if (!view || !field || !field.local || !isCombatPhase(phase)) return;
     if (!cameraLayers(field, pub, myId).length) return;
     const kind = field.kind === 'hidden' ? 'boss' : field.kind;
     setCam(kind, layerCamera(field, layer, sidesOf(field)[myId] || 'L'));
-  }, [layer, attackView]);
+  }, [layer]);
 
   // 前往查看 of a teammate on a two-half shared field (a 联防 leaker / an eliminated spectator tapping a helper or a pair
   // player): the camera goes to that player's half, so the ‹ › pill reads "👁 name" like the strip's tag (DESIGN §20.15;
@@ -1853,6 +1847,7 @@ function MatchScreen() {
       ${showShop ? html`<${ShopBar} priv=${priv} editable=${editable} collapsed=${barCollapsed} refreshBusy=${refreshBusy} onCollapse=${setCollapsed}
         barRef=${barRef} offBonds=${offBonds} econ=${econ}
         monsterShop=${myRole === 'attack' ? monsterShop : null}
+        view=${view} onDropCam=${setDropCam}
         onOpenShop=${String(pub?.modeId || '').startsWith('mode_xie_') ? () => { net.request('g.meltOpen', {}).catch(() => {}); } : null}
         onBuy=${buy} onLevel=${() => actions.levelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
@@ -1907,7 +1902,9 @@ function MatchScreen() {
           ${/* 投放窗口开着（active && stage === null）时这一回合还没结束：文案说「正在投放」+ 已投只数（草稿），
                不能再说「怪物已投放，等待…」—— 那时玩家一只都还没投（2026-11-04 视觉验收第 3 条） */ null}
           <div class="gm__attackwait__t"><${Icon} name="sword" />${t('本回合你是进攻方')}${confDropWindow ? html`<span class="t-dim">· ${t('正在投放')}</span>` : null}</div>
-          <p>${confDropWindow ? t('点下方怪物卡投放到上/下门。') : t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
+          <p>${confDropWindow
+            ? t('点一下投 1 只 · 长按多选 · 拖到上门 / 下门')
+            : t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
           ${confDropWindow
             ? html`<span class="num">${t('已投 {n} 只', { n: dropPlaced })}</span>`
             : mySub ? html`<span class="num">${t('本回合投放 {n} 只', { n: mySub.total })}</span>` : html`<span class="t-dim">${t('等待投放结算')}</span>`}

@@ -52,7 +52,7 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf } from '../monsterShop.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
 
 /**
@@ -676,6 +676,30 @@ export class MatchConfront {
   }
 
   /**
+   * 发本回合的**怪物军费**（业主 2026-11-04 裁决：攻方有独立的怪物资金账户，跨回合结转）。
+   *
+   * 金额 = `round(官方波次价值 × CONFRONT_VOLUME_SHARE ÷ 攻方人数)`，**对每个攻方各发一份** ——
+   * 两人合计 = 1.5 × 波次价值，正好买得下「官方只数 × 1.5」的整池（份数与钱同一个 1.5 口径，
+   * 见 monsterPool.js 的 buildMonsterPool）。
+   * 发放点 = `finishConfrontTargets`（目标选择刚结束：攻方名单 / 人数 / 本回合波次都已确定）。
+   * 只在 `monsterShopOn && isRoleRound()` 时发；调用方本来就套在这道闸门里，这里再判一次是为了防止
+   * 将来有人在别的阶段调它（`opts.monsterShop === false` ⇒ 一行都不跑，账户恒 0）。
+   * @returns {number} 每人拿到的军费（没发 → 0）
+   */
+  grantMonsterFunds() {
+    if (!this.monsterShopOn || typeof this.isRoleRound !== 'function' || this.isRoleRound() !== true) return 0;
+    const amount = Math.max(0, Math.round((this.confrontWaveValue() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize()));
+    for (const ps of this.confrontActors()) {
+      if (!ps || typeof ps.addMonsterFunds !== 'function') continue;
+      // 帧上的「本回合军费 / 本回合奖励」每回合重置一次（奖励在 settle 里累加）
+      ps.monsterGrant = amount;
+      ps.monsterEarned = 0;
+      ps.addMonsterFunds(amount);
+    }
+    return amount;
+  }
+
+  /**
    * What ONE seat can spend this round in the current mode — the budget the type-draw's affordability floor must use.
    * 2V2 spends `confrontBudget()` (×budgetMul = 2, per player); 同盟狩猎 inserts its prey, so a seat only gets
    * `wave value × share` (coopHuntPlans). Using the 2V2 number for co-op would let an unplayable 4-type draw through.
@@ -685,12 +709,32 @@ export class MatchConfront {
     return Math.round(this.confrontWaveValue() * this.confrontRatio());
   }
 
-  /** Σ value of a set of picks, at this round's scaling. */
+  /**
+   * Σ value of a set of picks, at this round's scaling.
+   * **必须与卡面同源**（业主 2026-11-04）：单价一律走 `monsterShop.js` 的 `monsterPriceOf`（含全局系数
+   * `MONSTER_PRICE_FACTOR`），不在这里另算一遍 confrontValueOf —— 否则「预算 / 卡价 / 提交校验」会不同尺度。
+   * `monsterPriceOf` 内部就是 `confrontValueOf(key)`（缺省 scale = 本回合），所以量纲与旧实现一致。
+   */
   confrontSpent(picks) {
-    const scale = this.confrontScale();
     let v = 0;
-    for (const p of picks || []) v += this.confrontValueOf(p && p.enemyKey, scale);
+    for (const p of picks || []) v += monsterPriceOf(this, p && p.enemyKey);
     return v;
+  }
+
+  /**
+   * 一份投放最多能值多少（2026-11-04 怪物资金口径）：**商店开着时读攻方的怪物资金账户**，
+   * 而不是每回合现算的 `confrontBudget()`。账户是跨回合结转的，拿回合预算当上限会把「存下来的钱」判成超支。
+   *
+   * 额度 = `ps.monsterFunds` + 同一份草稿里**已经付过款**的价值：草稿里的卡在 `buyMonster` / `placeMonster`
+   * 时就已经扣过钱了（余额已经少了那一笔），提交时把这一笔加回额度，才不会「买满余额的那次提交被自己的付款卡住」。
+   * 取不到账户（老对局 / 守方 / bot 直接写 sub）⇒ 回落到旧的 `confrontBudget()`，行为逐字节不变。
+   * @param {object} ps
+   * @returns {number}
+   */
+  confrontPurchaseLimit(ps) {
+    if (!this.monsterShopOn || !ps || !Number.isFinite(Number(ps.monsterFunds))) return this.confrontBudget();
+    const draft = ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
+    return Math.max(0, Number(ps.monsterFunds) || 0) + this.confrontSpent(draft);
   }
 
   /**
@@ -1195,6 +1239,10 @@ export class MatchConfront {
     // 开张时机（2026-11-04）：目标选择结束这一刻，且**在进 PREP 之前**就位 —— 同步调度下 PREP 可能立刻结束，
     // 那时 finishConfront 的收尾（关店 / 补 bot 投放）必须已经能看到商店。
     if (this.monsterShopOn) {
+      // 军费（业主 2026-11-04 裁决）：此刻攻方 / 人数 / 本回合波次都已确定 —— 给每个攻方发一份
+      // 「官方波次价值 × 1.5 ÷ 攻方人数」，进 ps.monsterFunds（跨回合结转）。必须在开店 / 推首帧**之前**，
+      // 否则第一帧显示的余额还是 0。
+      this.grantMonsterFunds();
       this.monsterPools ||= new Map();
       const solo = this.monsterMode === 'solo';
       // 池的键：shared = teamId（同队必须共用同一个池，否则队友看不到对方买走的份数 / 退回来的份数）；
@@ -1313,7 +1361,9 @@ export class MatchConfront {
     if (out.length > VERSUS_CONFRONT.maxPicks) return { error: ERR.CONFRONT_COUNT };
     // 路线越长，占用预算越多（长度 ×2），让「绕远路」不能白嫖
     const routeCost = out.reduce((n, p) => n + (Number(p.routeLen) || 0) * 2, 0);
-    if (this.confrontSpent(out) + routeCost > this.confrontBudget()) return { error: ERR.CONFRONT_BUDGET };
+    // 上限：商店开着 = 怪物资金账户（confrontPurchaseLimit，见那里的注释）；关着 = 旧的回合预算。
+    // `confrontSpent` 与卡面同源（monsterPriceOf），所以这里与 `buyMonster` / `placeMonster` 是同一个尺度。
+    if (this.confrontSpent(out) + routeCost > this.confrontPurchaseLimit(ps)) return { error: ERR.CONFRONT_BUDGET };
     const bArr = Array.isArray(bosses) ? bosses : [];
     // outside the 事件期 rounds the boss 格 does not exist, so the pool is empty and any boss is refused with it
     const bossAllowed = this.confrontBossOpen() ? new Set(this.confrontBossPool().map((r) => r.key)) : new Set();

@@ -6,9 +6,12 @@
 // 2026-11-04 业主口径「点卡即投放」：`g.monsterPlace { index, gate, count? }` 把卡直接投到上/下出怪口、
 // 可选数量；`buyMonster`（旧面板）保留，等价于「投到 lower、1 只」。两者**用掉后该格立即补位**（refillSlot）。
 //
-// 钱的量纲：刷新价 MONSTER_REFRESH_PRICE 以 confrontValue 为单位（与卡面价格、回合预算同一量纲）。
-// 刷新花掉的钱记在 ps.monsterShop.spent 里，只**收紧**本回合还能买多少（buyMonster 的余额 = 预算 − 已买 − 刷新）；
-// 它不进提交的 picks，所以 submitConfront 的预算判据仍只看 picks —— 刷新只会让玩家买得更少，绝不会让提交被拒。
+// 钱的量纲：单价 = 该怪官方波次价值 × MONSTER_PRICE_FACTOR（默认 1），刷新价 MONSTER_REFRESH_PRICE 同量纲。
+// 钱从哪来（业主 2026-11-04 裁决）：攻方有**独立的怪物资金账户** `ps.monsterFunds`，来源 = 每回合军费
+// （match/confront.js grantMonsterFunds）+ 击杀 / 漏过奖励（match/settle.js），**跨回合结转**；
+// 买卡 / 刷新 / 投放都是**显式扣款**（`ps.spendMonsterFunds`，全有或全无），撤回草稿退款。
+// 它不进守方的 funds / 统计（`econSplitLeftover` 不会清零它）。提交时 `_confrontMember` 的预算判据读同一个账户，
+// 所以「买得起 = 交得上」，而刷新只会让余额更少，绝不会让已买的卡交不上。
 //
 // 守卫：m.monsterShopOn 为假（opts.monsterShop === false / 非对抗局）时，所有方法直接返回 ERR.WRONG_PHASE，
 // 旧行为完全不受影响。购买 / 刷新 / 冻结 / 撤回草稿要求「投放窗口开着」：PHASE.PREP、本回合是攻守回合、
@@ -39,6 +42,12 @@ export { legalKeys };
 
 /** 商店格数（业主口径：5 格，与干员商店同宽）。 */
 export const MONSTER_SHOP_SLOTS = 5;
+/**
+ * 卡面单价的**全局系数**（业主 2026-11-04 裁决：单价 = 该怪官方波次价值 × 全局系数）。
+ * 它乘在 `monsterPriceOf` 里，而 `match/confront.js` 的 `confrontSpent` / `_confrontMember` 也走同一个函数 ——
+ * 所以「预算 / 价格 / 提交校验」永远同尺度，改这一个常量就整体调价（默认 1 = 与官方价值等价）。
+ */
+export const MONSTER_PRICE_FACTOR = 1;
 /** 刷新价，以 confrontValue 为单位（与卡面价格同量纲）。 */
 export const MONSTER_REFRESH_PRICE = 2;
 /** 每回合附赠的免费刷新次数（开局的那次发牌不计）。 */
@@ -152,23 +161,28 @@ export function monsterShopRng(m) {
 // 优先级 = 本回合官方出怪（`m._roundOfficialSpawns` 只读快照）→ confrontGroups 并集 → null（不闸门）。
 // `submitConfront` 的 `_confrontMember` 也调同一个函数，保证「买得到 / 点得动」的卡一定交得上。
 
-/** 一只怪在本回合的价格（confrontValue 量纲；取不到 → 0）。 */
+/**
+ * 一只怪在本回合的价格（confrontValue 量纲 × MONSTER_PRICE_FACTOR；取不到 → 0）。
+ * **价格的唯一权威**：卡面报价（dealSlots / refillSlot）、购买 / 刷新 / 投放的扣款、撤回退款，以及
+ * `match/confront.js` 的 `confrontSpent` / `_confrontMember` 预算判据全部走这里 —— 不要另算一遍公式，
+ * 否则预算与卡价会不同尺度。
+ */
 export function monsterPriceOf(m, key) {
   if (!m || typeof m.confrontValueOf !== 'function' || typeof key !== 'string' || !key) return 0;
   const v = Number(m.confrontValueOf(key));
-  return Number.isFinite(v) && v > 0 ? v : 0;
+  return Number.isFinite(v) && v > 0 ? Math.max(1, Math.round(v * MONSTER_PRICE_FACTOR)) : 0;
 }
 
 /**
- * 本回合这个玩家还能花多少（= 回合预算 − 已买卡的价 − 刷新花掉的钱）。
+ * 本回合这个攻方还能花多少 —— 直接读**怪物资金账户**（业主 2026-11-04：攻方有独立账户、跨回合结转，
+ * 买 / 刷新 / 投放都是显式扣款，不再拿「回合预算 − Σpicks」重算）。
+ * 四个字段保留（帧兼容，老客户端只读 `left`）：`budget` = 余额，`picks` / `refresh` 恒 0（已经记账在余额里）。
  * @returns {{ budget: number, picks: number, refresh: number, left: number }}
  */
 export function monsterBudgetLeft(m, ps) {
-  const budget = Number(m && typeof m.confrontBudget === 'function' ? m.confrontBudget() : 0) || 0;
-  const picks = (ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks)) ? ps.monsterDraft.picks : [];
-  const pickSpent = Number(m && typeof m.confrontSpent === 'function' ? m.confrontSpent(picks) : 0) || 0;
-  const refreshSpent = Number(ps && ps.monsterShop ? ps.monsterShop.spent : 0) || 0;
-  return { budget, picks: pickSpent, refresh: refreshSpent, left: Math.max(0, budget - pickSpent - refreshSpent) };
+  void m;
+  const funds = Math.max(0, Number(ps && ps.monsterFunds) || 0);
+  return { budget: funds, picks: 0, refresh: 0, left: funds };
 }
 
 /** 商店快照（客户端报价用；public views 不带商店，所以由意图成功时私有推送）。 */
@@ -191,8 +205,18 @@ export function monsterShopFrame(m, ps) {
     freeRefreshes: Math.max(0, Number(shop.freeRefreshes) || 0),
     refreshes: Math.max(0, Number(shop.refreshes) || 0),
     budget: left.budget,
+    // `spent` 现在恒 0：攻方是显式扣款（钱一花出去余额就少了），没有「预算 − 已花」这层记账了。
+    // 字段名一个都没改（老客户端不会炸），语义见 monsterBudgetLeft。
     spent: left.picks + left.refresh,
     left: left.left,
+    // 怪物资金（业主 2026-11-04）：`funds` = 账户余额（跨回合结转），`grant` = 本回合军费、`earned` = 本回合奖励。
+    // 只有**商店真开着**（m.monsterShopOn）才出现 —— `opts.monsterShop === false` 的帧里一个新字段都不加，
+    // 老客户端/旧对局的帧逐字节不变。
+    ...(shopEnabled(m) ? {
+      funds: Math.max(0, Number(ps.monsterFunds) || 0),
+      grant: Math.max(0, Number(ps.monsterGrant) || 0),
+      earned: Math.max(0, Number(ps.monsterEarned) || 0),
+    } : {}),
     slots: (shop.slots || []).map((s, index) => (s ? {
       index,
       key: s.key,
@@ -367,8 +391,8 @@ export function rollMonsterShop(m, ps, { free = false } = {}) {
   }
   const price = free || useFree ? 0 : MONSTER_REFRESH_PRICE;
   if (price > 0) {
-    const { left } = monsterBudgetLeft(m, ps);
-    if (price > left) return fail(ERR.CONFRONT_BUDGET, 'refresh price over the round budget'); // i18n-ignore
+    // 显式扣款（业主 2026-11-04）：自费刷新花的是怪物资金；余额不够就一分不扣、不重抽、不记自费次数。
+    if (!ps.spendMonsterFunds(price)) return fail(ERR.CONFRONT_BUDGET, 'refresh price over the monster funds'); // i18n-ignore
   }
   if (useFree) shop.freeRefreshes = Math.max(0, (Number(shop.freeRefreshes) || 0) - 1);
   if (price > 0) shop.paidRefreshes = Math.max(0, Number(shop.paidRefreshes) || 0) + 1;
@@ -409,10 +433,10 @@ export function buyMonster(m, ps, idx) {
   if (monsterStockLeft(m, ps, slot.key) <= 0) return fail(ERR.SOLD_OUT, 'stock reserved for human teammates'); // i18n-ignore
   const price = monsterPriceOf(m, slot.key);
   if (!(price > 0)) return fail(ERR.BAD_TARGET, 'unknown monster'); // i18n-ignore
-  const { left } = monsterBudgetLeft(m, ps);
-  if (price > left) return fail(ERR.CONFRONT_BUDGET, 'price over the round budget'); // i18n-ignore
+  // 显式扣款（业主 2026-11-04）：先扣钱、再动库存 —— 钱不够时连库存都不碰。
+  if (!ps.spendMonsterFunds(price)) return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); // i18n-ignore
   const taken = pool.take(slot.key, 1);
-  if (taken < 1) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
+  if (taken < 1) { ps.addMonsterFunds(price); return fail(ERR.SOLD_OUT, 'stock empty'); } // i18n-ignore
   const key = slot.key;
   if (!ps.monsterDraft) ps.monsterDraft = { picks: [], position: 'mid' };
   if (!Array.isArray(ps.monsterDraft.picks)) ps.monsterDraft.picks = [];
@@ -458,14 +482,17 @@ export function placeMonster(m, ps, index, gate, count = 1) {
   if (available <= 0) return fail(ERR.SOLD_OUT, 'stock reserved for human teammates'); // i18n-ignore
   const price = monsterPriceOf(m, slot.key);
   if (!(price > 0)) return fail(ERR.BAD_TARGET, 'unknown monster'); // i18n-ignore
-  const { left } = monsterBudgetLeft(m, ps);
+  // 只数上限读**怪物资金余额**（业主 2026-11-04）：余额 / 单价 = 买得起几只
+  const fundsLeft = monsterBudgetLeft(m, ps).left;
   const want = Number.isFinite(Number(count)) && Number(count) >= 1 ? Math.floor(Number(count)) : 1;
-  const affordable = price > 0 ? Math.floor(left / price) : 0;
+  const affordable = price > 0 ? Math.floor(fundsLeft / price) : 0;
   const units = Math.min(20, available, Math.max(0, affordable), want);
-  if (units <= 0) return fail(ERR.CONFRONT_BUDGET, 'price over the round budget'); // i18n-ignore
+  if (units <= 0) return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); // i18n-ignore
   const key = slot.key;
   const placed = pool.take(key, units);
   if (placed < 1) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
+  // 显式扣款：按**实际投下的只数**结算；扣不动就把刚取走的库存还回去（全有或全无）
+  if (!ps.spendMonsterFunds(price * placed)) { pool.give(key, placed); return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); } // i18n-ignore
   if (!ps.monsterDraft) ps.monsterDraft = { picks: [], position: 'mid' };
   if (!Array.isArray(ps.monsterDraft.picks)) ps.monsterDraft.picks = [];
   // count 条草稿：门由这次点击决定，时刻留给 submitConfront / _botConfrontPlan 再定
@@ -513,8 +540,12 @@ export function dropMonster(m, ps, index) {
   const [removed] = picks.splice(index, 1);
   const key = removed && typeof removed.enemyKey === 'string' && removed.enemyKey ? removed.enemyKey : null;
   const pool = monsterPoolFor(m, ps);
-  if (key) pool.give(key, 1);
-  return { ok: true, index, key, left: key ? pool.left(key) : 0, picks: picks.length };
+  // 退款（业主 2026-11-04）：撤回一张已付过款的草稿 = 把那笔钱退回怪物资金（单价按当前口径，与买它时同源）。
+  if (key) {
+    pool.give(key, 1);
+    ps.addMonsterFunds(monsterPriceOf(m, key));
+  }
+  return { ok: true, index, key, left: key ? pool.left(key) : 0, picks: picks.length, funds: Math.max(0, Number(ps.monsterFunds) || 0) };
 }
 
 /**

@@ -839,6 +839,13 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .confdone__name { flex: 1; font-size: calc(.13 * var(--t)); color: #eafff8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confdone__gate { padding: .01rem .05rem; font-size: calc(.11 * var(--t)); font-weight: 700; border: 1px solid #c4583d; color: #ffab97; background: rgba(196, 88, 61, .12); }
 .confdone__gate.is-upper { border-color: #3d78c4; color: #8cc6ff; background: rgba(61, 120, 196, .12); }
+/* 撤回（业主 2026-11-04「场上 / 清单里已投的怪有面板可以撤销」）：贴着那一行右侧，.confdone__name 是 flex:1 ⇒ 它靠右。
+   飞行中 disabled（服务端推帧后整行消失，不需要本地删行）。 */
+.confdone__undo { flex: none; margin-left: .04rem; padding: .01rem .1rem; font: inherit; font-size: calc(.11 * var(--t));
+  font-weight: 700; letter-spacing: .04em; color: #ffab97; background: rgba(196, 88, 61, .14);
+  border: 1px solid rgba(196, 88, 61, .75); cursor: pointer; }
+.confdone__undo:hover:not(:disabled) { color: #1a0d0a; background: #ff8f74; border-color: #ff8f74; }
+.confdone__undo:disabled { opacity: .45; cursor: default; }
 .confdone__empty { margin: 0; font-size: calc(.12 * var(--t)); }
 .confdone__sum { margin: 0; font-size: calc(.11 * var(--t)); }
 

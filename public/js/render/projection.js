@@ -110,17 +110,6 @@ export const CAMERA_PRESETS = Object.freeze({
     rect: Object.freeze({ r0: 14, r1: 18, c0: 7, c1: 13 }), margin: 0.3, headroom: 1.2, tilt: 30, dist: 11,
     official: Object.freeze({ L: 'enemy_camera_param', R: 'enemy_camera_param' }),
   }),
-  /**
-   * 攻方默认视角（2026-11-04）：攻防回合的进攻方没有自己的棋盘，投放窗口与 COMBAT 观战都从这里看 —— 取景落在战场
-   * 右上（出怪口在 rows 9–12 的 cols 10 一侧）。字段与数值风格照抄上面的 `prep` / `normal`（rect / margin /
-   * headroom / tilt / dist / official），没有新增字段；`official` 仍沿用 normal 的两张 configBlackBoard 参数。
-   * 这是**攻方默认视角**，不是新的战场：它框的仍是 normal 战场（网格、绘制行、可点区域都不变），只是视图收窄；
-   * 调用方带 `fit: true` 时才真正按 rect 拟合（render/projection.js presetCamera 的拟合分支）。
-   */
-  spawn: Object.freeze({
-    rect: Object.freeze({ r0: 8, r1: 12, c0: 5, c1: 10 }), margin: 0.45, headroom: 1.35, tilt: 30, dist: 13,
-    official: Object.freeze({ L: 'left_battle_camera_param', R: 'right_battle_camera_param' }),
-  }),
 });
 
 const EPS = 1e-6;
@@ -439,8 +428,8 @@ export function clearHud(cam, hud, keep, viewport) {
 const sameRect = (a, b) => !!a && !!b && a.r0 === b.r0 && a.r1 === b.r1 && a.c0 === b.c0 && a.c1 === b.c1;
 
 /**
- * Preset camera for a field kind: 'prep' | 'normal' | 'unite' | 'boss' ('hidden') | 'bossPrep' | 'pen' | 'spawn'
- * (`spawn` = 攻方默认视角, the top-right gates of a normal field; see CAMERA_PRESETS).
+ * Preset camera for a field kind: 'prep' | 'normal' | 'unite' | 'boss' ('hidden') | 'bossPrep' | 'pen'
+ * (see CAMERA_PRESETS).
  * Official framing (configBlackBoard params, `opts.config` = stage.config overrides the defaults) unless the
  * viewport is narrower than 4:3 (portrait), `opts.fit` is set, or `opts.rect` is a custom rect — then the rect is
  * fitted into the padded viewport (`fitCamera`). `opts.side` 'L'|'R' picks the side's param (right boss half);

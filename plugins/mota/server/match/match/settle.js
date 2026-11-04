@@ -6,6 +6,27 @@ import { flushMatchLineups } from '../../lineupLibrary.js';
 
 const REVIVAL_WINDOW_MS = 30_000; // 救援窗口（业主 2026-10-17：固定 30 秒，期间冻结推进）
 
+/**
+ * 怪物资金的**奖励常量**（业主 2026-11-04 裁决；可调）：攻方自己投放的怪每被击杀一只 +A，每漏过一只 +B。
+ * 漏过给得比击杀多：漏怪对攻方是「达成本回合目的」（守方掉血），击杀是「被防住」但仍然是消耗。
+ * 改这两个数字不影响价格 / 军费（那两个在 monsterShop.js 的 MONSTER_PRICE_FACTOR 与 confront.js 的
+ * CONFRONT_VOLUME_SHARE）。
+ */
+export const MONSTER_KILL_REWARD = 2;
+export const MONSTER_LEAK_REWARD = 4;
+
+/**
+ * 一个战场结果里「投放怪战果」的来源（settle 与战役结算读同一份）：优先 `f.result`，没有就问 battle.result()。
+ * 对抗模式的 confrontKills / confrontLeaks 就挂在这份结果上（sim/battle/lifecycle.js）。
+ * @param {any} f field
+ * @returns {object|null}
+ */
+function placedFieldResult(f) {
+  let fr = f && f.result;
+  if (!fr && f && f.battle && typeof f.battle.result === 'function') { try { fr = f.battle.result(); } catch { fr = null; } }
+  return fr && typeof fr === 'object' ? fr : null;
+}
+
 import { PHASE, layerGainRoom } from '../../../shared/constants.js';
 import { uniteSurvivors } from '../unite.js';
 import { buildResult } from '../results.js';
@@ -51,22 +72,51 @@ export class MatchSettle {
     // 顶层字段到不了那里 —— 所以这里读 this.fields 的结果，而不是 lastResults。
     const placedLeaksByPlayer = new Map();   // 守方：自己场上漏过去的投放怪只数
     const placedKillsByTeam = new Map();     // 攻方：自己投放的怪被击杀只数（跨本回合所有战场汇总到队）
+    // 攻方奖励的归属（业主 2026-11-04：发给**投放者本人**）：confrontKills / confrontLeaks 的键都是投放席位
+    // String(seat)（sim/battle/deploy.js），用 this.order 查回 playerId。playerId → { killed, leaked }
+    const placedRewardsByPlayer = new Map();
     if (this.isVersus) {
       for (const f of this.fields || []) {
-        let fr = f && f.result;
-        if (!fr && f && f.battle && typeof f.battle.result === 'function') { try { fr = f.battle.result(); } catch { fr = null; } }
-        if (!fr || typeof fr !== 'object') continue;
+        const fr = placedFieldResult(f);
+        if (!fr) continue;
         if (fr.confrontLeaks) {
           let n = 0;
           for (const v of Object.values(fr.confrontLeaks)) n += Math.max(0, Number(v) || 0);
           if (n > 0) for (const pid of f.players || []) placedLeaksByPlayer.set(pid, (placedLeaksByPlayer.get(pid) || 0) + n);
         }
+        const rewardOf = (owner) => {
+          let r = placedRewardsByPlayer.get(owner.playerId);
+          if (!r) { r = { killed: 0, leaked: 0 }; placedRewardsByPlayer.set(owner.playerId, r); }
+          return r;
+        };
         for (const [seatStr, v] of Object.entries(fr.confrontKills || {})) {
           const owner = this.order.find((x) => x.seat === Number(seatStr));
           if (!owner || !owner.alive) continue;
+          const n = Math.max(0, Number(v) || 0);
           const t = this.teamIdOf(owner);
-          placedKillsByTeam.set(t, (placedKillsByTeam.get(t) || 0) + Math.max(0, Number(v) || 0));
+          placedKillsByTeam.set(t, (placedKillsByTeam.get(t) || 0) + n);
+          if (n > 0) rewardOf(owner).killed += n;
         }
+        // 漏过的投放怪同样按席位归到投放者（上面那段是「守方掉血」，这里是「攻方领钱」，两份互不影响）
+        for (const [seatStr, v] of Object.entries(fr.confrontLeaks || {})) {
+          const owner = this.order.find((x) => x.seat === Number(seatStr));
+          if (!owner || !owner.alive) continue;
+          const n = Math.max(0, Number(v) || 0);
+          if (n > 0) rewardOf(owner).leaked += n;
+        }
+      }
+    }
+    // 发奖（业主 2026-11-04）：击杀每只 +MONSTER_KILL_REWARD、漏过每只 +MONSTER_LEAK_REWARD，直接进投放者的
+    // **怪物资金**账户（跨回合结转，玩家可以留到下回合用）。只在商店开着时发 —— `opts.monsterShop === false` 时
+    // 整段不跑，账户恒 0、帧里也不出现新字段；席位查不到人 / 本人已淘汰就不发。
+    if (this.monsterShopOn === true) {
+      for (const [playerId, r] of placedRewardsByPlayer) {
+        const ps = this.order.find((x) => x && x.playerId === playerId);
+        if (!ps || !ps.alive || typeof ps.addMonsterFunds !== 'function') continue;
+        const pay = r.killed * MONSTER_KILL_REWARD + r.leaked * MONSTER_LEAK_REWARD;
+        if (!(pay > 0)) continue;
+        ps.monsterEarned = Math.max(0, Number(ps.monsterEarned) || 0) + pay;
+        ps.addMonsterFunds(pay);
       }
     }
     const alive = this.alivePlayers();

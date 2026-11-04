@@ -629,7 +629,7 @@ export async function createFieldView(host, options = {}) {
 
   function targetCamera(kind, o) {
     const sz = size();
-    const k = kind === 'hidden' ? 'boss' : (['prep', 'spawn', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
+    const k = kind === 'hidden' ? 'boss' : (['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
     // 肉鸽官方地图嵌在 19×21 画框里：不管服务端给的 normal/boss rect，整张画框就是取景
     let rect = stageRec?.rogueFrame ? camRect() : (o.rect ? normRect(o.rect) : (stdField() ? null : camRect()));
     if (k === 'prep' && stdField()) rect = rect ? { ...rect, r0: Math.min(rect.r0, GEO.HAND_ROW) } : null;
@@ -2258,6 +2258,21 @@ export async function createFieldView(host, options = {}) {
         || document.elementFromPoint(clientX, clientY) !== canvas) return null;
       const p = canvasPoint({ clientX, clientY });
       return pieceAt(p.x, p.y)?.uid ?? null;
+    },
+    /**
+     * The BOARD tile under an unobstructed client point — the object `pickBoardTile` returns (`{ row, col, x, y }`), or
+     * null. Same guards as `pieceAtClientPoint` (destroyed view, not showing the prep board, a piece being dragged, a
+     * non-finite point, another element on top of the canvas) minus the enemy-pen exclusion: the attacker's drop
+     * camera (screens/game.js DROP_CAM) is not the pen, and that is exactly where 拖拽投放 happens (ui/shopBar.js MonsterCard —
+     * the pointer decides the gate: row ≥ 11 上路, else 下路; anything off rows 9–12 is not a gate and cancels). A tile
+     * picked off the player's half comes back as `{ row: -1, col: -1 }` (pickBoardTile) — the caller checks the rows.
+     */
+    tileAtClientPoint(clientX, clientY) {
+      if (destroyed || mode !== 'prep' || drag.dragging
+        || !Number.isFinite(clientX) || !Number.isFinite(clientY)
+        || document.elementFromPoint(clientX, clientY) !== canvas) return null;
+      const p = canvasPoint({ clientX, clientY });
+      return pickBoardTile(p.x, p.y) ?? null;
     },
     pieceScreenRect(uid) {
       let v = views.get('p:' + uid);

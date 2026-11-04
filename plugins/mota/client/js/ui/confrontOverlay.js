@@ -2,9 +2,10 @@
 //   'target'（选目标）：限时 10 秒的必选题，保持模态（.spov__veil）。对手以 '?' + P 编号 + 队伍色列出，队内先到先得
 //     （服务端把剩下的那个发给队友）。
 //   'roster'（投放公示）：5 秒的只读名单 —— 右下角一张卡片（.rospov--conf，pointer-events: none），不拦截战场点击。
-// 投放窗口（pub.confront.active === true && stage === null）整块不渲染：投放走商店条（ui/shopBar.js 的
-// MonsterCard / MonsterPickPanel → g.monsterPlace），游戏页的攻方状态条只留一个「查看投放 / 继续投放」入口
-// （本文件的 ConfrontDoneCard）。服务端 submitConfront 仍在（bot 与旧客户端会用），客户端不再调用。
+// 投放窗口（pub.confront.active === true && stage === null）整块不渲染：投放走商店条（ui/shopBar.js 的 MonsterCard
+// → g.monsterPlace：点一下投 1 只 / 长按多选 / 拖到上门·下门），游戏页的攻方状态条只留一个「查看投放 / 继续投放」入口
+// （本文件的 ConfrontDoneCard，每一行可撤回 → g.monsterDrop）。服务端 submitConfront 仍在（bot 与旧客户端会用），
+// 客户端不再调用。
 // 所以这里也**不再**有型号组 / 卡池 / 已放置 / 出怪位置 / boss 格 / 商店这一整套投放 UI。
 // Texts go through t() (docs/I18N.md).
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
@@ -14,6 +15,8 @@ import { enemyIconUrl } from '../ui/assetUrls.js';
 import { useStore } from '../store.js';
 import { RosterPanel } from './rosterPanel.js';
 import { FOE_NAMES, foeEffect, eliteEffect, eventFoeCard } from './eventFoe.js';
+// 撤回一次投放（`g.monsterDrop`）：与投放同一条通道（act 统一处理错误提示）。
+import { act } from './gameActions.js';
 import { t } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
@@ -264,8 +267,9 @@ const pickName = (gd, key) => {
 
 /**
  * 攻方「查看投放 / 继续投放」的已投清单（2026-11-04）：投放窗口（pub.confront.active === true && stage === null）里由游戏页
- * 攻方状态条的入口按钮打开。只读 —— 列出本回合已投放的怪与剩余价值预算，**不重复投放 UI**（投放走商店条），也没有
- * 全屏遮罩（卡片以外不拦截战场点击）。
+ * 攻方状态条的入口按钮打开。列出本回合已投放的怪与剩余价值预算，每一行都能**撤回**（业主 2026-11-04 裁决：
+ * 场上 / 清单里已投的怪要能撤销）；投放本身走商店条（点一下 / 长按多选 / 拖到门），这里不重复投放 UI，
+ * 也没有全屏遮罩（卡片以外不拦截战场点击）。
  * 数据源（服务端实测口径，见报告）：`g.monsterPlace` 只写 ps.monsterDraft，随 `m.monsterShop` 帧下发
  * （monsterShop.js placeMonster / monsterShopFrame），**不进** pub.confront.subs；pub.confront.subs 只有
  * submitConfront / botConfront 才会写。所以商店帧开着时以 `shop.draft.picks` + `shop.left/budget` 为准，否则回落到
@@ -276,6 +280,10 @@ const pickName = (gd, key) => {
 export function ConfrontDoneCard({ pub, shop = null }) {
   const gd = useGameData();
   const myId = useStore((s) => s.me.playerId);
+  // 正在撤回的行（服务端 picks 的下标）：同一行不发第二次；成功后服务端推帧 ⇒ picks 变短，下面的 effect 清空它。
+  // 只有商店草稿的 picks 能撤回（那是 ps.monsterDraft，g.monsterDrop 摘的就是它）；旧对局的 confront.subs 是提交后的
+  // 只读名单，没有撤回按钮。
+  const [undoing, setUndoing] = useState([]);
   const conf = pub && pub.confront;
   const mine = conf && conf.subs ? conf.subs[myId] : null;
   const shopOn = !!shop && shop.open === true;
@@ -283,6 +291,7 @@ export function ConfrontDoneCard({ pub, shop = null }) {
   const picks = shopOn
     ? (Array.isArray(shop.draft && shop.draft.picks) ? shop.draft.picks : [])
     : (Array.isArray(mine && mine.picks) ? mine.picks : []);
+  useEffect(() => { setUndoing([]); }, [picks.length]);
   // 价值表：本回合的 confront.groups（服务端已按本回合口径发好单价）
   const valueOf = new Map();
   for (const g of (Array.isArray(conf && conf.groups) ? conf.groups : [])) {
@@ -293,6 +302,17 @@ export function ConfrontDoneCard({ pub, shop = null }) {
     : picks.reduce((s, p) => s + (valueOf.get(p && p.enemyKey) || 0), 0);
   const left = Math.max(0, budget - spent);
   const upper = picks.filter((p) => p && p.gate === 'upper').length;
+  /**
+   * 撤回第 i 条草稿：`g.monsterDrop { index: i }` → 服务端摘掉 picks[i]、把那一条的库存与资金退回（monsterShop.js
+   * dropMonster），成功后推帧 ⇒ picks 变短，这张卡跟着重画（不本地删行）。同一行在飞行中不发第二次。
+   */
+  const undoPick = (i) => {
+    if (undoing.includes(i)) return;
+    setUndoing((cur) => (cur.includes(i) ? cur : [...cur, i]));
+    void act('g.monsterDrop', { index: i }, { sfx: 'back' }).then((ok) => {
+      if (!ok) setUndoing((cur) => cur.filter((x) => x !== i));   // 被拒：放开按钮（toast 已经说了原因）
+    });
+  };
   return html`<div class="confdone" id="confront-done-card" role="status" data-testid="confront-done">
     <div class="confdone__head">
       <b class="confdone__title">${t('本回合已投放')}</b>
@@ -305,9 +325,15 @@ export function ConfrontDoneCard({ pub, shop = null }) {
             <span class="confdone__icon"><${Img} src=${enemyIconUrl(gd.m, p && p.enemyKey)} fallback=${html`<${GIcon} name="target" />`} /></span>
             <span class="confdone__name">${pickName(gd, p && p.enemyKey)}</span>
             <span class=${cx('confdone__gate', p && p.gate === 'upper' && 'is-upper')}>${t(p && p.gate === 'upper' ? '上路' : '下路')}</span>
+            ${/* 撤回：只有商店草稿能撤（confront.subs 是提交后的只读名单） */ null}
+            ${shopOn
+              ? html`<button type="button" class="confdone__undo" data-testid="confront-undo" disabled=${undoing.includes(i)}
+                  title=${t('撤回这一只：库存与投放资金退回')} aria-label=${t('撤回这一只')}
+                  onClick=${() => undoPick(i)}>${t('撤回')}</button>`
+              : null}
           </li>`)}
         </ul>`
-      : html`<p class="confdone__empty t-dim">${t('还没有投放怪物：在下方商店条选卡投放')}</p>`}
+      : html`<p class="confdone__empty t-dim">${t('还没有投放怪物：在下方商店条点卡投放')}</p>`}
     ${picks.length ? html`<p class="confdone__sum t-dim">${t('上路 {u} 只 · 下路 {l} 只', { u: upper, l: picks.length - upper })}</p>` : null}
   </div>`;
 }

@@ -18,6 +18,9 @@
 // (稍后 → the normal shop again + rewardOverlay.js pill);
 // a special refresh (凯瑟琳 定向投放's 3 items, 娜仁图亚, 寻呼模块, 信标, 松果) takes the same place under its own name, an
 // item slot drawn as an item card (player report #6 after 0.1.0).
+// 对抗·攻方（2026-11-04）另有怪物卡池（`monsterShop`，只有攻方拿得到 open:true 的帧）：点一下投 1 只、长按进多选态、
+// 拖到上门 / 下门一次性投放（业主 2026-11-04 裁决，旧的「选门 + 选数量」浮层已删除）；撤销在攻方状态条的已投清单里
+// （ui/confrontOverlay.js ConfrontDoneCard → `g.monsterDrop`）。`monsterOn === false` 时每一处分支都走改造前的老路。
 // Every operator card shows the skill it will fight with — the player's 干员调配 loadout (m.private.loadout, DESIGN
 // §16): the skill icon above the name, mint-framed with 已调配 in its title when it is not the default skill (and the
 // module type of an elite card, with its official type icon when the local-client art has it). A chess the player does
@@ -27,7 +30,7 @@
 // piece (0.2.0, m.private.diy — a DIY slot the player filled, only ever in its own shop) shows the operator — name,
 // portrait, class, the bonds of its factions, the pick's skill and module — with a mint 「自选」 badge.
 
-import { useEffect, useState } from '../../vendor/hooks.module.js';
+import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, HexBadge, TierChip, Tooltip, MicroLabel } from './components.js';
 import { Img, BondGlyph, CoinGlyph, GIcon, RichText } from './gameComponents.js';
 import { priceTone, mergeProgress, mergeTarget, shopBlockReason, chessLoadout, offerHeader, briefingBondTip, ownStandIn, standInLoadout, standInLabel, standInTip, standInForText, ownDiyRecord, diyGetter } from './gameLogic.js';
@@ -40,6 +43,9 @@ import { hotkeyLabelOf } from './settings.js';
 import { modComponent } from './modComponents.js';
 import { t } from '../../../shared/i18n.js';
 import { longPress, heldClick } from './longPress.js';
+// 半区高亮的几何（门格四角，跟着镜头走）与战场的行列（GEO.FIELD）—— 与 ui/underframe.js 同一套 import
+import { useTileScreen } from './facingWheel.js';
+import { GEO } from '../../../shared/constants.js';
 // 协同经济的三个动作 (后勤项目/表决/救济) 一直写成裸 `actions.xxx`：这个模块从来没 import 过 actions，
 // 点下去只会抛 ReferenceError 并被上层吞掉 —— 表现就是「按钮点了没反应」(user report 2026-10-17)。
 // gameActions 只依赖 net/toasts/audio，反向不依赖本文件，不成环。
@@ -187,15 +193,85 @@ export function monsterPlaceCap(slot, budget) {
 }
 
 /**
- * 怪物卡（对抗·攻方商店，2026-11-04）：外壳照 `ChessCard` —— 同一套 `.scard` + `scard--t<tier>`（测试按
- * `.shopbar__cards .scard` 选卡，CSS 的边框/悬停/冻结/已售一套全部复用），卡面换成怪物：图标
- * `enemyIconUrl`（assetUrls.js:157）、名称、阶、单价、库存 `left/cap`。点卡 = 选中并打开下方的「选门 + 选数量」浮层；
- * 右键 = 冻结这一格（触摸屏用浮层里的 冻结 按钮）。
- * @param {{ slot:{ index:number, key:string, name:string, tier:number, price:number, frozen?:boolean, left:number, cap:number },
- *   idx:number, selected?:boolean, frozen?:boolean, poor?:boolean,
- *   onPick:(slot:any)=>void, onFreeze:(slot:any)=>void }} props
+ * 门的行判据（审计口径）：落点只能取战场门 —— `GEO.FIELD` = rows 9–12 / cols 2–10（shared/constants.js:128），路线的起点
+ * 是 (12,10)=上、(9,10)=下（waves.js gateOf：起点行 ≥12 为上）。**上半区判据用行：row ≥ 11 → upper，否则 lower**；
+ * row 落在 9–12 以外不是门 ⇒ 返回 null（取消投放）。
  */
-export function MonsterCard({ slot, idx, selected = false, frozen = false, poor = false, onPick, onFreeze }) {
+const GATE_SPLIT = GEO.FIELD.r1 - 1;
+/** 拖拽的位移阈值（px）：超过它就从「按下」变成「拖」。与 longPress 的默认 cancelPx 同值 —— 拖拽和长按互斥。 */
+const MON_DRAG_PX = 8;
+
+/**
+ * The gate a BOARD row belongs to, or null when it belongs to no gate at all (a drop there cancels).
+ * @param {number} row board row (render/app.js tileAtClientPoint → pickBoardTile → prepXf.toBoard)
+ * @returns {'upper'|'lower'|null}
+ */
+export function monsterGateOf(row) {
+  if (!Number.isInteger(row) || row < GEO.FIELD.r0 || row > GEO.FIELD.r1) return null;
+  return row >= GATE_SPLIT ? 'upper' : 'lower';
+}
+
+/** The engine view behind the guarded one (ui/fieldHost.js guardView keeps it as `raw`; facingWheel's rawOf does the same). */
+const rawViewOf = (view) => (view && view.raw) || view || null;
+
+/**
+ * The board tile under a client point, through the render API `tileAtClientPoint` (render/app.js). The guarded view only
+ * forwards the methods ui/fieldHost.js lists in METHODS / OPTIONAL, and `tileAtClientPoint` is not on that list yet — so
+ * this goes through `raw`, the same route facingWheel.js takes for tile geometry. A view without the method (the DOM
+ * fallback field) answers null: 拖拽投放 needs the engine, 点一下 / 多选 do not.
+ * @returns {{ row:number, col:number } | null}
+ */
+function tileUnderPoint(view, clientX, clientY) {
+  const raw = rawViewOf(view);
+  const fn = raw && raw.tileAtClientPoint;
+  if (typeof fn !== 'function') return null;
+  try {
+    const tile = fn.call(raw, clientX, clientY);
+    return tile && Number.isInteger(tile.row) && Number.isInteger(tile.col) ? tile : null;
+  } catch { return null; }
+}
+
+/**
+ * 半区高亮的四角（客户端 px）：从门格 `useTileScreen` 的四角外推整个半区。tileScreen 的 poly 是
+ * `[(row+½,col−½), (row+½,col+½), (row−½,col+½), (row−½,col−½)]` ⇒ 「向 −row 一格」= p2−p1、「向 −col 一格」= p0−p1。
+ * 上门 = rows 11–12（门格 (12,10) 是它的右下角），下门 = rows 9–10（门格 (9,10) 是它的右上角）；列一律 2–10。
+ * @param {Array<[number,number]>|null} poly the gate tile's poly
+ * @param {'upper'|'lower'} gate
+ * @returns {Array<[number,number]>|null} 4 points, or null without geometry
+ */
+function halfRegionPoly(poly, gate) {
+  if (!Array.isArray(poly) || poly.length < 4) return null;
+  const [p0, p1, p2] = poly;
+  const dRow = [p2[0] - p1[0], p2[1] - p1[1]];   // one row towards −row
+  const dCol = [p0[0] - p1[0], p0[1] - p1[1]];   // one column towards −col
+  const at = (fr, fc) => [p1[0] + dRow[0] * fr + dCol[0] * fc, p1[1] + dRow[1] * fr + dCol[1] * fc];
+  const gateRow = gate === 'upper' ? GEO.FIELD.r1 : GEO.FIELD.r0;
+  const hiRow = gate === 'upper' ? GEO.FIELD.r1 : GATE_SPLIT - 1;
+  const loRow = gate === 'upper' ? GATE_SPLIT : GEO.FIELD.r0;
+  const fr0 = gateRow - hiRow;                       // upper 0 / lower −1（门格相对半区上沿）
+  const fr1 = gateRow - loRow + 1;                   // upper 2 / lower 1
+  const fc1 = GEO.FIELD.c1 - GEO.FIELD.c0 + 1;       // 9 columns
+  const pts = [at(fr0, 0), at(fr1, 0), at(fr1, fc1), at(fr0, fc1)];
+  return pts.every((p) => Number.isFinite(p[0]) && Number.isFinite(p[1])) ? pts : null;
+}
+
+/**
+ * 怪物卡（对抗·攻方商店，2026-11-04；交互按业主 2026-11-04 的裁决重做）：外壳照 `ChessCard` —— 同一套 `.scard` +
+ * `scard--t<tier>`（测试按 `.shopbar__cards .scard` 选卡，CSS 的边框 / 悬停 / 冻结 / 已售一套全部复用），卡面换成怪物：
+ * 图标 `enemyIconUrl`、名称、阶、单价、库存 `left/cap`。
+ * 三条路径，都不经过任何「先选门 → 再确认」的浮层：
+ *   点一下       → `onTap`（ShopBar：投 1 只到上一次成功投放的门）
+ *   长按 ≥550ms  → `onHold`（进多选态；这一下不算点击 —— longPress 的 heldClick 吞掉随后的 click）
+ *   按住并移动   → 拖拽（`onPointerDown/Move/Up` 由 ShopBar 接管：折叠商店条、换镜头、跟随的 ghost、落点判门）
+ * 右键仍是冻结。
+ * @param {{ slot:any, idx:number, multi?:boolean, picked?:boolean, dragging?:boolean, frozen?:boolean, poor?:boolean,
+ *   onTap:(slot:any)=>void, onFreeze:(slot:any)=>void, onHold?:(slot:any)=>void,
+ *   onPointerDown?:(e:any, slot:any)=>void, onPointerMove?:(e:any)=>void,
+ *   onPointerUp?:(e:any, cancel?:boolean)=>void, onPointerCancel?:(e:any, cancel?:boolean)=>void }} props
+ *   multi / picked: 多选态开着 / 这一格被选中（CSS 的 is-multi / is-picked）
+ */
+export function MonsterCard({ slot, idx, multi = false, picked = false, dragging = false, frozen = false, poor = false,
+  onTap, onFreeze, onHold = null, onPointerDown = null, onPointerMove = null, onPointerUp = null, onPointerCancel = null }) {
   // 与 ChessCard 同一个理由：图标表随 assets 清单在运行时到货，早画的卡会永远停在空图标上
   useData('assets');
   const m = data.get('assets');
@@ -210,11 +286,23 @@ export function MonsterCard({ slot, idx, selected = false, frozen = false, poor 
   // onError 换同一个 fallback。占位骷髅的尺寸写在 css 里是**显式 rem**（不是百分比）—— 2026-11-04 视觉验收第 1 条
   // 的空白卡面，占位节点当年只靠 1em 的淡色 glyph，等同于没画。
   const iconUrl = enemyIconUrl(m, slot?.key);
-  return html`<button type="button" class=${cx('scard', `scard--t${tier}`, 'scard--monster', frozen && 'is-frozen', selected && 'is-armed', poor && 'is-disabled')}
+  // 长按：计时（HOLD_MS 550）与「位移 >8px 取消」都在 longPress.js；这里只注入「进多选态」这一个动作（不再弹注释）。
+  const hold = longPress(null, { onHold: () => { if (onHold) onHold(slot); } });
+  const pointerDown = (e) => { if (onPointerDown) onPointerDown(e, slot); hold.onPointerDown(e); };
+  const pointerMove = (e) => { if (onPointerMove) onPointerMove(e); hold.onPointerMove(e); };
+  const pointerUp = (e) => { if (onPointerUp) onPointerUp(e, false); hold.onPointerUp(e); };
+  const pointerCancel = (e) => { if (onPointerCancel) onPointerCancel(e, true); hold.onPointerCancel(e); };
+  return html`<button type="button" class=${cx('scard', `scard--t${tier}`, 'scard--monster', frozen && 'is-frozen',
+      multi && 'is-multi', picked && 'is-picked', dragging && 'is-dragging', poor && 'is-disabled')}
       data-shop-slot=${idx} data-monster-key=${slot?.key}
-      title=${t('{name}：点击选择投放的门与数量，右键冻结这一格', { name })}
-      onClick=${() => onPick(slot)} onContextMenu=${(e) => { e.preventDefault(); onFreeze(slot); }}
-      aria-label=${t('{name}，价格 {price}，库存 {left}/{cap}', { name, price, left, cap })} aria-pressed=${String(!!selected)}>
+      title=${multi
+        ? t('{name}：点一下选中 / 取消，拖到上门或下门投放', { name })
+        : t('{name}：点一下投 1 只，长按多选，右键冻结这一格', { name })}
+      onPointerDown=${pointerDown} onPointerMove=${pointerMove} onPointerUp=${pointerUp} onPointerCancel=${pointerCancel}
+      onPointerLeave=${hold.onPointerLeave}
+      onClick=${(e) => { if (heldClick(e)) return; onTap(slot); }}
+      onContextMenu=${(e) => { e.preventDefault(); onFreeze(slot); }}
+      aria-label=${t('{name}，价格 {price}，库存 {left}/{cap}', { name, price, left, cap })} aria-pressed=${String(!!picked)}>
     <span class="scard__bg" aria-hidden="true"></span>
     <span class="scard__top">
       <${TierChip} tier=${tier} size="md" />
@@ -227,6 +315,7 @@ export function MonsterCard({ slot, idx, selected = false, frozen = false, poor 
     </span>
     <span class="scard__stock">${stock}</span>
     ${frozen ? html`<span class="scard__ice" aria-hidden="true"><${Icon} name="snow" /></span>` : null}
+    ${picked ? html`<span class="scard__pickednum num" aria-hidden="true">${t('已选')}</span>` : null}
   </button>`;
 }
 
@@ -239,38 +328,6 @@ export function MonsterCard({ slot, idx, selected = false, frozen = false, poor 
 function MonsterEmptyCard() {
   return html`<div class="scard scard--monster-empty" role="img" aria-label=${t('空栏位：本回合没有这种怪可投放')}
     title=${t('空栏位：本回合没有这种怪可投放')}><span class="scard--monster-empty__dash" aria-hidden="true">—</span></div>`;
-}
-
-/**
- * 怪物卡下方的「选门 + 选数量」浮层（同 ShopBar 内渲染，不是全局 modal）：两个门按钮、数量步进（− / + / 直接输入，
- * 夹在 `[1, min(20, 库存, 预算能买的只数)]`）、投放、冻结、取消。
- * @param {{ slot:any, cap:number, count:number, gate:'upper'|'lower', frozen:boolean,
- *   onGate:(g:'upper'|'lower')=>void, onCount:(n:number)=>void, onPlace:(slot:any, gate:string, count:number)=>void,
- *   onFreeze:(slot:any)=>void, onClose:()=>void }} props
- */
-function MonsterPickPanel({ slot, cap, count, gate, frozen, onGate, onCount, onPlace, onFreeze, onClose }) {
-  const max = Math.max(0, Number(cap) || 0);
-  const n = Math.max(0, Math.min(max, Math.trunc(Number(count) || 0)));
-  const step = (d) => onCount(Math.max(1, Math.min(max, (n || 1) + d)));
-  return html`<div class="mshop-pop" role="dialog" aria-label=${t('投放 {name}', { name: slot?.name || '' })}>
-    <div class="mshop-pop__head"><b>${slot?.name || slot?.key || ''}</b><span class="num">${Number(slot?.price) || 0}</span></div>
-    <div class="mshop-pop__gates" role="group" aria-label=${t('投放位置')}>
-      <button type="button" class=${cx('mshop-pop__gate', gate === 'upper' && 'is-on')} onClick=${() => onGate('upper')}>${t('上位门')}</button>
-      <button type="button" class=${cx('mshop-pop__gate', gate === 'lower' && 'is-on')} onClick=${() => onGate('lower')}>${t('下位门')}</button>
-    </div>
-    <div class="mshop-pop__count">
-      <button type="button" class="mshop-pop__step" disabled=${n <= 1} onClick=${() => step(-1)} aria-label=${t('减少一只')}>-</button>
-      <input class="mshop-pop__num" type="number" inputMode="numeric" min="1" max=${max} value=${n > 0 ? String(n) : ''}
-        onInput=${(e) => onCount(Number(e.target.value))} aria-label=${t('数量')} />
-      <button type="button" class="mshop-pop__step" disabled=${n >= max} onClick=${() => step(1)} aria-label=${t('增加一只')}>+</button>
-      <span class="mshop-pop__cap">${t('上限 {max}', { max })}</span>
-    </div>
-    <div class="mshop-pop__acts">
-      <button type="button" class="mshop-pop__place" disabled=${max < 1} onClick=${() => onPlace(slot, gate, n)}>${t('投放')}</button>
-      <button type="button" class="mshop-pop__freeze" onClick=${() => onFreeze(slot)}>${frozen ? t('解冻') : t('冻结')}</button>
-      <button type="button" class="mshop-pop__cancel" onClick=${onClose}>${t('取消')}</button>
-    </div>
-  </div>`;
 }
 
 /**
@@ -509,15 +566,19 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
  *   onBuy:(i:number)=>void, onLevel:Function, onRefresh:Function, onFreeze:Function, onDetail:(id:string, kind?:string, hint?:string|null)=>void,
  *   onDetailClose?: () => void, onRefuse?: (reason: string) => void, barRef:any,
  *   reward?: any, onReward?: (idx:number)=>void, onRewardLater?: Function, offBonds?: Set<string>|null,
- *   monsterShop?: any }} props — offBonds:
+ *   monsterShop?: any, view?: any, onDropCam?: (on:boolean)=>void }} props — offBonds:
  *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards.
  *   monsterShop: 对抗·攻方商店的私有帧 `m.monsterShop`（game.js 传入；只有攻方会收到 open:true 的帧 —— 服务端
  *   `monsterShopFrame` 只发给 confrontActors）。缺省 null / `open !== true` ⇒ 每一处分支都走改造前的老路。
  *   它为真时（攻方）不画干员的元素：不画 LevelCard、不占装备卡那一格、`剩余可放置角色` 换成 `剩余投放预算`
  *   （读 monsterShop.left）；冻结 / 刷新 / 卡片改用 g.monster* 那一套。
+ *   view / onDropCam: 拖拽投放用的镜头钩子（game.js 传入）。`view` 只用来做落点判门（render/app.js 的
+ *   tileAtClientPoint）与半区高亮的几何（useTileScreen）；`onDropCam(true/false)` 把镜头换成 / 还回能同时框住
+ *   上下门的取景。两者缺省 null ⇒ 拖拽只折叠商店条、不发投放（点一下与多选照常）。
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
-  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null, monsterShop = null }) {
+  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null, monsterShop = null,
+  view = null, onDropCam = null }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -539,6 +600,11 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   const mFreeRef = monsterOn ? Math.max(0, Number(monsterShop.freeRefreshes) || 0) : 0;
   // 免费次数用完且剩余预算不够刷新的价钱 ⇒ 刷新灰掉（与卡面「投不起就灰」同一个口径）
   const mRefBlocked = monsterOn ? (mFreeRef <= 0 && mRefPrice > monsterLeft) : false;
+  // 攻方的钱是**独立的怪物资金账户**（服务端 ps.monsterFunds，跨回合结转；买 / 刷新 / 投放都从它扣）：
+  // monsterOn 时资金条读 `monsterShop.funds`（帧里的新字段），不读守方的 priv.funds —— 后者对攻方没有意义
+  // （回合末会被 econSplitLeftover 清零）。monsterOn 为假 ⇒ 仍是 priv.funds，与改造前逐字节相同。
+  const monsterFunds = monsterOn ? Math.max(0, Number(monsterShop.funds) || 0) : 0;
+  const fundsShown = monsterOn ? monsterFunds : funds;
 
   // A completed upgrade changes the level, so its confirmation cannot carry into the next upgrade.
   const levelKey = `lv:${shop.level ?? 1}`;
@@ -557,29 +623,220 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   const armedSig = armedSlot ? `${armedSlot.kind}:${armedSlot.id}` : '';
   useEffect(() => { onArm?.(armedSlot ? { kind: armedSlot.kind === 'item' ? 'item' : 'chess', id: armedSlot.id } : null); }, [armedSig]);
   useEffect(() => () => onArm?.(null), []);
-  // 怪物卡池的浮层状态（hook 必须排在 collapsed 的提前 return 之前）：{ index, count } + 粘住的门选择。
-  // 新回合 / 一次刷新之后浮层自动收起 —— 那时锚点卡可能已经换了内容（服务端重发牌）。
-  const [mPick, setMPick] = useState(null);
+  // ---- 怪物卡池：点一下 = 投 1 只 / 长按 = 多选 / 拖到上门·下门 = 选门投放（业主裁决 2026-11-04）-------------------
+  // hook 必须排在 collapsed 的提前 return 之前。`mGate` = 点一下投放的默认门：**上一次成功投放的门**，默认下门。
+  // `mPick`（旧的「选门 + 选数量」浮层状态）与 openMonsterPick / setMCount 已随浮层一起删除。
   const [mGate, setMGate] = useState('lower');
-  useEffect(() => { if (!monsterOn) setMPick(null); }, [monsterOn]);
-  useEffect(() => { setMPick(null); }, [monsterShop?.round, monsterShop?.refreshes]);
-  /** 点卡 = 选中（再点同一张收起）；浮层读的是**当前帧**的这一格，刷新后不会停在旧卡上。 */
-  const openMonsterPick = (slot) => {
-    if (!slot) return;
-    const index = Number(slot.index);
-    setMPick((cur) => (cur && cur.index === index ? null : { index, count: 1 }));
+  const [mMulti, setMMulti] = useState(null);         // 多选态：null / { index }（长按的那一格）
+  const [mPicked, setMPicked] = useState([]);         // 多选态里选中的格子（服务端 slot.index）
+  const [mDrag, setMDrag] = useState(null);           // 拖拽中：{ x, y, index, name, icon, count, gate }
+  const mSelRef = useRef({ key: null, picked: [] });  // 多选态的唯一真源（手势回调读它；上面两个 state 是渲染镜像）
+  const mBusy = useRef(new Set());                    // 单飞锁：同一格在飞行中不发第二次（照 gameActions.refreshPending）
+  const mPress = useRef(null);                        // 当前这次按下：{ slot, index, x, y, id, dragging, move, up }
+  const mDragOn = useRef(false);                      // 正在拖：商店条已折叠、镜头已换过 ⇒ 结束必须还回去
+  const mTapGuard = useRef(0);                        // 拖完那一下的 click 不算「点一下」（时间戳）
+  const mHooks = useRef({});                          // 对外钩子（镜头 / 折叠）—— 每次 render 刷新，卸载时也拿得到
+  const mLive = useRef({});                           // 手势读的实时值，防止按下时的闭包陈旧
+  mHooks.current.cam = onDropCam;
+  mHooks.current.collapse = onCollapse;
+  // 半区高亮的几何（跟着镜头走，useTileScreen 与 underframe.js / facingWheel.js 同一范式）：两个门格的四角。
+  // 服务端只把 open:true 的商店帧发给攻方 ⇒ monsterOn 为假时传 null：两个 hook 什么都不做（不登记 rAF 循环）。
+  const mGateUp = useTileScreen(monsterOn ? view : null, GEO.FIELD.r1, GEO.FIELD.c1);   // (12,10) = 上门
+  const mGateDown = useTileScreen(monsterOn ? view : null, GEO.FIELD.r0, GEO.FIELD.c1); // (9,10)  = 下门
+
+  /** 多选态的唯一写入口：key = 长按的那一格（null = 退出），picked = 选中的格子。 */
+  const setSel = (key, picked) => {
+    mSelRef.current = { key: key == null ? null : key, picked: Array.isArray(picked) ? picked : [] };
+    setMMulti(mSelRef.current.key == null ? null : { index: mSelRef.current.key });
+    setMPicked(mSelRef.current.picked);
   };
-  const setMCount = (count) => setMPick((cur) => (cur ? { ...cur, count } : cur));
-  /** 投放：夹到 [1, cap] 再发（cap 与服务端同源，见 monsterPlaceCap）；一只都投不起就说清原因。 */
+
+  /**
+   * 投放一次（点一下 / 拖到门）。夹到 [1, cap] 再发（cap 与服务端同源，见 monsterPlaceCap）；一只都投不起就说清原因。
+   * 单飞：同一格在网络往返中不再发第二次 —— 投放成功后该格**立刻补位**，连点同一格会投出「新补的那张」。
+   * @returns {Promise<boolean>}
+   */
   const placeMonster = (slot, gate, count) => {
-    if (!slot) return;
+    if (!slot) return Promise.resolve(false);
+    const index = Number(slot.index);
+    if (!Number.isInteger(index) || mBusy.current.has(index)) return Promise.resolve(false);
     const max = monsterPlaceCap(slot, monsterLeft);
-    if (max < 1) { onRefuse?.(t('剩余预算不足，投不下一只')); return; }
+    if (max < 1) { onRefuse?.(t('剩余预算不足，投不下一只')); return Promise.resolve(false); }
     const n = Math.max(1, Math.min(max, Math.trunc(Number(count) || 1)));
-    void act('g.monsterPlace', { index: Number(slot.index), gate: gate === 'upper' ? 'upper' : 'lower', count: n }, { sfx: 'drop' });
+    const g = gate === 'upper' ? 'upper' : 'lower';
+    mBusy.current.add(index);
+    return act('g.monsterPlace', { index, gate: g, count: n }, { sfx: 'drop' })
+      .then((ok) => { if (ok) setMGate(g); return ok; })
+      .finally(() => { mBusy.current.delete(index); });
   };
   const freezeMonsterSlot = (slot) => { if (slot) void act('g.monsterFreeze', { index: Number(slot.index) }, { sfx: 'freeze' }); };
   const refreshMonsterShop = () => { if (!mRefBlocked) void act('g.monsterRefresh', {}, { sfx: 'refresh' }); };
+  mLive.current = { view, slots: monsterSlots, place: placeMonster };
+
+  /** 长按一格：进多选态（这一格自动选中；再长按同一格 = 退出并清空）。 */
+  const holdMonster = (slot) => {
+    const index = Number(slot?.index);
+    if (!Number.isInteger(index)) return;
+    const cur = mSelRef.current;
+    if (cur.key === index) setSel(null, []);
+    else setSel(index, [index]);
+  };
+  /** 多选态里点一下 = 选中 / 取消。 */
+  const toggleMonsterPick = (slot) => {
+    const index = Number(slot?.index);
+    if (!Number.isInteger(index)) return;
+    const cur = mSelRef.current.picked;
+    setSel(mSelRef.current.key, cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index]);
+  };
+
+  /** 拖拽开始：折叠商店条（复用 onCollapse → game.js setCollapsed）并把镜头换成能同时框住上下门的取景。 */
+  const beginDrop = (slot) => {
+    const index = Number(slot?.index);
+    if (!Number.isInteger(index)) return;
+    const picked = mSelRef.current.picked;
+    if (!mDragOn.current) {
+      mDragOn.current = true;
+      mHooks.current.collapse?.(true);
+      mHooks.current.cam?.(true);
+    }
+    setMDrag({
+      x: 0, y: 0, index, gate: null,
+      name: slot?.name || slot?.key || '',
+      icon: enemyIconUrl(data.get('assets'), slot?.key),
+      count: picked.length || 1,
+    });
+  };
+  /** 拖拽结束：ghost 收掉，镜头与商店条的展开状态原样还回去。 */
+  const endDrop = () => {
+    setMDrag(null);
+    if (!mDragOn.current) return;
+    mDragOn.current = false;
+    mHooks.current.cam?.(false);
+    mHooks.current.collapse?.(false);
+  };
+  const detachPress = () => {
+    const r = mPress.current;
+    if (!r) return;
+    window.removeEventListener('pointermove', r.move);
+    window.removeEventListener('pointerup', r.up);
+    window.removeEventListener('pointercancel', r.up);
+    mPress.current = null;
+  };
+  /**
+   * 卡片按下：记下起点，把手势挂到 window 上 —— 拖拽一开始商店条会折叠成小条，卡片节点会消失，手势不能挂在节点上。
+   */
+  const pressMonster = (e, slot) => {
+    if (!slot || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const index = Number(slot.index);
+    if (!Number.isInteger(index)) return;
+    detachPress();
+    const move = (ev) => movePress(ev);
+    // pointercancel（系统手势抢走指针、标签页切走）算取消：不发投放，只把商店条与镜头还回去
+    const up = (ev) => endPress(ev, ev.type === 'pointercancel');
+    mPress.current = { slot, index, x: Number(e.clientX) || 0, y: Number(e.clientY) || 0, id: e.pointerId, dragging: false, move, up };
+    window.addEventListener('pointermove', move, { passive: true });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+  /** 移动：超过 8px 从「按下」变成「拖」；每次移动都重算落点属于哪个门（≤ 8px 时交给长按的定时器）。 */
+  const movePress = (e) => {
+    const r = mPress.current;
+    if (!r || (r.id != null && e.pointerId != null && e.pointerId !== r.id)) return;
+    // 卡片自己的 onPointerMove 与 window 上的同一个处理器都会收到这一下（冒泡）：同一个点只处理一次
+    if (r.lx === e.clientX && r.ly === e.clientY) return;
+    r.lx = e.clientX;
+    r.ly = e.clientY;
+    const dx = e.clientX - r.x;
+    const dy = e.clientY - r.y;
+    if (!r.dragging) {
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) <= MON_DRAG_PX) return;
+      r.dragging = true;
+      beginDrop(r.slot);
+    }
+    const gate = monsterGateOf(tileUnderPoint(mLive.current.view, e.clientX, e.clientY)?.row);
+    setMDrag((cur) => (cur ? { ...cur, x: e.clientX, y: e.clientY, gate } : cur));
+  };
+  /**
+   * 松手：命中门就把选中的每格各投 1 只（多选态）或手指下那一张投 1 只；没命中 / 取消 = 什么都不发。
+   * 投放之后**退出多选态**：那一格的 index 已经补位成另一只怪，选中的东西不再指同一张卡。
+   */
+  const endPress = (e, cancelled) => {
+    const r = mPress.current;
+    if (!r) return;
+    // 另一根手指抬起不算这次手势（多指同时按住两张卡时只认记下的那一个 pointerId）
+    if (r.id != null && e && e.pointerId != null && e.pointerId !== r.id) return;
+    const dragging = r.dragging;
+    detachPress();
+    if (!dragging) return;                          // 一次普通点击：交给卡片的 onClick
+    mTapGuard.current = Date.now();                  // 拖完那一下的 click 不当作「点一下」
+    if (!cancelled) {
+      const gate = monsterGateOf(tileUnderPoint(mLive.current.view, e.clientX, e.clientY)?.row);
+      if (gate) {
+        const picked = mSelRef.current.picked;
+        const list = picked.length ? picked : [r.index];
+        // 依次发（一张一张等回执）：同一门、每格 1 只。单飞锁挡住同一格的重复；某一只被拒（toast 已说原因）
+        // 也不影响其余几格的投放 —— 每格是独立的库存与资金结算。
+        const step = (k) => {
+          const i = list[k];
+          if (i == null) return;
+          const slot = mLive.current.slots.find((s) => s && Number(s.index) === i) || null;
+          if (!slot) { step(k + 1); return; }
+          void mLive.current.place(slot, gate, 1).finally(() => step(k + 1));
+        };
+        step(0);
+        if (picked.length) setSel(null, []);
+      }
+    }
+    endDrop();
+  };
+  /**
+   * 单击怪物卡：多选态里 = 选中 / 取消；否则 = 投 1 只到上一次成功投放的门。
+   * 拖拽松手后浏览器补的那一下 click 不算（400ms 内的 click 丢弃）。
+   */
+  const tapMonster = (slot) => {
+    if (!slot) return;
+    if (Date.now() - mTapGuard.current < 400) return;
+    if (mSelRef.current.key != null) { toggleMonsterPick(slot); return; }
+    void placeMonster(slot, mGate, 1);
+  };
+
+  // 离开多选态 / 收起拖拽的三条路：商店关掉、换回合或刷新（那时选中的 index 已经补位成别的怪）、卸载。
+  // 都要先比一次值再写：monsterOn 为假时 Set / Set 状态的写入会被 Preact 丢掉，但 `setSel` 会造一个新数组 ⇒
+  // 挂在 mount / 每次 render 上的 effect 会多出一次无意义的渲染（改造前这里就是两条只在值变化时才动手的 effect）。
+  const mShopKey = `${monsterShop?.round ?? ''}:${monsterShop?.refreshes ?? ''}`;
+  const mShopKeyRef = useRef(mShopKey);
+  useEffect(() => {
+    if (monsterOn) return;
+    if (mSelRef.current.key != null || mSelRef.current.picked.length) setSel(null, []);
+    if (mDragOn.current) endDrop();
+  }, [monsterOn]);
+  useEffect(() => {
+    if (mShopKeyRef.current === mShopKey) return;
+    mShopKeyRef.current = mShopKey;
+    setSel(null, []);
+    endDrop();
+  }, [mShopKey]);
+  useEffect(() => () => {
+    const r = mPress.current;
+    if (r) {
+      window.removeEventListener('pointermove', r.move);
+      window.removeEventListener('pointerup', r.up);
+      window.removeEventListener('pointercancel', r.up);
+      mPress.current = null;
+    }
+    if (mDragOn.current) { mDragOn.current = false; mHooks.current.cam?.(false); mHooks.current.collapse?.(false); }
+  }, []);
+  // 点别处退出多选态（卡片自己的 pointerdown 由卡片处理：那一下是选中 / 取消）
+  useEffect(() => {
+    if (!mMulti) return undefined;
+    const onDown = (e) => {
+      const el = e.target;
+      if (el && el.closest && el.closest('.scard--monster')) return;
+      setSel(null, []);
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    return () => window.removeEventListener('pointerdown', onDown, true);
+  }, [mMulti]);
   /** First tap arms + opens the detail; the second buys (or says why it can't). */
   const tapCard = (kind, idx, slot, detailKind, reason, buy) => {
     const key = armKey(kind, idx, slot);
@@ -595,10 +852,28 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
     onLevel();
   };
 
+  // 拖动时跟随指针的浮动卡（卡面 + 张数）与命中半区的高亮。两个都不吃指针（pointer-events: none）。
+  // 拖拽一开始商店条就折叠成小条 ⇒ 这两块要同时画在「折叠」与「展开」两支里（提前 return 之前算好）。
+  const mDragGhost = mDrag ? html`<div class="mshop-ghost" style=${`left:${Math.round(mDrag.x)}px; top:${Math.round(mDrag.y)}px`} aria-hidden="true">
+    <span class="mshop-ghost__art"><${Img} src=${mDrag.icon} fallback=${html`<${GIcon} name="skull" />`} /></span>
+    <span class="mshop-ghost__body"><b class="mshop-ghost__name">${mDrag.name}</b>
+      <span class="mshop-ghost__count num">${`×${mDrag.count}`}</span></span>
+  </div>` : null;
+  const mDragRing = (() => {
+    if (!mDrag || !mDrag.gate) return null;
+    const pts = halfRegionPoly((mDrag.gate === 'upper' ? mGateUp : mGateDown)?.poly, mDrag.gate);
+    if (!pts) return null;
+    const d = `${pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')} Z`;
+    return html`<svg class=${cx('mshop-gate-ring', mDrag.gate === 'upper' ? 'is-upper' : 'is-lower')} aria-hidden="true"><path d=${d} /></svg>`;
+  })();
+
   if (collapsed) {
-    return html`<div class="shopbar-tab" ref=${barRef}>
-      <div class="shopbar-tab__funds"><${CoinGlyph} /><b class="num">${funds}</b></div>
+    // 拖拽中这条小条不拦指针（`elementFromPoint` 会跳过 pointer-events: none 的元素）：下门就在右下角，
+    // 被它压住的话落点判门会判成「不是门」⇒ 取消投放。
+    return html`<div class=${cx('shopbar-tab', mDrag && 'is-dragging')} ref=${barRef}>
+      <div class="shopbar-tab__funds"><${CoinGlyph} /><b class="num">${fundsShown}</b></div>
       <button type="button" class="shopbar-tab__btn" onClick=${() => onCollapse(false)}><${Icon} name="chevronLeft" />${t('展开商店')}</button>
+      ${mDragRing}${mDragGhost}
     </div>`;
   }
 
@@ -613,7 +888,11 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
       ${monsterOn
         ? html`<span class="shopbar__remain">${t('剩余投放预算：')}<b class=${cx('num', monsterLeft === 0 && 't-orange')}>${monsterLeft}</b></span>`
         : html`<span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>`}
-      ${/* 怪物卡池开着时：商店级「冻结」不适用（冻结是按格子的，见卡面右键 / 浮层按钮）⇒ 不画；刷新改发 g.monsterRefresh */ null}
+      ${/* 多选态（长按进入）的提示行：说的是「现在怎么投」—— 已选 N 只 + 拖到上门或下门 */ null}
+      ${monsterOn && mMulti
+        ? html`<span class="shopbar__remain mshop-multi" data-testid="monster-multi">${t('已选 {n} 只 · 拖到上门或下门投放', { n: mPicked.length })}</span>`
+        : null}
+      ${/* 怪物卡池开着时：商店级「冻结」不适用（冻结是按格子的，见卡面右键）⇒ 不画；刷新改发 g.monsterRefresh */ null}
       ${monsterOn ? null : html`<button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
         title=${frzReason || (frozen ? t('解冻商店 · {key}', { key: hk.freeze }) : t('冻结商店（下回合保留） · {key}', { key: hk.freeze }))}>
         <${Img} src=${uiUrl(data.get('assets'), frozen ? 'shopPanel/frozen_icon2' : 'shopPanel/frozen_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="snow" />`} />
@@ -644,13 +923,14 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
             if (!s) return html`<${MonsterEmptyCard} key=${`me${i}`} />`;
             if (s.sold) return html`<${SoldCard} key=${`ms${i}`} />`;
             const cap = monsterPlaceCap(s, monsterLeft);
-            const open = !!mPick && mPick.index === Number(s.index);
-            return html`<div class="mshop-anchor" key=${`m${i}:${s.key}`}>
-              <${MonsterCard} slot=${s} idx=${i} poor=${cap < 1} frozen=${slotFrozen(s, false)} selected=${open}
-                onPick=${openMonsterPick} onFreeze=${freezeMonsterSlot} />
-              ${open ? html`<${MonsterPickPanel} slot=${s} cap=${cap} count=${mPick.count} gate=${mGate} frozen=${slotFrozen(s, false)}
-                onGate=${setMGate} onCount=${setMCount} onPlace=${placeMonster} onFreeze=${freezeMonsterSlot} onClose=${() => setMPick(null)} />` : null}
-            </div>`;
+            const index = Number(s.index);
+            // 没有 .mshop-anchor 了：浮层（MonsterPickPanel）已删除，卡片直接排在 .shopbar__cards 里
+            return html`<${MonsterCard} key=${`m${i}:${s.key}`} slot=${s} idx=${i} poor=${cap < 1}
+              frozen=${slotFrozen(s, false)}
+              multi=${!!mMulti} picked=${mPicked.includes(index)} dragging=${!!mDrag && mDrag.index === index}
+              onTap=${tapMonster} onFreeze=${freezeMonsterSlot} onHold=${holdMonster}
+              onPointerDown=${pressMonster} onPointerMove=${movePress}
+              onPointerUp=${endPress} onPointerCancel=${endPress} />`;
           })
           : chessSlots.map(({ s, i }) => {
           if (!s) return html`<${EmptyCard} key=${`e${i}`} />`;
@@ -675,11 +955,13 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
       <div class="funds">
         <div class="funds__hex">
           <${CoinGlyph} class="funds__coin" />
-          <b class="funds__num num">${funds}</b>
+          <b class="funds__num num">${fundsShown}</b>
         </div>
-        <span class="funds__label">${t('目前资金')}</span>
+        <span class="funds__label">${monsterOn ? t('怪物资金') : t('目前资金')}</span>
         <button type="button" class="funds__collapse" onClick=${() => onCollapse(true)}><${Icon} name="close" />${t('收起')}</button>
       </div>
     </div>
+    ${/* 拖拽覆盖层（只有攻方会拖；monsterOn 为假时两者恒为 null ⇒ 输出与改造前一致） */ null}
+    ${mDragRing}${mDragGhost}
   </section>`;
 }
