@@ -224,10 +224,59 @@ export function dropMonsterBonds(m, ps, enemyKey, count = 1) {
 }
 
 /**
- * 本回合某个归属键下**投放怪漏过**的只数：读战场结果的 `confrontLeaks`（sim/battle/lifecycle.js 按**投放席位**
- * 汇总，settle.js 的攻方奖励也读这一份），再按 seat → player → 归属键归类。战斗还没打完 → 0。
+ * 本回合「投放怪漏过 **by 归属键**」的快照（2026-11-04 复验修复 3：回收盟约恒发 0）。
+ *
+ * 为什么需要它：`settle()` 在**发完攻方奖励之后**就把 `this.fields` 清掉了（match/match/settle.js:238），
+ * 而回合边界（match/match/phases.js:472 的 `closeMonsterBondRound`）必然在 settle 之后才跑 ——
+ * 那时 `leaksForKey` 直接读 `this.fields` 只能读到 `[]`，实测「回收」盟约发放恒为 0。
+ * 修法（B 的变体）：在 settle 里**清 fields 之前**把漏怪数钉成快照，回合边界只读这份快照。
+ * 触发点不在 settle.js（不在本次改动清单内），而是 settle 已经在调的两个允许文件入口：
+ *   · `monsterShop.js` 的 `addMonsterFundsTo`（settle 的击杀 / 漏过奖励经 Match.js 改道到这里；shared 模式）；
+ *   · `match/match/confront.js` 的 `monsterShopOn` getter（settle.js:112 的闸门；两种怪物模式都会读，补 solo 的缺口）。
+ * 快照只在 `this.fields` 非空、且至少一场结果已就绪时写：settle 清空之后（以及下一回合 PREP 里）的调用一律 no-op，
+ * 不会把好数据覆盖成 0。
+ * @param {object} m
+ * @returns {{ round: number, leaks: Map<any, number> }|null} 当前生效的快照
+ */
+export function captureMonsterBondLeaks(m) {
+  // 注意：**不能**读 m.monsterShopOn —— 本函数会从 monsterShopOn 之外的两个入口被调，
+  // 而其中的 getter 若也调本函数就会自递归。这里用同一个判据的直接写法（与 confront.js 的 getter 等价）。
+  if (!m || m.isVersus !== true || (m.opts && m.opts.monsterShop === false)) return null;
+  if (!Array.isArray(m.fields) || !m.fields.length) return m._bondRoundStats || null;
+  const byKey = new Map();
+  const players = allPlayers(m);
+  let saw = false;
+  for (const f of m.fields) {
+    // 与 settle.js 的 placedFieldResult 同一取源：优先 f.result，没有就问 battle.result()（clientCombat / 直测）
+    let fr = f && f.result;
+    if (!fr && f && f.battle && typeof f.battle.result === 'function') {
+      try { fr = f.battle.result(); } catch { fr = null; }
+    }
+    if (!fr || typeof fr !== 'object') continue;
+    saw = true;
+    const leaks = fr.confrontLeaks;
+    if (!leaks || typeof leaks !== 'object') continue;
+    for (const [seatStr, v] of Object.entries(leaks)) {
+      const owner = players.find((x) => x && x.seat === Number(seatStr));
+      if (!owner) continue;
+      const key = monsterBondKey(m, owner);
+      if (key == null) continue;
+      byKey.set(key, (byKey.get(key) || 0) + Math.max(0, Number(v) || 0));
+    }
+  }
+  // 一场结果都还没出来（战斗进行中 / fields 只是占位）→ 不覆盖已钉好的快照，也不凭空写一份空快照
+  if (!saw) return m._bondRoundStats || null;
+  m._bondRoundStats = { round: Number(m.round) || 0, leaks: byKey };
+  return m._bondRoundStats;
+}
+
+/**
+ * 本回合某个归属键下**投放怪漏过**的只数：优先读 `captureMonsterBondLeaks` 钉下的快照（settle 清 fields 之前），
+ * 没有快照（例如战斗还没打完）才回落到 `m.fields` 的 `confrontLeaks`（sim/battle/lifecycle.js 按**投放席位**汇总）。
  */
 function leaksForKey(m, key) {
+  const snap = m && m._bondRoundStats;
+  if (snap && snap.leaks instanceof Map) return Math.max(0, Number(snap.leaks.get(key)) || 0);
   if (!Array.isArray(m && m.fields) || !m.fields.length) return 0;
   const players = allPlayers(m);
   let n = 0;
@@ -344,8 +393,10 @@ export function monsterBondView(m, ps) {
 }
 
 /**
- * 回合收尾（phases.js 的回合边界，**必须在 `this.fields = []` / `_roundOfficialSpawns = null` 之前**）：
- * 把资金类盟约（增援 / 回收）按本回合最终口径发给投放者，然后清空 `m.monsterBonds`（每回合重置）。
+ * 回合收尾（phases.js 的回合边界）：把资金类盟约（增援 / 回收）按本回合最终口径发给投放者，然后清空
+ * `m.monsterBonds`（每回合重置）。
+ * 漏怪数读 `captureMonsterBondLeaks` 在 settle 里钉下的快照（`m._bondRoundStats`）—— settle 结尾会清 `m.fields`
+ * （settle.js:238），所以这里读不到 fields 本身（2026-11-04 复验修复 3：此前「回收」恒发 0）。
  * 同队共享池时按各人投放只数的比例分摊。
  * @param {object} m
  * @returns {number} 实际发出的怪物资金总额
@@ -353,7 +404,7 @@ export function monsterBondView(m, ps) {
 export function closeMonsterBondRound(m) {
   if (!m || m.monsterShopOn !== true) return 0;
   const map = m.monsterBonds;
-  if (!(map instanceof Map) || !map.size) { m.monsterBonds = null; return 0; }
+  if (!(map instanceof Map) || !map.size) { m.monsterBonds = null; m._bondRoundStats = null; return 0; }
   const players = allPlayers(m);
   const official = officialTotalCount(m);
   let paid = 0;
@@ -389,5 +440,7 @@ export function closeMonsterBondRound(m) {
     }
   }
   m.monsterBonds = null;
+  // 快照按回合消费一次：清掉之后本回合的漏怪数不会再被下一回合误读（下一回合的 settle 会重新钉一份）。
+  m._bondRoundStats = null;
   return paid;
 }

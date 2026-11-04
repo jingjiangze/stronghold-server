@@ -40,7 +40,7 @@ import { OK, fail } from './match/common.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
 import { buildMonsterPool, legalKeys } from './monsterPool.js';
 // 怪物盟约（2026-11-04 业主口径：攻方只有怪物方的独立盟约）：投放 / 购买涨层，撤回退层，帧里带一份视图。
-import { addMonsterBonds, dropMonsterBonds, monsterBondView } from './monsterBonds.js';
+import { addMonsterBonds, dropMonsterBonds, monsterBondView, captureMonsterBondLeaks } from './monsterBonds.js';
 
 // 合法集合的唯一判据在 monsterPool.js（卡池同源）：这里只转出，避免两份实现漂移。
 export { legalKeys };
@@ -170,6 +170,10 @@ export function monsterFundsOf(m, ps) {
  */
 export function addMonsterFundsTo(m, ps, n) {
   if (!ps) return 0;
+  // 回收盟约的快照钩子（2026-11-04 复验修复 3）：settle 的击杀 / 漏过奖励走这一条（Match.js 把
+  // ps.addMonsterFunds 改道到这里），而 settle 结尾会清 `m.fields`（settle.js:238）—— 趁这次调用先把本回合的
+  // 漏怪数钉住，回合边界的 closeMonsterBondRound 才读得到。fields 为空时是 no-op（不覆盖已有快照）。
+  captureMonsterBondLeaks(m);
   if (!fundsShared(m, ps)) return typeof ps.addMonsterFunds === 'function' ? ps.addMonsterFunds(n) : 0;
   const v = Number.isFinite(n) ? Math.trunc(n) : 0;
   if (!(v > 0)) return 0;

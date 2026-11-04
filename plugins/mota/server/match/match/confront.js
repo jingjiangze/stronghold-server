@@ -55,9 +55,9 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom } from '../monsterShop.js';
 // 怪物盟约（2026-11-04 业主口径）：攻方投放的怪吃自己这一回合攒出来的乘区，与 roundMods 相乘（只乘不覆盖）。
-import { monsterBondMods, mergeMonsterBondMods } from '../monsterBonds.js';
+import { monsterBondMods, mergeMonsterBondMods, captureMonsterBondLeaks } from '../monsterBonds.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
 
 /**
@@ -557,7 +557,15 @@ export class MatchConfront {
    * 关掉时 enterConfront 之后的卡池分支（finishConfrontTargets 的开张 / botConfront / finishConfront 的收尾）全部不执行
    * —— 行为与改造前逐字节一致。
    */
-  get monsterShopOn() { return this.isVersus && this.opts?.monsterShop !== false; }
+  get monsterShopOn() {
+    // 回收盟约快照（2026-11-04 复验修复 3）：settle() 在发完攻方奖励、清 `this.fields`（settle.js:238）之前会读
+    // 这个 getter（settle.js:112）—— 漏怪快照只能在这之前钉住。shared 模式的奖励已经走 addMonsterFundsTo 捕获，
+    // 但 solo 模式走 PlayerState.addMonsterFunds（不经 monsterShop），所以在唯一的公共入口补一次：
+    // `captureMonsterBondLeaks` 幂等、fields 为空即 no-op、不读本 getter（不会自递归）。
+    captureMonsterBondLeaks(this);
+    return this.isVersus && this.opts?.monsterShop !== false;
+  }
+
 
   /**
    * 怪物模式的归属口径（业主 2026-11-04，经房间选项 `opts.monsterMode` 透传；Match.js 不改）：
@@ -731,13 +739,13 @@ export class MatchConfront {
   }
 
   /**
-   * 一份投放最多能值多少（2026-11-04 怪物资金口径）：**商店开着时读攻方的怪物资金账户**，
-   * 而不是每回合现算的 `confrontBudget()`。账户是跨回合结转的，拿回合预算当上限会把「存下来的钱」判成超支。
+   * 一份投放最多能花多少（2026-11-04 复验修复 1）：**只按攻方的怪物资金余额**。
    *
-   * 额度 = `monsterFundsOf(m, ps)`（shared = 队级账户 / solo = 个人账户）+ 同一份草稿里**已经付过款**的价值：
-   * 草稿里的卡在 `buyMonster` / `placeMonster` 时就已经扣过钱了（余额已经少了那一笔），提交时把这一笔加回额度，
-   * 才不会「买满余额的那次提交被自己的付款卡住」。
-   * 取不到账户（老对局 / 守方 / bot 直接写 sub）⇒ 回落到旧的 `confrontBudget()`，行为逐字节不变。
+   * 旧的「余额 + 草稿价」把草稿里已经付过款的卡再加回额度，等于给同一笔钱发了两遍额度
+   * （复验实测：空草稿直接提交 5 只、价值 160 → 成功，余额 168 不变、池库存不变 —— `g.confront` 是免费通道）。
+   * 现在提交侧只对**尚未付款**的部分收钱（`_confrontChargeFor`：草稿里的同 key 条数先抵扣），
+   * 所以额度不再需要加回草稿价；「已买的草稿 + 提交」也不会被自己的付款卡住（那部分 cost = 0）。
+   * 商店关着 / 取不到账户（老对局 / 没有怪物账户的席位）⇒ 回落到旧的回合预算，行为逐字节不变。
    * @param {object} ps
    * @returns {number}
    */
@@ -747,9 +755,89 @@ export class MatchConfront {
     // shared 模式读的是队级账户（恒为数字），不需要这道兜底。
     if (this.monsterMode !== 'shared' && !Number.isFinite(Number(ps.monsterFunds))) return this.confrontBudget();
     // 账户读数走 monsterFundsOf（业主 2026-11-04 裁决 2）：shared = 队级账户余额（同队两人同额），solo = 个人账户。
-    const funds = monsterFundsOf(this, ps);
-    const draft = ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
-    return Math.max(0, Number(funds) || 0) + this.confrontSpent(draft);
+    return Math.max(0, Number(monsterFundsOf(this, ps)) || 0);
+  }
+
+  /**
+   * 一次提交里**哪些 pick 还没付过钱**（2026-11-04 复验修复 1）：先抵扣两边已经付过款的额度 ——
+   *   ① 草稿（`ps.monsterDraft.picks`）里的同 key 条数：那些卡在 `buyMonster` / `placeMonster` 时就已经扣过款、
+   *      也从同一个池 `take` 过份数（见 monsterShop.js）；
+   *   ② 本回合**已经为提交付过款**的同 key 条数（`this._confrontPaid`）：草稿可以反复覆盖（`commit` 之前），
+   *      同一笔付款绝不能收第二遍（复验要求 b）。
+   * 抵扣按 key 逐条消耗，与顺序无关（草稿 3 条 + 提交 5 条 ⇒ 只对多出来的 2 条收费）。
+   * @param {object} ps @param {Array<{ enemyKey: string }>} picks
+   * @returns {{ charge: object[], cost: number }} charge = 需要付款的 pick；cost = 它们的 Σ 单价（monsterPriceOf 同源）
+   */
+  _confrontChargeFor(ps, picks) {
+    const credit = new Map();
+    const add = (key, n) => { if (typeof key === 'string' && key) credit.set(key, (credit.get(key) || 0) + n); };
+    const draft = ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
+    for (const d of draft) if (d && typeof d.enemyKey === 'string') add(d.enemyKey, 1);
+    const pid = ps && ps.playerId;
+    const ledger = this._confrontPaid instanceof Map && pid != null ? this._confrontPaid.get(pid) : null;
+    if (ledger instanceof Map) for (const [key, n] of ledger) if (n > 0) add(key, n);
+    const charge = [];
+    let cost = 0;
+    for (const p of Array.isArray(picks) ? picks : []) {
+      if (!p || typeof p.enemyKey !== 'string') continue;
+      const left = credit.get(p.enemyKey) || 0;
+      if (left > 0) { credit.set(p.enemyKey, left - 1); continue; }
+      charge.push(p);
+      cost += monsterPriceOf(this, p.enemyKey);
+    }
+    return { charge, cost };
+  }
+
+  /**
+   * 结算一次提交的未付款部分（2026-11-04 复验修复 1）：**先算后扣、全有或全无**。
+   *   ① 库存预检（逐 key 合计需求 vs 池里剩余）→ 不足直接 SOLD_OUT，不动钱也不动库存；
+   *   ② 扣款（`spendMonsterFundsFrom`，余额不够就一分不扣）→ 失败 CONFRONT_BUDGET；
+   *   ③ 扣库存；理论上预检已过，仍防御性回滚（把钱与已取的库存一起还回去）后再 SOLD_OUT。
+   * @param {object} ps @param {{ charge: object[], cost: number }} settle `_confrontChargeFor` 的结果
+   * @returns {null|{ error: string }} null = 已付清（或无需付款）
+   */
+  _confrontPayPicks(ps, { charge, cost }) {
+    const list = Array.isArray(charge) ? charge : [];
+    if (!list.length) return null;
+    const pool = monsterPoolFor(this, ps);
+    const demand = new Map();
+    for (const p of list) demand.set(p.enemyKey, (demand.get(p.enemyKey) || 0) + 1);
+    for (const [key, n] of demand) if (pool.left(key) < n) return { error: ERR.SOLD_OUT };
+    if (cost > 0 && !spendMonsterFundsFrom(this, ps, cost)) return { error: ERR.CONFRONT_BUDGET };
+    const taken = [];
+    for (const [key, n] of demand) {
+      const got = pool.take(key, n);
+      taken.push([key, got]);
+      if (got < n) {
+        for (const [k, g] of taken) if (g > 0) pool.give(k, g);
+        if (cost > 0) addMonsterFundsTo(this, ps, cost);
+        return { error: ERR.SOLD_OUT };
+      }
+    }
+    // 记账（2026-11-04 复验修复 1 / 复验要求 b）：这次付过款的 pick 记进本回合的提交台账 ——
+    // 草稿可以在 `commit` 之前反复覆盖，同一笔付款不能收第二遍（`_confrontChargeFor` 会先抵扣它）。
+    const pid = ps && ps.playerId;
+    if (pid != null) {
+      if (!(this._confrontPaid instanceof Map)) this._confrontPaid = new Map();
+      const prev = this._confrontPaid.get(pid);
+      const next = new Map(prev instanceof Map ? prev : []);
+      for (const p of list) next.set(p.enemyKey, (next.get(p.enemyKey) || 0) + 1);
+      this._confrontPaid.set(pid, next);
+    }
+    return null;
+  }
+
+  /**
+   * bot 的投放预算（2026-11-04 复验修复 1）：商店开着时 = min(回合预算, 账户余额 + 草稿里已付过款的价值)。
+   * 上限不越过回合预算（赏金档的「替换一小部分」语义不受账户结转影响），下限受余额约束 ——
+   * bot 不能派出自己付不起的怪（`_confrontPayPicks` 会拒），否则赏金档 bot 会整单落空。
+   * @param {object} ps @returns {number}
+   */
+  confrontBotBudget(ps) {
+    if (!this.monsterShopOn) return this.confrontBudget();
+    const draft = ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
+    const funds = Math.max(0, Number(monsterFundsOf(this, ps)) || 0);
+    return Math.min(this.confrontBudget(), funds + this.confrontSpent(draft));
   }
 
   /**
@@ -1127,6 +1215,8 @@ export class MatchConfront {
     this._confrontRemoved = new Map();
     this.confrontTargets = new Map(); // attacker playerId → target playerId
     this.confrontSubs = new Map();    // attacker playerId → { target, group, position, picks, bosses, ratio, budget }
+    // 提交付款台账（2026-11-04 复验修复 1）：每回合清零 —— 上一回合为提交付过的款不能抵扣本回合的怪。
+    this._confrontPaid = new Map();
     // 怪物卡池（2026-11-03）：这里只做阶段准备，**不再**开张商店 —— 2026-11-04 起投放窗口就是本回合的 PREP，
     // 商店在目标选择结束那一刻开（finishConfrontTargets），买卡 / 提交 / 冻结全程同一个 deadline。
     if (this.isConfrontRule()) {
@@ -1337,11 +1427,13 @@ export class MatchConfront {
   }
 
   /**
-   * Check a submission: every enemyKey is offered by SOME 特训敌人 type, a legal gate and position, at most
-   * VERSUS_CONFRONT.maxPicks monsters, and the combined VALUE within the round's budget. The player MAY MIX TYPES (user
+   * Check a submission: every enemyKey is offered by SOME 特训敌人 type (the legal set follows the rule: 对抗 = 官方波次 /
+   * 赏金 = 面板并集, see monsterPool.js legalKeys), a legal gate and position, at most VERSUS_CONFRONT.maxPicks monsters,
+   * and — 2026-11-04 复验修复 1 — the money still OWED for it (the picks already paid through the 怪物商店 draft / an
+   * earlier submission of the same round are credited) within the monster-funds balance. The player MAY MIX TYPES (user
    * decision 2026-10-17: step into one type, spend part of the budget, step into another and add more), so `group` is
    * display-only and only the union is checked. The AUTHORITATIVE cap (the client greys out what does not fit, this
-   * refuses it): over the budget ⇒ ERR.CONFRONT_BUDGET, over the count ⇒ ERR.CONFRONT_COUNT.
+   * refuses it): over the balance ⇒ ERR.CONFRONT_BUDGET, out of stock ⇒ ERR.SOLD_OUT, over the count ⇒ ERR.CONFRONT_COUNT.
    *
    * `bosses` (the 事件期 boss 格, user 2026-10-21) is checked on its own: every enemyKey must be in the 机变悬赏 pool
    * (confrontBossPool — and the round must be an event round at all), an enemyKey may appear at most ONCE per submission
@@ -1389,9 +1481,16 @@ export class MatchConfront {
     if (out.length > VERSUS_CONFRONT.maxPicks) return { error: ERR.CONFRONT_COUNT };
     // 路线越长，占用预算越多（长度 ×2），让「绕远路」不能白嫖
     const routeCost = out.reduce((n, p) => n + (Number(p.routeLen) || 0) * 2, 0);
-    // 上限：商店开着 = 怪物资金账户（confrontPurchaseLimit，见那里的注释）；关着 = 旧的回合预算。
-    // `confrontSpent` 与卡面同源（monsterPriceOf），所以这里与 `buyMonster` / `placeMonster` 是同一个尺度。
-    if (this.confrontSpent(out) + routeCost > this.confrontPurchaseLimit(ps)) return { error: ERR.CONFRONT_BUDGET };
+    // 预算判据（2026-11-04 复验修复 1：`g.confront` 曾经是免费投放通道）：
+    //   商店开着 → 只判**尚未付款**的部分（草稿里的同 key 卡在 buyMonster / placeMonster 时已扣过款、也 take 过库存），
+    //     上限 = 怪物资金账户余额（confrontPurchaseLimit，见那里的注释）；
+    //   商店关着 → 旧口径（回合预算 vs 整单价值），一个字节都不变。
+    // `confrontSpent` / `monsterPriceOf` 与卡面同源，所以这里与 buyMonster / placeMonster 是同一个尺度。
+    const settle = this.monsterShopOn ? this._confrontChargeFor(ps, out) : null;
+    const overBudget = settle
+      ? settle.cost + routeCost > this.confrontPurchaseLimit(ps)
+      : this.confrontSpent(out) + routeCost > this.confrontPurchaseLimit(ps);
+    if (overBudget) return { error: ERR.CONFRONT_BUDGET };
     const bArr = Array.isArray(bosses) ? bosses : [];
     // outside the 事件期 rounds the boss 格 does not exist, so the pool is empty and any boss is refused with it
     const bossAllowed = this.confrontBossOpen() ? new Set(this.confrontBossPool().map((r) => r.key)) : new Set();
@@ -1404,6 +1503,12 @@ export class MatchConfront {
     // the cap is the event's own ordinal (confrontBossCap: E1 = 1, E2 = 2, E3 = 3; user 2026-10-21 after playtest) —
     // over the cap is a count offence; off the event rounds the cap is 0 and the empty pool above already refused
     if (outB.length > this.confrontBossCap()) return { error: ERR.CONFRONT_COUNT };
+    // 收款（全有或全无，2026-11-04 复验修复 1）：到这里全部校验都已通过，才开始动钱 / 库存 ——
+    // 余额不足 → CONFRONT_BUDGET、库存不足 → SOLD_OUT，两种失败都**不会**留下任何部分扣款。
+    if (settle) {
+      const paid = this._confrontPayPicks(ps, settle);
+      if (paid) return { error: paid.error };
+    }
     const gi = Number.isInteger(group) && group >= 1 && group <= list.length ? group : 1;
     return { sub: { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi, position: pos, picks: out, bosses: outB, total: out.length, ratio: this.confrontRatio(), budget: this.confrontBudget(), seat: ps.seat } };
   }
@@ -1433,11 +1538,14 @@ export class MatchConfront {
       }
     }
     const groups = this.confrontGroups();
-    const budget = this.confrontBudget();
+    // bot 的花钱上限（2026-11-04 复验修复 1）：商店开着时 = min(回合预算, 账户余额 + 草稿里已付过款的价值)
+    // （confrontBotBudget）—— bot 只能派自己付得起的怪，否则下面 `_confrontPayPicks` 会整单拒掉、投放落空。
+    // 商店关着 = 旧的回合预算，行为逐字节不变。
+    const budget = this.confrontBotBudget(ps);
     const cap = this.confrontPlaceCap();
-    // 合法集合（2026-11-04 第二轮复审修复 5）：赏金档的 confrontGroups 不带回合闸门，旧贪心会从全类型池里挑出
-    // 本回合官方根本没出的怪（实测 6 条 pick 全部不在本回合集合 ⇒ 投完再过滤 ⇒ 全被滤掉 ⇒ bot 空投）。
-    // 商店开着时**先**把候选限定在本回合合法集：赏金档的旧贪心（下面的 `ordered`）与对抗档的 `fillConfrontPicks`
+    // 合法集合（2026-11-04 第二轮复审修复 5 + 复验修复 2）：候选必须落在 `legalKeys` 里 —— 按规则档分流，
+    // 对抗档 = 本回合官方出怪、赏金档 = 面板并集（赏金档实测官方 key ∩ 面板 = 0，用官方集合会把子单整单滤空）。
+    // 商店开着时**先**把候选限定在合法集：赏金档的旧贪心（下面的 `ordered`）与对抗档的 `fillConfrontPicks`
     // 共用这一条判据 —— 否则「便宜优先」会先被非法怪吃光预算，投完再过滤就成了空单。
     const legal = legalKeys(this);
     const rowAllowed = (r) => !(this.monsterShopOn && legal && r && !legal.has(r.key));
@@ -1539,7 +1647,13 @@ export class MatchConfront {
     // 补一份 bot 投放，缺 sub 的那一队在 PREP 结束时才补，不如这里就给全。
     // 同上（2026-11-04 复验修复 2）：合法集过滤后为空也照样写空 sub —— 旧不变式「即使一条都交不上也要有 sub」保留，
     // 空 picks 是合法提交（apply 时什么都不替换），且避免 finishConfront 的兜底再走一遍同样的空结果。
-    const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
+    let routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
+    // 结算（2026-11-04 复验修复 1）：bot 的投放同样要付得起 —— 草稿里的卡先抵扣，其余按单价扣款 + 扣库存；
+    // 付不起（余额 / 库存不足）就退回空投放（合法提交：apply 时什么都不替换），绝不写一笔没付钱的投放。
+    if (this.monsterShopOn) {
+      const chargeFor = this._confrontChargeFor(ps, routed);
+      if (this._confrontPayPicks(ps, chargeFor)) routed = [];
+    }
     this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses, total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
     this.markPublic();
     // 共享池同步（2026-11-04 第二轮复审修复 1）：bot 写完 sub 之后把商店的新帧推给人类队友
