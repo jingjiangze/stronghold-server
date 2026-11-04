@@ -52,7 +52,7 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterPoolFor, pushMonsterShops } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops } from '../monsterShop.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
 
 /**
@@ -1418,17 +1418,21 @@ export class MatchConfront {
       }
     }
     // 共享池库存（2026-11-04 第二轮复审修复 5）：bot 从来不读 `MonsterPool.left` —— 实测官方只出 5 只，bot 投了 9 条。
-    // 逐 key 限量（每条 pick 消耗 1，超出的那一条单独丢弃，**不清空整单**），额度 = 池里剩下的份数 + 本席草稿里
+    // 逐 key 限量（每条 pick 消耗 1，超出的那一条单独丢弃，**不清空整单**），额度 = 本席**可用**份数
+    // （池里剩下的份数 − 给同队人类留的份数，见 monsterShop.js 的 `monsterStockLeft`）+ 本席草稿里
     // 已经买下的份数（cardpool 策略买卡时已经从同一个池 `take` 过，只看 `left` 会把它自己买的卡全部丢掉）。
     // 没有商店 / 没有合法集（取不到）= 不做闸门，保持旧行为。
     if (this.monsterShopOn && legal) {
-      const pool = monsterPoolFor(this, ps);
+      // 共享池留份（2026-11-04 真机 2V2）：bot 的逐 key 额度必须与 monsterShop.js 的 buyMonster / placeMonster
+      // 走**同一个上限**（`monsterStockLeft` = 池里剩余 − 给同队人类攻方留的份数），否则 bot 的投放计划会绕过
+      // 商店把留给人类的那几份也占掉。扣的只是池里的剩余值，**不扣**本席草稿里已经买下的份数
+      // （那些已经从池里 take 走了，held 就是把它们加回来的额度）。
       const held = new Map();
       for (const d of (ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [])) {
         if (d && typeof d.enemyKey === 'string') held.set(d.enemyKey, (held.get(d.enemyKey) || 0) + 1);
       }
       const budgetLeft = new Map();
-      for (const key of legal) budgetLeft.set(key, pool.left(key) + (held.get(key) || 0));
+      for (const key of legal) budgetLeft.set(key, monsterStockLeft(this, ps, key) + (held.get(key) || 0));
       const keptPicks = [];
       for (const p of picks) {
         if (!p) continue;

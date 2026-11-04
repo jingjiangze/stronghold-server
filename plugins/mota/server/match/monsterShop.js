@@ -24,6 +24,10 @@
 // 怪物模式（业主 2026-11-04，`m.monsterMode`，由房间选项 `opts.monsterMode` 透传）：
 //   · shared（缺省）= 共有出怪：池按队共享、同队攻方共用同一个 target；
 //   · solo = 单人怪物模式：池按人（playerId），只有该队第一位存活攻方开店 / 能买能投，其余攻方一律 WRONG_PHASE。
+//
+// 共享池留份（2026-11-04 真机 2V2 控怪档）：同队 1 人类 + 1 AI 攻方共用一池，AI 开窗瞬间把池买空，人类两张卡
+// 都是 `0/N` 且 `is-disabled`。现在 shared 模式下 **bot 的购买 / 投放上限 = 池里剩余 − 同队人类攻方人数**
+// （`monsterStockLeft`，下限 0），人类自己的上限仍是池里的真实剩余（可以买到最后一份）。solo / 全 AI 队不受影响。
 
 import { PHASE, ERR } from '../../shared/constants.js';
 import { OK, fail } from './match/common.js';
@@ -82,6 +86,48 @@ export function monsterPoolFor(m, ps) {
   if (!m.monsterPools) m.monsterPools = new Map();
   if (!m.monsterPools.has(key)) m.monsterPools.set(key, buildMonsterPool(m));
   return m.monsterPools.get(key);
+}
+
+/**
+ * 同队阵线里**人类攻方**的人数（共享池的「留一份」口径）。取不到（没有 confrontActors / 它抛异常 /
+ * 不是数组）→ 0 —— 调用方据此退化成「不留份」，与改造前完全一致。
+ * @param {object} m
+ * @returns {number} >= 0
+ */
+export function humanAttackers(m) {
+  if (!m || typeof m.confrontActors !== 'function') return 0;
+  let actors = null;
+  try { actors = m.confrontActors(); } catch { return 0; }
+  if (!Array.isArray(actors)) return 0;
+  let n = 0;
+  for (const p of actors) if (p && !p.botControlled) n += 1;
+  return n;
+}
+
+/**
+ * 本席购买 / 投放时**要给同队人类攻方留的份数**：只有「bot 买、shared 模式」才留。
+ * 人类永远不停手（可以买到最后一份）；solo 每人一个池，也不留。
+ * @param {object} m @param {object} ps
+ * @returns {number} >= 0
+ */
+export function monsterReserve(m, ps) {
+  if (!ps || !ps.botControlled) return 0;
+  if (m && m.monsterMode === 'solo') return 0;
+  return humanAttackers(m);
+}
+
+/**
+ * 本席此刻还能从 `key` 拿走几份 = 池里剩余 − 给人类队友留的份数（下限 0）。
+ * 真机 2V2 控怪档（2026-11-04）：同队 1 人类 + 1 bot 共享一个池，bot 开窗瞬间把池买空，人类两张卡都
+ * `0/N` 且 `is-disabled` —— 留份就是为了让人类**至少还能买到最后一份**。人类自己的 ps 不是 bot ⇒ 上限
+ * 就是池里的真实剩余，行为不变。buyMonster / placeMonster 与 botConfront 的逐 key 额度都走这一个函数。
+ * @param {object} m @param {object} ps @param {string} key
+ * @returns {number} >= 0
+ */
+export function monsterStockLeft(m, ps, key) {
+  const left = monsterPoolFor(m, ps).left(key);
+  const reserve = monsterReserve(m, ps);
+  return reserve > 0 ? Math.max(0, left - reserve) : left;
 }
 
 /**
@@ -337,6 +383,8 @@ export function rollMonsterShop(m, ps, { free = false } = {}) {
  * 判据顺序与 PlayerState.buy 一致：阶段/身份 → 索引 → 该格 → **本回合合法性** → 售出 → 库存 → 预算。
  * 复验修复 1.2：不在本回合合法集合里的卡一律 BAD_TARGET 且不扣库存（否则买到手也提交不了，
  * 提交时只会得到 `illegal 对抗期 pick`）。
+ * 共享池留份（2026-11-04 真机）：bot 的库存上限是 `monsterStockLeft`（= 剩余 − 同队人类攻方人数），
+ * 留不出来就 SOLD_OUT；人类的上限仍是真实剩余。
  * @param {object} m @param {object} ps @param {number} idx
  * @returns {{ ok: true, index: number, key: string, price: number, left: number, picks: number }
  *   | { error: string, detail?: string }}
@@ -357,6 +405,8 @@ export function buyMonster(m, ps, idx) {
   if (slot.sold === true) return fail(ERR.SOLD_OUT);
   const pool = monsterPoolFor(m, ps);
   if (pool.left(slot.key) <= 0) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
+  // 共享池留份（2026-11-04 真机 2V2）：bot 不得把同队人类的份额买光，人类自己不受这条限制。
+  if (monsterStockLeft(m, ps, slot.key) <= 0) return fail(ERR.SOLD_OUT, 'stock reserved for human teammates'); // i18n-ignore
   const price = monsterPriceOf(m, slot.key);
   if (!(price > 0)) return fail(ERR.BAD_TARGET, 'unknown monster'); // i18n-ignore
   const { left } = monsterBudgetLeft(m, ps);
@@ -378,7 +428,8 @@ export function buyMonster(m, ps, idx) {
  * 投到上/下出怪口，可选数量（缺省 1）。与 buyMonster 的区别只在「门」与「一次几只」；
  * 判据（商店开着 / 投放窗口 / 攻方 / 合法集合 / 预算 / 库存）与 buyMonster 完全同一套。
  *
- * count 的夹紧：`[1, min(20, 库存 left, 本格剩余预算能买的只数)]`；夹到 0（连一只都买不起）→ CONFRONT_BUDGET，
+ * count 的夹紧：`[1, min(20, 可用库存, 本格剩余预算能买的只数)]`，可用库存 = `monsterStockLeft`
+ * （bot 在 shared 模式里要扣掉同队人类攻方的份数）；夹到 0（连一只都买不起）→ CONFRONT_BUDGET，
  * 且**不动库存**（先算再 take）。用掉后该格立即补位（refillSlot，见上）。
  * @param {object} m @param {object} ps @param {number} index 商店格下标
  * @param {'upper'|'lower'} gate 出怪口 @param {number} [count] 只数，缺省 1
@@ -402,12 +453,15 @@ export function placeMonster(m, ps, index, gate, count = 1) {
   if (legal && !legal.has(slot.key)) return fail(ERR.BAD_TARGET, 'this monster is not open this round'); // i18n-ignore
   const pool = monsterPoolFor(m, ps);
   if (pool.left(slot.key) <= 0) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
+  // 共享池留份（2026-11-04 真机 2V2）：一次投放的只数上限也要先扣掉给人类队友留的份数。
+  const available = monsterStockLeft(m, ps, slot.key);
+  if (available <= 0) return fail(ERR.SOLD_OUT, 'stock reserved for human teammates'); // i18n-ignore
   const price = monsterPriceOf(m, slot.key);
   if (!(price > 0)) return fail(ERR.BAD_TARGET, 'unknown monster'); // i18n-ignore
   const { left } = monsterBudgetLeft(m, ps);
   const want = Number.isFinite(Number(count)) && Number(count) >= 1 ? Math.floor(Number(count)) : 1;
   const affordable = price > 0 ? Math.floor(left / price) : 0;
-  const units = Math.min(20, pool.left(slot.key), Math.max(0, affordable), want);
+  const units = Math.min(20, available, Math.max(0, affordable), want);
   if (units <= 0) return fail(ERR.CONFRONT_BUDGET, 'price over the round budget'); // i18n-ignore
   const key = slot.key;
   const placed = pool.take(key, units);
