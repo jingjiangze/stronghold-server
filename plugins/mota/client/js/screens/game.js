@@ -918,7 +918,12 @@ function MatchScreen() {
       setBanner(null);
       setRoundPop({ round: pub.round, left: roundsToBoss(pub), sub: b.sub, watching: spectator || !alive, key: phaseKey });
     } else if (plate) setBanner({ ...plate, plate: true, key: phaseKey });
-    else if (b) setBanner({ ...b, key: phaseKey });
+    // 攻方本回合的准备期就是投放窗口，不是休整期，不放这块 ROUND NN // REST 横幅：2026-11-05 真机（对抗档第 2 回合，
+    // shots/v-12-3d-battle.png）里它横在屏幕中部（y 306–413、x ≈170–1109），把右下出怪口的红色投放框（x 957–1073 /
+    // y 293–389）盖到只剩顶边 y 293–305，同帧上方投放面板却写着「正在投放」。判据复用 confDropWindow（攻方 + 投放
+    // 窗口开着：pub.confront.active 且 stage == null，server/match/match/views.js 只在本回合攻防的 PREP 这么发）；
+    // 守方 / 协同 / 单人等 pub.confront 缺失或本席不是攻方的局面它恒为 false，行为与改动前逐字节一致。
+    else if (b && !(phase === PHASE.PREP && confDropWindow)) setBanner({ ...b, key: phaseKey });
     if (phase === PHASE.ROUND_START) audio.sfx('roundStart');
     else if (phase === PHASE.PREP) audio.sfx('rest', { volume: 0.7 });
     else if (phase === PHASE.COMBAT) audio.sfx('battleStart');
