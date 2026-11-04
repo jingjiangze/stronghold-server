@@ -5,15 +5,17 @@ import { createBotRegistry } from './botContract.js';
 
 // 登记表：以后每个模式要独立 AI 就在这里加一行 defineBotStrategy({...})（再登记进下面的 REGISTRY）。
 // 目前各模式的默认实现都是 legacy（行为与改造前完全一致）；这里是唯一需要改的地方。
-// 对抗的三个规则档各有一格（2026-11-04 复验修复 4）：versusRule 三档（bounty / confront / ai）**各自**可独立配 AI；
-// `versus` 只是「isVersus 但没有 versusRule」时的兜底键。`ai`（AI 对抗）与 `confront`（纯对抗）不要混用一格。
+// 对抗的规则档**两档**（2026-11-04 定两档：bounty 赏金 / confront 控怪），各有一格、**各自**可独立配 AI；
+// `versus` 不是第三档，只是「isVersus 但没有 versusRule」时的兜底键（botModeKey 的 `|| 'versus'`）。
+// `ai`（AI 对抗）这一档已撤：房间层 room.variant 不再产生它（versusLobby.js 的 ruleOf 回落 bounty），
+// 只有直接以 versusRule='ai' 建 Match 的老路径还可能落到那一格，新代码不要再选它。
 const MODES = Object.freeze({
   solo: 'legacy',
   coop: 'legacy',
-  versus: 'legacy',
+  versus: 'legacy',    // 不是可选档：只是 botModeKey 在「isVersus 但没有 versusRule」时的兜底键
   bounty: 'legacy',
   confront: 'legacy',
-  ai: 'legacy',
+  ai: 'legacy',        // 已撤的第三档：只剩「直接以 versusRule='ai' 建 Match」的老路径会落到这里
   rogue: 'legacy',
 });
 
@@ -21,7 +23,7 @@ const MODES = Object.freeze({
 // 所以这里只登记额外策略；空表 = 只有 legacy，与改造前等价。
 const REGISTRY = createBotRegistry([]);
 
-/** 模式键：对抗档用 versusRule（bounty / confront / ai 三档各自独立配 AI），其余按 mode。 */
+/** 模式键：对抗档用 versusRule（bounty / confront **两档**各自独立配 AI）；没有 versusRule 时兜底 'versus'，其余按 mode。 */
 export function botModeKey(match) {
   if (!match) return 'solo';
   if (match.isVersus) return match.versusRule || 'versus';

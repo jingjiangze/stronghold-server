@@ -997,7 +997,7 @@ export class Lobby {
   // room.* handlers
   // ---------------------------------------------------------------------------------------------------
 
-  create(session, { mode, difficulty: asked, test, version: askedVersion, soloUnlimited, teamSize, variant, versusAlt, versusSpeed } = {}) {
+  create(session, { mode, difficulty: asked, test, version: askedVersion, soloUnlimited, teamSize, variant, versusAlt, versusSpeed, monsterMode } = {}) {
     // A test room exists only when the process switch allowed it. The check runs before the room is built.
     if (test === true && this.testEnabled !== true) return fail(ERR.TEST_DISABLED);
     // the official version (header "Official versions"): left out, the server's default
@@ -1065,6 +1065,9 @@ export class Lobby {
     if (mode === 'versus') room.versusAlt = versusAlt !== false;
     // 对抗「倍速」（业主 2026-10-31：赏金档的怪量让玩家自己调）：只认 1 / 1.5 / 2，其它一律回 1。
     if (mode === 'versus') room.versusSpeed = versusSpeed === 1.5 || versusSpeed === 2 ? versusSpeed : 1;
+    // 对抗「怪物形态」（业主 2026-11-04）：'shared' 共有出怪（默认，同队攻方共用一个池）/ 'solo' 单人怪物（每队第一位
+    // 存活攻方持有投放权）。与 versusLobby.js 的 matchOptions 同口径：别的值（含缺省）一律回 'shared'。
+    if (mode === 'versus') room.monsterMode = monsterMode === 'solo' ? 'solo' : 'shared';
     // 「不限时」 only on a solo room of a version whose solo is timed (header). Anywhere else the key is ignored, so a
     // stray true cannot change a default or co-op create.
     if (mode === 'solo' && soloUnlimited === true && this.versionSoloTimed(version)) room.soloUnlimited = true;

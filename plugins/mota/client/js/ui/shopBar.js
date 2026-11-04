@@ -497,6 +497,8 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
  *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards.
  *   monsterShop: 对抗·攻方商店的私有帧 `m.monsterShop`（game.js 传入；只有攻方会收到 open:true 的帧 —— 服务端
  *   `monsterShopFrame` 只发给 confrontActors）。缺省 null / `open !== true` ⇒ 每一处分支都走改造前的老路。
+ *   它为真时（攻方）不画干员的元素：不画 LevelCard、不占装备卡那一格、`剩余可放置角色` 换成 `剩余投放预算`
+ *   （读 monsterShop.left）；冻结 / 刷新 / 卡片改用 g.monster* 那一套。
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
   reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null, monsterShop = null }) {
@@ -590,7 +592,11 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
          and blew 冻结/刷新 up to fill them (user report 2026-10-09). Its own row keeps the buttons packed right. */ null}
     ${econ ? html`<div class="shopbar__econ"><${EconStrip} econ=${econ} editable=${editable} onRefuse=${onRefuse} onOpenShop=${onOpenShop} /></div>` : null}
     <div class="shopbar__tools">
-      <span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>
+      ${/* 怪物卡池开着时（攻方）：这一行是「剩余投放预算」（monsterShop.left），不是干员的部署位；
+           关着时走右支，与改造前逐字节相同（同一个字符串、同一个 class、同一个 remaining） */ null}
+      ${monsterOn
+        ? html`<span class="shopbar__remain">${t('剩余投放预算：')}<b class=${cx('num', monsterLeft === 0 && 't-orange')}>${monsterLeft}</b></span>`
+        : html`<span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>`}
       ${/* 怪物卡池开着时：商店级「冻结」不适用（冻结是按格子的，见卡面右键 / 浮层按钮）⇒ 不画；刷新改发 g.monsterRefresh */ null}
       ${monsterOn ? null : html`<button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
         title=${frzReason || (frozen ? t('解冻商店 · {key}', { key: hk.freeze }) : t('冻结商店（下回合保留） · {key}', { key: hk.freeze }))}>
@@ -611,7 +617,8 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
       </button>`}
     </div>
     <div class="shopbar__row">
-      <${LevelCard} shop=${shop} reason=${lvReason} armed=${armed === levelKey} onTap=${tapLevel} />
+      ${/* 攻方（怪物卡池开着）不画干员的商店升级卡：两档之间只差这一层条件，monsterOn 为假时输出与改造前完全一致 */ null}
+      ${monsterOn ? null : html`<${LevelCard} shop=${shop} reason=${lvReason} armed=${armed === levelKey} onTap=${tapLevel} />`}
       ${showReward ? html`<${RewardCards} offer=${reward} priv=${priv} editable=${editable} onPick=${onReward} onDetail=${onDetail} onLater=${onRewardLater}
           armed=${armed} onTap=${tapCard} offBonds=${offBonds} />`
         : html`<div class="shopbar__cards">
@@ -637,7 +644,9 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
               reason=${reason} armed=${armed === armKey('c', i, s)} onTap=${editable ? (idx) => tapCard('c', idx, s, 'chess', reason, onBuy) : null} />`;
         })}
       </div>`}
-      ${showReward ? null : html`<div class="shopbar__item">
+      ${/* 装备卡那一格同样是干员商店的：攻方（怪物卡池开着）不占这一格。与 showReward 同一条短路判据，
+           两者都为假时输出与改造前完全一致 */ null}
+      ${showReward || monsterOn ? null : html`<div class="shopbar__item">
         ${itemSlots.length
           ? itemSlots.map(({ s, i }) => {
             if (s.sold) return html`<${SoldCard} key=${`is${i}`} item=${true} />`;

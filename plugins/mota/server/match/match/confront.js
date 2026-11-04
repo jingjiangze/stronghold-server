@@ -1389,6 +1389,21 @@ export class MatchConfront {
       if (ordered.length) take(ordered[0].rows);
       if (picks.length < cap) for (let i = 1; i < ordered.length; i++) take(ordered[i].rows);
     }
+    // 合法集闸门（2026-11-04 复验修复 2）：`_sanitizeBotPicks`（pureShares.sanitizeBotPickList）只校验字段形态与
+    // 预算，**不判** enemyKey 是否在本回合合法集合里；赏金档的 `confrontGroups` 又没有回合闸门（isConfrontRule 为假
+    // 时只按「本局见过」筛），于是 bot 的贪心会从全类型池里挑 —— 实测本回合官方只出 2 个 key，冻结进 this.confront
+    // 的 12 条里有 10 条是别的怪（apply 时多半被当成非法出怪丢掉）。
+    // 三条产出路径（策略 deployPlan / 对抗档 fillConfrontPicks / 赏金档贪心）都汇到这一个 picks 数组，所以在这里
+    // 过一道 `legalKeys`（与 `_confrontMember` / 怪物商店**同源**）就覆盖全部 return 路径，且先于 firstKey 与清洗。
+    // `legalKeys` 返回 null（取不到合法集）= 不闸门，保持旧行为。
+    const legal = legalKeys(this);
+    if (legal) {
+      const kept = picks.filter((p) => p && legal.has(p.enemyKey));
+      if (kept.length !== picks.length) {
+        picks.length = 0;
+        for (const p of kept) picks.push(p);
+      }
+    }
     const firstKey = picks.length ? picks[0].enemyKey : null;
     const gi = firstKey == null ? 0 : (rows.find((r) => r.key === firstKey)?.gi ?? 0);
     // 事件期 boss 格：按金币降序取到 cap（不占预算、不计 maxPicks —— 校验器与 _confrontBossSpawns 都是这么定的）
@@ -1404,6 +1419,8 @@ export class MatchConfront {
     // （time / routeIndex / 路线长度 / routeCost 预算）。这里走同一套判据，非法字段就地纠正。
     // 复审计 2026-10-27：即使一条都买不起也必须写 sub —— 投放收尾（finishConfront）会给每个还没有 sub 的攻方
     // 补一份 bot 投放，缺 sub 的那一队在 PREP 结束时才补，不如这里就给全。
+    // 同上（2026-11-04 复验修复 2）：合法集过滤后为空也照样写空 sub —— 旧不变式「即使一条都交不上也要有 sub」保留，
+    // 空 picks 是合法提交（apply 时什么都不替换），且避免 finishConfront 的兜底再走一遍同样的空结果。
     const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
     this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses, total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
     this.markPublic();
@@ -1469,16 +1486,38 @@ export class MatchConfront {
   }
 
   /**
-   * The PREP is over (endPrep, 2026-11-04): anyone still missing a submission gets a bot one, the shops close and the
-   * placements FREEZE into `this.confront` — once, for this round. Then the roster (悬赏名单) is held for
-   * VERSUS_CONFRONT.rosterMs before the battles start (CONFRONT_ROSTER_MS, user 2026-10-17 addendum); without the hold
-   * (rosterMs 0) the battles start at once.
+   * The PREP is over (endPrep, 2026-11-04): the monster-shop DRAFTS become submissions (a submission someone already
+   * made wins over their draft; a seat left with nothing gets a bot one only when it is botControlled — a human's empty
+   * draft means they throw nothing), the shops close and the placements FREEZE into `this.confront` — once, for this
+   * round. Then the roster (悬赏名单) is held for VERSUS_CONFRONT.rosterMs before the battles start
+   * (CONFRONT_ROSTER_MS, user 2026-10-17 addendum); without the hold (rosterMs 0) the battles start at once.
    */
   finishConfront() {
     if (this.phase !== PHASE.PREP || this.confrontStage != null) return;
     this.setDeadline(0);
     this.confrontSubs ||= new Map();
-    for (const ps of this.confrontActors()) if (!this.confrontSubs.has(ps.playerId)) this.botConfront(ps);
+    // 点卡投放（2026-11-04 复验修复 1）：客户端已经不再发 `g.confront`，投放只写在 `ps.monsterDraft.picks` 里
+    // （monsterShop.js 的 buyMonster / placeMonster）。收尾必须**先把草稿转成正式提交**，否则「没有 sub 的攻方」
+    // 会被下一段 botConfront 用 bot 自选的怪覆盖 —— 赏金档的缺省策略是 legacy（三个 hook 全返回 null），
+    // 回落到旧贪心填充 ⇒ 玩家投的卡整单消失（实测：投 2 只 slime，冻结进 this.confront 的是 bot 的 6 只）。
+    // 判定顺序（业主口径）：
+    //   ① 已有 sub（含已确认的 committed）→ 不动，玩家自己的提交优先于草稿；
+    //   ② 草稿非空（人类或 bot 都算）→ 按 `submitConfront` 的同一套判据（`_confrontMember`：合法集 / 数量 / 预算 /
+    //      路线 / 时刻）转成正式提交，写进 confrontSubs 并标记 committed；
+    //   ③ 草稿为空 → 只有 botControlled 才补 bot 投放；人类空草稿 = 本回合什么都不投（保持空，不替人做主）。
+    // 转换被拒（越界 / 超预算 / 不在本回合合法集）不静默丢弃：记一条 error，再按 ③ 兜底。
+    for (const ps of this.confrontActors()) {
+      if (this.confrontSubs.has(ps.playerId)) continue;
+      const draft = ps.monsterDraft;
+      const picks = draft && Array.isArray(draft.picks) ? draft.picks : [];
+      if (picks.length > 0) {
+        const member = this._confrontMember(ps, 0, (draft && draft.position) || 'mid', picks, []);
+        if (member && member.sub) this.confrontSubs.set(ps.playerId, { ...member.sub, committed: true });
+        else this.reportError(`confront draft ${ps.playerId}`, (member && member.error) || 'illegal 对抗期 pick'); // i18n-ignore: 服务端内部日志
+      }
+      if (this.confrontSubs.has(ps.playerId)) continue;
+      if (ps.botControlled) this.botConfront(ps);
+    }
     // 怪物卡池收尾（2026-11-03）：所有 sub 都已落到 confrontSubs（上面的 botConfront 也要能看到商店），
     // 再把 ps.monsterShop / ps.monsterDraft 摘掉。关掉时整段不执行。
     if (this.monsterShopOn) for (const ps of this.confrontActors()) closeMonsterShop(this, ps);

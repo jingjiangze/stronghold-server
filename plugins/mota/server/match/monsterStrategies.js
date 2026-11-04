@@ -64,17 +64,25 @@ function bestSlot(m, ps) {
   return best;
 }
 
+/** 已有草稿 = 投放已经由「点卡 / 之前的购买」定下（monsterDraft.picks 非空）。 */
+function hasDraft(ps) {
+  return !!(ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) && ps.monsterDraft.picks.length > 0);
+}
+
 /**
  * 买卡循环：反复买「最划算、买得起」的一格；一格都买不起就刷新。
  * 刷新上限（1 次免费 + 最多 MONSTER_MAX_PAID_REFRESHES 次自费）**由商店自己记账**（monsterShop.js 的
  * rollMonsterShop，人类走同一条路径）；这里不再自己数次数（2026-11-04 复验修复 2：两份计数会漂移，且玩家侧
  * 原先无上限）。商店拒绝刷新（WRONG_PHASE / 预算不足）就收手。
+ * 草稿非空就直接返回（2026-11-04 复验修复 3）：草稿是玩家（或上一次买卡）已经决定的投放，
+ * 再买一只就变成「投 3 提交 4」—— 买卡只发生在草稿为空时。
  * 副作用只有 ps.monsterShop / ps.monsterDraft.picks。
  * @returns {number[]} 买到的格下标（诊断 / 测试用）
  */
 function cardpoolShopPlan(m, ps) {
   const bought = [];
   if (!ps || !ps.monsterShop) return bought;
+  if (hasDraft(ps)) return bought;
   for (let guard = 0; guard < 64; guard++) {
     const idx = bestSlot(m, ps);
     if (idx != null) {
@@ -87,14 +95,16 @@ function cardpoolShopPlan(m, ps) {
   return bought;
 }
 
-/** cardpool 的投放计划：先保证商店开着，再买，最后把草稿交回引擎。买不到 → null（回落引擎原逻辑）。 */
+/** cardpool 的投放计划：先保证商店开着，再买（**仅当草稿为空**），最后把草稿交回引擎。买不到 → null（回落引擎原逻辑）。 */
 function cardpoolDeployPlan(m, ps) {
   if (!m || !ps || m.monsterShopOn !== true) return null;
   if (!ps.monsterShop) {
     const opened = openMonsterShop(m, ps);
     if (opened && opened.error) return null;
   }
-  cardpoolShopPlan(m, ps);
+  // 2026-11-04 复验修复 3：草稿非空（人类点卡 / 已买到的卡）＝ 投放已经决定 —— 跳过买卡，原样交回草稿。
+  // 旧实现无条件先买再交回草稿，线上表现是「人类投 3 → 提交 4」。只有草稿为空时才买。
+  if (!hasDraft(ps)) cardpoolShopPlan(m, ps);
   const picks = (ps.monsterDraft && Array.isArray(ps.monsterDraft.picks)) ? ps.monsterDraft.picks : [];
   if (!picks.length) return null;
   return picks.map((p) => ({ enemyKey: p.enemyKey, gate: p.gate === 'upper' ? 'upper' : 'lower' }));

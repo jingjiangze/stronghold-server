@@ -586,7 +586,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
   testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
   versusRule = 'bounty', onVersusRule = null,
-  versusSpeed = 1, onVersusSpeed = null }) {
+  versusSpeed = 1, onVersusSpeed = null, monsterMode = 'shared', onMonsterMode = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -666,6 +666,14 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                   onChange=${(e) => onVersusSpeed && onVersusSpeed(Number(e.currentTarget.value))}>
                   ${[1, 1.5, 2].map((m) => html`<option key=${m} value=${String(m)}>${t('{m}× 出怪', { m })}</option>`)}
                 </select></label>` : null}
+              ${/* 怪物形态（业主 2026-11-04）：两档都能选 —— 怪物卡池在赏金 / 控怪两档都开着（confront.monsterShopOn） */ null}
+              <label class="proto-team" title=${t('怪物形态：共有出怪 = 同队攻方共用一个出怪池、一起出怪；单人怪物 = 每人一个池，只有每队第一位存活攻方持有投放权（其余攻方的商店不开）')}>
+                <span>${t('怪物形态')}</span>
+                <select value=${monsterMode} disabled=${!!busy}
+                  onChange=${(e) => onMonsterMode && onMonsterMode(e.currentTarget.value === 'solo' ? 'solo' : 'shared')}>
+                  <option value="shared">${t('共有出怪')}</option>
+                  <option value="solo">${t('单人怪物')}</option>
+                </select></label>
             </div>
           </div>` : null}
         ${modeVariant === 'xie' ? html`<div class="proto-versus proto-versus--info">
@@ -930,6 +938,8 @@ export function LobbyScreen() {
   const [versusRule, setVersusRule] = useState('bounty');
   // 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，控怪档不吃这一项
   const [versusSpeed, setVersusSpeed] = useState(1);
+  // 怪物形态（业主 2026-11-04）：'shared' 共有出怪（默认）/ 'solo' 单人怪物；只对抗房的 room.create 带这个字段
+  const [monsterMode, setMonsterMode] = useState('shared');
   const [difficulty, setDifficulty] = useState(() => preferredDifficulty(lobbySimulationPreference()));
   const [fpVariant, setFpVariant] = useState(firepowerVariantPreference);
   const roomMode = simulation === 'solo' ? 'solo' : simulation === 'versus' ? 'versus' : 'coop';
@@ -1050,7 +1060,9 @@ export function LobbyScreen() {
       ...(simulation === 'versus' ? { teamSize: 2, variant: versusRule,
         // 攻守是否轮换由服务端按档强制（赏金轮换 / 控怪固定），这里只把 wire 发干净，值本身不会被采信。
         versusAlt: versusRule === 'bounty',
-        versusSpeed: versusRule === 'bounty' ? versusSpeed : 1 } : {}),
+        versusSpeed: versusRule === 'bounty' ? versusSpeed : 1,
+        // 怪物形态（业主 2026-11-04）：服务端只认 'solo'，其余回落 'shared'（server/lobby.js create）
+        monsterMode } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });
     // 随机地图默认关（2026-10-30）：不再在建房时强开；要换图请在房间里用「随机地图」开关。
@@ -1221,6 +1233,7 @@ export function LobbyScreen() {
       testMode=${testMode} asTest=${asTest} onTest=${setAsTest}
       versusRule=${versusRule} onVersusRule=${setVersusRule}
       versusSpeed=${versusSpeed} onVersusSpeed=${setVersusSpeed}
+      monsterMode=${monsterMode} onMonsterMode=${setMonsterMode}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 
