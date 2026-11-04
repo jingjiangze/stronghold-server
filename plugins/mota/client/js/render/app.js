@@ -613,8 +613,10 @@ export async function createFieldView(host, options = {}) {
   }
   function stdField() { const [h, w] = mapSize(); return h === 19 && w === 21 && !(stageRec && stageRec.rogueFrame); }
   function fullBand() { return [0, mapSize()[0] - 1]; }
-  const viewBand = (b) => (stdField() ? b : fullBand());
-  const viewField = (f) => (stdField() ? f : fullBand());
+  // 2026-11-05 真机：这两行原来是 `const` 箭头函数，而第 445 行的 tiles.setView 先用到它们 → TDZ ReferenceError
+  // → createFieldView 抛错 → fieldHost 判定引擎不可用，整张棋盘退回 DOM（SIMPLIFIED VIEW）。改用函数声明（会提升）。
+  function viewBand(b) { return stdField() ? b : fullBand(); }
+  function viewField(f) { return stdField() ? f : fullBand(); }
 
   function camRect() {
     if (!stdField()) { const [h, w] = mapSize(); return { r0: 0, r1: h - 1, c0: 0, c1: w - 1 }; }
