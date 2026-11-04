@@ -10,7 +10,7 @@ import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
 // 怪物卡池（2026-11-03）：攻方的怪物商店（买卡进投放草稿 / 刷新 / 冻结 / 撤回草稿）
-import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, placeMonster, monsterShopFrame, pushMonsterShops } from '../monsterShop.js';
+import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, placeMonster, upgradeMonsterShop, monsterShopFrame, pushMonsterShops } from '../monsterShop.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
@@ -27,6 +27,9 @@ export class MatchIntents {
       case 'g.monsterDrop': return this.monsterShopReply(ps, dropMonster(this, ps, msg.index == null ? null : Number(msg.index), msg.id == null ? null : Number(msg.id)));
       // 点卡即投放（业主 2026-11-04）：卡直接投到上/下出怪口，count 可选（缺省 1）；用掉后该格自动补位
       case 'g.monsterPlace': return this.monsterShopReply(ps, placeMonster(this, ps, Number(msg.index), msg.gate, msg.count == null ? 1 : Number(msg.count)));
+      // 升级怪物卡池（业主 2026-11-04「参考卫戍协议干员商店」）：无字段；等级挂 Match、跨回合持久，
+      // 满级回 MAX_LEVEL，扣款全有或全无。回包走 monsterShopReply（本席 + 同队各推一帧新的 level/upgradePrice）。
+      case 'g.monsterLevelUp': return this.monsterShopReply(ps, upgradeMonsterShop(this, ps));
       case 'g.hex': return this.hexPick(ps, msg.hexId);
       case 'g.hexReroll': return this.hexReroll(ps, msg.slot);
       case 'g.meltOpen': return this.meltdownRequest(ps);

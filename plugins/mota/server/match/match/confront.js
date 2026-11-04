@@ -55,7 +55,7 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom, monsterShopLevelOf } from '../monsterShop.js';
 // 怪物盟约（2026-11-04 业主口径）：攻方投放的怪吃自己这一回合攒出来的乘区，与 roundMods 相乘（只乘不覆盖）。
 import { monsterBondMods, mergeMonsterBondMods, captureMonsterBondLeaks } from '../monsterBonds.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
@@ -656,6 +656,16 @@ export class MatchConfront {
   /** The round's monster count (Σ counts) — the base of the insertion positions (25 / 50 / 75 %). */
   confrontWaveCount() {
     return this._confrontWaveSpawns().reduce((n, s) => n + Math.max(1, Math.floor(Number(s.count) || 1)), 0);
+  }
+
+  /**
+   * 本回合的「全队军费总额 G」—— 怪物商店**升级价**的基准（业主 2026-11-04「参考卫戍协议干员商店」）。
+   * = `confrontWaveValue() × CONFRONT_VOLUME_SHARE`：与 grantMonsterFunds 同源（每人军费 = G ÷ 攻方人数，
+   * 全队合计恰好 = G），**不在这里另算一遍公式**。monsterShop.js 的 monsterUpgradePriceOf 从这里取 G。
+   * @returns {number} >= 0
+   */
+  monsterUpgradeFundsG() {
+    return Math.max(0, Math.round((Number(this.confrontWaveValue()) || 0) * CONFRONT_VOLUME_SHARE));
   }
 
   /**
@@ -1361,6 +1371,10 @@ export class MatchConfront {
       // 「官方波次价值 × 1.5 ÷ 攻方人数」，shared 模式进队级账户、solo 进 ps.monsterFunds（跨回合结转）。
       // 必须在开店 / 推首帧**之前**，否则第一帧显示的余额还是 0。
       this.grantMonsterFunds();
+      // 商店等级（2026-11-04「参考卫戍协议干员商店」）：等级挂 Match（`m.monsterShopLevels`，跨回合持久，不挂
+      // ps.monsterShop —— 那玩意儿每回合重建）。开店前 seed 一次：首次碰到该队（solo：该人）时为 1 级。
+      // openMonsterShop 只**读**等级决定槽位数，不改等级；升级只走 g.monsterLevelUp。
+      for (const ps of this.confrontActors()) monsterShopLevelOf(this, ps);
       this.monsterPools ||= new Map();
       const solo = this.monsterMode === 'solo';
       // 池的键：shared = teamId（同队必须共用同一个池，否则队友看不到对方买走的份数 / 退回来的份数）；

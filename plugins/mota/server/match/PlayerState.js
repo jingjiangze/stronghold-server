@@ -163,6 +163,8 @@ export class PlayerState {
     // （match/settle.js）。买卡 / 刷新 / 投放都从这里扣（monsterShop.js 显式 spendMonsterFunds）。
     // 与守方的 `funds` **完全分开**：不进 stats.gold / round.spent / totalSpent，`econSplitLeftover` 只碰 `ps.funds`
     // 与 `ps.reserve`，不会清零它；`eliminate()` 也不动它（账户跟人走，不参与守方那套三层资金）。
+    // 注：商店的**等级**（2026-11-04「参考卫戍协议干员商店」）不在本类 —— 它跨回合持久，挂在 Match 的
+    // `m.monsterShopLevels`（monsterShop.js 的 monsterShopLevelOf / setMonsterShopLevel）；放这里会被每回合重建冲掉。
     this.monsterFunds = 0;
     /** 本回合发的军费（只给 m.monsterShop 帧显示；每次发军费时重置） */
     this.monsterGrant = 0;

@@ -85,6 +85,14 @@
 .lvcard.is-disabled .lvcard__frame { border-color: rgba(143, 165, 156, .5); }
 .lvcard.is-disabled .lvcard__frame::before, .lvcard.is-disabled .lvcard__frame::after { border-color: #8fa59c; }
 .lvcard.is-max { background: linear-gradient(180deg, #d9b24a, #a07a1c); color: #1d1400; cursor: default; filter: none; }
+/* 怪物卡池的等级卡（2026-11-04「参考卫戍协议干员商店」）：复用 .lvcard 的形状，只换攻方那一档的琥珀色系
+   （与怪物卡 / 投放口径的金色一致，一眼能区分「这是怪物的卡池，不是干员的调度中心」）。 */
+.lvcard--monster { background: linear-gradient(180deg, #e8a24a, #b06a1c); color: #1d1400; }
+.lvcard--monster .lvcard__key { color: #4a2a06 !important; border-color: rgba(29, 20, 0, .35) !important; }
+.lvcard--monster.is-max { background: linear-gradient(180deg, #d9b24a, #a07a1c); }
+/* 资金条旁边的卡池等级（只在 monsterOn 时出现） */
+.funds__lv { display: inline-flex; align-items: baseline; gap: .02rem; font-size: .14rem; letter-spacing: .06em; color: var(--text-lo); }
+.funds__lv b { font-size: .18rem; line-height: 1; color: #fff; }
 
 /* ---- operator / item card ---- */
 /* A tap anywhere on a card is the card's tap (no ⓘ corner — user playtest #6 item 10); the 确认购买 strip takes no

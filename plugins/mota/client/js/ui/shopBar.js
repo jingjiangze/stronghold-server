@@ -386,12 +386,16 @@ function EmptyCard({ item = false }) {
     title=${t('空栏位：刷新或下回合开始时补满')}></div>`;
 }
 
-function LevelCard({ shop, reason, armed = false, onTap }) {
+function LevelCard({ shop, reason, armed = false, onTap, monster = false }) {
   const lv = shop?.level ?? 1;
   const max = lv >= (shop?.maxLevel ?? 6);
   const price = shop?.upgradePrice ?? 0;
-  return html`<button type="button" class=${cx('lvcard', max && 'is-max', reason && 'is-disabled', armed && 'is-armed')} onClick=${() => !reason && onTap()}
-      title=${reason || (armed ? t('再次点击确认升级（{price} 资金）', { price }) : t('升级调度中心（{price} 资金） · {key}', { price, key: hotkeyLabelOf('levelUp') }))} aria-disabled=${reason ? 'true' : 'false'}
+  // 怪物卡池（2026-11-04「参考卫戍协议干员商店」）：同一张 .lvcard、同一个两击确认，只有文案与修饰类不同
+  const idleTitle = monster
+    ? t('升级怪物卡池（{price} 资金） · {key}', { price, key: hotkeyLabelOf('levelUp') })
+    : t('升级调度中心（{price} 资金） · {key}', { price, key: hotkeyLabelOf('levelUp') });
+  return html`<button type="button" class=${cx('lvcard', monster && 'lvcard--monster', max && 'is-max', reason && 'is-disabled', armed && 'is-armed')} onClick=${() => !reason && onTap()}
+      title=${reason || (armed ? t('再次点击确认升级（{price} 资金）', { price }) : idleTitle)} aria-disabled=${reason ? 'true' : 'false'}
       aria-pressed=${String(!!armed)}>
     ${!max ? html`<${HexBadge} value=${price} tone=${reason && reason !== t('调度中心已达最高等级') ? 'dark' : 'gold'} size="md" class="lvcard__price" />` : null}
     <span class="lvcard__frame">
@@ -606,7 +610,8 @@ export function MonsterBondStrip({ bonds = null }) {
  *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards.
  *   monsterShop: 对抗·攻方商店的私有帧 `m.monsterShop`（game.js 传入；只有攻方会收到 open:true 的帧 —— 服务端
  *   `monsterShopFrame` 只发给 confrontActors）。缺省 null / `open !== true` ⇒ 每一处分支都走改造前的老路。
- *   它为真时（攻方）不画干员的元素：不画 LevelCard、不占装备卡那一格、`剩余可放置角色` 换成 `剩余投放预算`
+ *   它为真时（攻方）不画干员的元素：商店升级卡换成**怪物卡池等级卡**（`.lvcard--monster`，读帧里的
+ *   level/maxLevel/upgradePrice，点了发 g.monsterLevelUp）、不占装备卡那一格、`剩余可放置角色` 换成 `剩余投放预算`
  *   （读 monsterShop.left）；冻结 / 刷新 / 卡片改用 g.monster* 那一套。
  *   view / onDropCam: 拖拽投放用的镜头钩子（game.js 传入）。`view` 只用来做落点判门（render/app.js 的
  *   tileAtClientPoint）与半区高亮的几何（useTileScreen）；`onDropCam(true/false)` 把镜头换成 / 还回能同时框住
@@ -614,7 +619,7 @@ export function MonsterBondStrip({ bonds = null }) {
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
   reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null, monsterShop = null,
-  view = null, onDropCam = null }) {
+  onMonsterLevel = null, view = null, onDropCam = null }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -641,13 +646,26 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   // （回合末会被 econSplitLeftover 清零）。monsterOn 为假 ⇒ 仍是 priv.funds，与改造前逐字节相同。
   const monsterFunds = monsterOn ? Math.max(0, Number(monsterShop.funds) || 0) : 0;
   const fundsShown = monsterOn ? monsterFunds : funds;
+  // 怪物卡池等级（2026-11-04「参考卫戍协议干员商店」）：等级 / 满级 / 升级价都读服务端帧的新键
+  // （server/match/monsterShop.js monsterShopFrame）。老帧没有这几个键 ⇒ 回落 1 级 / 6 级 / 0 价，不崩。
+  const mLevel = monsterOn ? Math.max(1, Math.trunc(Number(monsterShop.level) || 1)) : 1;
+  const mMaxLevel = monsterOn ? Math.max(mLevel, Math.trunc(Number(monsterShop.maxLevel) || 6)) : 6;
+  const mUpgradePrice = monsterOn ? Math.max(0, Math.trunc(Number(monsterShop.upgradePrice) || 0)) : 0;
+  // 两击确认（与干员 LevelCard 同一个观感）：第一下武装、第二下才发 g.monsterLevelUp（扣的是怪物资金，队级账户）
+  const mLevelKey = `mlv:${mLevel}`;
+  const mLevelReason = monsterOn
+    ? (mLevel >= mMaxLevel ? t('怪物卡池已达最高等级')
+      : (!editable ? (priv?.ready ? t('已准备就绪，取消准备后才能操作') : t('当前阶段无法进行该操作'))
+        : (mUpgradePrice > monsterFunds ? t('怪物资金不足，升级需要 {price}', { price: mUpgradePrice }) : null)))
+    : null;
 
   // A completed upgrade changes the level, so its confirmation cannot carry into the next upgrade.
   const levelKey = `lv:${shop.level ?? 1}`;
   // two-tap: the keys that may stay armed right now
   const keys = new Set();
   if (!collapsed) {
-    if (!lvReason) keys.add(levelKey);
+    if (monsterOn) { if (!mLevelReason) keys.add(mLevelKey); }
+    else if (!lvReason) keys.add(levelKey);
     // a reward offer hides the shop's cards (operators and the equipment slot, #617): only its own cards arm
     if (showReward) reward.slots.forEach((s, i) => { if (s && !s.sold) keys.add(armKey('r', i, s)); });
     else slots.forEach((s, i) => { if (s && !s.sold) keys.add(armKey(s.kind === 'item' ? 'i' : 'c', i, s)); });
@@ -887,6 +905,13 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
     setArmed(null);
     onLevel();
   };
+  /** 怪物卡池的升级卡：同一个两击确认，第二下发 g.monsterLevelUp（涨价 / 满级 / 资金不足都先说清原因）。 */
+  const tapMonsterLevel = () => {
+    if (armed !== mLevelKey) { setArmed(mLevelKey); return; }
+    setArmed(null);
+    if (mLevelReason) { onRefuse?.(mLevelReason); return; }
+    onMonsterLevel?.();
+  };
 
   // 拖动时跟随指针的浮动卡（卡面 + 张数）与命中半区的高亮。两个都不吃指针（pointer-events: none）。
   // 拖拽一开始商店条就折叠成小条 ⇒ 这两块要同时画在「折叠」与「展开」两支里（提前 return 之前算好）。
@@ -948,8 +973,12 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
       </button>`}
     </div>
     <div class="shopbar__row">
-      ${/* 攻方（怪物卡池开着）不画干员的商店升级卡：两档之间只差这一层条件，monsterOn 为假时输出与改造前完全一致 */ null}
-      ${monsterOn ? null : html`<${LevelCard} shop=${shop} reason=${lvReason} armed=${armed === levelKey} onTap=${tapLevel} />`}
+      ${/* 攻方（怪物卡池开着）画**怪物卡池**等级卡（同一张 .lvcard + .lvcard--monster 修饰类，点了发
+           g.monsterLevelUp）；守方画干员的调度中心升级卡。monsterOn 为假时输出与改造前完全一致 */ null}
+      ${monsterOn
+        ? html`<${LevelCard} monster=${true} shop=${{ level: mLevel, maxLevel: mMaxLevel, upgradePrice: mUpgradePrice }}
+            reason=${mLevelReason} armed=${armed === mLevelKey} onTap=${tapMonsterLevel} />`
+        : html`<${LevelCard} shop=${shop} reason=${lvReason} armed=${armed === levelKey} onTap=${tapLevel} />`}
       ${showReward ? html`<${RewardCards} offer=${reward} priv=${priv} editable=${editable} onPick=${onReward} onDetail=${onDetail} onLater=${onRewardLater}
           armed=${armed} onTap=${tapCard} offBonds=${offBonds} />`
         : html`<div class="shopbar__cards">
@@ -994,6 +1023,8 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
           <b class="funds__num num">${fundsShown}</b>
         </div>
         <span class="funds__label">${monsterOn ? t('怪物资金') : t('目前资金')}</span>
+        ${/* 怪物卡池开着时：资金条旁边显示卡池等级（业主 2026-11-04「参考卫戍协议干员商店」） */ null}
+        ${monsterOn ? html`<span class="funds__lv" title=${t('怪物卡池 {level}/{max} 级', { level: mLevel, max: mMaxLevel })}>Lv.<b class="num">${mLevel}</b></span>` : null}
         <button type="button" class="funds__collapse" onClick=${() => onCollapse(true)}><${Icon} name="close" />${t('收起')}</button>
       </div>
     </div>

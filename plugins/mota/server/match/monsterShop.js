@@ -1,4 +1,4 @@
-// plugins/mota/server/match/monsterShop.js — 攻方的怪物商店：每回合一张，5 格，可刷新/冻结/购买。
+// plugins/mota/server/match/monsterShop.js — 攻方的怪物商店：每回合一张，3–5 格（按商店等级），可刷新/冻结/购买/升级。
 //
 // 形态照「卫戍协议干员卡池」：卡有阶（tier）、有份数（MonsterPool 的 cap/left）、可刷新、可冻结、买走就少。
 // 用途不同：买 / 点卡进「投放草稿」（ps.monsterDraft.picks），**仍不直接写 this.confront** —— 最终由既有的
@@ -46,7 +46,31 @@ import { addMonsterBonds, dropMonsterBonds, monsterBondView, captureMonsterBondL
 // 合法集合的唯一判据在 monsterPool.js（卡池同源）：这里只转出，避免两份实现漂移。
 export { legalKeys };
 
-/** 商店格数（业主口径：5 格，与干员商店同宽）。 */
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 商店等级（业主 2026-11-04 口径：「怪物商店参考卫戍协议的干员商店」）—— 照干员商店的**形态**，不照抄数值：
+//   · 等级 1..6，槽位（一次摆几张可选卡）3 / 4 / 4 / 5 / 5 / 5（= 干员商店 shopSlots.chess 那一列）；
+//   · 升级价 = 本回合「全队军费总额 G」× MONSTER_UPGRADE_SHARES（G = confrontWaveValue × CONFRONT_VOLUME_SHARE，
+//     见 match/confront.js 的 monsterUpgradeFundsG —— 与军费同源，不按「一整回合军费」定价，否则那一回合出怪量塌到 0）；
+//   · 刷新价恒 1 个 MONSTER_REFRESH_PRICE、**不随等级**（照干员商店的刷新价恒 1）；满级 6，升级只**空开**新槽、不补卡。
+// ⚠ 等级**不能**挂在 `ps.monsterShop` 上：它每回合被 openMonsterShop 整块重建、回合末被 closeMonsterShop delete ⇒
+//   挂那里等于每回合掉回 1 级。照资金账户的范式挂 **Match 级 Map** `m.monsterShopLevels`（key 与池同口径：
+//   `monsterMode === 'solo' ? playerId : teamId`），懒建、首次 seed 1（与 `m.teamMonsterFunds` 同一个范式）。
+// 槽位只决定「一次摆几张可选卡」，**不影响**库存 cap（cap = 官方只数 × 1.5，见 monsterPool.js）—— 库存口径不许动。
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** 等级 → 一次摆几张可选卡（照干员商店 shopSlots.chess 的 3/4/4/5/5/5）。下标 = level − 1。 */
+export const MONSTER_SHOP_SLOTS_BY_LEVEL = [3, 4, 4, 5, 5, 5];
+/** 商店满级（照干员商店 maxShopLevel = 6）。 */
+export const MONSTER_MAX_LEVEL = 6;
+/**
+ * 升级价占「全队军费总额 G」的比例：level 1→2 用 [0]，2→3 用 [1] … 5→6 用 [4]。
+ * 合计 2.70G（约等于全程收入的 39%，与干员商店 37% 同量级），按比例定价才不会把某一回合的军费一口吃掉。
+ */
+export const MONSTER_UPGRADE_SHARES = [0.30, 0.45, 0.60, 0.65, 0.70];
+/**
+ * 老宽度（无等级时的回落）：`monsterShopSlotCount` 取不到合法等级（老对局 / 非法值）时用它。
+ * 业主 2026-11-03 引入等级之前商店恒为 5 格；**不是**「与干员商店同宽」——干员是 3/4/4/5/5/5 分级的。
+ */
 export const MONSTER_SHOP_SLOTS = 5;
 /**
  * 卡面单价的**全局系数**（业主 2026-11-04 裁决：单价 = 该怪官方波次价值 × 全局系数）。
@@ -203,6 +227,135 @@ export function spendMonsterFundsFrom(m, ps, n) {
   return true;
 }
 
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 商店等级（业主 2026-11-04）：Match 级 Map `m.monsterShopLevels`，懒建、首次 seed 1 —— **跨回合持久**。
+// 与 `m.teamMonsterFunds` 同一个范式（Match.js 的构造函数不用改：第一次读时建表）。
+// key 与卡池同口径（monsterPoolFor）：solo = playerId，shared = teamId（同队共用一份等级）。
+// ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** 等级表（惰性；key = 级别归属键，同 monsterPoolFor）。 */
+export function monsterShopLevels(m) {
+  if (!m) return new Map();
+  if (!m.monsterShopLevels) m.monsterShopLevels = new Map();
+  return m.monsterShopLevels;
+}
+
+/** 这一席所在商店的等级键（与 monsterPoolFor 完全同口径：solo 按人、shared 按队）。 */
+export function monsterShopLevelKey(m, ps) {
+  const solo = !!(m && m.monsterMode === 'solo');
+  if (solo) return (ps && ps.playerId != null) ? ps.playerId : 0;
+  return (m && typeof m.teamIdOf === 'function' && ps) ? m.teamIdOf(ps) : 0;
+}
+
+/** 夹到 [1, MONSTER_MAX_LEVEL]（非法 / 缺失 → 1）。 */
+function clampLevel(n) {
+  const v = Math.trunc(Number(n));
+  return Number.isFinite(v) ? Math.max(1, Math.min(MONSTER_MAX_LEVEL, v)) : 1;
+}
+
+/**
+ * 这一席此刻的**商店等级**（唯一的读数入口：开店槽位数、帧、升级判据都问它）。
+ * 首次读到该 key 时 seed 1（老对局 / 迁移过来的对局从 1 级起）。
+ * @param {object} m @param {object} ps
+ * @returns {number} 1..MONSTER_MAX_LEVEL
+ */
+export function monsterShopLevelOf(m, ps) {
+  const book = monsterShopLevels(m);
+  const key = monsterShopLevelKey(m, ps);
+  if (!book.has(key)) book.set(key, 1);
+  return clampLevel(book.get(key));
+}
+
+/**
+ * 写等级（夹紧后写进 Match 级表）。只给 upgradeMonsterShop 用 —— 其它模块只读。
+ * @param {object} m @param {object} ps @param {number} level
+ * @returns {number} 实际写入的等级
+ */
+export function setMonsterShopLevel(m, ps, level) {
+  const v = clampLevel(level);
+  monsterShopLevels(m).set(monsterShopLevelKey(m, ps), v);
+  return v;
+}
+
+/**
+ * 等级 → 一次摆几张可选卡。取不到合法等级（老对局 / 非法值）→ 回落到老宽度 MONSTER_SHOP_SLOTS（5）。
+ * @param {number} level
+ * @returns {number} 3..5
+ */
+export function monsterShopSlotCount(level) {
+  const i = Math.trunc(Number(level)) - 1;
+  const n = MONSTER_SHOP_SLOTS_BY_LEVEL[i];
+  return Number.isInteger(n) && n > 0 ? n : MONSTER_SHOP_SLOTS;
+}
+
+/**
+ * 本回合的「全队军费总额 G」—— 升级价的基准。真源在 match/confront.js 的 `monsterUpgradeFundsG`
+ * （= `confrontWaveValue() × CONFRONT_VOLUME_SHARE`，与 grantMonsterFunds 同源，不在这里另算一遍公式）。
+ * 取不到（没有这道方法的老对局 / 没有波次）→ 0。
+ * @param {object} m
+ * @returns {number} >= 0
+ */
+export function monsterUpgradeFundsG(m) {
+  if (!m || typeof m.monsterUpgradeFundsG !== 'function') return 0;
+  let v = 0;
+  try { v = Number(m.monsterUpgradeFundsG()); } catch { return 0; }
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+/**
+ * 从当前等级升到下一级的价钱 = `round(G × MONSTER_UPGRADE_SHARES[level − 1])`。
+ * 满级 → 0（调用方先判 MAX_LEVEL）；取不到 G → 0（不开店的阶段本来也升不了级）。
+ * @param {object} m @param {object} ps
+ * @returns {number} >= 0
+ */
+export function monsterUpgradePriceOf(m, ps) {
+  const level = monsterShopLevelOf(m, ps);
+  if (level >= MONSTER_MAX_LEVEL) return 0;
+  const share = MONSTER_UPGRADE_SHARES[level - 1] || 0;
+  const g = monsterUpgradeFundsG(m);
+  return g > 0 ? Math.max(0, Math.round(g * share)) : 0;
+}
+
+/**
+ * 升级商店（业主 2026-11-04「参考卫戍协议干员商店」）：`g.monsterLevelUp`，无字段。
+ * 判据与买卡同一套（商店开着 / 投放窗口 / 攻方 / 有投放权 / 商店已开张）；扣款**全有或全无**
+ * （`spendMonsterFundsFrom`：shared 扣队级账户、solo 扣个人账户）；满级 → ERR.MAX_LEVEL 且不扣款。
+ * 成功后 `level++` 并**空开**新槽（只加长 `slots` 数组、新格 null，不补卡 —— 下一次 dealSlots / rollMonsterShop
+ * 才按新长度发牌）。帧由调用方（intents 的 monsterShopReply）推给本席与同队，不在这里重复推。
+ * @param {object} m @param {object} ps
+ * @returns {{ ok: true, level: number, maxLevel: number, price: number, slots: number, left: number }
+ *   | { error: string, detail?: string }}
+ */
+export function upgradeMonsterShop(m, ps) {
+  if (!shopEnabled(m)) return off();
+  if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
+  if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
+  if (!isAttacker(m, ps)) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters'); // i18n-ignore
+  if (!placeActorOk(m, ps)) return fail(ERR.WRONG_PHASE, 'solo monster mode: only the first attacker places'); // i18n-ignore
+  const shop = ps && ps.monsterShop;
+  if (!shop) return fail(ERR.WRONG_PHASE, 'monster shop not open'); // i18n-ignore
+  const level = monsterShopLevelOf(m, ps);
+  if (level >= MONSTER_MAX_LEVEL) return fail(ERR.MAX_LEVEL);
+  const price = monsterUpgradePriceOf(m, ps);
+  // 显式扣款（与买卡 / 刷新同一个入口）：扣不动就一分不扣、等级也不动
+  if (price > 0 && !spendMonsterFundsFrom(m, ps, price)) return fail(ERR.CONFRONT_BUDGET, 'upgrade price over the monster funds'); // i18n-ignore
+  setMonsterShopLevel(m, ps, level + 1);
+  // 空开新槽：只加长数组（新格 null），不补卡；槽位不影响库存 cap。
+  const want = monsterShopSlotCount(level + 1);
+  if (Array.isArray(shop.slots)) {
+    while (shop.slots.length < want) shop.slots.push(null);
+    if (shop.slots.length > want) shop.slots.length = want;
+  }
+  return {
+    ok: true,
+    level: level + 1,
+    maxLevel: MONSTER_MAX_LEVEL,
+    price,
+    slots: Array.isArray(shop.slots) ? shop.slots.length : 0,
+    left: monsterBudgetLeft(m, ps).left,
+  };
+}
+
 /**
  * 同队阵线里**人类攻方**的人数（共享池的「留一份」口径）。取不到（没有 confrontActors / 它抛异常 /
  * 不是数组）→ 0 —— 调用方据此退化成「不留份」，与改造前完全一致。
@@ -312,6 +465,12 @@ export function monsterShopFrame(m, ps) {
     refreshPrice: MONSTER_REFRESH_PRICE,
     freeRefreshes: Math.max(0, Number(shop.freeRefreshes) || 0),
     refreshes: Math.max(0, Number(shop.refreshes) || 0),
+    // 商店等级（业主 2026-11-04）：等级挂在 Match 上、**整局持久**，这里只是每帧的快照。
+    // 老客户端忽略这四个新键；老帧（没有它们）客户端回落 level 1 / maxLevel 6（见 client/ui/shopBar.js）。
+    level: monsterShopLevelOf(m, ps),
+    maxLevel: MONSTER_MAX_LEVEL,
+    upgradePrice: monsterUpgradePriceOf(m, ps),
+    slotsPerLevel: MONSTER_SHOP_SLOTS_BY_LEVEL,
     budget: left.budget,
     // `spent` 现在恒 0：攻方是显式扣款（钱一花出去余额就少了），没有「预算 − 已花」这层记账了。
     // 字段名一个都没改（老客户端不会炸），语义见 monsterBudgetLeft。
@@ -328,7 +487,8 @@ export function monsterShopFrame(m, ps) {
     } : {}),
     slots: (shop.slots || []).map((s, index) => {
       if (!s) return null;
-      // 这只怪属于哪条怪物盟约（纯函数，只看敌人数据，取第一条命中的类型条）。空 ⇒ 帧里**省略** `bond` 键，
+      // 这只怪属于哪条怪物盟约（纯函数，只看敌人 `acTypes` 的 7 个特训类别，取第一条命中的）。`name` 取类别名
+      // （特异 / 飞行 / 频次 / 元素 / 持续 / 隐匿 / 折射），客户端按 id 上色、按 name 显示。空 ⇒ 帧里**省略** `bond` 键，
       // 老帧形状与老客户端逐字节不变（业主 2026-11-04：卡面要显示名称与羁绊）。
       const bondId = monsterBondIdForEnemy(m && m.gd, s.key);
       return {
@@ -510,8 +670,10 @@ export function openMonsterShop(m, ps) {
   if (!shopEnabled(m)) return off();
   if (!ps) return fail(ERR.BAD_TARGET);
   if (!placeActorOk(m, ps)) return fail(ERR.WRONG_PHASE, 'solo monster mode: only the first attacker places'); // i18n-ignore
+  // 槽位长度按**商店等级**定（等级在 Match 上，本函数只读、不改）：等级 1 = 3 格 … 6 = 5 格。
+  const level = monsterShopLevelOf(m, ps);
   ps.monsterShop = {
-    slots: new Array(MONSTER_SHOP_SLOTS).fill(null),
+    slots: new Array(monsterShopSlotCount(level)).fill(null),
     freeRefreshes: MONSTER_FREE_REFRESHES,
     paidRefreshes: 0,
     spent: 0,
@@ -731,6 +893,7 @@ export function dropMonster(m, ps, index, id = null) {
 /**
  * 收尾：finishConfront 之后把商店与草稿从 PlayerState 上摘掉（picks 已经在 this.confrontSubs / this.confront 里）。
  * 没什么可清的时候是 no-op。
+ * **不动等级**：等级挂在 Match 的 `m.monsterShopLevels`（整局持久），这里删的就只是本回合的货架与草稿。
  * @param {object} m @param {object} ps
  * @returns {{ ok: true }}
  */

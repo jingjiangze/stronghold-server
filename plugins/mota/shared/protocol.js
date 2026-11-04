@@ -625,6 +625,9 @@ export const C2S = {
   'g.monsterDrop': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8, id: (v) => Number.isInteger(v) && v >= 0, $optional: ['id'] },
   // 点卡即投放（业主 2026-11-04）：index = 商店格，gate = 上/下出怪口，count = 只数（可选，缺省 1）
   'g.monsterPlace': { index: (v) => Number.isInteger(v) && v >= 0 && v <= 8, gate: (v) => v === 'upper' || v === 'lower', count: (v) => Number.isInteger(v) && v >= 1 && v <= 20, $optional: ['count'] },
+  // 升级怪物卡池（业主 2026-11-04「参考卫戍协议干员商店」）：无字段 —— 等级挂在 Match 上、整局持久，
+  // 升级价由服务端按本回合军费算出（帧里的 upgradePrice），客户端只发这一条意图。
+  'g.monsterLevelUp': {},
   'g.event.pick': { target: (v) => EVENT_TARGETS_ALL.includes(v) },
   // 随机地图开关（2026-10-22；房主，开局前）
   'room.setRandomStage': { randomStage: isBool },

@@ -447,7 +447,7 @@ function MatchScreen() {
     getChess: (id) => { const c = gd.chess(id); return ownDiyRecord(c, priv, { chess: data.get('chess'), backups: data.get('backups') }) || c; },
     getToken: gd.token, getItem: gd.item, getEffect: gd.effect, backups: gd.backups, morphMode,
   }), [priv, pub?.stageId, editable, gd.ready, deployField, data.locale(), morphMode]);
-  live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
+  live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused, monsterShopOpen };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
   // 攻方（攻防回合的进攻方）没有自己的棋盘，但取景与「观战该 field」完全一致：投放窗口落回自己的 prep 请求分支，
@@ -1654,6 +1654,9 @@ function MatchScreen() {
         else if (act === 'sell' && available?.sell != null) await sellOwnPiece(uid);
         return;
       }
+      // 攻方按 D = 升级**怪物卡池**（业主 2026-11-04「参考卫戍协议干员商店」；等级挂 Match、跨回合持久）。
+      // 必须排在下面那条干员商店的 shopBlockReason 之前：攻方没有干员商店的等级语义，别被「资金不足」提前挡掉。
+      if (act === 'levelUp' && L.monsterShopOpen) { actions.monsterLevelUp(); return; }
       const reason = shopBlockReason(act, { priv: L.priv, editable: L.editable });
       if (reason) { audio.sfx('error', { volume: 0.5 }); return; }
       if (act === 'refresh') actions.refresh();
@@ -1870,7 +1873,7 @@ function MatchScreen() {
         monsterShop=${myRole === 'attack' ? monsterShop : null}
         view=${view} onDropCam=${setDropCam}
         onOpenShop=${String(pub?.modeId || '').startsWith('mode_xie_') ? () => { net.request('g.meltOpen', {}).catch(() => {}); } : null}
-        onBuy=${buy} onLevel=${() => actions.levelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
+        onBuy=${buy} onLevel=${() => actions.levelUp()} onMonsterLevel=${() => actions.monsterLevelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
         onDetailClose=${() => setDetail((d) => (d?.kind === 'chess' || d?.kind === 'item' ? null : d))}
         onRefuse=${(reason) => { toast(reason, 'warn'); audio.sfx('error', { volume: 0.5 }); }}
