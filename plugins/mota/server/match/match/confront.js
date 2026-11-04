@@ -55,7 +55,7 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom, monsterShopLevelOf } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom, spendableMonsterFunds, monsterShopLevelOf } from '../monsterShop.js';
 // 怪物盟约（2026-11-04 业主口径）：攻方投放的怪吃自己这一回合攒出来的乘区，与 roundMods 相乘（只乘不覆盖）。
 import { monsterBondMods, mergeMonsterBondMods, captureMonsterBondLeaks } from '../monsterBonds.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
@@ -669,6 +669,19 @@ export class MatchConfront {
   }
 
   /**
+   * 每名攻方本回合的**军费份额** = `round(官方波次价值 × CONFRONT_VOLUME_SHARE ÷ 攻方人数)`。
+   *
+   * 这就是 `grantMonsterFunds` 每人发的那一份（本方法的唯一调用方之一），也是 `monsterShop.js` 里
+   * **bot 只能花自己那一份**的上限（2026-11-05 真机 2V2：同队 1 人类 + 1 AI 共用队级账户，AI 开窗瞬间
+   * 把队资金花到 0，人类看到「怪物资金 0」三张卡全买不起）。公式只在这里定义一次，发放与上限共用，
+   * 不要在别处另算一遍（否则两处会漂移）。
+   * @returns {number} >= 0
+   */
+  monsterFundsSharePerAttacker() {
+    return Math.max(0, Math.round((Number(this.confrontWaveValue()) || 0) * CONFRONT_VOLUME_SHARE / this.attackingTeamSize()));
+  }
+
+  /**
    * 2V2's placement budget: the wave value × the share × VERSUS_CONFRONT.budgetMul — PER PLAYER (个算个的). The 2V2
    * placement REPLACES originals, so its ×2 keeps the net addition at the share; the co-op hunt INSERTs its prey and
    * therefore uses `wave value × share` only (coopHuntPlans).
@@ -714,7 +727,9 @@ export class MatchConfront {
    */
   grantMonsterFunds() {
     if (!this.monsterShopOn || typeof this.isRoleRound !== 'function' || this.isRoleRound() !== true) return 0;
-    const amount = Math.max(0, Math.round((this.confrontWaveValue() * CONFRONT_VOLUME_SHARE) / this.attackingTeamSize()));
+    // 每人一份 = `monsterFundsSharePerAttacker()`（单点定义：bot 的自有份额上限读的是同一个方法，
+    // 见 monsterShop.js 的 monsterOwnShare —— 发放与上限必须同源，否则「够不够花」会和「发了多少」漂移）。
+    const amount = this.monsterFundsSharePerAttacker();
     for (const ps of this.confrontActors()) {
       if (!ps) continue;
       // 帧上的「本回合军费 / 本回合奖励」每回合重置一次（奖励在 settle 里累加）
@@ -802,7 +817,8 @@ export class MatchConfront {
   /**
    * 结算一次提交的未付款部分（2026-11-04 复验修复 1）：**先算后扣、全有或全无**。
    *   ① 库存预检（逐 key 合计需求 vs 池里剩余）→ 不足直接 SOLD_OUT，不动钱也不动库存；
-   *   ② 扣款（`spendMonsterFundsFrom`，余额不够就一分不扣）→ 失败 CONFRONT_BUDGET；
+   *   ② 份额闸门（只有 bot：超「自己那一份 − 已花」→ CONFRONT_BUDGET，一分不扣）+ 扣款
+   *      （`spendMonsterFundsFrom`，余额不够也一分不扣）→ 失败 CONFRONT_BUDGET；
    *   ③ 扣库存；理论上预检已过，仍防御性回滚（把钱与已取的库存一起还回去）后再 SOLD_OUT。
    * @param {object} ps @param {{ charge: object[], cost: number }} settle `_confrontChargeFor` 的结果
    * @returns {null|{ error: string }} null = 已付清（或无需付款）
@@ -814,7 +830,16 @@ export class MatchConfront {
     const demand = new Map();
     for (const p of list) demand.set(p.enemyKey, (demand.get(p.enemyKey) || 0) + 1);
     for (const [key, n] of demand) if (pool.left(key) < n) return { error: ERR.SOLD_OUT };
+    // 共享军费留份（2026-11-05）：与 monsterShop.js 的 `payMonsterFunds` **同一口径** —— 份额闸门在扣款之前，
+    // 超了不碰队账户、也不碰库存（上面的库存预检是只读的）。判据单点在 monsterShop.js 的 `spendableMonsterFunds`
+    // （人类 / solo / 全 AI 队在那里恒等于账户余额），这里不复制公式。
+    const ownCost = Math.max(0, Number(cost) || 0);
+    const ownPrev = ps && ps.botControlled ? Math.max(0, Number(ps.monsterSpentOwn) || 0) : 0;
+    if (cost > 0 && ps && ps.botControlled && cost > spendableMonsterFunds(this, ps)) return { error: ERR.CONFRONT_BUDGET };
     if (cost > 0 && !spendMonsterFundsFrom(this, ps, cost)) return { error: ERR.CONFRONT_BUDGET };
+    // bot 的「已花自己那一份」记账（与 payMonsterFunds 同口径，初始视为 0）—— 下面回滚时同步减回去，
+    // 否则这一笔会把份额永久占住（同 monsterShop.js 的 `refundMonsterFunds`）。
+    if (ps && ps.botControlled && ownCost > 0) ps.monsterSpentOwn = ownPrev + ownCost;
     const taken = [];
     for (const [key, n] of demand) {
       const got = pool.take(key, n);
@@ -822,6 +847,7 @@ export class MatchConfront {
       if (got < n) {
         for (const [k, g] of taken) if (g > 0) pool.give(k, g);
         if (cost > 0) addMonsterFundsTo(this, ps, cost);
+        if (ps && ps.botControlled && ownCost > 0) ps.monsterSpentOwn = ownPrev;
         return { error: ERR.SOLD_OUT };
       }
     }
@@ -842,12 +868,15 @@ export class MatchConfront {
    * bot 的投放预算（2026-11-04 复验修复 1）：商店开着时 = min(回合预算, 账户余额 + 草稿里已付过款的价值)。
    * 上限不越过回合预算（赏金档的「替换一小部分」语义不受账户结转影响），下限受余额约束 ——
    * bot 不能派出自己付不起的怪（`_confrontPayPicks` 会拒），否则赏金档 bot 会整单落空。
+   * 共享军费留份（2026-11-05）：bot 在 shared 里看到的是「自己那一份 − 已花」
+   * （`spendableMonsterFunds`，与 monsterShop.js 同一单点定义）；否则会按队余额算出「买得起 4 只」，
+   * 再在提交时被份额闸门整单拒掉、一只都投不出。人类 / solo / 全 AI 队下它恒等于账户余额，行为不变。
    * @param {object} ps @returns {number}
    */
   confrontBotBudget(ps) {
     if (!this.monsterShopOn) return this.confrontBudget();
     const draft = ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
-    const funds = Math.max(0, Number(monsterFundsOf(this, ps)) || 0);
+    const funds = Math.max(0, Number(spendableMonsterFunds(this, ps)) || 0);
     return Math.min(this.confrontBudget(), funds + this.confrontSpent(draft));
   }
 

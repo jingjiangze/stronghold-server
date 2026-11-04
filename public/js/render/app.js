@@ -614,7 +614,7 @@ export async function createFieldView(host, options = {}) {
 
   function targetCamera(kind, o) {
     const sz = size();
-    const k = kind === 'hidden' ? 'boss' : (['prep', 'spawn', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
+    const k = kind === 'hidden' ? 'boss' : (['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen'].includes(kind) ? kind : 'normal');
     let rect = o.rect ? normRect(o.rect) : null;
     if (k === 'prep') rect = rect ? { ...rect, r0: Math.min(rect.r0, GEO.HAND_ROW) } : null;
     // official configBlackBoard framing (render/projection.js presetCamera); the padding only matters for the
