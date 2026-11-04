@@ -1,7 +1,8 @@
 // plugins/mota/server/match/monsterBonds.js — 怪物方的**独立盟约**（攻方专属，业主 2026-11-04 口径）。
 //
 // 业主口径（2026-11-04，v2 按阵营）：**攻方完全没有干员盟约、没有干员商店，只有怪物方的独立盟约** ——
-// 20 条**按阵营**（data/monster-factions.json 的 20 个 id）+ 3 条通用，层数制，**只影响本回合**。
+// 21 条**按阵营**（data/monster-factions.json 的 21 个 id：0.4.3 的 20 个 + 业主 2026-11-04 新增的「源石协议」
+// ORIGINIUM）+ 3 条通用，层数制，**只影响本回合**。
 // 所以本模块与 `bondsMeta.js`（干员盟约：整局持久、ps.layers / ps.bonds 被 invariants.js 钉死）是**平行结构**，
 // 两套数据 / 状态 / installer 一律不共用：
 //   · 状态 `m.monsterBonds` = Map<key, Record<bondId, layers>>，key 与怪物池同口径（monsterMode === 'solo' ? playerId
@@ -14,8 +15,9 @@
 // 【阵营归属（2026-11-04）】只认 `data/monster-factions.json` 的 `map`（敌人 key → 阵营 id 数组）：一只怪属于哪些
 // 阵营是**数据**，不是从 acType / rank 现推的。读法与 `gamedata.js` 同源：GameData 的 `raw` 就是 server/data.js
 // `loadData()` 把 data/*.json 按 basename 装进来的对象（`gd.raw['monster-factions']`）；拿不到 `gd.raw` 的直测 / stub
-// 走同一个 `getData()` 单例（与 builtinMeta.js 的懒取法一致），**不另造读数层**。没有阵营的怪（map 未覆盖）不进任何
-// 阵营条，只在 3 条通用条里计数。
+// 走同一个 `getData()` 单例（与 builtinMeta.js 的懒取法一致），**不另造读数层**。2026-11-04 业主裁决「剩余全部归类」
+// 之后 map 已覆盖 enemies.json 的 491/491（0.4.3 的 297 条 + 规则补全的 194 条，规则顺序见该文件的 `rules` 段）；
+// 「没有阵营的怪不进任何阵营条、只在 3 条通用条里计数」这条分支保留作**防御性兜底**（老数据 / 新增怪 / 数据缺文件时）。
 //
 // 【阈值（2026-11-04 重定）】阵营条不再用绝对 [2,4,6]：按该阵营在**本回合可投放池**（monsterPool.js 的
 // monsterCardKeys，对抗档 = 本回合官方出怪 / 赏金档 = 面板并集）里的**只数** n 取比例：
@@ -95,13 +97,15 @@ export function monsterFactionIds(gd, enemyKey) {
 }
 
 /**
- * 23 条盟约的固定定义（业主 2026-11-04 裁决 v2：20 条按**阵营** + 3 条通用）。
+ * 24 条盟约的固定定义（业主 2026-11-04 裁决 v2：21 条按**阵营** + 3 条通用）。
  * 阵营条的 id == data/monster-factions.json 的阵营 id（也是 MONSTER_BOND_MODS 的键）；归属判据是 map 命中，
  * 不再看 acType / rank / tags。阵营条的 `thresholds` **不写死** —— 按本回合可投放池里该阵营的只数算
  * （见 monsterBondThresholds），所以这里只有 3 条通用条带绝对阈值。
  */
 export const MONSTER_BOND_DEFS = [
-  // ---- 20 条按阵营（顺序 = 0.4.3 factions.json 的 types 顺序；monsterBondIdForEnemy 取第一条命中的） ----
+  // ---- 21 条按阵营（前 20 条顺序 = 0.4.3 factions.json 的 types 顺序；monsterBondIdForEnemy 取第一条命中的） ----
+  // 第 21 条「源石协议」= 业主 2026-11-04 新增（源石虫 / 源石造物单独一类），**追加在末尾**：既有 20 条的相对顺序
+  // 不变，所以同时命中多阵营的老怪（如 1010_demon = REUNION+SARKAZ）的「第一条命中」与卡面徽标不受影响。
   { id: 'REUNION', name: '整合运动', faction: 'REUNION' },
   { id: 'URSUS', name: '乌萨斯', faction: 'URSUS' },
   { id: 'DEEP_POOL', name: '深池', faction: 'DEEP_POOL' },
@@ -122,6 +126,9 @@ export const MONSTER_BOND_DEFS = [
   { id: 'HIGASHI', name: '东国', faction: 'HIGASHI' },
   { id: 'SAMI', name: '萨米', faction: 'SAMI' },
   { id: 'COLUMBIA', name: '哥伦比亚', faction: 'COLUMBIA' },
+  // 第 21 条（业主 2026-11-04 裁决）：源石协议 —— 专收源石虫 / 源石造物系（data 侧 32 只，见 monster-factions.json
+  // 的 rules 段第 1 条）。追加在末尾，不插队（见上方「21 条按阵营」注释）。
+  { id: 'ORIGINIUM', name: '源石协议', faction: 'ORIGINIUM' },
   // ---- 3 条通用 ----
   // 增援：投放只数 ≥ 官方只数 × 1.5（层数 = 投放只数），效果走资金返还
   { id: 'reinforce', name: '增援', thresholds: MONSTER_BOND_THRESHOLDS, classify: null, kind: 'funds' },
@@ -143,6 +150,9 @@ export const MONSTER_BOND_DEFS = [
  *     并列时按 MONSTER_BOND_DEFS 的顺序。
  *   · 基线分布（实测）：SARKAZ 19 / COLUMBIA 16 / DEEP_POOL 15 / REUNION 13 / SEA_BORN 9 / YAN 8 / BOLIVAR 8 /
  *     KJERAG 4 / URSUS 3 / SIRACUSA 3 / IBERIA 3 / LATERANO 2 / SIESTA 1 / 其余 7 个阵营 0。
+ *   · 2026-11-04 补全 194 条后（map 491/491）基线池的增量只有两处：REUNION 13 → 20（17 只无阵营的里有 7 只落兜底）、
+ *     ORIGINIUM 0 → 10（源石虫 2 + 源石植物 2 + 假想敌 6）。既有 20 条的键位与 per **不重排**（重排会改既有阵营的
+ *     实机乘区、且与「按本回合池子只数取比例」的阈值口径无关），新阵营按下面 ORIGINIUM 条目的注释取同级值。
  */
 export const MONSTER_BOND_MODS = {
   // n=19 → per 0.03，rank0 → hpMul
@@ -185,6 +195,12 @@ export const MONSTER_BOND_MODS = {
   HIGASHI: { key: 'hpMul', per: 0.05, cap: 0.3 },
   // n=0 → 0.05，rank19 → atkMul
   SAMI: { key: 'atkMul', per: 0.05, cap: 0.3 },
+  // 源石协议（业主 2026-11-04 新增，第 21 条）：键按六键轮转**续位** —— rank19 SAMI 是 atkMul，rank20 回到 defMul。
+  // per/cap 取「与相邻阵营同级」：末位两条（HIGASHI / SAMI）都是 0.05 / 0.3，本条第 21 条同档，cap 也同是 0.3
+  // （cap 相同 ⇒ 到顶层数只由 per 决定：0.05 需 6 层）。
+  // 备查（未采用的另一口径）：补全后基线池 120 只里 ORIGINIUM 实测 10 只，若按本文件上面「n ≥ 10 → 0.03」的分档
+  // 应给 0.03；业主口径是「不重排既有 20 条、与相邻阵营同级」，故本条取 0.05。要切回 n 分档时只改这一行即可。
+  ORIGINIUM: { key: 'defMul', per: 0.05, cap: 0.3 },
 };
 
 const defById = new Map(MONSTER_BOND_DEFS.map((d) => [d.id, d]));
