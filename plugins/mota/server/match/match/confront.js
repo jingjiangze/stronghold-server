@@ -52,7 +52,7 @@ import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
 import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame } from '../monsterShop.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterPoolFor, pushMonsterShops } from '../monsterShop.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
 
 /**
@@ -1222,7 +1222,11 @@ export class MatchConfront {
     }
     // 进本回合的 PREP：全体存活玩家同一个 deadline（gd.prepTime(round)），攻方也在这里点准备。
     this.enterPrep();
-    for (const ps of this.confrontActors()) if (ps.botControlled) this.botConfront(ps);
+    let botsActed = false;
+    for (const ps of this.confrontActors()) if (ps.botControlled) { this.botConfront(ps); botsActed = true; }
+    // 共享池同步（2026-11-04 第二轮复审修复 1）：bot 这一轮买走的份数必须推给人类队友 —— botConfront 自己也会推，
+    // 这里再推一次是本轮「最终态」的兜底（内容相同，客户端按整帧覆盖，不会出现半帧）。没有 bot 行动就不推。
+    if (botsActed) pushMonsterShops(this);
     this.markPublic();
   }
 
@@ -1353,8 +1357,17 @@ export class MatchConfront {
     const groups = this.confrontGroups();
     const budget = this.confrontBudget();
     const cap = this.confrontPlaceCap();
+    // 合法集合（2026-11-04 第二轮复审修复 5）：赏金档的 confrontGroups 不带回合闸门，旧贪心会从全类型池里挑出
+    // 本回合官方根本没出的怪（实测 6 条 pick 全部不在本回合集合 ⇒ 投完再过滤 ⇒ 全被滤掉 ⇒ bot 空投）。
+    // 商店开着时**先**把候选限定在本回合合法集：赏金档的旧贪心（下面的 `ordered`）与对抗档的 `fillConfrontPicks`
+    // 共用这一条判据 —— 否则「便宜优先」会先被非法怪吃光预算，投完再过滤就成了空单。
+    const legal = legalKeys(this);
+    const rowAllowed = (r) => !(this.monsterShopOn && legal && r && !legal.has(r.key));
     const rows = [];
-    groups.forEach((g, gi) => (g.rows || []).forEach((r) => rows.push({ key: r.key, value: r.value, gi })));
+    groups.forEach((g, gi) => (g.rows || []).forEach((r) => {
+      if (!rowAllowed(r)) return;
+      rows.push({ key: r.key, value: r.value, gi });
+    }));
     const picks = [];
     // 商店计划（2026-11-04 复验修复 3b）：契约声明了 shopPlan 就必须真的调用 —— 它的副作用是 ps.monsterDraft.picks，
     // 下面 deployPlan 才可能拿到「这一回合买到的卡」。返回值只用于诊断/测试，允许 null；异常已在 callStrategyHook 里吞掉。
@@ -1370,8 +1383,9 @@ export class MatchConfront {
       const filled = fillConfrontPicks({ rows, budget, unitsTarget, cap });
       filled.forEach((f, i) => picks.push({ enemyKey: f.enemyKey, gate: i % 2 ? 'upper' : 'lower' }));
     } else {
-      // 赏金档：旧实现原样保留（便宜优先 + 反复扫到没有进展为止，去掉「每种怪最多一只」）
-      const ordered = groups.map((g, i) => ({ i, rows: (g.rows || []).slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key))) }));
+      // 赏金档：旧实现原样保留（便宜优先 + 反复扫到没有进展为止，去掉「每种怪最多一只」）；
+      // 商店开着时先过 `rowAllowed`（本回合合法集），不再「投完再被滤掉」。
+      const ordered = groups.map((g, i) => ({ i, rows: (g.rows || []).filter(rowAllowed).slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key))) }));
       let left = budget;
       const take = (list) => {
         let progressed = true;
@@ -1395,14 +1409,36 @@ export class MatchConfront {
     // 的 12 条里有 10 条是别的怪（apply 时多半被当成非法出怪丢掉）。
     // 三条产出路径（策略 deployPlan / 对抗档 fillConfrontPicks / 赏金档贪心）都汇到这一个 picks 数组，所以在这里
     // 过一道 `legalKeys`（与 `_confrontMember` / 怪物商店**同源**）就覆盖全部 return 路径，且先于 firstKey 与清洗。
-    // `legalKeys` 返回 null（取不到合法集）= 不闸门，保持旧行为。
-    const legal = legalKeys(this);
+    // `legalKeys` 返回 null（取不到合法集）= 不闸门，保持旧行为。`legal` 已在上面（rows 的候选集）算过，这里复用。
     if (legal) {
       const kept = picks.filter((p) => p && legal.has(p.enemyKey));
       if (kept.length !== picks.length) {
         picks.length = 0;
         for (const p of kept) picks.push(p);
       }
+    }
+    // 共享池库存（2026-11-04 第二轮复审修复 5）：bot 从来不读 `MonsterPool.left` —— 实测官方只出 5 只，bot 投了 9 条。
+    // 逐 key 限量（每条 pick 消耗 1，超出的那一条单独丢弃，**不清空整单**），额度 = 池里剩下的份数 + 本席草稿里
+    // 已经买下的份数（cardpool 策略买卡时已经从同一个池 `take` 过，只看 `left` 会把它自己买的卡全部丢掉）。
+    // 没有商店 / 没有合法集（取不到）= 不做闸门，保持旧行为。
+    if (this.monsterShopOn && legal) {
+      const pool = monsterPoolFor(this, ps);
+      const held = new Map();
+      for (const d of (ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [])) {
+        if (d && typeof d.enemyKey === 'string') held.set(d.enemyKey, (held.get(d.enemyKey) || 0) + 1);
+      }
+      const budgetLeft = new Map();
+      for (const key of legal) budgetLeft.set(key, pool.left(key) + (held.get(key) || 0));
+      const keptPicks = [];
+      for (const p of picks) {
+        if (!p) continue;
+        const left = budgetLeft.get(p.enemyKey) || 0;
+        if (left <= 0) continue;
+        budgetLeft.set(p.enemyKey, left - 1);
+        keptPicks.push(p);
+      }
+      picks.length = 0;
+      for (const p of keptPicks) picks.push(p);
     }
     const firstKey = picks.length ? picks[0].enemyKey : null;
     const gi = firstKey == null ? 0 : (rows.find((r) => r.key === firstKey)?.gi ?? 0);
@@ -1424,6 +1460,9 @@ export class MatchConfront {
     const routed = this._sanitizeBotPicks(this._botConfrontPlan(ps, picks, 'mid'), budget);
     this.confrontSubs.set(ps.playerId, { target: this.confrontTargets.get(ps.playerId) ?? null, group: gi + 1, position: 'mid', picks: routed, bosses, total: routed.length, ratio: this.confrontRatio(), budget, seat: ps.seat, committed: true });
     this.markPublic();
+    // 共享池同步（2026-11-04 第二轮复审修复 1）：bot 写完 sub 之后把商店的新帧推给人类队友
+    // （`shopPlan` 买卡 / 刷新已经改过共享池；bot 席位自己不收帧）。
+    pushMonsterShops(this);
   }
 
   /**

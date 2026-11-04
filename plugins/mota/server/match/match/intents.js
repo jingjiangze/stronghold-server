@@ -10,7 +10,7 @@ import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
 // 怪物卡池（2026-11-03）：攻方的怪物商店（买卡进投放草稿 / 刷新 / 冻结 / 撤回草稿）
-import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, placeMonster, monsterShopFrame } from '../monsterShop.js';
+import { buyMonster, rollMonsterShop, freezeMonster, dropMonster, placeMonster, monsterShopFrame, pushMonsterShops } from '../monsterShop.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
@@ -128,6 +128,9 @@ export class MatchIntents {
   monsterShopReply(ps, res) {
     if (res && res.error) return fail(res.error, res.detail);
     try { this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop frame', e); }
+    // 共享池同步（2026-11-04 第二轮复审修复 1）：这些意图会改共享池 / 队友也要看到的草稿态，
+    // 同队其他人类必须收到新帧（自己上面已经推过，排除掉 —— 不重复推同一席）。
+    try { pushMonsterShops(this, { except: ps }); } catch (e) { this.reportError('monster shop push', e); }
     return OK;
   }
 

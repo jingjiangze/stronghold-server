@@ -49,6 +49,13 @@ const off = () => fail(ERR.WRONG_PHASE, 'monster shop off'); // i18n-ignore: 服
 function shopEnabled(m) { return !!(m && m.monsterShopOn === true); }
 
 /**
+ * 人类点了准备之后不能再动投放（准备 = 本回合的操作结束）。
+ * bot 不受限：`cardpoolDeployPlan` 直接调 `buyMonster`，而 bot 的 `ready` 可能是 true（托管 / 自动准备）。
+ * 判定只拦**人类意图入口**，bot 的引擎回落路径全部放行。
+ */
+function readyLocked(ps) { return !!(ps && !ps.botControlled && ps.ready); }
+
+/**
  * 是否处在投放窗口（购买 / 刷新 / 冻结只在投放窗口里合法）：本回合的 PREP、是攻守回合、且目标选择已结束
  * （`confrontStage == null` —— 'target' 在 PHASE.CONFRONT 里，'roster' 是投放公示，两者都关窗）。
  * 与 MatchConfront.confrontWindowOpen（g.confront / botConfront 的闸门）同一判据。
@@ -239,6 +246,33 @@ function refillSlot(m, ps, idx, usedKey = null) {
 }
 
 /**
+ * 把**开着的**怪物商店推给所有**非 bot** 的投放方（2026-11-04 第二轮复审修复 1：共享池不同步）。
+ *
+ * 为什么需要它：池按队共享（`monsterPoolFor`），但 bot 买卡只改池、不推帧 —— 人类队友手里的 `m.monsterShop`
+ * 一直停在旧帧：`slots[].left` 是开局值、点卡得到 SOLD_OUT、面板整局不刷新。共享池的每次变化都必须让
+ * 所有能看到这块池的席位收到新帧。
+ *
+ * 只推「商店开着」的席位（`ps.monsterShop` 存在：solo 模式里没投放权 / 已收尾的队友不该收到货架）；
+ * bot 席位一律不推（`sendTo` 对 bot 本来就返回 false，但不依赖那一条）。推送失败不影响已经成功的操作。
+ * @param {object} m
+ * @param {{ except?: object|null }} [opts] except: 调用方自己已经单独推过的席位（避免同一帧发两遍）
+ * @returns {number} 实际推出去的帧数
+ */
+export function pushMonsterShops(m, { except = null } = {}) {
+  if (!shopEnabled(m) || typeof m.sendTo !== 'function' || typeof m.confrontActors !== 'function') return 0;
+  let sent = 0;
+  for (const ps of m.confrontActors()) {
+    if (!ps || ps === except) continue;
+    if (ps.botControlled || ps.isBot) continue;
+    if (!ps.monsterShop || !ps.playerId) continue;
+    try { m.sendTo(ps.playerId, monsterShopFrame(m, ps)); sent += 1; } catch (e) {
+      if (typeof m.reportError === 'function') m.reportError('monster shop push', e);
+    }
+  }
+  return sent;
+}
+
+/**
  * 开（或重置）本回合的商店，并把投放草稿清空。
  * 只要求商店开着（阶段由调用方保证：match/match/confront.js 的 finishConfrontTargets 在目标选择结束时开，
  * 让攻方在整个 PREP 里都有商店可用）。
@@ -273,6 +307,7 @@ export function openMonsterShop(m, ps) {
  */
 export function rollMonsterShop(m, ps, { free = false } = {}) {
   if (!shopEnabled(m)) return off();
+  if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
   if (!ps || !ps.monsterShop) return fail(ERR.WRONG_PHASE, 'monster shop not open'); // i18n-ignore
   if (!free) {
     if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
@@ -308,6 +343,7 @@ export function rollMonsterShop(m, ps, { free = false } = {}) {
  */
 export function buyMonster(m, ps, idx) {
   if (!shopEnabled(m)) return off();
+  if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
   if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
   if (!isAttacker(m, ps)) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters'); // i18n-ignore
   if (!placeActorOk(m, ps)) return fail(ERR.WRONG_PHASE, 'solo monster mode: only the first attacker places'); // i18n-ignore
@@ -351,6 +387,7 @@ export function buyMonster(m, ps, idx) {
  */
 export function placeMonster(m, ps, index, gate, count = 1) {
   if (!shopEnabled(m)) return off();
+  if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
   if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
   if (!isAttacker(m, ps)) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters'); // i18n-ignore
   if (!placeActorOk(m, ps)) return fail(ERR.WRONG_PHASE, 'solo monster mode: only the first attacker places'); // i18n-ignore
@@ -391,6 +428,7 @@ export function placeMonster(m, ps, index, gate, count = 1) {
  */
 export function freezeMonster(m, ps, idx) {
   if (!shopEnabled(m)) return off();
+  if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
   if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
   if (!isAttacker(m, ps)) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters'); // i18n-ignore
   const shop = ps && ps.monsterShop;
@@ -412,6 +450,7 @@ export function freezeMonster(m, ps, idx) {
  */
 export function dropMonster(m, ps, index) {
   if (!shopEnabled(m)) return off();
+  if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
   if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
   if (!isAttacker(m, ps)) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters'); // i18n-ignore
   const picks = ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : null;
