@@ -22,8 +22,9 @@ export class MatchIntents {
       case 'g.monsterBuy': return this.monsterShopReply(ps, buyMonster(this, ps, Number(msg.index)));
       case 'g.monsterRefresh': return this.monsterShopReply(ps, rollMonsterShop(this, ps));
       case 'g.monsterFreeze': return this.monsterShopReply(ps, freezeMonster(this, ps, Number(msg.index)));
-      // 撤回一张投放草稿（复验修复 1.4）：index 是草稿下标；库存退回本队的池
-      case 'g.monsterDrop': return this.monsterShopReply(ps, dropMonster(this, ps, Number(msg.index)));
+      // 撤回一张投放草稿（复验修复 1.4）：id = 草稿条目的稳定 id（优先，多端撤回按它定位）；
+      // 没给 id 才用 index（老客户端回落），库存退回本队的池
+      case 'g.monsterDrop': return this.monsterShopReply(ps, dropMonster(this, ps, msg.index == null ? null : Number(msg.index), msg.id == null ? null : Number(msg.id)));
       // 点卡即投放（业主 2026-11-04）：卡直接投到上/下出怪口，count 可选（缺省 1）；用掉后该格自动补位
       case 'g.monsterPlace': return this.monsterShopReply(ps, placeMonster(this, ps, Number(msg.index), msg.gate, msg.count == null ? 1 : Number(msg.count)));
       case 'g.hex': return this.hexPick(ps, msg.hexId);

@@ -337,7 +337,8 @@ export function monsterShopFrame(m, ps) {
       cap: pool.cap(s.key),
     } : null)),
     draft: {
-      picks: ((ps.monsterDraft && ps.monsterDraft.picks) || []).map((p) => ({ enemyKey: p.enemyKey, gate: p.gate })),
+      // `id` = 草稿条目的稳定 id（撤回按它定位）；老对局 / 老存档的条目没有 id ⇒ null（客户端回落到下标，不崩）
+      picks: ((ps.monsterDraft && ps.monsterDraft.picks) || []).map((p) => ({ id: Number.isInteger(p && p.id) ? p.id : null, enemyKey: p && p.enemyKey, gate: p && p.gate })),
       position: (ps.monsterDraft && ps.monsterDraft.position) || 'mid',
     },
     // 怪物盟约条（客户端 `.gm__bonds` 在攻方回合改读这一份）；空则整个键不出现
@@ -453,6 +454,20 @@ export function pushMonsterShops(m, { except = null } = {}) {
 }
 
 /**
+ * 草稿条目的**稳定 id**（2026-11-04 多端撤回修复）：以前 picks 只按下标定位，多端 / 并发撤回会撤错行
+ * （服务端先删一条，另一端手里的下标就整体前移）。`ps.monsterDraft.seq` 单调递增，每次入草稿取一个新 id；
+ * 老存档没有 `seq` / 旧条目没有 `id` 也照常工作（seq 从 0 起算，旧条目保持 undefined —— 撤回时没 id 就回落到下标）。
+ * @param {object} ps
+ * @returns {number} 新的 id（>= 1，本席本回合唯一）
+ */
+function nextMonsterPickId(ps) {
+  const d = ps.monsterDraft;
+  const cur = Number.isInteger(d.seq) && d.seq >= 0 ? d.seq : 0;
+  d.seq = cur + 1;
+  return d.seq;
+}
+
+/**
  * 开（或重置）本回合的商店，并把投放草稿清空。
  * 只要求商店开着（阶段由调用方保证：match/match/confront.js 的 finishConfrontTargets 在目标选择结束时开，
  * 让攻方在整个 PREP 里都有商店可用）。
@@ -472,7 +487,8 @@ export function openMonsterShop(m, ps) {
     refreshes: 0,
     round: Number(m.round) || 0,
   };
-  ps.monsterDraft = { picks: [], position: 'mid' };
+  // `seq` = 草稿条目的 id 计数器（见 nextMonsterPickId）：每回合重开商店时归零，拾取 id 从 1 起
+  ps.monsterDraft = { picks: [], position: 'mid', seq: 0 };
   dealSlots(m, ps);
   return { ok: true, shop: ps.monsterShop };
 }
@@ -551,8 +567,9 @@ export function buyMonster(m, ps, idx) {
   const key = slot.key;
   if (!ps.monsterDraft) ps.monsterDraft = { picks: [], position: 'mid' };
   if (!Array.isArray(ps.monsterDraft.picks)) ps.monsterDraft.picks = [];
-  // 业主口径：买到就进草稿；投放时刻 / 门由 submitConfront（或 AI 的 _botConfrontPlan）再定
-  ps.monsterDraft.picks.push({ enemyKey: key, gate: 'lower', time: null });
+  // 业主口径：买到就进草稿；投放时刻 / 门由 submitConfront（或 AI 的 _botConfrontPlan）再定。
+  // `id` = 稳定条目 id（见 nextMonsterPickId）：客户端的撤回按 id 定位，不再按下标猜
+  ps.monsterDraft.picks.push({ id: nextMonsterPickId(ps), enemyKey: key, gate: 'lower', time: null });
   // 怪物盟约（2026-11-04）：这一只算进「本回合投放的某一类型」的层数（官方波次不进这里）
   addMonsterBonds(m, ps, { enemyKey: key, count: 1, price });
   // 用掉自动补位（业主 2026-11-04）：这一格立刻重抽一张新卡（旧面板照旧能买，只是不再显示 sold 格）
@@ -608,8 +625,8 @@ export function placeMonster(m, ps, index, gate, count = 1) {
   if (!spendMonsterFundsFrom(m, ps, price * placed)) { pool.give(key, placed); return fail(ERR.CONFRONT_BUDGET, 'price over the monster funds'); } // i18n-ignore
   if (!ps.monsterDraft) ps.monsterDraft = { picks: [], position: 'mid' };
   if (!Array.isArray(ps.monsterDraft.picks)) ps.monsterDraft.picks = [];
-  // count 条草稿：门由这次点击决定，时刻留给 submitConfront / _botConfrontPlan 再定
-  for (let i = 0; i < placed; i++) ps.monsterDraft.picks.push({ enemyKey: key, gate, time: null });
+  // count 条草稿：门由这次点击决定，时刻留给 submitConfront / _botConfrontPlan 再定；每条一个稳定 id
+  for (let i = 0; i < placed; i++) ps.monsterDraft.picks.push({ id: nextMonsterPickId(ps), enemyKey: key, gate, time: null });
   // 怪物盟约（2026-11-04）：按**实际投下的只数**涨层（类型盟约 + 增援）
   addMonsterBonds(m, ps, { enemyKey: key, count: placed, price });
   // 用掉自动补位：这一格换成一张新卡（池里没货就置 null）
@@ -638,22 +655,37 @@ export function freezeMonster(m, ps, idx) {
 }
 
 /**
- * 撤回一张投放草稿（复验修复 1.4）：`g.monsterDrop { index }` → 把 picks[index] 摘掉，并把那一份库存还给本队的池。
+ * 撤回一张投放草稿（复验修复 1.4）：`g.monsterDrop { index, id? }` → 把那一条 pick 摘掉，并把那一份库存还给本队的池。
  * 存在的理由：卡池按回合重建 / 合法集合按回合变，草稿里若留着一张已不合法的死卡，玩家既提交不了也删不掉，
  * 整个投放窗口就废了。已售出的商店格不回滚（卡已经从货架上消失），退回去的只是库存份数。
- * @param {object} m @param {object} ps @param {number} index
- * @returns {{ ok: true, index: number, key: string|null, left: number, picks: number } | { error: string, detail?: string }}
+ *
+ * 定位（2026-11-04 多端撤回修复）：**给了 `id` 就按 id 找**（草稿条目的稳定 id，见 nextMonsterPickId）——
+ * 多端 / 并发撤回不会因为「另一端先删了一条 ⇒ 下标整体前移」而撤错行；找不到该 id → BAD_TARGET。
+ * 没给 `id` 才按下标（老客户端 / 老存档：旧条目本来就没有 id）。
+ * @param {object} m @param {object} ps
+ * @param {number|null} index 草稿下标（没有 id 时的回落口径）
+ * @param {number|null} [id] 草稿条目的稳定 id（优先）
+ * @returns {{ ok: true, index: number, id: number|null, key: string|null, left: number, picks: number, funds: number }
+ *   | { error: string, detail?: string }}
  */
-export function dropMonster(m, ps, index) {
+export function dropMonster(m, ps, index, id = null) {
   if (!shopEnabled(m)) return off();
   if (readyLocked(ps)) return fail(ERR.WRONG_PHASE, 'ready'); // i18n-ignore: 服务端内部 detail
   if (!inMonsterStage(m)) return fail(ERR.WRONG_PHASE);
   if (!isAttacker(m, ps)) return fail(ERR.WRONG_PHASE, 'the defending team cannot place monsters'); // i18n-ignore
   const picks = ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : null;
   if (!picks) return fail(ERR.WRONG_PHASE, 'monster shop not open'); // i18n-ignore
-  if (!Number.isInteger(index) || index < 0 || index >= picks.length) return fail(ERR.BAD_TARGET);
-  const [removed] = picks.splice(index, 1);
+  let at;
+  if (Number.isInteger(id) && id >= 0) {
+    at = picks.findIndex((p) => p && Number.isInteger(p.id) && p.id === id);
+    if (at < 0) return fail(ERR.BAD_TARGET);
+  } else {
+    if (!Number.isInteger(index) || index < 0 || index >= picks.length) return fail(ERR.BAD_TARGET);
+    at = index;
+  }
+  const [removed] = picks.splice(at, 1);
   const key = removed && typeof removed.enemyKey === 'string' && removed.enemyKey ? removed.enemyKey : null;
+  const removedId = removed && Number.isInteger(removed.id) ? removed.id : null;
   const pool = monsterPoolFor(m, ps);
   // 退款（业主 2026-11-04）：撤回一张已付过款的草稿 = 把那笔钱退回怪物资金（单价按当前口径，与买它时同源）。
   if (key) {
@@ -662,7 +694,7 @@ export function dropMonster(m, ps, index) {
     // 怪物盟约（2026-11-04）：撤回把这一只的层数 / 只数退回去（资金只在回合收尾发，不涉及追回）
     dropMonsterBonds(m, ps, key, 1);
   }
-  return { ok: true, index, key, left: key ? pool.left(key) : 0, picks: picks.length, funds: monsterFundsOf(m, ps) };
+  return { ok: true, index: at, id: removedId, key, left: key ? pool.left(key) : 0, picks: picks.length, funds: monsterFundsOf(m, ps) };
 }
 
 /**

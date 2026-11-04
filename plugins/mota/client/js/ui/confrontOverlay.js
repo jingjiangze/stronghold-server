@@ -307,13 +307,16 @@ export function ConfrontDoneCard({ pub, shop = null }) {
   const left = Math.max(0, budget - spent);
   const upper = picks.filter((p) => p && p.gate === 'upper').length;
   /**
-   * 撤回第 i 条草稿：`g.monsterDrop { index: i }` → 服务端摘掉 picks[i]、把那一条的库存与资金退回（monsterShop.js
-   * dropMonster），成功后推帧 ⇒ picks 变短，这张卡跟着重画（不本地删行）。同一行在飞行中不发第二次。
+   * 撤回第 i 条草稿：`g.monsterDrop { index, id? }` → 服务端摘掉那一条、把它的库存与资金退回（monsterShop.js
+   * dropMonster）。定位优先用**稳定 id**（`shop.draft.picks[i].id`，服务端的 seq）：多端同时撤回时下标会整体前移，
+   * 用 id 才撤得对那一条；老帧 / 老存档没有 id 就回落到下标（服务端两种都认）。成功后服务端推帧 ⇒ picks 变短，
+   * 这张卡跟着重画（不本地删行）。同一行在飞行中不发第二次。
    */
-  const undoPick = (i) => {
+  const undoPick = (i, id) => {
     if (undoing.includes(i)) return;
     setUndoing((cur) => (cur.includes(i) ? cur : [...cur, i]));
-    void act('g.monsterDrop', { index: i }, { sfx: 'back' }).then((ok) => {
+    const payload = Number.isInteger(id) ? { index: i, id } : { index: i };
+    void act('g.monsterDrop', payload, { sfx: 'back' }).then((ok) => {
       if (!ok) setUndoing((cur) => cur.filter((x) => x !== i));   // 被拒：放开按钮（toast 已经说了原因）
     });
   };
@@ -333,7 +336,7 @@ export function ConfrontDoneCard({ pub, shop = null }) {
             ${shopOn
               ? html`<button type="button" class="confdone__undo" data-testid="confront-undo" disabled=${undoing.includes(i)}
                   title=${t('撤回这一只：库存与投放资金退回')} aria-label=${t('撤回这一只')}
-                  onClick=${() => undoPick(i)}>${t('撤回')}</button>`
+                  onClick=${() => undoPick(i, p && p.id)}>${t('撤回')}</button>`
               : null}
           </li>`)}
         </ul>`

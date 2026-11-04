@@ -7,12 +7,12 @@
 //     : teamId，见 monsterPool.js monsterPoolFor）—— 共享池时同队两名攻方的层数合成一份；
 //   · 生命周期**每回合重置**（match/match/phases.js 的回合边界调 closeMonsterBondRound）；
 //   · 涨层 = `monsterShop.js` 的 placeMonster / buyMonster（只算攻方投放的怪，官方波次不算），dropMonster 回退；
-//   · 效果 = spawn 的 `mods` 乘区（hpMul / atkMul / defMul / resMul / speedMul），在 match/match/confront.js 的
+//   · 效果 = spawn 的 `mods` 乘区（hpMul / atkMul / defMul / resMul / speedMul / aspdMul），在 match/match/confront.js 的
 //     applyConfront（投放怪）与 _confrontBossSpawns（事件期 boss）合并；资金类（增援 / 回收）在回合收尾发放。
 //
-// 【不改 sim 的边界】`aspd`（攻速）在 sim 里**没有乘区**（server/sim/battle/spawns.js 的 mods 只认
-// hpMul / atkMul / defMul / resMul / speedMul），要加攻速得同时改服务端与客户端两棵 sim 树 —— 不在本次范围。
-// 因此「频次」的效果落在 hpMul（同样抬血量）而不是攻速；真正的攻速加成只能在 sim 改动后补。
+// 【aspdMul（攻速乘区）】2026-11-04 起两棵 sim 树的 `spawns.js`（`server/sim/battle/spawns.js` 与
+// `plugins/mota/server/sim/battle/spawns.js`）的 enemy mods 都认 `aspdMul`：`aspd = def.aspd * (m.aspdMul ?? 1)`，
+// 下游 `units.js` 的 `clamp(..., ASPD_MIN, ASPD_MAX)` 照旧兜底。**两棵树必须同步改**，否则客户端与服务端结果会漂。
 //
 // 守卫：`m.monsterShopOn === false`（opts.monsterShop === false / 非对抗局）时**整段不跑** —— 不建状态、不发帧、
 // 不发放资金，旧对局的行为与字节完全不变。
@@ -63,7 +63,7 @@ export const MONSTER_BOND_DEFS = [
   { id: 'refract', name: '折射', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'REFLECTION' },
   { id: 'element', name: '元素', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'ELEMENT' },
   { id: 'dot', name: '灼蚀', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'DOT' },
-  // 频次：acType = TIMES。注意 sim 没有攻速乘区（见文件头），效果落 hpMul
+  // 频次：acType = TIMES。效果走攻速乘区 aspdMul（攻速快 = 更难，两棵 sim 树都认，见文件头）
   { id: 'tempo', name: '频次', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.acType === 'TIMES' },
   { id: 'elite', name: '特化', thresholds: MONSTER_BOND_THRESHOLDS, classify: (e) => e.rank === 'ELITE' || e.rank === 'BOSS' },
   // ---- 3 条通用 ----
@@ -76,8 +76,8 @@ export const MONSTER_BOND_DEFS = [
 ];
 
 /**
- * 效果表（乘区）：每条的「每层增量」与单条上限。`key` 只允许 spawn mods 认的五个键
- * （server/sim/battle/spawns.js 的 `mm()`：hpMul / atkMul / defMul / resMul / speedMul）。
+ * 效果表（乘区）：每条的「每层增量」与单条上限。`key` 只允许 spawn mods 认的六个键
+ * （server/sim/battle/spawns.js 的 `mm()`：hpMul / atkMul / defMul / resMul / speedMul / aspdMul）。
  * 乘数语义 = 1 + Δ（sim 里 `base.maxHp * m.hpMul`），所以 Δ 是**加法叠加**的百分比。
  */
 export const MONSTER_BOND_MODS = {
@@ -86,7 +86,8 @@ export const MONSTER_BOND_MODS = {
   refract: { key: 'defMul', per: 0.06, cap: 0.6 },
   element: { key: 'atkMul', per: 0.04, cap: 0.5 },
   dot: { key: 'hpMul', per: 0.03, cap: 0.5 },
-  tempo: { key: 'hpMul', per: 0.05, cap: 0.5 },
+  // 频次：攻速快 = 更难（每层 +5% 攻速，上限与其它条一致）
+  tempo: { key: 'aspdMul', per: 0.05, cap: 0.5 },
   elite: { key: 'atkMul', per: 0.03, cap: 0.5 },
 };
 
@@ -334,7 +335,7 @@ export function monsterBondLayers(m, ps) {
 }
 
 /**
- * 本席此刻的怪物盟约**乘区乘数**（供 spawn 的 mods 用）：`{ hpMul: 1.12, atkMul: 1.09, speedMul: 1.05 }`。
+ * 本席此刻的怪物盟约**乘区乘数**（供 spawn 的 mods 用）：`{ hpMul: 1.12, atkMul: 1.09, speedMul: 1.05, aspdMul: 1.15 }`。
  * 没有盟约 / 商店关着 → null（调用方原样返回 roundMods 的对象）。
  * @param {object} m @param {object} ps 投放者（applyConfront 里由 sub 反查到的攻方）
  * @returns {Object<string, number>|null}
