@@ -1603,12 +1603,16 @@ const HIT_AREAS = Object.freeze({
  * the ground boss 盐风主教昆图斯.
  */
 const STATIC_BODIES = Object.freeze(new Set([
+  // 2026-11-05：新增飞行单位（与基体同规则；enemy_1321_wdarft/_2、enemy_1430_lrrook/_2 一对）
   'enemy_1005_yokai', 'enemy_1005_yokai_2', 'enemy_1005_yokai_3',   // 妖怪 / 妖怪MKII / 威龙
   'enemy_1017_defdrn', 'enemy_1040_bombd', 'enemy_1041_lazerd', 'enemy_1041_lazerd_2', 'enemy_1042_frostd', // 御4 / 暴鸰 / 法术大师A1 / A2 / 寒霜
+  'enemy_1070_iced', 'enemy_1106_byokai',                            // 虚幻 / 斗志昂扬无人机 (2026-11-05)
   'enemy_1112_emppnt', 'enemy_1112_emppnt_2',                        // 帝国炮火先兆者 / 帝国炮火中枢先兆者
-  'enemy_1269_nhfly', 'enemy_1321_wdarft',                           // 枯朽之种 / 枯朽萃聚使徒
+  'enemy_1269_nhfly', 'enemy_1321_wdarft', 'enemy_1321_wdarft_2',     // 枯朽之种 / 枯朽萃聚使徒 / 腐败萃聚使徒
+  'enemy_1336_bldbat',                                               // 伏翼兽 (2026-11-05)
   'enemy_1355_mrfly', 'enemy_1355_mrfly_2', 'enemy_1407_hummbd',     // 护障 / 护障·P / 远眺
-  'enemy_1430_lrrook', 'enemy_1521_dslily',                          // 愧悔魂灵圣杯 / 盐风主教昆图斯 (WALK)
+  'enemy_1430_lrrook', 'enemy_1430_lrrook_2', 'enemy_1521_dslily',    // 愧悔魂灵圣杯 / 殉亡魂灵圣杯 / 盐风主教昆图斯 (WALK)
+  'enemy_2086_skzdwx', 'enemy_2087_skzdwy', 'enemy_2090_skzjbc',     // 年代印痕 / 年代印痕 / 托生莲座 (2026-11-05)
   'enemy_9009_acfort', 'enemy_9014_acstma', 'enemy_9015_acstmb', 'enemy_9016_acstmr', // 假想敌：黑云 / “斩胄之剑” / “破胄之锤” / 刺胄之弹
   'enemy_10028_vtswd', 'enemy_10029_vtshld', 'enemy_10030_vtwand',   // 未装配刀片 / 防护背心 / 冲击式施术单元
   'enemy_10040_cnvbln',                                              // 节日气球
