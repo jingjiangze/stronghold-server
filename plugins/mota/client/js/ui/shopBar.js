@@ -45,7 +45,7 @@ import { modComponent } from './modComponents.js';
 import { t } from '../../../shared/i18n.js';
 import { longPress, heldClick } from './longPress.js';
 // 半区高亮的几何（门格四角，跟着镜头走）与战场的行列（GEO.FIELD）—— 与 ui/underframe.js 同一套 import
-import { useTileScreen } from './facingWheel.js';
+import { tileScreen, useTileScreen } from './facingWheel.js';
 import { GEO } from '../../../shared/constants.js';
 // 协同经济的三个动作 (后勤项目/表决/救济) 一直写成裸 `actions.xxx`：这个模块从来没 import 过 actions，
 // 点下去只会抛 ReferenceError 并被上层吞掉 —— 表现就是「按钮点了没反应」(user report 2026-10-17)。
@@ -229,13 +229,17 @@ export function monsterPlaceCap(slot, budget) {
 }
 
 /**
- * 门的行判据（审计口径，2026-11-05 与服务端对齐）：落点只能取战场门 —— `GEO.FIELD` = rows 9–12 / cols 2–10
- * （shared/constants.js:128），路线的起点是 (12,10)=上、(9,10)=下。**上半区判据用行：row ≥ 12 → upper，否则 lower**
- * —— 与服务端 `waves.js` 的 gateOf 口径一致（target = 起点行 + 6 ≥ 18 ⇔ 起点行 ≥ 12 ⇒ 普通场起点行 ≥12 = 上门，
- * rows 9–11 = 下门）。旧实现用 `GEO.FIELD.r1 - 1`（=11）把 row 11 误判成上门，差一行。
+ * 门的行判据（**客户端拖拽口径**，2026-11-06 修正）：落点只能取战场门 —— `GEO.FIELD` = rows 9–12 / cols 2–10
+ * （shared/constants.js:139），路线的起点是 (12,10)=上、(9,10)=下。**投放门区上下各半**：rows 9–10 = lower，
+ * rows 11–12 = upper ⇒ 分界 = row 10.5 ⇔ `GATE_SPLIT = GEO.FIELD.r0 + 2`（= 11）。
+ * 为什么不是 `GEO.FIELD.r1`（= 12，2026-11-06 之前就是它）：四行的战场里只有最上面一行算上门 ⇒ 上门只占画面
+ * 高度的 1/4，拖到「上半区」四分之三都会变成下门（业主报障「上门/下门体感没生效」，判门区 1:3）。
+ * **这只决定「玩家把卡投给哪个门」**：服务端 `waves.js` 的 `gateOf` 仍是「起点行 ≥ 12 = upper」，合成路线也仍从
+ * 上门的门格 (12,10) / 下门的门格 (9,10) 出发 —— 玩家拖到上半区（rows 11–12）表示「投上门」，敌人照样从 (12,10)
+ * 出来。两套判据口径不同、互不冲突：**不要**把这里改回 12。
  * row 落在 9–12 以外不是门 ⇒ 返回 null（取消投放）。
  */
-const GATE_SPLIT = GEO.FIELD.r1;
+const GATE_SPLIT = GEO.FIELD.r0 + 2;
 /** 拖拽的位移阈值（px）：超过它就从「按下」变成「拖」。与 longPress 的默认 cancelPx 同值 —— 拖拽和长按互斥。 */
 const MON_DRAG_PX = 8;
 
@@ -270,10 +274,83 @@ function tileUnderPoint(view, clientX, clientY) {
 }
 
 /**
+ * 落点**兜底**判门（纯函数，客户端 px）：`render/app.js` 的 `tileAtClientPoint` 先要求
+ * `document.elementFromPoint(clientX, clientY) === canvas`（plugins/mota/client/js/render/app.js:2272-2275）——
+ * 拖拽时只要有覆盖层压住画布（HUD / 状态条 / 别的面板），它就拿不到 tile ⇒ endPress 判「不是门」⇒ **静默取消投放**。
+ * 这里改用投影几何兜底：平面投影把直线映成直线 ⇒ 门区 rows 9–12 × cols 2–10 的投影是一个凸四边形，
+ * rows 10 与 11 之间（row GATE_SPLIT − ½）那条分界线也是一条直线段。判据 = 点在四边形内 + 落在分界线的哪一侧。
+ * 出界（不在门区）⇒ null，与「点不到门格」同一个结果（仍是取消）。
+ * @param {Array<Array<number>>} quad 四角，按 board 坐标顺时针：(小 row, 小 col) → (小 row, 大 col) → (大 row, 大 col) → (大 row, 小 col)
+ * @param {Array<Array<number>>} split 分界线两端 [小 col 端, 大 col 端]（row = GATE_SPLIT − ½）
+ * @param {number} x @param {number} y
+ * @returns {'upper'|'lower'|null}
+ */
+export function gateFromQuad(quad, split, x, y) {
+  if (!Array.isArray(quad) || quad.length !== 4 || !Array.isArray(split) || split.length !== 2) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const cross = (a, b, p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+  // 四边形的绕向（最终攻势的镜像半场会把 x 翻过来）。sgn 与下面那一次 cross 同时变号 ⇒ 乘积不变，判据仍成立。
+  const sgn = cross(quad[0], quad[1], quad[2]) > 0 ? 1 : -1;
+  for (let i = 0; i < 4; i++) {
+    if (sgn * cross(quad[i], quad[(i + 1) % 4], [x, y]) < 0) return null;   // 某条边外侧 ⇒ 不在门区
+  }
+  // 同一行在不同列上的屏幕 y 不一定相同（斜投影 / 相机有滚转时）⇒ 不能只比 y：判点落在分界线的哪一侧。
+  // 分切线 A→B 与四边形的绕向由同一个 board→screen 投影决定（世界：x = col、y = row，row 0 最近相机）⇒
+  // 两者同时随「镜像 / 翻转」变号、乘积不变；符号按实际投影取（行号越大 → 屏幕 y 越小 ⇒ rows 11–12 在
+  // sgn·cross > 0 的一侧，这就是行号大的一侧）。
+  return sgn * cross(split[0], split[1], [x, y]) > 0 ? 'upper' : 'lower';
+}
+
+/**
+ * 拖拽落点兜底用的屏幕几何（**不改渲染层**）：只用 `facingWheel` 的 `tileScreen`（与半区高亮同一套 cam.project），
+ * 不调用任何命中测试 ⇒ 覆盖层压住画布时照样拿得到。一次 rAF 里取 6 个角点：门区四角（rows 9–12 × cols 2–10）+
+ * 分界线两端（row GATE_SPLIT − ½ = 10.5）。跟镜头走的方式与 useTileScreen 相同（每帧重投影，值变了才 setState；
+ * 不为此另开 6 个 useTileScreen）。
+ * 任何一格投影不出来（例如最终攻势把该格投到画面外 ⇒ tileScreen 返回 null）⇒ 整个兜底关掉（null），行为回到改造前。
+ * @param {any} view @param {boolean} enabled
+ * @returns {{ quad: Array<Array<number>>, split: Array<Array<number>> } | null}
+ */
+function useGateQuad(view, enabled) {
+  const [geo, setGeo] = useState(null);
+  const last = useRef('');
+  useEffect(() => {
+    let raf = 0;
+    let alive = true;
+    if (!view || !enabled) { last.current = ''; setGeo(null); return undefined; }
+    // 格子的四角：poly = [(row+½,col−½), (row+½,col+½), (row−½,col+½), (row−½,col−½)]
+    const corner = (row, col, i) => {
+      const p = tileScreen(view, row, col)?.poly?.[i];
+      return Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) ? [p[0], p[1]] : null;
+    };
+    const tick = () => {
+      if (!alive) return;
+      const quad = [
+        corner(GEO.FIELD.r0, GEO.FIELD.c0, 3),   // (row 8.5, col 1.5)   —— board 小 row / 小 col
+        corner(GEO.FIELD.r0, GEO.FIELD.c1, 2),   // (row 8.5, col 10.5)  —— board 小 row / 大 col
+        corner(GEO.FIELD.r1, GEO.FIELD.c1, 1),   // (row 12.5, col 10.5) —— board 大 row / 大 col
+        corner(GEO.FIELD.r1, GEO.FIELD.c0, 0),   // (row 12.5, col 1.5)  —— board 大 row / 小 col
+      ];
+      const split = [
+        corner(GATE_SPLIT, GEO.FIELD.c0, 3),     // (row 10.5, col 1.5)
+        corner(GATE_SPLIT, GEO.FIELD.c1, 2),     // (row 10.5, col 10.5)
+      ];
+      const next = quad.every(Boolean) && split.every(Boolean) ? { quad, split } : null;
+      const key = next ? next.quad.flat().concat(next.split.flat()).map((n) => n.toFixed(1)).join(',') : '';
+      if (key !== last.current) { last.current = key; setGeo(next); }
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => { alive = false; cancelAnimationFrame(raf); };
+  }, [view, enabled]);
+  return geo;
+}
+
+/**
  * 半区高亮的四角（客户端 px）：从门格 `useTileScreen` 的四角外推整个半区。tileScreen 的 poly 是
  * `[(row+½,col−½), (row+½,col+½), (row−½,col+½), (row−½,col−½)]` ⇒ 「向 −row 一格」= p2−p1、「向 −col 一格」= p0−p1。
- * 上门 = row 12（门格 (12,10) 是它的右下角），下门 = rows 9–11（门格 (9,10) 是它的右上角）；列一律 2–10。
- * 分界与判门同一个常量 GATE_SPLIT（= 12，与服务端 gateOf 对齐）⇒ 高亮哪一半与拖上去判成哪个门永远一致。
+ * 上门 = rows 11–12（2 行；门格 (12,10) 是它的右下角），下门 = rows 9–10（门格 (9,10) 是它的右上角）；列一律 2–10。
+ * 分界与判门同一个常量 GATE_SPLIT（= 11，即 rows 10 与 11 之间）⇒ 高亮哪一半与拖上去判成哪个门永远一致。
+ * （服务端从哪个门格出敌人是另一回事：见上面 GATE_SPLIT 的注释。高亮随分界自动变成上门 2 行 / 下门 2 行。）
  * @param {Array<[number,number]>|null} poly the gate tile's poly
  * @param {'upper'|'lower'} gate
  * @returns {Array<[number,number]>|null} 4 points, or null without geometry
@@ -428,6 +505,10 @@ function LevelCard({ shop, reason, armed = false, onTap, monster = false }) {
   const lv = shop?.level ?? 1;
   const max = lv >= (shop?.maxLevel ?? 6);
   const price = shop?.upgradePrice ?? 0;
+  // 满级**不是**「不可用」，价签不该被压暗（2026-11-06）：这里原先只认干员那条满级文案，怪物卡池满级时 reason 是
+  // `怪物卡池已达最高等级` ⇒ 比对不上、价签被画成 dark。两条满级文案都算满级（满级时价签本来就不画，
+  // 这条只对「level 与 maxLevel 在某一帧不一致」的瞬间有意义）。
+  const maxed = !!reason && (reason === t('调度中心已达最高等级') || reason === t('怪物卡池已达最高等级'));
   // 怪物卡池（2026-11-04「参考卫戍协议干员商店」）：同一张 .lvcard、同一个两击确认，只有文案与修饰类不同
   const idleTitle = monster
     ? t('升级怪物卡池（{price} 资金） · {key}', { price, key: hotkeyLabelOf('levelUp') })
@@ -435,7 +516,7 @@ function LevelCard({ shop, reason, armed = false, onTap, monster = false }) {
   return html`<button type="button" class=${cx('lvcard', monster && 'lvcard--monster', max && 'is-max', reason && 'is-disabled', armed && 'is-armed')} onClick=${() => !reason && onTap()}
       title=${reason || (armed ? t('再次点击确认升级（{price} 资金）', { price }) : idleTitle)} aria-disabled=${reason ? 'true' : 'false'}
       aria-pressed=${String(!!armed)}>
-    ${!max ? html`<${HexBadge} value=${price} tone=${reason && reason !== t('调度中心已达最高等级') ? 'dark' : 'gold'} size="md" class="lvcard__price" />` : null}
+    ${!max ? html`<${HexBadge} value=${price} tone=${reason && !maxed ? 'dark' : 'gold'} size="md" class="lvcard__price" />` : null}
     <span class="lvcard__frame">
       <span class="lvcard__micro">LEVEL</span>
       <b class="lvcard__num num">${lv}</b>
@@ -658,20 +739,23 @@ export function MonsterBondStrip({ bonds = null }) {
  *   onBuy:(i:number)=>void, onLevel:Function, onRefresh:Function, onFreeze:Function, onDetail:(id:string, kind?:string, hint?:string|null)=>void,
  *   onDetailClose?: () => void, onRefuse?: (reason: string) => void, barRef:any,
  *   reward?: any, onReward?: (idx:number)=>void, onRewardLater?: Function, offBonds?: Set<string>|null,
- *   monsterShop?: any, view?: any, onDropCam?: (on:boolean)=>void }} props — offBonds:
+ *   monsterShop?: any, monsterEditable?: boolean, view?: any, onDropCam?: (on:boolean)=>void }} props — offBonds:
  *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards.
  *   monsterShop: 对抗·攻方商店的私有帧 `m.monsterShop`（game.js 传入；只有攻方会收到 open:true 的帧 —— 服务端
  *   `monsterShopFrame` 只发给 confrontActors）。缺省 null / `open !== true` ⇒ 每一处分支都走改造前的老路。
  *   它为真时（攻方）不画干员的元素：商店升级卡换成**怪物卡池等级卡**（`.lvcard--monster`，读帧里的
  *   level/maxLevel/upgradePrice，点了发 g.monsterLevelUp）、不占装备卡那一格、`剩余可放置角色` 换成 `剩余投放预算`
  *   （读 monsterShop.left）；冻结 / 刷新 / 卡片改用 g.monster* 那一套。
+ *   monsterEditable: 投放窗口（game.js 的 `confDropWindow` = confront.active + 投放公示未开始 + 本回合攻方）。
+ *   **攻方的 `editable` 恒 false**（它带 `myRole !== 'attack'`，管的是棋盘 / 干员卡 / 干员商店），怪物卡池的等级卡
+ *   只能靠这个 prop 拿到「可操作」（本组件再与 `!priv.ready` 合成 monsterEditable）。
  *   view / onDropCam: 拖拽投放用的镜头钩子（game.js 传入）。`view` 只用来做落点判门（render/app.js 的
- *   tileAtClientPoint）与半区高亮的几何（useTileScreen）；`onDropCam(true/false)` 把镜头换成 / 还回能同时框住
- *   上下门的取景。两者缺省 null ⇒ 拖拽只折叠商店条、不发投放（点一下与多选照常）。
+ *   tileAtClientPoint，拿不到时用 tileScreen 的投影兜底）与半区高亮的几何（useTileScreen）；`onDropCam(true/false)`
+ *   把镜头换成 / 还回能同时框住上下门的取景。两者缺省 null ⇒ 拖拽只折叠商店条、不发投放（点一下与多选照常）。
  */
 export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
   reward = null, onReward, onRewardLater, onArm = null, offBonds = null, econ = null, onOpenShop = null, monsterShop = null,
-  onMonsterLevel = null, view = null, onDropCam = null }) {
+  monsterEditable: monsterDropWindow = false, onMonsterLevel = null, view = null, onDropCam = null }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -687,6 +771,13 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   // 怪物卡池（2026-11-04）：攻方这一回合的商店。`open !== true`（守方 / 商店没开 / 没有这一帧的旧对局）⇒ monsterOn
   // 为假 ⇒ 下面的干员卡、刷新、冻结全部照旧，一条新分支都不进。
   const monsterOn = !!monsterShop && monsterShop.open === true;
+  // 怪物卡池的**可操作**判据（2026-11-06）。与服务端 `inMonsterStage`（server/match/monsterShop.js:136，PREP +
+  // 投放公示未开始 + 攻守回合）同口径：商店开着（`open:true` 只在投放窗口发给攻方）+ 投放窗口（game.js 的
+  // confDropWindow）+ 还没点准备（服务端 readyLocked 会拒）。
+  // **不复用 `editable`**：game.js:384 的 editable 带 `myRole !== 'attack'` ⇒ 攻方恒 false；它管棋盘 / 干员卡 /
+  // 干员商店共 11 处，为了一张等级卡放开它会连带放开干员的逻辑。monsterOn 为假（守方 / 商店没开 / 旧对局）⇒
+  // 这里恒 false，下面所有怪物分支都不进 —— 守方行为与改造前逐字节相同。
+  const monsterEditable = monsterOn && monsterDropWindow === true && !priv?.ready;
   const monsterSlots = monsterOn && Array.isArray(monsterShop.slots) ? monsterShop.slots : [];
   const monsterLeft = monsterOn ? Math.max(0, Number(monsterShop.left) || 0) : 0;
   const mRefPrice = monsterOn ? Math.max(0, Number(monsterShop.refreshPrice) || 0) : 0;
@@ -703,11 +794,13 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   const mLevel = monsterOn ? Math.max(1, Math.trunc(Number(monsterShop.level) || 1)) : 1;
   const mMaxLevel = monsterOn ? Math.max(mLevel, Math.trunc(Number(monsterShop.maxLevel) || 6)) : 6;
   const mUpgradePrice = monsterOn ? Math.max(0, Math.trunc(Number(monsterShop.upgradePrice) || 0)) : 0;
-  // 两击确认（与干员 LevelCard 同一个观感）：第一下武装、第二下才发 g.monsterLevelUp（扣的是怪物资金，队级账户）
+  // 两击确认（与干员 LevelCard 同一个观感）：第一下武装、第二下才发 g.monsterLevelUp（扣的是怪物资金，队级账户）。
+  // 可操作判据用 monsterEditable（**不是** editable —— 攻方的 editable 恒 false，原先这一条让等级卡永远 armed 不起来，
+  // 连卡片的 onClick（`!reason && onTap()`）都早退、根本没发包）。
   const mLevelKey = `mlv:${mLevel}`;
   const mLevelReason = monsterOn
     ? (mLevel >= mMaxLevel ? t('怪物卡池已达最高等级')
-      : (!editable ? (priv?.ready ? t('已准备就绪，取消准备后才能操作') : t('当前阶段无法进行该操作'))
+      : (!monsterEditable ? (priv?.ready ? t('已准备就绪，取消准备后才能操作') : t('当前阶段无法进行该操作'))
         : (mUpgradePrice > monsterFunds ? t('怪物资金不足，升级需要 {price}', { price: mUpgradePrice }) : null)))
     : null;
 
@@ -722,7 +815,11 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
     if (showReward) reward.slots.forEach((s, i) => { if (s && !s.sold) keys.add(armKey('r', i, s)); });
     else slots.forEach((s, i) => { if (s && !s.sold) keys.add(armKey(s.kind === 'item' ? 'i' : 'c', i, s)); });
   }
-  const [armed, setArmed] = useTwoTap({ editable, keys });
+  // 两击武装的「可操作」闸门：干员卡与怪物等级卡**共用一个 armed state**，而攻方的 editable 恒 false ⇒ 攻方第一下
+  // 武装的 mLevelKey 会在下一帧被 useTwoTap 的 valid 清掉，两击永远凑不齐（2026-11-06）。所以这里放行
+  // `monsterOn && monsterEditable`；**不会**误放开干员卡：上面的 keys 在 monsterOn 时只加 mLevelKey，
+  // 干员 / 装备 / 奖励卡的 arm key 根本不在集合里，且守方（monsterOn 为假）走的仍是 editable 这一支，行为不变。
+  const [armed, setArmed] = useTwoTap({ editable: editable || (monsterOn && monsterEditable), keys });
   // the armed card's slot (game.js lights the tile a merge's elite will take — gameLogic.mergeTarget); kept before the
   // collapsed tab's early return (hook order)
   const armedSlot = armedSlotOf(armed, slots, showReward ? reward.slots : null);
@@ -748,9 +845,11 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   mHooks.current.cam = onDropCam;
   mHooks.current.collapse = onCollapse;
   // 半区高亮的几何（跟着镜头走，useTileScreen 与 underframe.js / facingWheel.js 同一范式）：两个门格的四角。
-  // 服务端只把 open:true 的商店帧发给攻方 ⇒ monsterOn 为假时传 null：两个 hook 什么都不做（不登记 rAF 循环）。
+  // 服务端只把 open:true 的商店帧发给攻方 ⇒ monsterOn 为假时传 null：这几个 hook 什么都不做（不登记 rAF 循环）。
   const mGateUp = useTileScreen(monsterOn ? view : null, GEO.FIELD.r1, GEO.FIELD.c1);   // (12,10) = 上门
   const mGateDown = useTileScreen(monsterOn ? view : null, GEO.FIELD.r0, GEO.FIELD.c1); // (9,10)  = 下门
+  // 落点兜底的投影几何（覆盖层压住画布时 tileAtClientPoint 拿不到 tile —— 见 useGateQuad 的注释）
+  const mGateQuad = useGateQuad(monsterOn ? view : null, monsterOn);
 
   /** 多选态的唯一写入口：key = 长按的那一格（null = 退出），picked = 选中的格子。 */
   const setSel = (key, picked) => {
@@ -779,7 +878,20 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   };
   const freezeMonsterSlot = (slot) => { if (slot) void act('g.monsterFreeze', { index: Number(slot.index) }, { sfx: 'freeze' }); };
   const refreshMonsterShop = () => { if (!mRefBlocked) void act('g.monsterRefresh', {}, { sfx: 'refresh' }); };
-  mLive.current = { view, slots: monsterSlots, place: placeMonster };
+  mLive.current = { view, geo: mGateQuad, slots: monsterSlots, place: placeMonster };
+
+  /**
+   * 落点的门（拖拽的移动预览与松手共用，保证「高亮哪一半」= 「真投到哪个门」）：
+   * 先走渲染层的 tile 命中（**权威**口径 —— 命中成功时它的「不是门」也是权威的）；**只有**命中测试什么都没给
+   * （覆盖层压住画布 / 视图没这个方法）时，才用投影几何的兜底（gateFromQuad）。
+   * @returns {'upper'|'lower'|null}
+   */
+  const gateAtPoint = (x, y) => {
+    const tile = tileUnderPoint(mLive.current.view, x, y);
+    if (tile) return monsterGateOf(tile.row);
+    const g = mLive.current.geo;
+    return g ? gateFromQuad(g.quad, g.split, x, y) : null;
+  };
 
   /** 长按一格：进多选态（这一格自动选中；再长按同一格 = 退出并清空）。 */
   const holdMonster = (slot) => {
@@ -861,7 +973,7 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
       r.dragging = true;
       beginDrop(r.slot);
     }
-    const gate = monsterGateOf(tileUnderPoint(mLive.current.view, e.clientX, e.clientY)?.row);
+    const gate = gateAtPoint(e.clientX, e.clientY);
     setMDrag((cur) => (cur ? { ...cur, x: e.clientX, y: e.clientY, gate } : cur));
   };
   /**
@@ -878,7 +990,7 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
     if (!dragging) return;                          // 一次普通点击：交给卡片的 onClick
     mTapGuard.current = Date.now();                  // 拖完那一下的 click 不当作「点一下」
     if (!cancelled) {
-      const gate = monsterGateOf(tileUnderPoint(mLive.current.view, e.clientX, e.clientY)?.row);
+      const gate = gateAtPoint(e.clientX, e.clientY);
       if (gate) {
         const picked = mSelRef.current.picked;
         const list = picked.length ? picked : [r.index];

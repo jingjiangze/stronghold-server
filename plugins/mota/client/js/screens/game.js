@@ -336,6 +336,8 @@ function MatchScreen() {
   // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条；状态条上只留「已投 N 只」与「撤回上一只」
   // 两个东西 —— 已投**名单**只给对面（守方的 conf.roster 公示 / priv.incoming 预览），投放方自己不看清单
   // （业主 2026-11-04：投放方不显示投放名单）。
+  // 这个值同时作为 `monsterEditable` 传给 ShopBar（2026-11-06）：攻方的 `editable` 恒 false（下面 384 行的
+  // `myRole !== 'attack'`），怪物卡池的等级卡只能靠它判定「可操作」；口径与服务端 inMonsterStage 一致。
   const confDropWindow = !!pub?.confront && pub.confront.active === true && confStage === null && myRole === 'attack';
   // 投放窗口里「已投 N 只」读的是**本回合草稿**（m.monsterShop.draft.picks，点卡投放每投一只加一条）——
   // 这时还没有提交，m.confront.subs[myId] 不存在，旧文案只能画「等待投放结算」（2026-11-04 视觉验收第 3 条）。
@@ -1684,6 +1686,12 @@ function MatchScreen() {
         toggleReady(!L.priv.ready);
         return;
       }
+      // 攻方按 D = 升级**怪物卡池**（业主 2026-11-04「参考卫戍协议干员商店」；等级挂 Match、跨回合持久）。
+      // **怪物升级不受干员商店的 editable 限制**（2026-11-06）：`editable` 带 `myRole !== 'attack'`（384 行）⇒ 攻方
+      // 恒 false；这一条原先排在下面那句「editable 为假就早退」之后，D 键对攻方永远到不了（也排不到干员商店的
+      // shopBlockReason 之前）。只把这一条提到早退之前：其余热键（买 / 刷新 / 冻结 / 退场 / 出售）照旧按
+      // editable 早退，守方 / 干员商店行为不变。
+      if (act === 'levelUp' && L.monsterShopOpen) { actions.monsterLevelUp(); return; }
       if (!L.editable) return;
       if (act === 'buy') {
         if (L.drag || L.facing || !pointer || pointer.buttons) return;
@@ -1706,9 +1714,6 @@ function MatchScreen() {
         else if (act === 'sell' && available?.sell != null) await sellOwnPiece(uid);
         return;
       }
-      // 攻方按 D = 升级**怪物卡池**（业主 2026-11-04「参考卫戍协议干员商店」；等级挂 Match、跨回合持久）。
-      // 必须排在下面那条干员商店的 shopBlockReason 之前：攻方没有干员商店的等级语义，别被「资金不足」提前挡掉。
-      if (act === 'levelUp' && L.monsterShopOpen) { actions.monsterLevelUp(); return; }
       const reason = shopBlockReason(act, { priv: L.priv, editable: L.editable });
       if (reason) { audio.sfx('error', { volume: 0.5 }); return; }
       if (act === 'refresh') actions.refresh();
@@ -1923,6 +1928,7 @@ function MatchScreen() {
       ${showShop ? html`<${ShopBar} priv=${priv} editable=${editable} collapsed=${barCollapsed} refreshBusy=${refreshBusy} onCollapse=${setCollapsed}
         barRef=${barRef} offBonds=${offBonds} econ=${econ}
         monsterShop=${myRole === 'attack' ? monsterShop : null}
+        monsterEditable=${confDropWindow}
         view=${view} onDropCam=${setDropCam}
         onOpenShop=${String(pub?.modeId || '').startsWith('mode_xie_') ? () => { net.request('g.meltOpen', {}).catch(() => {}); } : null}
         onBuy=${buy} onLevel=${() => actions.levelUp()} onMonsterLevel=${() => actions.monsterLevelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
