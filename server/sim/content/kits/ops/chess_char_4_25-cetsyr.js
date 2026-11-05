@@ -4,10 +4,7 @@
 import { COLS } from '../../../constants.js';
 import { canTargetEnemy } from '../../../targeting.js';
 import { aggregateMods } from '../../../buffs.js';
-import {
-  AURA, AURA_DUR, num, tbb, moduleBb, grid, enemyHasTag, whileDeployed, toggleBuff, skillActive, isSel, alt,
-  withDefaults,
-} from '../shared/tier4.js';
+import { AURA, AURA_DUR, num, tbb, moduleBb, grid, enemyHasTag, whileDeployed, toggleBuff, skillActive, isSel, alt, withDefaults } from '../shared/tier4.js';
 
 /**
  * 鼓舞 (ba.inspire "获得额外附加的基础属性加成（同类属性取最高）"): +`val` ATK (or max HP) on top of the target's own
@@ -95,9 +92,6 @@ export default withDefaults({
         { install(battle, unit) { // 过往尘埃: 3 motes; touching an operator ⇒ her trait regen ×1.5 on it for 6 s; mote back after 6 s
           unit.mem.motes = new Array(baseCnt).fill(-Infinity);
           unit.mem.noInspire = true; // trait: 自身不受鼓舞影响 (another bard's 鼓舞 skips her)
-          // The orbiting 「微尘」 for the client (render/motes.js; snapshot.js moteView): how many are out right now and
-          // whether S2's 旋转半径扩大 is up. Display only — the mote logic below stays the sim's own.
-          unit.moteRing = () => [unit.mem.motes.reduce((k, t) => k + (t <= battle.time + 1e-9 ? 1 : 0), 0), S2 && skillActive(unit) ? 1 : 0];
           const cooldown = () => (S1 && skillActive(unit) ? num(bb.talent_cool_down, 3) : num(t0.cooldown, 6)); // S1: 重生速度加快
           const takeMote = () => {
             const i = unit.mem.motes.findIndex((t) => t <= battle.time + 1e-9);

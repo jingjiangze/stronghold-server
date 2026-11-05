@@ -13,9 +13,26 @@ import { previewPlayer } from '../preview.js';
 import { morphBattleOpt } from '../../../shared/plugins/rules.js';
 
 export class MatchCombat {
+  /**
+   * 危机合约 (shared/contractEffects.js) as the Battle options server/sim/Battle.js reads: `contractOpStatMul`,
+   * `contractHealMul`, `contractLayerCap` (copied onto the battle's data view — players.js / damage.js /
+   * economy.js read them from there). Only non-neutral keys go out: a room without contracts (or with contracts that
+   * touch none of the three) passes exactly the options it always passed, and Battle grows no data key.
+   */
+  _contractOpts() {
+    const fx = this.fx;
+    if (!fx) return {};
+    const op = fx.opStatMul;
+    return {
+      ...(op && (op.atk !== 1 || op.def !== 1 || op.hp !== 1) ? { contractOpStatMul: { ...op } } : {}),
+      ...(fx.healMul !== 1 ? { contractHealMul: fx.healMul } : {}),
+      ...(fx.bondLayerCap != null ? { contractLayerCap: { cap: fx.bondLayerCap } } : {}),
+    };
+  }
+
   /** Construct a battle; a constructor failure yields a finished stand-in (clean result) and is logged. */
   newBattle(opts, { preview = false } = {}) {
-    const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts, ...morphBattleOpt(this.rules),
+    const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts, ...this._contractOpts(), ...morphBattleOpt(this.rules),
       ...(preview ? { logger: {}, quiet: true } : {}) };
     try {
       return new this.BattleClass(full);
@@ -74,6 +91,9 @@ export class MatchCombat {
       fieldId: `n:${ps.playerId}`,
       enemyOverrides: wave.overrides,
       waveId: wave.templateId,
+      // 危机合约 (shared/contractEffects.js): the room-wide battle modifiers — this object is also what the
+      // client-side field's BattleSpec is built from (clientCombat._ccField), so the browser sim reads them too
+      ...this._contractOpts(),
     };
   }
 

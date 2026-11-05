@@ -82,7 +82,7 @@
 
 import { ASPD_MIN } from '../sim/constants.js';
 import { rehearsalCap, RehearsalRun } from '../sim/rehearsal.js';
-import { freeSlot, countFree, legalTiles, canPlace, positionClass, placeClass, basePositionClass, parseKey, tileKey, FIELD, pieceDir, boardTileOf, BOSS_MIRROR_COL } from './board.js';
+import { freeSlot, countFree, legalTiles, canPlace, positionClass, placeClass, basePositionClass, parseKey, tileKey, FIELD, rectOfMap, pieceDir, boardTileOf, BOSS_MIRROR_COL } from './board.js';
 import { rotateOffset, normDir, mirrorDir, oppositeDir } from '../sim/dir.js';
 import { itemKey } from './gamedata.js';
 import { computeBonds } from './bondsMeta.js';
@@ -329,7 +329,7 @@ function bondPoolStats(m, ps, owned) {
   const reach = new Map();
   const supply = new Map();
   const maxTier = Math.min(6, ps.shop.level + 1);
-  for (const [id, e] of m.pool.entries) {
+  for (const [id, e] of ps.poolGroup().entries) {
     if (!(e.left > 0)) continue;
     const c = m.gd.chess(id);
     if (!c || !Array.isArray(c.bonds)) continue;
@@ -624,7 +624,7 @@ function buyScore(m, ps, id, ctx) {
   // [ASSUMED] A soft 18-point cooperation weight (PR #407), not an official rule or a reserved card.
   // Leave high-tier shared chess to living teammates whose opening strategy needs its faction.
   // Humans and bots count equally; a single soft penalty still allows valuable own merges.
-  if (c.tier >= 5 && !c.isGolden && !c.diyFor && m.pool.has(base) && m.alivePlayers().some((mate) =>
+  if (c.tier >= 5 && !c.isGolden && !c.diyFor && ps.poolGroup().has(base) && m.alivePlayers().some((mate) =>
     mate !== ps && gd.bandBondIds(mate.bandId).some((b) => !gd.modeInactiveBonds.has(b) && c.bonds.includes(b)))) s -= 18;
   return s;
 }
@@ -632,7 +632,9 @@ function buyScore(m, ps, id, ctx) {
 // ---------------------------------------------------------------------------------------------------
 // field model: where the round's enemies walk / fly over the own board, and an exposure model of a layout
 
-const inRect = (r, c) => r >= FIELD.r0 && r <= FIELD.r1 && c >= 0 && c <= FIELD.c1;
+/** A tile of the own board `rect` (the deploy map's region — a rogue stage's own frame; FIELD by default). The left
+ * bound stays 0 (paths may enter from off-board); FIELD keeps the classic window exactly. */
+const inRect = (r, c, rect = FIELD) => r >= rect.r0 && r <= rect.r1 && c >= 0 && c <= rect.c1;
 
 /** Integer tiles along a polyline of [row, col] points (inclusive, consecutive duplicates removed). */
 function traceLine(points) {
@@ -681,13 +683,16 @@ export function fieldModel(m, ps = null) {
   if (m._botPath && m._botPath.key === cacheKey) return m._botPath;
   const gd = ps?.gd || m.gd;
   const st = m.stage;
+  // the own board's region: the deploy map's rect (a rogue stage's own frame), FIELD otherwise (no player ⇒ FIELD,
+  // as before). Enemies walk over the tiles the player may deploy on, not the classic window.
+  const rect = ps ? rectOfMap(ps.deployMap()) : FIELD;
   const gpaths = (st && (st.groundPathsWithDevices || st.groundPaths)) || {};
   const routesOut = [];
   const toBoard = boss
     ? ([r, c]) => boardTileOf(boss.side === 'R' ? 'bossR' : 'bossL', r, c)
     : (p) => p;
   const pushRoute = (tilesRC, n, fly, hp, speed, dwell = 0) => {
-    const own = tilesRC.map(toBoard).filter(([r, c]) => inRect(r, c)).map(([r, c]) => tileKey(r, c));
+    const own = tilesRC.map(toBoard).filter(([r, c]) => inRect(r, c, rect)).map(([r, c]) => tileKey(r, c));
     if (own.length > 1) own.pop(); // the objective / last tile: an enemy there has already leaked
     if (!own.length) return;
     const tileTime = Math.max(0.4, Math.min(6, 1 / Math.max(0.05, speed * 0.5)));
@@ -749,9 +754,9 @@ export function fieldModel(m, ps = null) {
     for (const [k, arr] of Object.entries(gpaths)) {
       if (!Array.isArray(arr) || !arr.length) continue;
       const [sr, sc] = String(k).split('->')[0].split(',').map(Number);
-      if (!(sr >= FIELD.r0 && sr <= FIELD.r1 && sc <= FIELD.c1)) continue;
+      if (!(sr >= rect.r0 && sr <= rect.r1 && sc <= rect.c1)) continue;
       // stage ground paths are in normal-field coordinates: no boss mapping
-      const own = arr.filter(([r, c]) => inRect(r, c)).map(([r, c]) => tileKey(r, c));
+      const own = arr.filter(([r, c]) => inRect(r, c, rect)).map(([r, c]) => tileKey(r, c));
       if (own.length > 1) own.pop();
       if (own.length) routesOut.push({ n: 3, fly: false, tiles: own, tileTime: 2, hp: 3000, dwell: 0 });
     }
@@ -774,7 +779,7 @@ export function fieldModel(m, ps = null) {
   let wsum = 0;
   for (const w of foes.values()) wsum += w;
   const armor = [...foes.entries()].map(([k, w]) => { const [def, res] = k.split('|').map(Number); return { def, res, w: w / wsum }; });
-  m._botPath = { key: cacheKey, routes: routesOut, index, ground, flyTotal, airflow: airflowOf(st, toBoard, boss && boss.side === 'R'), armor, dps: new Map() };
+  m._botPath = { key: cacheKey, routes: routesOut, index, ground, flyTotal, airflow: airflowOf(st, toBoard, boss && boss.side === 'R', rect), armor, dps: new Map() };
   return m._botPath;
 }
 
@@ -784,7 +789,7 @@ export function fieldModel(m, ps = null) {
  * such a tile facing WITH the flow gets ATK × (1 + blower_s_character[equal].atk), against it [opposite], across it
  * [vertical] (DESIGN §3, research 09 §1.1): the planner scales its DPS accordingly when it picks a direction.
  */
-function airflowOf(st, toBoard, mirrored) {
+function airflowOf(st, toBoard, mirrored, rect = FIELD) {
   const out = new Map();
   for (const d of (st && Array.isArray(st.devices) ? st.devices : [])) {
     if (!d || d.role !== 'blower' || d.active === false || d.hidden) continue;
@@ -793,7 +798,7 @@ function airflowOf(st, toBoard, mirrored) {
     for (const p of Array.isArray(d.rangeTiles) ? d.rangeTiles : []) {
       if (!Array.isArray(p)) continue;
       const [r, c] = toBoard(p);
-      if (inRect(r, c)) out.set(tileKey(r, c), { dir, bb });
+      if (inRect(r, c, rect)) out.set(tileKey(r, c), { dir, bb });
     }
   }
   return out;
@@ -1305,12 +1310,12 @@ function copyCounts(m, ps) {
 function refreshValue(m, ps, ctx) {
   const L = ps.shop.level;
   let total = 0;
-  for (const e of m.pool.entries.values()) if (e.left > 0 && e.tier <= L) total += e.left;
+  for (const e of ps.poolGroup().entries.values()) if (e.left > 0 && e.tier <= L) total += e.left;
   if (!(total > 0)) return 0;
   const slots = m.gd.shopSlots(L).chess;
   let v = 0;
   for (const [b, k] of ctx.copies) {
-    const e = m.pool.entries.get(b);
+    const e = ps.poolGroup().entries.get(b);
     if (!e || e.left <= 0 || e.tier > L) continue;
     const pShop = 1 - (1 - e.left / total) ** slots;
     if (k + 1 >= mergeNeed(m, b)) v += pShop * MERGE_HIT;
@@ -1382,7 +1387,7 @@ function sellJunk(m, ps) {
     const base = m.gd.baseIdOf(p.id);
     const copies = c.isGolden ? 0 : ctx.copies.get(base) || 0;
     // a pair whose third copy can still come (the merge's reward is worth it for any pair)
-    const pairLive = copies + 1 >= mergeNeed(m, base) && (m.pool.left(base) > 0 || !m.pool.has(base));
+    const pairLive = copies + 1 >= mergeNeed(m, base) && (ps.poolGroup().left(base) > 0 || !ps.poolGroup().has(base));
     const useful = c.isGolden || pairLive || ctx.keep.has(base) || (copies >= 2 && m.round <= 6);
     (useful ? keep : junk).push({ p, v: pieceValue(m, ps, p, ctx) + (pairLive ? 150 : useful ? 100 : 0) });
   }

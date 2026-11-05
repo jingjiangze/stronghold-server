@@ -14,8 +14,8 @@
 //     host changes it in the room — the event's 联合模拟 creates the room first (research 06 §3.2), the starting
 //     difficulty is not recorded [ASSUMED: 标准, the first one unlocked; the event room research 06 §3.2 describes shows
 //     ♜ 标准模拟 in its footer pill]. The game's own lobby always sends the remembered one.
-//   * Host-only: room.setDifficulty, room.setAiPicksLast, room.setSoloUnlimited, room.addBot, room.removeBot, room.kick,
-//     room.start.
+//   * Host-only: room.setDifficulty, room.setAiPicksLast, room.setSoloUnlimited, room.setIncompleteMaps, room.addBot,
+//     room.removeBot, room.kick, room.start.
 //     ▸ Changing the difficulty or the AI-picks-last option (co-op only) un-readies the other humans.
 //     ▸ 「不限时」 (room.setSoloUnlimited { on }, DESIGN §35.23.10): a solo room of a version whose rules.soloTimed is
 //       true, off by default. On, the match is built with opts.soloUnlimited (preparation and 机变 untimed — the existing
@@ -231,9 +231,10 @@
 
 import { aiTakeover, aiTakeoverDirect, resetAiTakeover, reconcileAiTakeover, maybeRandomAiTakeover } from './aiTakeover.js';
 import { randomBytes, randomInt } from 'node:crypto';
-import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultyRank, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, TRAINING_DIFFICULTY, difficultyRank, difficultiesFor, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { getData } from './data.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks, charPotentialChanges, checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
+import { contractsValidFor, resolvePicked } from '../shared/contracts.js';
 import { encode, isErrCode, sendRaw, sendSession } from './net.js';
 import { getData as defaultGetData, lookup } from './data.js';
 import { Match as DefaultMatch } from './match/Match.js';
@@ -412,6 +413,20 @@ export class Room {
      * opts.soloUnlimited. room.state omits the key unless this is true.
      */
     this.soloUnlimited = false;
+    /**
+     * 「包含无场景地图」 (room.setIncompleteMaps; off by default): the match is built with opts.incompleteMaps, and its stage
+     * pools keep every stage of the mode only while this is true — off, a stage without an official scene package
+     * (data/local-assets.json `scene/<stageId>`) is left out of the setup / per-round / node-tier draws. room.state omits
+     * the key unless this is true.
+     */
+    this.incompleteMaps = false;
+    /**
+     * 危机合约 (shared/contracts.js): the contract ids the host picked with room.setContracts — already resolved by
+     * `setContracts` (exclusivity, prerequisites, the room's size / difficulty), so the list is exactly what the match
+     * plays and what room.state shows. A room without contracts keeps `[]`.
+     * @type {string[]}
+     */
+    this.contracts = [];
     /** @type {string | null} */
     this.hostId = null;
     /** lobby 级插件扩展（code.lobby）：room.state 的额外字段与房间事件从这里来 */
@@ -494,6 +509,9 @@ export class Room {
       mode: this.mode,
       difficulty: this.difficulty,
       aiPicksLast: this.aiPicksLast,
+      // 危机合约 (room.setContracts): the current selection, so a client that joins / resyncs reads what the host
+      // ticked. Omitted when empty, so a room without contracts keeps its room.state byte-identical.
+      ...(this.contracts.length ? { contracts: this.contracts.slice() } : {}),
       inMatch: !!this.match,
       // 座位上限（2026-10-27）：对抗房 = 2 × teamSize。此前没有这个字段，客户端按 MAX_SEATS(20) 画满，
       // 2V2 房也显示 20 个座位（线上反馈）。
@@ -525,6 +543,8 @@ export class Room {
       ...(this.test ? { test: true } : {}),
       // 「不限时」 (header): omitted unless on, so a default room.state stays identical
       ...(this.soloUnlimited === true ? { soloUnlimited: true } : {}),
+      // 「包含无场景地图」 (header): likewise omitted unless on
+      ...(this.incompleteMaps === true ? { incompleteMaps: true } : {}),
       // 插件平铺进 room.state 的字段（后写的覆盖同名核心键；插件自己保证不冲撞）
       ...(this.ext?.state?.(this) || {}),
     };
@@ -892,8 +912,10 @@ export class Lobby {
       case 'room.list': return this.sendLobbySnapshot(session);
       case 'room.ready': return this.ready(session, msg);
       case 'room.setDifficulty': return this.setDifficulty(session, msg);
+      case 'room.setContracts': return this.setContracts(session, msg);
       case 'room.setAiPicksLast': return this.setAiPicksLast(session, msg);
       case 'room.setSoloUnlimited': return this.setSoloUnlimited(session, msg);
+      case 'room.setIncompleteMaps': return this.setIncompleteMaps(session, msg);
       case 'room.setAiTakeover': return this.setAiTakeover(session, msg);
       case 'room.setAiRandom': return this.setAiRandom(session, msg);
       case 'room.aiRequest':
@@ -1006,8 +1028,12 @@ export class Lobby {
     if (!this.offered(version, mode).length) return fail(ERR.VERSION_UNSUPPORTED, `${version} has no ${mode} rooms`);
     if (!this.versionAvailable(version)) return fail(ERR.VERSION_UNSUPPORTED, 'the data of this version is not available');
     // left out: the default (header); the protocol refuses any other value that is not a difficulty; one the version
-    // lacks is lowered (终极 → 绝境)
-    const askedOk = DIFFICULTIES.includes(asked) || LEGACY_DIFFICULTIES.includes(asked);
+    // lacks is lowered (终极 → 绝境). 训练模式 (mode_training_1) is its own gate: solo rooms whose data carries it.
+    // 肉鸽（`mode: 'rogue'`）的难度表是 N1–N20（difficultiesFor('rogue')）：不在这里放行，协议放过来的 N 档会
+    // 被当成「不认识」而落到默认档 FUNNY，再被 fallbackDifficulty 降到 N1（2026-11-03 修）。
+    const askedOk = DIFFICULTIES.includes(asked) || LEGACY_DIFFICULTIES.includes(asked)
+      || (mode === 'rogue' && this.offered(version, mode).includes(asked))
+      || (asked === TRAINING_DIFFICULTY && this.offersTraining(version, mode));
     const difficulty = this.fallbackDifficulty(version, mode, askedOk ? asked : DEFAULT_DIFFICULTY);
     const cur = this.roomOf(session);
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
@@ -1192,9 +1218,9 @@ export class Lobby {
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
     // the room's version offers it (header "Official versions": 第二期上半 / 第一期 have no 终极)
-    // 版本提供的档位；旧 4 档名另外放行（老客户端），但前提是这个版本的数据里确实有那条 mode
-    if (!this.offered(room.version, room.mode).includes(difficulty)
-      && !(LEGACY_DIFFICULTIES.includes(difficulty) && this.hasModeOfVersion(room.version, room.mode, difficulty))) {
+    // 版本提供的档位；旧 4 档名另外放行（老客户端），但前提是这个版本的数据里确实有那条 mode。
+    // 训练模式（入门协议）只给单人房，且该版本数据里有 mode_training_1（difficultyAllowed）。
+    if (!this.difficultyAllowed(room.version, room.mode, difficulty)) {
       return fail(ERR.BAD_TARGET, 'not a mode of this version');
     }
     this.dropReplay(room, session.playerId);
@@ -1203,9 +1229,74 @@ export class Lobby {
       room.difficulty = difficulty;
       if (room.content?.modeId) { const rest = { ...room.content }; delete rest.modeId; room.content = Object.freeze(rest); }
       for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
+      // 危机合约: a lower difficulty may no longer allow the room's selection (CONTRACT_MIN_DIFFICULTY, minDifficulty);
+      // the clearing rides this broadcast, nobody else is told twice
+      this.revalidateContracts(room);
       this.broadcastState(room);
     }
     return OK;
+  }
+
+  /**
+   * room.setContracts (host-only, before the match; 危机合约, shared/contracts.js): the host replaces the room's
+   * selection with `contracts`, a list of contract ids from the 危机合约 screen. `contractsValidFor` judges every id
+   * against THIS room — its size (`takenSeats`, the lobby's own player count: bots included, spectators not) and its
+   * difficulty — and reports the first refusal (`reason` + the offending `bad` id), which becomes the error's detail
+   * so the client can say why instead of a bare 无效的目标.
+   *
+   * A legal list is stored **resolved**: `resolvePicked` applies the exclusivity / prerequisite / profession-limit
+   * rules, so what the room keeps — and what the match plays — is one self-consistent selection. Like a difficulty
+   * change, a changed selection un-readies the other humans (they re-read the room before ready).
+   */
+  setContracts(session, { contracts }) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
+    if (room.match) return fail(ERR.ROOM_STARTED);
+    if (!Array.isArray(contracts)) return fail(ERR.BAD_MSG, 'contracts must be an array');
+    const players = takenSeats(room);
+    const valid = contractsValidFor(contracts, { players, difficulty: room.difficulty });
+    if (!valid.ok) return fail(ERR.BAD_TARGET, `${valid.reason}: ${valid.bad}`);
+    const ids = resolvePicked(contracts, players, room.difficulty);
+    const same = ids.length === room.contracts.length && ids.every((id, i) => id === room.contracts[i]);
+    if (!same) {
+      this.dropReplay(room, session.playerId);
+      room.contracts = ids;
+      for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
+      this.broadcastState(room);
+    }
+    return OK;
+  }
+
+  /**
+   * 危机合约 (shared/contracts.js): re-check the room's selection against the room **as it is now** — its size
+   * (`takenSeats`, the lobby's own count: bots included, spectators not) and its difficulty — and clear it when it no
+   * longer holds. `setContracts` only judges the picks of the moment; afterwards the room shrinks (a player leaves, is
+   * kicked, a bot is removed, a grace timeout frees a seat) or its difficulty drops (`setDifficulty`, `setMode`, a
+   * version switch's `fallbackDifficulty`), and the match would otherwise play a contract the room cannot support —
+   * `noLpSharing` needs 5 players, every contract needs 终极 (`CONTRACT_MIN_DIFFICULTY`).
+   *
+   * Conservative by design: an invalid selection is **cleared**, not narrowed to the part that still resolves. The two
+   * differ only on a partial failure, and keeping the survivors would silently play a weaker challenge than the screen
+   * showed when the host ticked it; an empty list is something the room already knows how to run (no 危机合约) and the
+   * host re-picks it deliberately. `resolvePicked` therefore runs only in `setContracts`.
+   *
+   * Like a changed selection in `setContracts`, a cleared list un-readies the other humans (they re-read the room before
+   * ready). No broadcast here: every call site already broadcasts room.state right after (or `dropReplay`/`voidVersionVote`
+   * of the same step), so the clearing never costs a second frame.
+   *
+   * @param {Room} room @returns {boolean} true when the selection was cleared
+   */
+  revalidateContracts(room) {
+    // a running match owns its own copy (Match.opts.contracts, frozen): the room's list is a lobby-only state
+    if (!room || room.disposed || room.match || !room.contracts.length) return false;
+    const players = takenSeats(room);
+    const valid = contractsValidFor(room.contracts, { players, difficulty: room.difficulty });
+    if (valid.ok) return false;
+    this.log.info(`[lobby] ${room.code} contracts cleared (${valid.reason}: ${valid.bad}) — room: ${players} players @ ${room.difficulty}`);
+    room.contracts = [];
+    for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
+    return true;
   }
 
   /** 「AI 队友最后选择」 (GitHub #338): host-only, before the match, co-op rooms only (a solo room has no AI seat). */
@@ -1255,6 +1346,26 @@ export class Lobby {
     if (room.aiPicksLast !== on) {
       room.aiPicksLast = on;
       for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
+      this.broadcastState(room);
+    }
+    return OK;
+  }
+
+  /**
+   * 「包含无场景地图」 (host-only, before the match; every mode): off (the default) the match's stage pools keep only the
+   * stages with an official scene package (server/match/sceneStages.js); on, every stage of the mode is drawn again and a
+   * stage without a scene gets the procedural board. `on: false` clears the flag and drops the room.state key.
+   */
+  setIncompleteMaps(session, { on }) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.spectatorOf(session.playerId)) return fail(ERR.SPECTATOR);
+    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
+    if (room.match) return fail(ERR.ROOM_STARTED);
+    this.dropReplay(room, session.playerId);
+    const next = on === true;
+    if (room.incompleteMaps !== next) {
+      room.incompleteMaps = next;
       this.broadcastState(room);
     }
     return OK;
@@ -1445,14 +1556,21 @@ export class Lobby {
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     if (room.match) return fail(ERR.ROOM_STARTED);
     if (room.versionVote) return fail(ERR.VERSION_VOTE);
-    const official = [...DIFFICULTIES, ...LEGACY_DIFFICULTIES].find((d) => modeIdFor(room.mode, d) === modeId);
+    // 训练模式（入门协议 mode_training_1）没有 single/multi 的 id：只有单人房的候选里才放它，
+    // 放进来之后仍然走下面同一条 offered / 数据校验（不绕过）。
+    // 肉鸽的候选是 N1–N20（difficultiesFor('rogue')），id 是它自己那一族 mode_rogue_<难度>。
+    const rogue = room.mode === 'rogue';
+    const candidates = rogue ? [...difficultiesFor('rogue')]
+      : room.mode === 'solo'
+        ? [...DIFFICULTIES, ...LEGACY_DIFFICULTIES, TRAINING_DIFFICULTY]
+        : [...DIFFICULTIES, ...LEGACY_DIFFICULTIES];
+    const official = candidates.find((d) => modeIdFor(room.mode, d, rogue ? 'rogue' : undefined) === modeId);
     let difficulty = room.difficulty;
     let content = room.content;
     if (official) {
       // the room's version offers it (header "Official versions")；
       // 旧 4 档名另放行（该版本数据里确有这条 mode 就行），否则老客户端的「切换模式」会全部被判无效
-      if (!this.offered(room.version, room.mode).includes(official)
-        && !(LEGACY_DIFFICULTIES.includes(official) && this.hasModeOfVersion(room.version, room.mode, official))) {
+      if (!this.difficultyAllowed(room.version, room.mode, official)) {
         return fail(ERR.BAD_TARGET, 'not a mode of this version');
       }
       difficulty = official;
@@ -1469,6 +1587,8 @@ export class Lobby {
     room.difficulty = difficulty;
     room.content = content;
     for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
+    // 危机合约: the chosen mode may carry a lower difficulty than the selection allows (same rule as setDifficulty)
+    this.revalidateContracts(room);
     this.broadcastState(room);
     return OK;
   }
@@ -1559,9 +1679,11 @@ export class Lobby {
   }
 
   offered(v, mode) {
-    // 插件房模式（versus / rogue）沿用 coop 的难度表：玩法本体在插件里，房间选项仍是同一套难度。
-    const family = mode === 'versus' || mode === 'rogue' ? 'coop' : mode;
-    if (!this.versions || v === DEFAULT_VERSION) return DIFFICULTIES;
+    // 2026-11-03 业主：N1–N20 只给肉鸽；标准/同盟/对抗/协同共竞仍用旧 4 档。
+    if (!this.versions || v === DEFAULT_VERSION) return difficultiesFor(mode);
+    // 肉鸽是默认版本专属玩法（官方版本的数据里没有 mode_rogue_*）⇒ 非默认版本没有肉鸽房。
+    if (mode === 'rogue') return [];
+    const family = mode === 'versus' ? 'coop' : mode;
     return this.versions.offered(v, /** @type {'solo' | 'coop'} */ (family));
   }
 
@@ -1588,9 +1710,12 @@ export class Lobby {
   fallbackDifficulty(v, mode, d) {
     const offered = this.offered(v, mode);
     if (!offered.length || offered.includes(d)) return d;
+    // 训练模式不在 offered 列表里（它不参与难度阶梯，见 offersTraining）：该版本仍有这条 mode 就保留，
+    // 否则按下面的阶梯降级 —— 换版本后不会把房间留在一个这版数据里没有的 modeId 上。
+    if (d === TRAINING_DIFFICULTY && this.offersTraining(v, mode)) return d;
     // 「选择器里没有」但**该版本的数据里确实有这条 mode**（旧 4 档就是这种情况）⇒ 保留原档，
     // 这样老房间 / 老客户端 / 默认档 FUNNY 都不会被悄悄改成别的档。
-    if (this.hasModeOfVersion(v, mode, d)) return d;
+    if (LEGACY_DIFFICULTIES.includes(d) && this.hasModeOfVersion(v, mode, d)) return d;
     // 按**难度阶梯序**取「不高于它、且这个版本提供」的最高一档；都不高于它就取最低一档。
     // 这样 N 档 ↔ 旧 4 档能互相映射（N1→FUNNY、N20→HARD/ABYSS…），而不是各自算各自的 index。
     const want = difficultyRank(d) || 1;
@@ -1609,8 +1734,29 @@ export class Lobby {
       const cfg = v === DEFAULT_VERSION || !this.versions ? getData().config
         : (this.versions.data?.(v)?.config ?? null);
       if (!cfg) return false;
-      return Object.hasOwn(cfg.modes || {}, modeIdFor(roomMode, d));
+      return Object.hasOwn(cfg.modes || {}, modeIdFor(roomMode, d, roomMode === 'rogue' ? 'rogue' : null));
     } catch { return false; }
+  }
+
+  /**
+   * 训练模式（入门协议 `mode_training_1`, shared/constants.js TRAINING_DIFFICULTY）能不能在这个房间问：
+   * **单人房**才行（LOCAL 是单人语义），而且这个版本的数据里确实有这条 mode。它不在 DIFFICULTIES / LEGACY_DIFFICULTIES
+   * 里，所以 create / setDifficulty / setMode 三处各自用它放行，普通档位与 coop 房的校验一个字都不动。
+   * @param {string} v @param {'solo'|'coop'|'versus'|'rogue'} mode
+   */
+  offersTraining(v, mode) {
+    return mode === 'solo' && this.hasModeOfVersion(v, mode, TRAINING_DIFFICULTY);
+  }
+
+  /**
+   * May this version's rooms of `mode` carry `d`: the version's selector, an old 4-tier name whose mode record the
+   * version's data has (老客户端), or 训练模式 on a solo room whose data carries mode_training_1.
+   * @param {string} v @param {string} mode @param {string} d
+   */
+  difficultyAllowed(v, mode, d) {
+    return this.offered(v, mode).includes(d)
+      || (LEGACY_DIFFICULTIES.includes(d) && this.hasModeOfVersion(v, mode, d))
+      || (d === TRAINING_DIFFICULTY && this.offersTraining(v, mode));
   }
 
   /**
@@ -1767,6 +1913,9 @@ export class Lobby {
       s.loadoutCs = null; s.notOwnedCs = null; s.diyCs = null;
       if (s.card && !operators.has(s.card)) s.card = null;
     }
+    // 危机合约: the new version's fallbackDifficulty may not allow the room's selection (CONTRACT_MIN_DIFFICULTY); the
+    // clearing rides this broadcast
+    this.revalidateContracts(room);
     this.log.info(`[lobby] ${room.code} version → ${version} (${how})`);
     this.broadcastState(room);
   }
@@ -1800,6 +1949,8 @@ export class Lobby {
     const target = room.seats[seat];
     if (!target || !target.isBot) return fail(ERR.BAD_TARGET, 'seat does not hold an AI');
     room.seats[seat] = null;
+    // 危机合约: one seat fewer may drop the room below a contract's threshold (aidCommsDown minPlayers)
+    this.revalidateContracts(room);
     this.broadcastState(room);
     return OK;
   }
@@ -2170,6 +2321,13 @@ export class Lobby {
     }
     // (room.start refuses during a vote; a start from elsewhere voids it)
     if (room.versionVote) this.voidVersionVote(room, 'members');
+    // 危机合约, defensive: every mutating path re-checks the selection (room.revalidateContracts), but a lobby plugin's
+    // beforeStart may still have changed the seats. An invalid selection starts the match WITHOUT contracts rather than
+    // failing the start: startMatch's refusals are about the environment (another version's host, the per-network limit,
+    // a plugin-busy content set) and the lobby has no error code for "the picks became illegal" (that is setContracts'
+    // BAD_TARGET); refusing here would strand the host mid-start with a state room.start cannot repair. Empty +
+    // logged + broadcast below is the room's normal "no 危机合约" shape, and the host re-picks deliberately next time.
+    this.revalidateContracts(room);
     const host = room.seatOf(room.hostId);
     if (host) host.ready = true;
     // the room's data: its content set's in a room with gameplay plugins (header "Gameplay plugins")
@@ -2205,15 +2363,19 @@ export class Lobby {
         mode: room.mode,
         difficulty: room.difficulty,
         // a plugin mode the host chose (header "Gameplay plugins"), else the official mode of the difficulty
-        // 肉鸽用自己的一份 mode 记录（mode_rogue_<难度>）：回合数/敌人数值都从那里读，不再借用多人的表
+        // 肉鸽用自己的一份 mode 记录（mode_rogue_<难度>）：回合数/敌人数值都从那里读，不再借用多人的表。
+        // 独立模式看 room.mode，老写法（coop + variant:'rogue'）看 room.variant；solo/coop 传 undefined，结果不变。
         modeId: (this.ext?.options?.(room) || {}).modeId || room.content?.modeId
-          || modeIdFor(room.mode, room.difficulty, room.mode === 'rogue' ? 'rogue' : null),
+          || modeIdFor(room.mode, room.difficulty, room.mode === 'rogue' || room.variant === 'rogue' ? 'rogue' : undefined),
         // 房间变体（协同共竞 'xie' / 肉鸽 'rogue' / 无限火力 blitz…）。**必须透传给 Match**：引擎侧
         // `Match.roomVariant` 靠它判 `isRogue`。以前只把变体存进 `room.variant` 并广播给客户端，却没进 opts
         // ⇒ `isRogue` 恒 false，肉鸽的藏品节奏 / 随机事件 / 随机词缀 / 每回合换图**全部静默失效**（2026-10-31 修）。
         ...(typeof room.variant === 'string' && room.variant ? { variant: room.variant } : {}),
         // 「AI 队友最后选择」 (GitHub #338): fixed for the match
         aiPicksLast: room.mode !== 'solo' && room.aiPicksLast === true,
+        // 危机合约 (room.setContracts): the selection the match plays, already resolved. Omitted while the room has
+        // none, so a normal match's opts keep their keys.
+        ...(room.contracts.length ? { contracts: room.contracts.slice() } : {}),
         seats,
         // the spectator seats (header): watched like eliminated players, never players
         spectators: room.spectators.map((s) => s.playerId),
@@ -2234,6 +2396,8 @@ export class Lobby {
         ...(versioned ? { version: room.version } : {}),
         // 「不限时」 (header): only while the room's flag is on, so a default match's opts keep their keys
         ...(room.mode === 'solo' && room.soloUnlimited === true ? { soloUnlimited: true } : {}),
+        // 「包含无场景地图」 (header): only while the room's flag is on; off, the match narrows its stage pools itself
+        ...(room.incompleteMaps === true ? { incompleteMaps: true } : {}),
         // The list the lobby just checked the picks with (kittedFor). Vanilla rooms omit it: setDiy stays on
         // KITTED_CHARS, and the worker payload / test journal of a normal match do not grow a key.
         ...(modded ? { kitted: this.kittedFor(room) } : {}),
@@ -2598,6 +2762,9 @@ export class Lobby {
       room.seats[seat.seat] = null;
       // a player seat freed: the version vote is void (header "Official versions")
       if (room.versionVote) this.voidVersionVote(room, 'members');
+      // 危机合约 (room.revalidateContracts): a smaller room may no longer support the host's selection. The broadcast
+      // below (or the dispose) is the only frame either way — voidVersionVote('members') broadcasts nothing itself.
+      this.revalidateContracts(room);
     }
     if (room.disposed) return; // onLeave may have ended the match and emptied the room
     if (room.hostId === playerId) this.migrateHost(room);

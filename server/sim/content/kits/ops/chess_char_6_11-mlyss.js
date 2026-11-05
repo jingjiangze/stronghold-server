@@ -1,26 +1,12 @@
 // server/sim/content/kits/ops/chess_char_6_11-mlyss.js — 缪尔赛思 (char_249_mlyss) kit, tier 6.
 // Conventions of the tier-6 kits: ../shared/tier6.js; kit contract and rules: ../README.md.
 
-import {
-  num, bv, tbb, tdesc, moduleBb, parseN, live, isTok, onDefaultSkill, selectedSkill, AROUND8, N4, bstate, bestTile,
-  pullToward,
-} from '../shared/tier6.js';
+import { installMlyssModule20261101 } from '../shared/ark-update-modules-20261101.js';
+import { num, bv, tbb, tdesc, moduleBb, parseN, live, isTok, onDefaultSkill, selectedSkill, AROUND8, N4, bstate, bestTile, pullToward } from '../shared/tier6.js';
 import { holdProtect } from '../shared/tier1.js';
-import { isVersionData } from '../../tokens.js';
 
-/**
- * 莱茵生命 (character_table groupId "rhine") members sold as shop chess (checked against the official table): today's five,
- * the list of before versions M0, which data without config.version (the default data and the plugin content sets on it)
- * keeps. On another version's build (support isVersionData) also 第一期's 星源 (DESIGN §35.22.4). 伊芙利特 and 淬羽赫默
- * (shop chess in 第一期, 自选 picks today) and today's other 自选 members are left out until the maintainer decides whether
- * 自选 members count (M2, DESIGN §35.22.5).
- */
+/** 莱茵生命 (character_table groupId "rhine") members of this season's pool (checked against the official table). */
 const RHINE = new Set(['char_108_silent', 'char_128_plosis', 'char_202_demkni', 'char_249_mlyss', 'char_1047_halo2']);
-const RHINE_VERSION = new Set([...RHINE, 'char_135_halo']);
-/** The 莱茵生命 list of `data` (default: the loaded data). */
-export const rhineOf = (data) => (isVersionData(data) ? RHINE_VERSION : RHINE);
-/** A 莱茵生命 member of the loaded data's list: 开源节流's SP on copy and on deploy, and its cost cut. */
-export const isRhine = (u) => rhineOf().has(u?.def?.charId);
 
 // ------------------------------------------------------------------------------------------------------------------
 // 缪尔赛思 chess_char_6_11 (战术家) — S3 浅层非熵适应; 净水即生命 (流形); 开源节流; module 梳妆流形
@@ -83,7 +69,7 @@ function mlyss(bb, chess, def) {
   const manifoldMods = { atkPct: num(bb.atk), ...(num(bb.attack_speed) ? { aspd: num(bb.attack_speed) } : {}) };
   const buffManifold = (battle, t, dur) => battle.addBuff(t, { key: 'mlyss:s3', mods: manifoldMods, duration: dur });
   // module 落叶四季 (开源节流): copying a 莱茵生命 operator ⇒ she gains `sp`; deploying the copied one ⇒ it gains `sp_other`
-  const rhineSp = num(mod.sp), rhineSpOther = num(mod.sp_other);
+  const rhineSp = chess?.module?.id === 'uniequip_003_mlyss' ? num(mod.sp) : 0, rhineSpOther = num(mod.sp_other);
   const tokTal = (t, key) => { for (const x of t.def?.talents || []) if (x?.bb && typeof x.bb[key] === 'number') return x.bb; return {}; };
   // "其被击败后会在25秒后自动刷新" (token talent interval; the talent text as a fallback)
   const respawnOf = (t) => num(tokTal(t, 'scale').interval, parseN(tdesc(def, 0), /(\d+(?:\.\d+)?)秒后自动刷新/, 25));
@@ -97,7 +83,7 @@ function mlyss(bb, chess, def) {
     }
     copyInto(battle, t, src, num(tokTal(t, 'scale').scale, 1), isRanged(src));
     battle.fx('copy', { x: t.x, y: t.y, id: t.id, src: src.id });
-    if (rhineSp > 0 && isRhine(src) && unit.skill) unit.skill.gainSp(rhineSp, 'talent');
+    if (rhineSp > 0 && RHINE.has(src.def?.charId) && unit.skill) unit.skill.gainSp(rhineSp, 'talent');
   };
   const mineLive = (battle, unit) => battle.allyUnits.filter((x) => isTok(x, tokId, unit) && live(x));
 
@@ -141,6 +127,7 @@ function mlyss(bb, chess, def) {
   return {
     skills,
     install(battle, unit) {
+      installMlyssModule20261101(battle, unit, chess, tokId);
       if (sid === 'skchr_mlyss_2') {
         const regen = num(bb.hp_recovery_per_sec_by_max_hp_ratio), dr = num(bb.damage_resistance);
         battle.every(0.25, () => {
@@ -166,7 +153,7 @@ function mlyss(bb, chess, def) {
         }, { owner: unit });
       }
       if (rhineSpOther > 0) battle.on('deploy', ({ unit: u, initial }) => { // the copied 莱茵生命 operator is deployed
-        if (initial || !u || u.kind !== 'op' || u.ownerId !== unit.ownerId || !isRhine(u) || !u.skill) return;
+        if (initial || !u || u.kind !== 'op' || u.ownerId !== unit.ownerId || !RHINE.has(u.def?.charId) || !u.skill) return;
         if (battle.allyUnits.some((t) => isTok(t, tokId, unit) && live(t) && t.mem.mlyss?.from === u.id)) u.skill.gainSp(rhineSpOther, 'talent');
       }, { owner: unit });
     },
@@ -318,7 +305,7 @@ function mlyss(bb, chess, def) {
         S.rhine.add(unit.ownerId);
         const cut = num(t1.cost), first = num(t1.runtime_cost);
         battle.on('battleStart', () => {
-          const rh = battle.allyUnits.filter((a) => a.kind === 'op' && a.ownerId === unit.ownerId && isRhine(a)).sort((a, b) => a.deploySeq - b.deploySeq);
+          const rh = battle.allyUnits.filter((a) => a.kind === 'op' && a.ownerId === unit.ownerId && RHINE.has(a.def?.charId)).sort((a, b) => a.deploySeq - b.deploySeq);
           rh.forEach((a, i) => { a.base.cost = Math.max(0, a.base.cost + cut + (i === 0 ? first : 0)); });
         });
       } },

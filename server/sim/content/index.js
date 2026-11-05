@@ -7,10 +7,6 @@
 //   a faulty content module is logged and skipped, never crashing the battle.
 // setupUnitKit(battle, unit, mode) — resolves a unit's Kit: kits[baseChessId]?.(bb, chess, def) ?? generic.
 //   Battle opts.kits ({ [baseChessId]: kitFn }) take precedence (tests / sandboxes).
-//   On another official version's build (support isVersionData: config.version) an official kit is checked against the
-//   operator it was written for (officialKitKey, kits/index.js KIT_CHAR_IDS): that version gives some chess ids to
-//   other operators, whose kit is then found by charId (the tier kit of the record's tier, else a 自选 op-* kit), or
-//   none (generic). The default data and the plugin content sets built on it keep the by-id lookup (DESIGN §35.22.3).
 //   补位 stand-ins (isStandInDef: the def of simdata getStandIn — the chess's ids, another character's body): the kit is
 //   kits[def.charId] (the stand-in's own, kits/ops/standin-<codename>.js), never the chess id's — that is the replaced
 //   operator's kit; without one, the generic kit plus the talents it can apply exactly (generic.js genericTalents).
@@ -30,14 +26,13 @@
 //   are resolved by Battle (getToken(id, owner.defId, owner.def.loadout)), not here.
 // registerAllMeta(registry) — calls each domain module's registerMeta(registry) (prep side, server boot).
 
+import { withOperatorSfxSignals20261101 } from './kits/shared/operatorSfxSignals20261101.js';
 import { genericKit, genericTalents } from './generic.js';
 import { EXTENSIONS, installExtensions } from './extensions.js';
 import { compileDsl } from './dsl/compile.js';
 import { validateSkillSpec, matchesSchema, MODS_SCHEMA } from '../../../shared/plugins/skillSpec.js';
 import { withUnitLoadouts } from '../simdata.js';
 import { isPotential } from '../../../shared/potential.js';
-import { RECORD_MAPS } from '../../../shared/plugins/dataUtils.js';
-import { isVersionData } from './support/index.js';
 
 // Content files are loaded with guarded dynamic imports: a module that fails to load (syntax error, throwing
 // top-level code, missing file) is logged and replaced by an empty module instead of breaking the server.
@@ -83,62 +78,14 @@ export function isDiyDef(def) {
 /** A def whose body is another character than its chess id names (补位 stand-in, 自选 piece): its kit is keyed by charId. */
 const isOtherBody = (def) => isStandInDef(def) || isDiyDef(def);
 
-/** Tier kit key → the charId it was written for (kits/index.js). */
-const KIT_CHAR_IDS = KIT_REGISTRY.KIT_CHAR_IDS ?? Object.freeze({});
-/** charId → its tier kit keys, in KIT_FILES order (kits/index.js). */
-const TIER_KIT_KEYS_BY_CHAR = KIT_REGISTRY.TIER_KIT_KEYS_BY_CHAR ?? Object.freeze({});
-const tierOfKitKey = (key) => Number(/^chess_char_(\d+)_/.exec(key)?.[1]);
-/** A plugin's chess record (shared/plugins/dataUtils.js RECORD_MAPS: chess_x_ ids). */
-const isPluginChess = (id) => String(id ?? '').startsWith(`${RECORD_MAPS.chess[0]}_`);
-
-/**
- * The official kit of operator `charId`: its tier kit of `tier`, else its first tier kit, else a kit registered under
- * the charId itself (a 自选 op-* or stand-in kit), else null.
- */
-function kitKeyForChar(charId, tier, kits = KITS, tierKeys = TIER_KIT_KEYS_BY_CHAR) {
-  const keys = tierKeys[charId];
-  if (keys?.length) return keys.find((k) => tierOfKitKey(k) === tier) ?? keys[0];
-  return Object.hasOwn(kits, charId) ? charId : null;
-}
-
-/**
- * The key of `def`'s kit in KITS, or null (generic). A stand-in's and a 自选 piece's: its charId (isOtherBody), on every
- * data (a version's 自选 pick borrows its tier kit under the charId: kits/index.js DIY_BORROW_CHARS). Any
- * other def: the kit of its id (baseId, the exact id, or the suffix-less id). On another version's build (`data`
- * carries config.version; default: the loaded data) that kit counts only when it was written for the def's charId
- * (KIT_CHAR_IDS), else the kit is found by its charId (kitKeyForChar); a chess whose own kit was written for its
- * operator but failed to load stays generic, as on the default data. Only an official record with a real charId takes
- * that path: test fixtures (charId defaults to the chess id) and plugin chess (chess_x_ ids; forgeImport leaves `kitRef`
- * out on purpose to keep the generic kit) keep the by-id lookup. The default data and the plugin content sets built on
- * it keep the by-id lookup of before versions M0 (test/versions-keying.test.js). `registries` replaces the official
- * registries (KITS, KIT_CHAR_IDS, TIER_KIT_KEYS_BY_CHAR) for tests only, e.g. to model a kit file that failed to load.
- */
-export function officialKitKey(def, data, { kits = KITS, kitCharIds = KIT_CHAR_IDS, tierKeys = TIER_KIT_KEYS_BY_CHAR } = {}) {
-  if (!def) return null;
-  if (isOtherBody(def)) return Object.hasOwn(kits, def.charId) ? def.charId : null;
-  const bare = String(def.baseId ?? def.id ?? '').replace(/_[ab]$/, '');
-  const byId = [def.baseId, def.id, bare].find((k) => k != null && Object.hasOwn(kits, k) && kits[k]) ?? null;
-  if (!isVersionData(data)) return byId;
-  const real = typeof def.charId === 'string' && def.charId.startsWith('char_') && !def.charId.startsWith('char_x_') ? def.charId : null;
-  if (!real || isPluginChess(def.baseId ?? def.id)) return byId;
-  if (byId && (kitCharIds[byId] ?? real) === real) return byId;
-  if (!byId && kitCharIds[`${bare}_a`] === real) return null;
-  return kitKeyForChar(real, def.tier, kits, tierKeys);
-}
-
 /**
  * The kit builder of an operator def in `reg` ({ [key]: (bb, chess, def) => Kit }), or undefined. A stand-in's and a
  * 自选 piece's kit is keyed by its charId (`char_609_acguad`, `char_112_siege`) and by nothing else: the chess id it keeps
  * names the replaced operator's kit (a DIY slot has none). Any other def: baseId (`…_a`, data/SIM.md), the exact id, or
- * the suffix-less id of DESIGN §5.6's example. The official registry (KITS) goes through officialKitKey, which also
- * checks the operator; EXTENSIONS and injected Battle opts.kits keep the plain lookup.
+ * the suffix-less id of DESIGN §5.6's example.
  */
 function registeredKit(def, reg) {
   if (!def || !reg) return undefined;
-  if (reg === KITS) {
-    const key = officialKitKey(def);
-    return key == null ? undefined : KITS[key];
-  }
   if (isOtherBody(def)) return Object.prototype.hasOwnProperty.call(reg, def.charId) ? reg[def.charId] : undefined;
   const bare = String(def.baseId ?? def.id ?? '').replace(/_[ab]$/, '');
   return [def.baseId, def.id, bare].map(k => Object.hasOwn(reg, k) ? reg[k] : undefined).find(Boolean);
@@ -147,14 +94,12 @@ function registeredKit(def, reg) {
 /** Official kit key or file stem; no path supplied by a plugin is ever imported. */
 export function officialKit(ref) {
   if (Object.hasOwn(KITS, ref)) return KITS[ref];
-  const file = Object.values(KIT_REGISTRY.KIT_FILES || {}).flat().concat(
-    KIT_REGISTRY.STANDIN_KIT_FILES || [], KIT_REGISTRY.OPERATOR_KIT_FILES || [],
-    KIT_REGISTRY.VERSION_KIT_FILES || [], KIT_REGISTRY.DIY_BORROW_KIT_FILES || [],
-  ).find(f => f.replace(/\.js$/, '') === ref);
+  const file = Object.values(KIT_REGISTRY.KIT_FILES || {}).flat().concat(KIT_REGISTRY.STANDIN_KIT_FILES || [], KIT_REGISTRY.OPERATOR_KIT_FILES || [],KIT_REGISTRY.OWNER_KIT_FILES||[],KIT_REGISTRY.MOD_KIT_FILES||[])
+    .find(f => f.replace(/\.js$/, '') === ref);
   if (!file) return undefined;
   const stem = file.replace(/\.js$/, '');
   if (stem.startsWith('chess_')) return KITS[stem.split('-')[0] + '_a'];
-  const code = stem.replace(/^(op|standin|ver)-/, '');
+  const code = stem.replace(/^(op|standin|owner)-/, '');
   return Object.entries(KITS).find(([k]) => k.startsWith('char_') && k.endsWith('_' + code))?.[1];
 }
 
@@ -226,7 +171,7 @@ export function setupUnitKit(battle, unit, mode = 'full') {
     if (typeof f === 'function') {
       try {
         const k = f(bb, raw, def);
-        if (k) return selectSkillSpec(k, bb, raw, def);
+        if (k) return withOperatorSfxSignals20261101(selectSkillSpec(k, bb, raw, def), unit);
       } catch (e) {
         const dslCode = typeof e?.code === 'string' && /^PLUGIN_DSL_[A-Z0-9_]+$/.test(e.code);
         // A record that carries DSL, or a throw whose code is a DSL problem, is a corrupt content set.
@@ -351,21 +296,6 @@ export function selectSkillSpec(kit, bb, raw, def) {
   return out;
 }
 
-/**
- * Whether the kit of `def` has a hand-authored spec for its selected skill (tools/kit-coverage.mjs, tests): `skills`
- * entry, or the kit's `skill` for the default skill when the kit is not the generic fallback. Never throws.
- * @returns {'skills'|'kit'|'generic'|'none'} where the spec comes from ('none' = no kit function at all)
- */
-export function skillSpecSource(def, kits = KITS) {
-  const f = kitOf(def, kits);
-  if (typeof f !== 'function') return 'none';
-  let k = null;
-  try { k = f(def.skill?.bb ?? {}, def.raw ?? def, def); } catch { return 'generic'; }
-  if (!k || k.generic) return 'generic';
-  const id = selectedSkillId(def);
-  if (id && k.skills && Object.prototype.hasOwnProperty.call(k.skills, id)) return 'skills';
-  return skillIsDefault(def) && k.skill !== undefined ? 'kit' : 'generic';
-}
 
 /**
  * Install kits for every ally unit and (mode 'full') every domain module. First, a Battle constructed without the spec
@@ -406,4 +336,15 @@ export function registerAllMeta(registry) {
     if (typeof mod.registerMeta !== 'function') continue;
     try { mod.registerMeta(registry); } catch (e) { console.error(`[content] ${name}.registerMeta failed:`, e); }
   }
+}
+
+export function skillSpecSource(def, kits = KITS) {
+  const f = kitOf(def, kits);
+  if (typeof f !== 'function') return 'none';
+  let k = null;
+  try { k = f(def.skill?.bb ?? {}, def.raw ?? def, def); } catch { return 'generic'; }
+  if (!k || k.generic) return 'generic';
+  const id = selectedSkillId(def);
+  if (id && k.skills && Object.prototype.hasOwnProperty.call(k.skills, id)) return 'skills';
+  return skillIsDefault(def) && k.skill !== undefined ? 'kit' : 'generic';
 }

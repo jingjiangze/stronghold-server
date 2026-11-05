@@ -1,3 +1,5 @@
+import {isHuntEntry} from '../../../shared/huntProgression.js';
+import {carrySpyInvestigation} from '../../../shared/spyInvestigation.js';
 // server/sim/battle/deploy.js — Battle methods: deployment, death and redeploy: _deploy (home, landing or rest tile; 联防
 // carry), kill / retreat and the removal bookkeeping (_remove, hooks of removed units released at step end), redeploy /
 // automatic redeploys, leaks.
@@ -22,6 +24,7 @@ export class BattleDeploy {
       return false;
     }
     const k = R0 * COLS + C0;
+    if (this._sealedDeployTiles?.has(k)) return false;
     const occ = this._occ[k];
     if (occ && occ !== u && occ.alive && occ.deployed) { this.log(`tile ${R0},${C0} occupied; ${u} not deployed`); return false; }
     // "倒地干员所在地块视为可部署，但所有我方单位在此处的部署行为将被阻止" (PRTS 卫戍协议/帮助 §作战阶段 单位部署)
@@ -60,11 +63,7 @@ export class BattleDeploy {
     const sk = u.skill;
     // "自动操作具有3s冷却，在完成一次操作或作战开始时部署的单位将进入冷却" (PRTS 卫戍协议/帮助; skills.js)
     if (initial) sk.opReadyAt = this.time + this.flags.startOpCooldown;
-    // keepSp (突袭 "保留技力"): the SP / charges before the jump — not for a skill that costs no SP (spCost 0, the
-    // deploy-timed skills), which reset() just re-armed as at every deployment: the retreat ended it, so its snapshot
-    // holds 0 charges, and writing that back took the charge 伊内丝 S3's deploy hook casts with (community report:
-    // 伊内丝激活突袭瞬移以后3技能被吞; those with activateOnDeploy run already, skipped by `!sk.active`)
-    if (keepSp && !sk.noSkill && sk.kind !== 'passive' && !sk.active && sk.spCost > 0) {
+    if (keepSp && !sk.noSkill && sk.kind !== 'passive' && !sk.active) {
       sk.charges = Math.max(0, Math.min(sk.maxCharges, Math.floor(fin(keepSp.charges, 0))));
       sk.sp = Math.max(0, Math.min(sk.spCost, fin(keepSp.sp, 0)));
       if (sk.charges >= sk.maxCharges) sk.sp = sk.spCost;
@@ -75,44 +74,6 @@ export class BattleDeploy {
     // Explicit carry outside the 联防 opening follows this one deployment. The opening itself restores at the end
     // of Battle.start, so deployment/battle-start gifts do not come on top of it; later redeploys keep their gifts.
     if (!restoreLater && cs && Number.isFinite(cs.sp) && u.alive && u.skill) u.skill.setSpTotal(cs.sp);
-    // 藏品通道（BattleSpec relicMods，缺省零影响）：放在部署**收尾**做 —— content 侧的 setupUnitKit /
-    // syncUnitLoadout 会在这个函数中段整块重写 base（spRecovery 就在那份列表里），早写等于白写。
-    //   ① spRegenMul：走持久 buff 的 spRecoveryMul（聚合在 units.js，不会被 base 重写冲掉），同 key 重部署只替换不叠加
-    //   ② initSp：相对技能自身的 initSp 叠加一次，再按当前 sp 补齐/扣到目标值（负值夹在 0）
-    //   ③ stunOnDeploy：部署即晕眩 N 秒
-    if (u.relicSpRegenMul !== 1) {
-      this.addBuff(u, { key: 'relic:spRegen', mods: { spRecoveryMul: Math.max(0, u.relicSpRegenMul) }, persist: true, allowDead: true });
-    }
-    if (u.relicInitSp && u.skill && !cs) {
-      if (!Number.isFinite(u.skill._relicBaseInitSp)) {
-        u.skill._relicBaseInitSp = u.skill.initSp;
-        u.skill.initSp = Math.max(0, u.skill._relicBaseInitSp + u.relicInitSp);
-      }
-      const target = Math.max(0, u.skill.initSp);
-        if (u.skill.sp < target) u.skill.gainSp(target - u.skill.sp, 'init', true);
-      else if (u.skill.sp > target) u.skill.setSpTotal(target);
-    }
-    if (u.relicShelter > 0) {
-      // shelter（庇护）：承伤 ×(1−shelter)。走持久 buff 的 dmgTakenMul，与引擎自带的减伤通道同一条路
-      this.addBuff(u, { key: 'relic:shelter', mods: { dmgTakenMul: 1 - Math.min(1, u.relicShelter) }, persist: true, allowDead: true });
-    }
-    if (u.relicStartDebuff && initial) {
-      // startDebuff（退行的罗辛南特）：「战斗开始时」我方攻击 −20% / 攻速 −20 / 技力回复 −20%，持续 10 秒。
-      // 只在初部署施加（`initial`），再部署不重来。
-      const sd = u.relicStartDebuff;
-      this.addBuff(u, { key: 'relic:startDebuff', duration: sd.dur, refresh: 'replace',
-        mods: { atkPct: sd.atkPct, aspd: sd.aspd, spRecoveryMul: sd.spMul } });
-    }
-    if (u.relicDot) {
-      // 每秒伤害（fogOnDeploy 部署后 60s 内 2% 最大生命；neuralDps 全场每秒 10 点）——走 buff 的 interval/onTick
-      const d = u.relicDot;
-      const amount = d.flat + d.maxHpPct * (Number(u.s.maxHp) || 0);
-      if (amount > 0) {
-        this.addBuff(u, { key: 'relic:dot', duration: d.dur > 0 ? d.dur : Infinity, refresh: 'replace', interval: 1, visible: true,
-          onTick: ({ battle, unit }) => battle.dealDamage(null, unit, { amount, type: 'true', canDodge: false, ignoreSelect: true, tags: ['dot', 'relic'] }) });
-      }
-    }
-    if (u.relicStunOnDeploy > 0) this.applyStatus(u, 'stun', { duration: u.relicStunOnDeploy, ignoreSelect: true });
     return true;
   }
 
@@ -123,7 +84,7 @@ export class BattleDeploy {
     if (this._hooks.kill) this.emit('kill', { killer, victim: unit });
     // a nested kill/retreat inside the handlers already removed it: a later handler's hp write must not stick
     if (!unit.alive) { if (!unit.bossPool) unit.hp = 0; return; }
-    if (unit.hp > 0 && !unit.bossPool) { // revived by a kill handler (clamped: a handler may write any number)
+    if (unit.hp > 0 && (!unit.bossPool || unit.bossHpWindow && unit.bossPool.hp > 0)) { // a staged shared leader may revive within its reserved life
       unit.hp = Math.min(unit.hp, unit.s.maxHp);
       return;
     }
@@ -143,7 +104,8 @@ export class BattleDeploy {
   }
 
   _remove(unit, reason, killer = null, permanent = false, dying = false) {
-    this._cutAttackStand(unit);
+    if(this._hooks.beforeUnitExit)this.emit('beforeUnitExit',{unit,reason,killer,permanent,dying});
+    this._cutAttackStand(unit); // display metadata: death can precede the next AI update
     unit.alive = false;
     unit.removeReason = reason;
     unit.deployed = false;
@@ -182,15 +144,19 @@ export class BattleDeploy {
       this._unblock(unit);
       this._enemiesDirty = true;
       if (reason === 'killed') {
-        const pp = this._pp(unit.ownerId);
         if (unit.counted) {
           this.killed++;
+          const pp = this._pp(unit.ownerId);
           if (pp) pp.killed++;
         }
-        // the HUD capsule's numerator (DESIGN §14): only the enemies the stage itself scheduled (`inTotal`) — a split
-        // child / summon / part knocked down here is no 已解决 of the stage's own list and moves the capsule not at all
+        /*
+         * HUD 进度胶囊的分子:只数**本关自己排的**那些(`unit.inTotal`)。
+         * 分裂孩子 / 召唤物 / 部位 / 变身副本在这里被击倒不算"已解决",所以它们不动胶囊进度。
+         * ⚠ 上游 0.2.4 就有、fork 移植时漏了;官方测试基架的 checkInvariants 会校验。
+         */
         if (unit.inTotal) {
           this.killedInTotal++;
+          const pp = this._pp(unit.ownerId);
           if (pp) pp.killedInTotal++;
         }
         if (killer) killer.stats.kills++;
@@ -252,7 +218,7 @@ export class BattleDeploy {
     if (occ && occ.alive && occ !== unit) return false;
     if (at && this.downOn(at[0], at[1], unit)) return false;
     const ps = this.getPlayer(unit.ownerId);
-    const cost = unit.base.cost * unit.s.costMul;
+    const cost = unit.base.cost;
     let paid = 0;
     if (!free) {
       if (!ps || ps.dp + 1e-9 < cost) return false;
@@ -277,9 +243,10 @@ export class BattleDeploy {
       if (this.time + 1e-9 < u.respawnAt) continue;
       // the DP first: an operator past its timer mostly waits for DP, and the tile checks scan every ally
       const ps = this.getPlayer(u.ownerId);
-      const cost = u.base.cost * u.s.costMul;
+      const cost = u.base.cost;
       if (!ps || ps.dp + 1e-9 < cost) continue;
       const [r, c] = this.restTile(u);
+      if (this._sealedDeployTiles?.has(r * COLS + c)) continue;
       const occ = this._occ[r * COLS + c];
       if (occ && occ.alive && occ !== u) continue;
       if (this.downOn(r, c, u)) continue;
@@ -291,6 +258,10 @@ export class BattleDeploy {
   /** Leak: an enemy reached its goal. */
   leak(e) {
     if (!e || !e.alive || e.side !== 'enemy') return;
+    if(this._hooks.beforeEnemyLeak){const ctx={enemy:e,cancelled:false};this.emit('beforeEnemyLeak',ctx);if(ctx.cancelled||!e.alive)return;}
+    if(e.def.raw?.returnsToOwnField&&(this.kind==='unite'||e.mem.returningBoss?.state!=='flee')){e.moving=false;return;}
+    if(e.isBoss&&e.mods?.contractBossLoop&&e.returnSpawn){this._unblock(e);e.x=e.spawnX;e.y=e.spawnY;this.restoreEnemyRoute(e,e.returnSpawn.route);e.atkStandUntil=-Infinity;this.fx('appear',{id:e.id,x:e.x,y:e.y});return;}
+    if(e.def.raw?.returnsToOwnField)e.returnHpPct=Math.max(0,Math.min(1,e.hp/e.s.maxHp));
     this._recordLeak(e, false);
     this._remove(e, 'leak');
     this._ev(['leak', e.id]);
@@ -298,10 +269,16 @@ export class BattleDeploy {
   }
 
   _recordLeak(e, timeout) {
-    const owner = timeout ? e.ownerId : this._ownerForTile([Math.round(e.y), Math.round(e.x)]) ?? e.ownerId;
+    const owner = e.def.raw?.returnsToOwnField?e.ownerId:timeout ? e.ownerId : this._ownerForTile([Math.round(e.y), Math.round(e.x)]) ?? e.ownerId;
     const pp = this._pp(owner) ?? this._pp(e.ownerId);
     if (pp) {
-      const entry = { enemyKey: e.defId, mods: e.mods ?? null, lpr: e.lpr ?? 1, sourcePlayerId: e.sourcePlayerId ?? e.ownerId, tag: e.tag ?? null, counted: !!e.counted || e.isBoss, boss: e.isBoss || undefined, spawned: true };
+      const entry = { enemyKey: e.defId, mods: carrySpyInvestigation(e.defId,e.mods,{spyInvestigation:e.mem.investigation??e.mods?.spyInvestigation??0,spyStrikeSpent:e.mem.spyStrikeSpent??e.mods?.spyStrikeSpent??false}), lpr: e.lpr ?? 1, sourcePlayerId: e.sourcePlayerId ?? e.ownerId, tag: e.tag ?? null, counted: !!e.counted || e.isBoss, boss: e.isBoss || undefined, spawned: true };
+      if(e.def.raw?.returnsToOwnField){
+        const key=e.sourcePlayerId||e.ownerId||'',used=(this._returningLpSpent||={})[key]||0;
+        entry.lpr=Math.max(0,Math.min(e.lpr??3,10-used));e.lastLeakLpr=entry.lpr;this._returningLpSpent[key]=used+entry.lpr;
+        entry.returningId=e.returningId;entry.returnHpPct=Number.isFinite(e.returnHpPct)?e.returnHpPct:Math.max(0,Math.min(1,e.hp/e.s.maxHp));
+      }
+      if(isHuntEntry(e)){entry.lpr=0;e.lastLeakLpr=0;}
       // born while a 联防 field ran (spawns.js): the leaker never sent it in, so it costs nobody LP and raises no ×N —
       // unite.js uniteSurvivors / spec.js uniteLeft filter it; every other reading keeps counting it as usual
       if (e.uniteRuntime) entry.uniteRuntime = true;

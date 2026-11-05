@@ -1,3 +1,4 @@
+import { installContractSupports } from './contractSupport.js';
 // server/sim/Battle.js — one field simulation (normal / unite / boss / hidden). Public API: DESIGN §5.1.
 //
 //   const b = new Battle({ seed, kind, modeId, round, stage|stageId, rect, timeLimit, players, spawns, routes,
@@ -35,7 +36,7 @@
 //   deploy.js        deploy, kill, retreat, removal bookkeeping, redeploys, leaks
 //   blocking.js      contact blocking, block release, the 隐匿 switch-off after a block
 //   status.js        buffs, catalogue statuses (抵抗, 寒冷 → 冻结, 诱导, 恐惧 …), "同名效果取最高", the buff tick
-//   combat.js        damage / heal / HP loss (the attack.js pipeline), projectiles, forced attacks
+//   combat.js        damage / heal / HP loss (damage.js pipeline), projectiles, forced attacks
 //   queries.js       enemy tile index, unit queries (tiles, grid, radius, selectability), players, range rebuilds
 //   summons.js       tokens (summons), devices, stage devices
 //   tiles.js         obstacles, relocation / 【移动】, knocked-out bodies, reserved tiles, tactical points, ground paths
@@ -66,6 +67,7 @@ import { BattleTiles } from './battle/tiles.js';
 import { BattleDisplacement } from './battle/displacement.js';
 import { BattleEconomy } from './battle/economy.js';
 import { BattleEvents } from './battle/events.js';
+import {prepareRoundSpawns} from './roundEvents.js';
 
 export { pushTiles } from './battle/displacement.js';
 
@@ -85,6 +87,19 @@ export class Battle {
     /** When false the battle only ends by time limit / boss pool / forceEnd (tests, sandboxes). */
     this.autoFinish = opts.autoFinish !== false;
     this.data = toDataSource(opts.data);
+    /*
+     * 危机合约的模拟器侧钩子 (shared/contractEffects.js)。
+     *
+     * `toDataSource` 返回的可能是**共享**的默认 DataSource(测试、没传 data 时),直接往它上面写会污染别的战斗 ——
+     * 所以这里复制一份(带原型链的浅拷贝,查询方法照旧)。
+     */
+    if (opts.contractOpStatMul || opts.contractHealMul || opts.contractLayerCap) {
+      const extra = {};
+      if (opts.contractOpStatMul) extra.contractOpStatMul = opts.contractOpStatMul;
+      if (opts.contractHealMul != null && opts.contractHealMul !== 1) extra.contractHealMul = opts.contractHealMul;
+      if (opts.contractLayerCap) extra.contractLayerCap = opts.contractLayerCap;
+      if (Object.keys(extra).length) this.data = Object.assign(Object.create(Object.getPrototypeOf(this.data)), this.data, extra);
+    }
     let stage = opts.stage ?? (opts.stageId ? this.data.getStage(opts.stageId) : null);
     if (stage && !stage._norm) stage = normalizeStage(stage.id ?? opts.stageId, stage);
     this.stage = stage || { id: 'empty', rows: [], devices: [] };
@@ -114,9 +129,6 @@ export class Battle {
     this.routes = (opts.routes ?? []).map((r) => normalizeRoute(r));
     /** Per-template enemy overrides `{ [enemyKey]: { stats: {…partial} } }` (waves.json `overrides`). */
     this.enemyOverrides = opts.enemyOverrides ?? {};
-    /** 藏品对**全部敌人**的修正（2026-11-02）：`{ defAdd, defShredPerHit, defShredMax, eliteDmgTakenMul, eliteDmgDur, statusDurationMul }`。
-     *  在 spawns.js 生成每个敌人时施加；缺省 null ⇒ 与没有这条通道时逐位一致。 */
-    this.enemyMods = opts.enemyMods && typeof opts.enemyMods === 'object' ? opts.enemyMods : null;
     this.dt = TICK;
     this.time = 0;
     this.tickCount = 0;
@@ -173,7 +185,7 @@ export class Battle {
 
     // ---- spawns
     this._pending = [];
-    for (const s of opts.spawns ?? []) if (s && typeof s === 'object') this._safe(() => this._queueSpawn(s, true), 'queueSpawn');
+    for (const s of prepareRoundSpawns(this,opts.spawns??[])) if (s && typeof s === 'object') this._safe(() => this._queueSpawn(s, true), 'queueSpawn');
     this._pending.sort((a, b) => a.time - b.time || a.seq - b.seq);
 
     // ---- content
@@ -194,6 +206,7 @@ export class Battle {
       catch { this._result = { time: this.time, reason: 'forced', perPlayer: {}, killed: this.killed, total: this.total, resolved: this.resolved, errors: this.errorCount }; }
     } else {
       for (const u of this.allyUnits) if (!u.kit) this._setupUnit(u);
+      installContractSupports(this);
       if (typeof opts.setup === 'function') this._safe(() => opts.setup(this), 'opts.setup');
     }
   }

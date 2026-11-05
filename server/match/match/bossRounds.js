@@ -107,6 +107,12 @@ export class MatchBoss {
         enemyOverrides: wave.overrides,
         waveId: wave.templateId,
         bossId,
+        // 危机合约 (shared/contractEffects.js): the room-wide battle modifiers, exactly as a normal field's
+        // (_normalOpts). Beyond newBattle — which already merges them — these options ARE the client-side field's
+        // BattleSpec (clientCombat._ccField → sim/spec.js), so without them a browser-simulated Final Assault / Hidden
+        // Core ran without the contract's operator stats / healing / bond-layer cap while its normal rounds had them.
+        // Last, so no key above can shadow it (nothing here names those three).
+        ...this._contractOpts(),
       };
       if (this.clientCombat) return { fieldId, kind: hidden ? 'hidden' : 'boss', players: g.map((p) => p.playerId), opts: bopts, battle: null, live: true };
       const battle = this.newBattle(bopts);

@@ -27,6 +27,13 @@ export class MatchIntents {
         // 肉鸽的不期而遇由独立插件 `rogue` 提供（code.matchMixin）；插件停用时这条意图直接拒绝，不崩。
         if (typeof this.roguePick !== 'function') return fail(ERR.BAD_TARGET, 'no rogue plugin');
         return this.roguePick(ps, msg.choiceId);
+      case 'g.rogueNode': {
+        // 肉鸽节点三选一（2026-11-04）：rogue-core 插件的 mixin 提供；插件停用时直接拒绝，不崩。
+        if (typeof this.rogueNodePick !== 'function') return fail(ERR.BAD_TARGET, 'no rogue plugin');
+        const res = this.rogueNodePick(ps, msg.nodeId);
+        if (res && res.error) return fail(ERR.BAD_TARGET, 'bad rogue node');
+        return OK;
+      }
       case 'g.meltClose': return this.meltClose(ps);
       case 'g.confront.withdraw': return this.withdrawBounty(ps, msg);
       case 'g.event.pick': return this.pickEvent(ps, msg.target);

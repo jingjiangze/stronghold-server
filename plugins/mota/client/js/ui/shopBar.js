@@ -1,10 +1,10 @@
-// Bottom shop bar (research 06 §11.2 / D3): LEVEL card (upgrade price hex, 升级), 3–5 operator cards
+// Bottom shop bar (research 06 §11.2 / D3): level-up card (升级 price hex, 等级), 3–5 operator cards
 // (tier chip, price hex with discount/markup colours, portrait, bonds — a bond the mode never activates struck through,
 // 本局禁用 — class, frozen overlay, sold state,
 // merge progress), the item card, the funds card with ✕ 收起; above it 剩余可放置角色, 冻结/解冻 and 刷新.
 // Buying and upgrading take two taps (research 09 §5 / §6.5, official `EventOnFirstClick` → `EventOnConfirm` /
 // `EventOnUpgrade`): the first tap selects a card — it lifts and enlarges, its detail opens and it shows 确认购买
-// (无法购买 + the reason when it cannot be bought) — and a second tap on the same card buys it; the LEVEL card's first
+// (无法购买 + the reason when it cannot be bought) — and a second tap on the same card buys it; the upgrade card's first
 // tap arms 确认升级 and the second upgrades (已满级 at level 6). A tap anywhere else, a shop change or the end of the
 // editable phase disarms. A tap anywhere on a card is the card's tap — its 确认购买 strip included (it takes no
 // pointer): there is no ⓘ corner (the official cards have none; user playtest #6 item 10 — on phones its invisible
@@ -227,7 +227,7 @@ function LevelCard({ shop, reason, armed = false, onTap }) {
       aria-pressed=${String(!!armed)}>
     ${!max ? html`<${HexBadge} value=${price} tone=${reason && reason !== t('调度中心已达最高等级') ? 'dark' : 'gold'} size="md" class="lvcard__price" />` : null}
     <span class="lvcard__frame">
-      <span class="lvcard__micro">LEVEL</span>
+      <span class="lvcard__micro">${t('等级')}</span>
       <b class="lvcard__num num">${lv}</b>
     </span>
     <span class="lvcard__label">${max ? t('已满级') : armed ? t('确认升级') : t('升级')}</span>

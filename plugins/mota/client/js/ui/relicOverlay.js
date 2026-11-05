@@ -35,18 +35,20 @@ export function RelicOverlay({ cards, busyId = null, round = 0, onPick }) {
         ${cards.map((c) => html`<div key=${c.id} role="button" tabindex="0"
             class=${`hxd__card is-pickable ${TIER_CLASS[c.tier] || 'hxd__card--silver'}${busyId === c.id ? ' is-busy' : ''}`}
             onClick=${() => busyId == null && onPick && onPick(c.id)}>
-          <div class="hxd__row">
-            <span class="hxd__tier">${c.kind === 'negative' ? t('负面藏品') : t('增益藏品')}</span>
-            <span class="hxd__owner">${TIER_LABEL[c.tier] || ''}</span>
+          <div class="hxd__gain">
+            <div class="hxd__row">
+              <span class="hxd__tier">${c.kind === 'negative' ? t('负面藏品') : t('增益藏品')}</span>
+              <span class="hxd__owner">${TIER_LABEL[c.tier] || ''}</span>
+            </div>
+            <div class="hxd__icon">
+              ${c.icon
+                ? html`<${Img} src=${c.icon} fallback=${html`<span class="hxd__glyph">✦</span>`} />`
+                : html`<span class="hxd__glyph">✦</span>`}
+            </div>
+            <h3 class="hxd__name">${c.name}</h3>
+            <div class="hxd__tags"><span class="hxd__tag">${c.set || t('藏品')}</span></div>
+            <p class="hxd__desc">${c.desc}</p>
           </div>
-          <div class="hxd__icon">
-            ${c.icon
-              ? html`<${Img} src=${c.icon} fallback=${html`<span class="hxd__glyph">✦</span>`} />`
-              : html`<span class="hxd__glyph">✦</span>`}
-          </div>
-          <h3 class="hxd__name">${c.name}</h3>
-          <div class="hxd__tags"><span class="hxd__tag">${c.set || t('藏品')}</span></div>
-          <p class="hxd__desc">${c.desc}</p>
         </div>`)}
       </div>
     </div>

@@ -59,7 +59,7 @@ export const DEFAULTS = Object.freeze({
   dp: { init: 10, perSec: 1, max: 99 },
   unite: { maxHelpers: 2, templates: { 1: 'act1autochess_escaped_single', 2: 'act1autochess_escaped_multi' } },
   timers: { infoCheck: 25, bandDraft: 50, bandTurn: 30, battleCheck: 3, spFirst: 30, spTurn: 16 },
-  bans: { FUNNY: { core: 0, addon: 1 }, NORMAL: { core: 3, addon: 4 }, HARD: { core: 3, addon: 4 }, ABYSS: { core: 3, addon: 4 } },
+  bans: { FUNNY: { core: 0, addon: 1, extraChess: 7 }, NORMAL: { core: 3, addon: 4, extraChess: 7 }, HARD: { core: 3, addon: 4, extraChess: 7 }, ABYSS: { core: 3, addon: 4, extraChess: 7 } },
   bandDraft: { skipsPerPlayer: 1, timeoutBandId: 'band_bldsk' },
   leftoverFundsKeptByBands: ['band_cannot'],
   // 协同经济 (DESIGN §28): the shipped starting values of the co-op team economy; data/config.json (or a mode's own
@@ -118,11 +118,11 @@ export const COMBAT_TIME_SCALE = 2;
 
 /**
  * Multiplier of bloodPoint[difficulty] for the shared leader pool (DESIGN §20.10, §25.13.4), from config bossHpScale —
- * each key from the mode's entry first, then the global one; the defaults are the current rule:
+ * each key from the mode's entry first, then the global one; the defaults are the current rule (0.4.3):
  *   solo   `solo` (1: the table value — one player's share);
- *   co-op  `perPlayer` true (the owner's decision of 2026-10-06, adopting PR #209 by @qingjingshenghuo): `coop` (1) × the
- *          players alive when the fight starts — bots and AI 托管 seats count, eliminated and departed seats do not —
- *          at most `aliveFull` (4); a count left out means a full team;
+ *   co-op  `perPlayer` true (0.4.3, owner 2026-10-18 — it replaces the 2026-10-06 per-player count of PR #209):
+ *          `coop` (1) × (1 + 0.5 × min(players alive, 20)) — bots and AI 托管 seats count, eliminated and departed
+ *          seats do not; a count left out means a full 20-seat pool;
  *          `perPlayer` false: the fixed pool of 0.1.x (「保持固定血量」, restorable with `solo` 0.25): `coop` whatever the
  *          count, × min(alive, aliveFull) / aliveFull with `aliveScaling`.
  *
@@ -133,8 +133,8 @@ export const COMBAT_TIME_SCALE = 2;
  * This reads the room's CAPACITY (`seatCap`), deliberately: it is a calibration floor, not the variant gate (that one
  * is `Match.variant` = 参与人数 > 4, 业主裁令 2026-10-12). With the 缺省上限 of 20 a room that fields fewer people is
  * therefore scaled as if it could hold 20 — a no-op for today's data (`data/config.json`'s only `bossHpScale` has
- * `perPlayer: true`, so the share is `coop × alive` and `full` never enters), but a mode switching to `perPlayer: false`
- * would see the 20-seat ceiling instead of the 4-seat one.
+ * `perPlayer: true`, so the share is `coop × (1 + 0.5 × min(alive, 20))` and `full` never enters), but a mode switching
+ * to `perPlayer: false` would see the 20-seat ceiling instead of the 4-seat one.
  * @param {object|null|undefined} modeScale config.modes[modeId].bossHpScale
  * @param {object|null|undefined} cfgScale config.bossHpScale
  * @param {boolean} isSolo
@@ -152,7 +152,7 @@ export function bossPoolShareOf(modeScale, cfgScale, isSolo, aliveCount, seatCap
   const full = Math.max(1, Math.floor(pick('aliveFull', 4)), cap);
   const n = Number(aliveCount);
   const alive = Number.isFinite(n) && n >= 1 ? Math.min(full, Math.floor(n)) : full;
-  if (flag('perPlayer', true)) return pick('coop', 1) * alive;
+  if (flag('perPlayer', true)) return pick('coop', 1) * (1 + 0.5 * Math.min(alive, 20));
   return pick('coop', 1) * (flag('aliveScaling', false) ? alive / full : 1);
 }
 
@@ -486,7 +486,7 @@ export class GameData {
 
   // ---- mode -----------------------------------------------------------------------------------------
 
-  get isSolo() { return this.mode.type === 'SINGLE' || /^mode_single_/.test(this.modeId || ''); }
+  get isSolo() { return this.mode.type === 'SINGLE' || this.mode.type === 'LOCAL' || /^mode_single_/.test(this.modeId || ''); }
   get difficulty() { return this.mode.difficulty || (this.modeId ? String(this.modeId).split('_').pop().toUpperCase() : 'NORMAL'); }
   get lastRound() {
     if (Number.isInteger(this.mode.lastRound) && this.mode.lastRound > 0) return this.mode.lastRound;
@@ -538,7 +538,12 @@ export class GameData {
     const v = rc ? rc.combatTimeLimit : undefined;
     if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
     const m = this.mode.combatTimeLimit && this.mode.combatTimeLimit[String(r)];
-    return typeof m === 'number' && Number.isFinite(m) && m > 0 ? m : 60;
+    if (typeof m === 'number' && Number.isFinite(m) && m > 0) return m;
+    // R14 / R15 are the boss levels: the data leaves `combatTimeLimit` null there because that level's own
+    // `levelMaxPlayTime` (120) is the countdown — read it before the 60 s generic fallback, or the boss battle gets
+    // a limit 60 s shorter than its level. Rounds that declare a `combatTimeLimit` never reach this line.
+    const lv = rc ? rc.levelMaxPlayTime : undefined;
+    return typeof lv === 'number' && Number.isFinite(lv) && lv > 0 ? lv : 60;
   }
 
   /**
@@ -632,7 +637,9 @@ export class GameData {
   }
   /**
    * 协同经济 (DESIGN §28): the resolved rule set, or null while it is off. Off unless config.economy.team.enabled —
-   * a mode may override the whole block with mode.teamEconomy (the bossHpScale pick pattern) — and never in solo.
+   * a mode may override the whole block with mode.teamEconomy (the bossHpScale pick pattern) — and never in solo,
+   * nor in a single-human rogue room (`econSolo`, set by the Match once it knows the seat list: nobody is there to
+   * lend to, so the reserve / requests / projects would be a control the one human can press against themselves).
    * Every number is clamped here so the match code reads plain ints.
    */
   get teamEconomy() {
@@ -645,7 +652,7 @@ export class GameData {
     // （`meltdown` 只对 `mode_xie_*` 开放），所以那份配置只列 `teamIncome` 一个项目。缺这条配置时仍返回 null。
     const rogue = obj(this.economy.rogueTeam);
     const src = Object.keys(mode).length ? mode : (this.matchIsRogue === true ? rogue : conf);
-    if (src.enabled !== true || this.isSolo) return null;
+    if (src.enabled !== true || this.isSolo || this.econSolo === true) return null;
     const d = DEFAULTS.teamEconomy;
     const nn = (v, dflt) => (Number.isInteger(v) && v >= 0 ? v : dflt);
     const pi = (v, dflt) => (Number.isInteger(v) && v > 0 ? v : dflt);
@@ -779,8 +786,13 @@ export class GameData {
   bans(difficulty) {
     const b = this.config.bans && this.config.bans[difficulty];
     const d = DEFAULTS.bans[difficulty] || { core: 0, addon: 0 };
-    if (!b || typeof b !== 'object') return { ...d };
-    return { core: Number.isInteger(b.core) && b.core >= 0 ? b.core : d.core, addon: Number.isInteger(b.addon) && b.addon >= 0 ? b.addon : d.addon };
+    if (!b || typeof b !== 'object') return { ...d, extraChess: Number.isInteger(d.extraChess) ? d.extraChess : 0 };
+    return {
+      core: Number.isInteger(b.core) && b.core >= 0 ? b.core : d.core,
+      addon: Number.isInteger(b.addon) && b.addon >= 0 ? b.addon : d.addon,
+      // 0.4.3: after the bond bans, `extraChess` more visible chess are sampled out (pool.js drawDisabledBonds)
+      extraChess: Number.isInteger(b.extraChess) && b.extraChess >= 0 ? b.extraChess : (Number.isInteger(d.extraChess) ? d.extraChess : 0),
+    };
   }
   get bandDraft() {
     const b = this.config.bandDraft && typeof this.config.bandDraft === 'object' ? this.config.bandDraft : {};

@@ -185,9 +185,15 @@ function scheduleRng(rng) {
  *   that keep only the factions array (Match: buildNormalWave(gd, rng, this.factions, r)) get the official rounds.
  */
 export function setupMatchWaves(gd, rng) {
-  // stage
+  // stage — 「包含无场景地图」 (Match opts.incompleteMaps → gd.allowIncompleteMaps; off by default): off, only the stages with
+  // an official scene package are drawn (server/match/sceneStages.js; Match puts the Set on the gd as `sceneStages`).
+  // Narrowing to nothing (no manifest, a mode whose stages all lack a scene, a plain tool gd) falls back to the full
+  // pool, so a match never starts without a stage.
   const stageIds = Array.isArray(gd.mode.stages) ? gd.mode.stages : [];
-  const stagePairs = stageIds.map((id) => [id, gd.stage(id)]).filter(([, s]) => s && s.active !== false && Number(s.weight) > 0).map(([id, s]) => [id, s.weight]);
+  const sceneStages = gd.sceneStages instanceof Set ? gd.sceneStages : null;
+  const eligible = gd.allowIncompleteMaps === true || !sceneStages ? stageIds : stageIds.filter((id) => sceneStages.has(id));
+  const pool = eligible.length ? eligible : stageIds;
+  const stagePairs = pool.map((id) => [id, gd.stage(id)]).filter(([, s]) => s && s.active !== false && Number(s.weight) > 0).map(([id, s]) => [id, s.weight]);
   let stageId = stagePairs.length ? weightedPick(rng, stagePairs) : null;
   if (!stageId) {
     const any = Object.keys(gd.raw.stages || {}).filter((id) => gd.stage(id) && gd.stage(id).active);
@@ -342,7 +348,10 @@ function templateSpawns(gd, tpl, round, pick) {
       // enemy_exclude = enemy_9012_acloon): leader parts take them all; the leader takes ATK / speed but not HP — its HP
       // is the server pool, "领袖单位于服务器的生命值加成不受上述加成影响" (PRTS 下半). `supplyHpMul` (roundMods) rides along for
       // the 器物 hit-count units, which 补给线 / 补给线II leave out (archetypes.js `times`; also a 频次 enemy's death spawn)
-      mods: isBoss ? { atkMul: scale.atkMul, speedMul: scale.speedMul, slot } : { ...roundMods(scale), slot },
+      // template spawns may carry mods of their own (e.g. `suiSide` on the sim's sui_raid escorts): keep them, `slot` last
+      mods: isBoss
+        ? { atkMul: scale.atkMul, speedMul: scale.speedMul, ...(s.mods || {}), slot }
+        : { ...roundMods(scale), ...(s.mods || {}), slot },
       actionIndex: i,
       preview: previewInfo(gd, key, routes[routeIndex], isBoss, leader),
     };
@@ -421,6 +430,9 @@ export function buildBossWave(gd, rng, factions, round, { bossId, solo }, stageI
   const { spawns, actions } = templateSpawns(gd, tpl, round, pick);
   return {
     templateId,
+    // the template's own battlefield (e.g. the sim's `sui_raid`): the field rect and stage come from it when present
+    stageId: typeof tpl.stageId === 'string' ? tpl.stageId : null,
+    battleRect: tpl.battleRect && typeof tpl.battleRect === 'object' ? tpl.battleRect : null,
     spawns,
     routes: Array.isArray(tpl.routes) ? tpl.routes : [],
     extraRoutes: Array.isArray(tpl.extraRoutes) ? tpl.extraRoutes : [],

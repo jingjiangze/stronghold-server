@@ -1,5 +1,5 @@
 // §35.9: a readable index over human-visible data, not a second intent executor.
-import { FIELD, legalTiles, parseKey } from './board.js';
+import { rectOfMap, legalTiles, parseKey } from './board.js';
 import { interestDigest, effectText } from '../ai/knowledge.js';
 import { operatorCaps } from '../ai/playbook.js';
 import { ruleOption } from '../../shared/plugins/rules.js';
@@ -102,6 +102,10 @@ export function aiDigest(m, ps, kind, pub, own, pack = null) {
     own.personalChoice?.cards.forEach((c, idx) => add({ t: 'g.choice', idx, choiceId: own.personalChoice.id }, `personal card ${idx}: ${c.name}`));
     if (own.canReady) add({ t: 'g.ready', ready: true }, 'ready');
   }
+  // the geometry below describes the board the player deploys on: the deploy map's own region (a rogue stage's frame;
+  // FIELD otherwise) — the same region its tiles come from.
+  const deployMap = ps.deployMap();
+  const rect = rectOfMap(deployMap);
   return {
     playerId: own.playerId, round: pub.round, phase: pub.phase, lp: own.lp, band: { id: own.bandId, ...named(own.bandId) },
     availability: { disabledBonds: pub.disabledBonds, bannedChess: pub.bannedChess, diyBanned: own.diyBanned },
@@ -123,7 +127,7 @@ export function aiDigest(m, ps, kind, pub, own, pack = null) {
       lp: p.lp, bandId: p.bandId, bonds: p.bonds, board: m._prepBoardUnits(m.players.get(p.playerId)).map(u =>
         ({ id: u.defId, name: u.name, tier: u.tier, row: u.y, col: u.x, dir: u.dir, items: u.items })) })),
     choices: { cards: pub.sp?.cards?.map(withBounty), offers: pub.offers },
-    geometry: { rows: [FIELD.r0, FIELD.r1], cols: [0, FIELD.c1], tiles: [...ps.deployMap()].map(([key, terrain]) => ({ at: parseKey(key), terrain })) },
+    geometry: { rows: [rect.r0, rect.r1], cols: [0, rect.c1], tiles: [...deployMap].map(([key, terrain]) => ({ at: parseKey(key), terrain })) },
     actions,
     actionScope: 'Current-state shortcuts; IDs last only for this observation. Raw intents also support swaps, Arts, consumables, band focus and offer refresh; all actions are revalidated.',
   };

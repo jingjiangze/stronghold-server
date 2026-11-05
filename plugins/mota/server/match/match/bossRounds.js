@@ -93,9 +93,10 @@ export class MatchBoss {
         kind: hidden ? 'hidden' : 'boss',
         modeId: this.modeId,
         round: this.round,
-        stageId: this.stageId,
-        // 肉鸽（mode_rogue_*）的 BOSS 回合按普通场打：官方地图嵌在普通窗口，上方 boss 半场是禁区
-        rect: { ...(String(this.gd.modeId).startsWith('mode_rogue_') ? GEO.NORMAL_RECT : GEO.BOSS_RECT) },
+        stageId: wave.stageId || this.stageId,
+        // 模板自带战场（如 sim 的 sui_raid）：有就用它；肉鸽（mode_rogue_*）的 BOSS 回合按普通场打：官方地图嵌在普通窗口，
+        // 上方 boss 半场是禁区
+        rect: { ...(wave.battleRect || (String(this.gd.modeId).startsWith('mode_rogue_') ? GEO.NORMAL_RECT : GEO.BOSS_RECT)) },
         timeLimit: Infinity,
         players: inputs,
         spawns: this._sanitizeSpawns(spawns),
@@ -107,6 +108,12 @@ export class MatchBoss {
         enemyOverrides: wave.overrides,
         waveId: wave.templateId,
         bossId,
+        // 危机合约 (shared/contractEffects.js): the room-wide battle modifiers, exactly as a normal field's
+        // (_normalOpts). Beyond newBattle — which already merges them — these options ARE the client-side field's
+        // BattleSpec (clientCombat._ccField → sim/spec.js), so without them a browser-simulated Final Assault / Hidden
+        // Core ran without the contract's operator stats / healing / bond-layer cap while its normal rounds had them.
+        // Last, so no key above can shadow it (nothing here names those three).
+        ...this._contractOpts(),
       };
       if (this.clientCombat) return { fieldId, kind: hidden ? 'hidden' : 'boss', players: g.map((p) => p.playerId), opts: bopts, battle: null, live: true };
       const battle = this.newBattle(bopts);

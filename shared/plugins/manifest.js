@@ -40,7 +40,12 @@
 //                a list of paths or (assets, theme) the object inline · i18n { <lang>: path } (content+) — paths are
 //                inside the folder (isPackPath) and .json, the files an inline `assets` names are art, models, audio
 //                or fonts
-//   entry        { sim, meta } (script, .js) · { client } (ui: .html, required; trusted: .js) · { server } (trusted, .js)
+//   entry        { sim, meta } (script, .js) · { client } (ui: .html, unless a non-empty `code.client`; trusted: .js) ·
+//                { server } (trusted, .js)
+//   code         a lossless mount's own code tree, kept as written (paths relative to the plugin folder): match and
+//                matchMixin (a match entry and mixes over it), client, data, lobby and static — read by
+//                server/plugins/contentSet.js, lobbyModules.js, staticModules.js and the registry's ui frame. A plain
+//                object; any other shape is ignored with a warning. Not a permission: the paths are the manifest's.
 //   slots        ui only: hud.right, result.tab, stats.tab, room.panel (UI_SLOT_IDS). Absent or []: a warning, the
 //                plugin still loads but the host grants no slot. A bad list, or slots on another class: a problem.
 //   lang class   the language fields of manifest 1 (lang, base, fallback, complete, machineTranslated, numberUnits —
@@ -183,7 +188,7 @@ const SETTING_TYPES = ['boolean', 'integer', 'number', 'enum'];
 /** Top-level fields of manifest 2 (anything else is warned about and ignored). */
 const V2_FIELDS = new Set(['$schema', 'manifest', 'id', 'name', 'englishName', 'description', 'version', 'app', 'api', 'class', 'scope',
   'authors', 'credits', 'license', 'homepage', 'sourceLang', 'requires', 'optional', 'conflicts', 'loadAfter', 'loadBefore', 'priority',
-  'settings', 'permissions', 'capabilities', 'needs', 'overrides', 'rules', 'entry', 'code', 'slots', 'notices', 'files', 'lang', 'base', 'fallback', 'complete', 'machineTranslated', 'numberUnits', 'csp', ...Object.keys(PARTS)]);
+  'settings', 'permissions', 'overrides', 'rules', 'entry', 'code', 'slots', 'notices', 'files', 'lang', 'base', 'fallback', 'complete', 'machineTranslated', 'numberUnits', ...Object.keys(PARTS)]);
 /** Those fields, sorted, for the frozen API table (docs/PLUGIN-API.md). */
 export const MANIFEST_FIELDS = Object.freeze([...V2_FIELDS].sort());
 /** Fields only a lang plugin has. */
@@ -207,11 +212,10 @@ export const isPackId = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9.
 export const isPluginId = (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9-]{1,31}$/.test(v);
 
 /**
- * The slots a ui plugin may ask the host for (DESIGN §32.8). Five: four in-game panels plus `title.login` (the home
- * screen's login card, mounted by public/js/ui/pluginSlots.js since a same-origin module is needed there). The table grants one
+ * The slots a ui plugin may ask the host for (DESIGN §32.8). [ASSUMED] these four. The protocol table grants one
  * plugin per slot at a time; the match shows tabs when several ask for the same one (public/js/ui/pluginFrame.js).
  */
-export const UI_SLOT_IDS = Object.freeze(['hud.right', 'result.tab', 'stats.tab', 'room.panel', 'title.login']);
+export const UI_SLOT_IDS = Object.freeze(['hud.right', 'result.tab', 'stats.tab', 'room.panel']);
 
 /**
  * A path inside a pack or plugin folder ('ui.json', 'img/a.png'): relative, '/'-separated, no '.' / '..' / hidden /
@@ -294,8 +298,8 @@ export function appVersionMatches(range, version = APP_VERSION) {
  *   compatible: boolean, api: number | null, scope: string[], authors: string[], credits: string, license: string,
  *   homepage: string, sourceLang: string, requires: Record<string, string>, optional: Record<string, string>,
  *   conflicts: Record<string, string>, loadAfter: string[], loadBefore: string[], priority: number,
- *   settings: Record<string, PluginSetting>, permissions: string[], capabilities: string[], parts: Record<string, PluginPart>,
- *   entry: Record<string, string>, slots: string[], files: Record<string, string>, overrides?: string[],
+ *   settings: Record<string, PluginSetting>, permissions: string[], parts: Record<string, PluginPart>,
+ *   entry: Record<string, string>, code?: Record<string, any>, slots: string[], files: Record<string, string>, overrides?: string[],
  *   themeVars?: Record<string, string>, notices?: PluginNotice[],
  *   lang?: string, base?: string | null, fallback?: string[], complete?: boolean, machineTranslated?: boolean,
  *   numberUnits?: string[] | null, rules?: Record<string, string> }} PluginManifest
@@ -313,7 +317,7 @@ export function appVersionMatches(range, version = APP_VERSION) {
 function v2Defaults(cls) {
   return {
     names: {}, description: {}, api: null, scope: [...(PLUGIN_CLASSES[cls]?.defaultScope || [])], homepage: '', sourceLang: SOURCE_LANG,
-    requires: {}, optional: {}, conflicts: {}, loadAfter: [], loadBefore: [], priority: 0, settings: {}, permissions: [], capabilities: [], parts: {}, entry: {},
+    requires: {}, optional: {}, conflicts: {}, loadAfter: [], loadBefore: [], priority: 0, settings: {}, permissions: [], parts: {}, entry: {},
     slots: [],
   };
 }
@@ -416,47 +420,6 @@ export function readPackManifest(raw, ctx) {
  * @param {import('./errors.js').IssueList} list the findings
  * @returns {Record<string, string>}
  */
-/**
- * The directives a plugin may add to the site CSP. Deliberately small: a plugin may widen where images, media and
- * fetches come from, never what may run (`script-src` stays `'self'` + import-map hashes).
- */
-export const PLUGIN_CSP_DIRECTIVES = Object.freeze(['img', 'media', 'connect', 'style', 'font', 'frame', 'worker']);
-/**
- * An explicit origin: https, an optional `*.` subdomain wildcard, an optional port; or plain http on localhost.
- * No bare `*`, no scheme-only entry, no `'unsafe-inline'` / `'unsafe-eval'`, no `data:` / `blob:`.
- */
-const CSP_ORIGIN = /^(?:https:\/\/(?:\*\.)?[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::\d{1,5})?|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})?)$/i;
-
-/**
- * `"csp"`: `"off"` (trusted only; the server drops the header and logs it) or `{ "<directive>": ["https://…"] }`.
- * @returns {{ off: true } | { directives: Record<string, string[]> } | null}
- */
-function readCsp(raw, cls, list) {
-  if (raw === undefined) return null;
-  if (raw === 'off') {
-    if (cls !== 'trusted') { list.problem('PLUGIN_CSP', '"csp": "off" is only for a trusted plugin', { at: ['csp'] }); return null; }
-    return { off: true };
-  }
-  if (!isObj(raw)) { list.problem('PLUGIN_CSP', '"csp" is "off" or { "<directive>": ["https://…"] }', { at: ['csp'] }); return null; }
-  /** @type {Record<string, string[]>} */
-  const directives = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (!PLUGIN_CSP_DIRECTIVES.includes(key)) {
-      list.problem('PLUGIN_CSP', `"csp.${key}": a directive is ${PLUGIN_CSP_DIRECTIVES.map((d) => `"${d}"`).join(', ')}`, { at: ['csp', key] });
-      continue;
-    }
-    if (!Array.isArray(value) || value.length > 16) { list.problem('PLUGIN_CSP', `"csp.${key}" is a list of up to 16 origins`, { at: ['csp', key] }); continue; }
-    const ok = [];
-    for (const origin of value) {
-      const s = typeof origin === 'string' ? origin.trim() : '';
-      if (!CSP_ORIGIN.test(s)) { list.problem('PLUGIN_CSP', `"csp.${key}": ${short(origin)} is not an explicit https origin (or http://localhost)`, { at: ['csp', key] }); continue; }
-      ok.push(s);
-    }
-    if (ok.length) directives[key] = [...new Set(ok)];
-  }
-  return Object.keys(directives).length ? { directives } : null;
-}
-
 function localized(v, sourceLang, max, field, list) {
   /** @type {Record<string, string>} */
   const out = {};
@@ -638,6 +601,14 @@ export function readPluginManifest(raw, ctx) {
   if (!isPluginId(id)) list.problem('PLUGIN_ID', `"${id}" is not a plugin id (2–32 lower-case letters, digits and -, the folder name decides)`, { id });
   if (m.id !== undefined && m.id !== id) list.warning('PLUGIN_ID_MISMATCH', `"id": ${short(m.id)} is not "${id}" (the folder name decides)`, { at: ['id'], id });
   for (const k of Object.keys(m)) if (!V2_FIELDS.has(k)) list.warning('PLUGIN_FIELD_UNKNOWN', `"${k}" is not a field of manifest 2 (ignored)`, { at: [k] });
+  // `code` (see the header): a lossless mount's own code tree, kept as written — the code roots resolve its paths
+  // against the plugin folder. Only a plain object is one; anything else is ignored, as before.
+  /** @type {Record<string, any> | undefined} */
+  let code;
+  if (m.code !== undefined) {
+    if (isObj(m.code)) code = JSON.parse(JSON.stringify(m.code));
+    else list.warning('PLUGIN_FIELD_UNKNOWN', `"code": ${short(m.code)} is not an object (ignored)`, { at: ['code'] });
+  }
 
   const cls = typeof m.class === 'string' ? m.class : '';
   const kind = has(PLUGIN_CLASSES, cls) ? PLUGIN_CLASSES[cls] : null;
@@ -698,15 +669,6 @@ export function readPluginManifest(raw, ctx) {
     if (Number.isInteger(m.priority) && Math.abs(m.priority) <= 1000) priority = m.priority;
     else list.problem('PLUGIN_ORDER_HINTS', `"priority": ${short(m.priority)} is not an integer within ±1000`, { at: ['priority'] });
   }
-  // capabilities（2026-10-20）：插件自报的「面」，管理面板据此分组——transport 单列一栏，不混进美术/玩法。
-  // 只是个标签：不认识的值原样保留，不写这个字段的插件行为完全不变。
-  let capabilities = [];
-  if (m.capabilities !== undefined) {
-    const raw = Array.isArray(m.capabilities) ? m.capabilities : null;
-    if (!raw || raw.length > 8 || raw.some((x) => typeof x !== 'string' || !/^[a-z][a-z0-9-]{0,23}$/.test(x))) {
-      list.problem('PLUGIN_FIELD_UNKNOWN', 'capabilities must be up to 8 lowercase tags', { at: ['capabilities'] });
-    } else capabilities = [...new Set(raw)];
-  }
 
   /** @type {Record<string, PluginSetting>} */
   const settings = {};
@@ -760,10 +722,11 @@ export function readPluginManifest(raw, ctx) {
       const text = `"slots": ${short(m.slots)} — a ui plugin lists ${UI_SLOT_IDS.join(', ')} (one each)`;
       list.problem('PLUGIN_UI_SLOTS', text, { at: ['slots'], detail: text });
     } else slots = UI_SLOT_IDS.filter((s) => m.slots.includes(s));
-    // Two shapes: a sandboxed .html frame (entry.client, `ui.frame`) or a same-origin ES module listed in
-    // code.client and mounted by the host into this slot (public/js/ui/pluginSlots.js). One of them is required.
-    const moduleParts = m.code && typeof m.code === 'object' && Array.isArray(m.code.client) ? m.code.client.filter((x) => typeof x === 'string' && x) : [];
-    if (!entry.client && !moduleParts.length) list.problem('PLUGIN_ENTRY', '"entry.client" (.html frame) or a non-empty "code.client" module is required for a ui plugin', { at: ['entry', 'client'] });
+    // Second shape: no frame page, only services from the same origin. A non-empty `code.client` (the .js modules
+    // public/js/ui/pluginSlots.js mounts into the slots) is enough — the registry serves that form with no frame files
+    // (server/plugins/registry.js readUiFrame). Only an empty `code.client` leaves the plugin without an entry.
+    const moduleRels = Array.isArray(code?.client) ? code.client.filter((x) => typeof x === 'string' && x) : [];
+    if (!entry.client && !moduleRels.length) list.problem('PLUGIN_ENTRY', '"entry.client" is required for a ui plugin (an .html file)', { at: ['entry', 'client'] });
   }
 
   // permissions: known, allowed for the class, one for every part and entry point
@@ -802,27 +765,21 @@ export function readPluginManifest(raw, ctx) {
   }
   // A declared switch is gameplay. An absent or empty rules object is not, so a plugin that names none stays empty.
   const rules = readDeclaredRules(m.rules, list, cls);
-  const uiModules = cls === 'ui' && m.code && typeof m.code === 'object' && Array.isArray(m.code.client) ? m.code.client.filter((x) => typeof x === 'string' && x).length : 0;
-  if (!isLang && !Object.keys(parts).length && !Object.keys(entry).length && !notices && !rules && !uiModules) list.warning('PLUGIN_EMPTY', `carries nothing a ${cls} plugin is made of`, { class: cls });
+  if (!isLang && !Object.keys(parts).length && !Object.keys(entry).length && !notices && !rules) list.warning('PLUGIN_EMPTY', `carries nothing a ${cls} plugin is made of`, { class: cls });
 
   const overrides = m.overrides ?? [];
   if (m.overrides !== undefined && (!['script','trusted'].includes(cls) || !Array.isArray(overrides) || overrides.length > 200 || new Set(overrides).size !== overrides.length || overrides.some(x => typeof x !== 'string' || !/^[A-Za-z0-9_:-]{1,128}$/.test(x)))) list.problem('PLUGIN_SCRIPT_OVERRIDE', 'overrides must list official kit ids', {at:['overrides']});
-
-  // 跨域资源放行（业主 2026-10-21）：插件声明站点 CSP 需要追加的源。只放宽「从哪取」，script-src 保持 'self'。
-  const csp = readCsp(m.csp, cls, list);
 
   /** @type {PluginManifest} */
   const out = {
     manifest: 2, id, class: cls, type: kind.packType, name, englishName, names, description, version, app: range, compatible, api, scope,
     authors: authorsOf(m.authors), credits: str(m.credits, 500), license: str(m.license, 100), homepage, sourceLang: sourceLang || SOURCE_LANG,
-    requires, optional, conflicts, loadAfter, loadBefore, priority, settings, permissions, capabilities, parts, entry, slots, files: {},
-    // 无损插件：服务端代码根 / 客户端覆盖表 / 整份数据（只对 trusted 有意义）。
-    ...(m.code && typeof m.code === 'object' && !Array.isArray(m.code) ? { code: m.code } : {}),
+    requires, optional, conflicts, loadAfter, loadBefore, priority, settings, permissions, parts, entry, slots, files: {},
+    ...(code ? { code } : {}),
     ...(m.overrides !== undefined ? { overrides } : {}),
     ...(parts.theme?.themeVars ? { themeVars: parts.theme.themeVars } : {}),
     ...(notices ? { notices } : {}),
     ...(rules ? { rules } : {}),
-    ...(csp ? { csp } : {}),
   };
   if (isLang) {
     readLangFields(m, undefined, out, list);
@@ -976,7 +933,6 @@ export function pluginIndexEntry(p) {
   if (m.priority) e.priority = m.priority;
   if (Object.keys(m.settings).length) e.settings = JSON.parse(JSON.stringify(m.settings));
   if (m.permissions.length) e.permissions = [...m.permissions];
-  if (m.capabilities && m.capabilities.length) e.capabilities = [...m.capabilities];
   if (Number.isFinite(p.bytes)) e.bytes = p.bytes;
   if (Number.isFinite(p.count)) e.files = p.count;
   // [ASSUMED] A cosmetic whose overlay writes nothing does not publish `vs` or `artBytes`. The page would
@@ -1000,15 +956,12 @@ export function pluginIndexEntry(p) {
 }
 
 /**
- * The catalogue body: { version, app, api, content?, plugins: [entry …], skipped? } — by class (PLUGIN_CLASSES order), then id.
+ * The catalogue body: { version, app, api, content?, plugins: [entry …] } — by class (PLUGIN_CLASSES order), then id.
  * @param {PluginEntry[]} plugins
- * @param {{ app?: string, api?: { current: number, min: number }, vanilla?: string | null,
- *   skipped?: Array<{ where?: string, problems?: string[], issues?: Array<{ code?: string, text?: string }> }> }} [opts]
+ * @param {{ app?: string, api?: { current: number, min: number }, vanilla?: string | null }} [opts]
  *   vanilla: this server's vanilla content hash (server/plugins/identity.js)
- *   skipped: the folders the scan refused (server/plugins/registry.js `report().skipped`) — listed so a page can show
- *   「装了但装不上」 with a reason instead of the plugin simply not existing
  */
-export function buildPluginIndex(plugins, { app = APP_VERSION, api = PLUGIN_API, vanilla = null, skipped = [] } = {}) {
+export function buildPluginIndex(plugins, { app = APP_VERSION, api = PLUGIN_API, vanilla = null } = {}) {
   const order = Object.keys(PLUGIN_CLASSES);
   const rank = (p) => order.indexOf(p.class);
   const list = [...plugins].sort((a, b) => rank(a) - rank(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -1016,16 +969,5 @@ export function buildPluginIndex(plugins, { app = APP_VERSION, api = PLUGIN_API,
   const body = { version: PLUGIN_INDEX_VERSION, app, api: { current: api.current, min: api.min } };
   if (vanilla) body.content = { vanilla };
   body.plugins = capCatalogueNotices(list.map(pluginIndexEntry));
-  // the folders the scan refused: id out of `plugins/<id>/`, at most 5 coded issues each (the plain `problems` strings
-  // carry no code); a `where` this cannot read is skipped — the catalogue is a page's view, not a diagnostics dump
-  const refused = [];
-  for (const s of Array.isArray(skipped) ? skipped : []) {
-    const id = /^plugins\/([^/]+)\//.exec(String(s?.where || ''))?.[1];
-    if (!id) continue;
-    const problems = (Array.isArray(s.issues) ? s.issues : []).slice(0, 5)
-      .map((i) => ({ code: String(i?.code || 'PLUGIN_INVALID'), message: String(i?.text || '') }));
-    refused.push({ id, where: String(s.where), status: 'skipped', problems });
-  }
-  if (refused.length) body.skipped = refused;
   return body;
 }

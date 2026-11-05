@@ -62,13 +62,14 @@
 // Statuses: 束缚 (S1), 停顿 + 诱导 (本能的召唤); 神经损伤 bursts (engine: 3 麻痹 + 6000 元素伤害).
 
 import { num, up, traitBb, talentBb, skillRec, once } from '../shared/tier1.js';
+import { hypot } from '../../../detmath.js';
 import { isElite, onElementHit, elementDmg } from '../shared/tier6.js';
 import { releaseSkillSummon, startCountdown } from '../../tokens.js';
 import { absoluteRangeKeys } from '../../../targeting.js';
 import { bodyInRange } from '../../../body.js';
-import { hasHp, burstLocked } from '../../../attack.js';
+import { hasHp, burstLocked } from '../../../damage.js';
 import { MIN_DAMAGE_RATIO } from '../../../constants.js';
-import { hypot } from '../../../detmath.js';
+
 
 const S1 = 'skchr_phatm2_1';
 const S2 = 'skchr_phatm2_2';
@@ -95,7 +96,7 @@ const keysAt = (grid, u) => new Set(absoluteRangeKeys(grid, u.tileR, u.tileC, u.
 
 /**
  * 神经损伤 of a fixed value that ignores the target's 损伤抵抗 (PRTS 群体性谵妄 备注 "不受目标损伤抗性影响": the client's
- * ApplyFixedElementDamage): the share the engine takes off (attack/element.js elementIntake) is added back first.
+ * ApplyFixedElementDamage): the share the engine takes off (damage.js elementIntake) is added back first.
  */
 function fixedNeural(battle, src, e, amount, sourceless = false) {
   if (!(amount > 0) || !hasHp(e)) return 0;

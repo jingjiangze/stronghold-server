@@ -31,7 +31,7 @@
 // are built; switching back (WebGL context lost, art missing) rebuilds the 2D board.
 
 import { tileAtlas, fxAtlas, rng, groundTexture } from './textures.js';
-import { GLYPH, TILEKEY_GLYPH, TILE_H, COLORS, ORIGINIUM } from './style.js';
+import { GLYPH, GLYPH_PINNED, TILEKEY_GLYPH, TILE_H, COLORS, ORIGINIUM } from './style.js';
 import { parsePenRect, PEN_RECT } from './pen.js';
 
 /**
@@ -118,7 +118,10 @@ export function parseStage(stage, band = null, field = null) {
     const row = [];
     for (let c = 0; c < COLS; c++) {
       let g = line[c] || '#';
-      if (!GLYPH[g]) g = TILEKEY_GLYPH[legend[g]?.tileKey] || (legend[g]?.height === 'HIGH' ? '#' : 'R');
+      const lk = legend[g]?.tileKey;
+      const mapped = lk ? (TILEKEY_GLYPH[lk + ':' + legend[g]?.height] || TILEKEY_GLYPH[lk]) : null;
+      if (mapped && (!GLYPH[g] || !GLYPH_PINNED.has(g))) g = mapped;
+      else if (!GLYPH[g]) g = legend[g]?.height === 'HIGH' ? '#' : 'R';
       const def = GLYPH[g];
       const inBand = r >= band[0] && r <= band[1];
       const scenery = r < field[0] || r > field[1];

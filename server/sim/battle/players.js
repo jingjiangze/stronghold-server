@@ -12,6 +12,7 @@ import { normalizeToken } from '../simdata.js';
 import { isPotential, isCultivate } from '../../../shared/potential.js';
 import { setupUnitKit } from '../content/index.js';
 import { installTraitAttackSpeed } from '../content/traitMods.js';
+
 import { clone } from './util.js';
 
 export class BattlePlayers {
@@ -141,7 +142,7 @@ export class BattlePlayers {
       const owner = inp.ownerUid != null ? ps.units.find((x) => x.uid === inp.ownerUid) : null;
       const def = this._tokenDef(inp.tokenId ?? inp.chessId, owner, inp.def);
       if (!def) { this.log(`unknown token ${inp.tokenId}`); return null; }
-      const u = this._makeAlly(ps, def, 'token', r, c, { uid: inp.uid, ownerUnit: owner, dir, relicMods: inp.relicMods });
+      const u = this._makeAlly(ps, def, 'token', r, c, { uid: inp.uid, ownerUnit: owner, dir });
       u.carry = inp.carryState ?? null;
       return u;
     }
@@ -159,14 +160,59 @@ export class BattlePlayers {
     if (!def) { this.log(`unknown chess ${inp.chessId}${lo.diy ? ' (illegal 自选 pick)' : ''}`); return null; }
     // a DIY slot has no body of its own (甄选干员): it fights only as a 自选 piece (its `diy` pick)
     if (def.raw?.isDiy && !def.diyFor) { this.log(`自选 slot ${inp.chessId} without a pick`); return null; }
-    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, skin: inp.skin, relicMods: inp.relicMods });
+    const u = this._makeAlly(ps, def, 'op', r, c, { uid: inp.uid, dir, skin: inp.skin });
     u.items = [...(inp.items ?? [])];
     u.carry = inp.carryState ?? null;
-    // 练度 (自持有, 0.2.2): the owned operator's ×ATK / ×DEF / ×max HP (units.js Πmul) — never a 补位 stand-in's nor a
-    // prototype 自选 pick's (another character than the one the player owns)
+    /*
+     * ⚠ **不要在这里加 `u.spine = inp.spine` / `u.skin = …`。**
+     *
+     * 我一度在这里插了一段"把皮肤从 input 搬到单位"的代码,以为 sim 丢了它 —— **那是错的**:
+     * 这个函数**末尾**(见下面 `// 干员皮肤` 那一段)本来就在拷 `inp.skin` / `inp.skinOf`。
+     * 我插的那段是重复的,而且更糟的是它**骗过了变异测试**:
+     * 我把自己的那段删掉再跑自检,依然全过 —— 因为末尾那段还在起作用,
+     * 于是我一度以为"自检抓不到 bug",其实是我在错误的位置做变异。
+     *
+     * 教训:插代码之前先 `grep` 一遍同一个函数体,确认它是不是已经有了。
+     */
+    /*
+     * 练度 (自持有, 0.2.2): the owned operator's ×ATK / ×DEF / ×max HP (units.js Πmul) — never a 补位 stand-in's nor a
+     * prototype 自选 pick's (another character than the one the player owns).
+     */
     if (isCultivate(inp.cultivate) && !def.standInFor && !def.raw?.diyProto) {
       const mul = typeof this.data.cultivateMul === 'function' ? this.data.cultivateMul(inp.cultivate) : null;
       if (mul) { u.cultivate = inp.cultivate; u.cultMul = Object.freeze({ ...mul }); u.markDirty(); }
+    }
+    /*
+     * 危机合约的干员减益 (shared/contractEffects.js `opStatMul`)。
+     *
+     * 「临阵磨枪 / 训练不足 / 恢复期 / 重伤残」把干员的 ×ATK / ×DEF / ×max HP 压下去(0.9 → 0.5)。
+     * 接在 `cultMul` 上而不是 `mods`:那一项在 `units.js _recalc` 里与 buff / 潜能各自独立相乘,
+     * 而且 `maxHp` / `atk` / `def` 都带**不低于基础值**的下限,所以纯减益不会被翻成增益。
+     *
+     * ⚠ 必须**无条件**施加 —— 上面那个 `if` 只在有练度时才装 `cultMul`,而减益对每个自家干员都成立
+     * (补位 / 自选编队也一样,它们只是不能改练度,不是不该吃合约)。
+     */
+    /*
+     * ⚠ 倍率挂在**玩家输入**上(`ps.input.contractOpStatMul`),不是**单位**上 ——
+     * 这个函数的 `inp` 是单位,`battleInput()` 把合约那一段放在它返回的玩家对象里。
+     * 第一版读 `inp.contractOpStatMul`,于是恒为 undefined、减益完全不生效(实测面板一点没动)。
+     */
+    const contractOp = (ps && ps.input && ps.input.contractOpStatMul) || (this.data && this.data.contractOpStatMul);
+    if (contractOp && (contractOp.atk !== 1 || contractOp.def !== 1 || contractOp.hp !== 1)) {
+      const prev = u.cultMul || { atk: 1, def: 1, hp: 1 };
+      u.cultMul = Object.freeze({ atk: prev.atk * contractOp.atk, def: prev.def * contractOp.def, hp: prev.hp * contractOp.hp });
+      u.markDirty();
+    }
+    // 干员皮肤 (docs/SKINS.md): the skin this piece wears. It rides on the UNIT (not the def) because the def is
+    // cached per (chessId, loadout) and shared by every player fielding that chess — two players may skin the same
+    // operator differently. snapshot.js unitInfo() puts it back on the wire, and the client resolves the model.
+    //
+    // ⚠ `skinOf` 必须**一起拷贝**:自选编队上场时模型画的是被选中的干员,而皮肤要按归属 id 查目录
+    // (`public/js/assets.js spineEntry`)。这里只拷 `skin` 的话,`unitInfo` 再想带 `skinOf` 也没有 ——
+    // 皮肤在战斗里静默退回默认模型。这里是整条链的最后一环,漏了它前面全白做。
+    if (typeof inp.skin === 'string' && inp.skin) {
+      u.skin = inp.skin;
+      if (typeof inp.skinOf === 'string' && inp.skinOf) u.skinOf = inp.skinOf;
     }
     return u;
   }
@@ -185,80 +231,18 @@ export class BattlePlayers {
 
   _makeAlly(ps, def, kind, r, c, extra = {}) {
     const st = def.stats;
-    // 己方属性通道（肉鸽 rule 藏品）：`extra.relicMods` 是 { atkMul, hpMul, defMul, aspdMul, aspdAdd }，
-    // 由 lobby 侧的 `relicAllyMul()` 算好后随 BattleSpec 的每个 unit 传进来；缺省时一切照旧（对上游零影响）。
-    const rm = extra.relicMods && typeof extra.relicMods === 'object' ? extra.relicMods : null;
-    const mul = (v, k) => (rm && Number.isFinite(Number(rm[k])) ? Number(v) * Number(rm[k]) : Number(v));
-    const add = (v, k) => (rm && Number.isFinite(Number(rm[k])) ? Number(v) + Number(rm[k]) : Number(v));
     const u = new Unit({
       id: ++this._idSeq, side: 'ally', kind, def, defId: def.id, name: def.name, ownerId: ps ? ps.playerId : null,
       uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, skin: extra.skin ?? null, x: c, y: r, tileR: r, tileC: c,
       dir: extra.dir != null ? normDir(extra.dir) : extra.facing != null ? normDir(extra.facing) : ps ? ps.dir : 'RIGHT',
       base: {
-        maxHp: Math.max(1, mul(st.maxHp, 'hpMul')), atk: Math.max(0, mul(st.atk, 'atkMul')),
-        def: Math.max(0, mul(st.def, 'defMul')), res: st.res,
-        aspd: Math.max(1, add(mul(st.aspd, 'aspdMul'), 'aspdAdd')), bat: st.bat, blockCnt: st.blockCnt,
+        maxHp: st.maxHp, atk: st.atk, def: st.def, res: st.res, aspd: st.aspd, bat: st.bat, blockCnt: st.blockCnt,
         moveSpeed: 0, spRecovery: st.spRecovery, tauntLevel: st.tauntLevel, massLevel: st.massLevel,
         hpRecoveryPerSec: st.hpRecoveryPerSec, cost: st.cost, respawnTime: st.respawnTime,
       },
     });
-    if (rm) {
-      // 藏品通道的第二组（技力/晕眩）：写成单位自有字段，**不进 base** —— base 会在部署时被
-      // content/index.js 的 syncUnitLoadout 整块重写（spRecovery 就在那份列表里），写进 base 等于白写。
-      const n = (k) => (Number.isFinite(Number(rm[k])) ? Number(rm[k]) : 0);
-      if (rm.initSp != null) u.relicInitSp = Math.trunc(n('initSp'));
-      if (rm.spRegenMul != null) u.relicSpRegenMul = Math.max(0, n('spRegenMul'));
-      if (rm.stunOnDeploy != null) u.relicStunOnDeploy = Math.max(0, n('stunOnDeploy'));
-      if (rm.shelter != null) u.relicShelter = Math.max(0, Math.min(1, n('shelter')));
-      // 战斗内时序类：摊平的数值在这里拼回结构体（spec 层只认数值）
-      const opt = (k) => (rm[k] != null && Number.isFinite(Number(rm[k])) ? Number(rm[k]) : null);
-      const sDur = opt('startDur');
-      if (sDur && (opt('startAtkPct') != null || opt('startAspd') != null || opt('startSpMul') != null)) {
-        u.relicStartDebuff = { dur: sDur, atkPct: opt('startAtkPct') ?? 0, aspd: opt('startAspd') ?? 0, spMul: opt('startSpMul') ?? 1 };
-      }
-      const flatDps = opt('flatDps'), dotPct = opt('dotMaxHpPct');
-      if ((flatDps && flatDps > 0) || (dotPct && dotPct > 0)) {
-        u.relicDot = { flat: flatDps > 0 ? flatDps : 0, maxHpPct: dotPct > 0 ? dotPct : 0, dur: opt('dotDur') ?? 0 };
-      }
-      if (opt('skillAtkWindow') || opt('skillSpPer')) {
-        u.relicSkill = { window: opt('skillAtkWindow') ?? 0, mul: opt('skillAtkMul') ?? 2, spPer: opt('skillSpPer') ?? 0, spMax: opt('skillSpMax') ?? 5 };
-      }
-    }
-    // shelterOnDebuff（养育者基因种）：「有干员陷入负面状态后所有友方单位获得 35% 庇护，
-    // 攻击无视目标 35% 法术抗性和防御力，持续至战斗结束」——按**玩家**存一份配置，战斗级钩子只装一次。
-    if (ps && rm && Number(rm.debuffShelter) > 0) {
-      ps._relicDebuff = { shelter: Math.min(1, Number(rm.debuffShelter) || 0), ignore: Math.max(0, Math.min(1, Number(rm.debuffIgnore) || 0)) };
-      if (!this._relicDebuffHooked) {
-        this._relicDebuffHooked = true;
-        this.on('statusApplied', ({ target }) => {
-          if (!target || target.side !== 'ally' || !target.player) return;
-          const cfg = target.player._relicDebuff;
-          if (!cfg) return;
-          for (const a of this.allyUnits) {
-            if (a.player !== target.player || !a.alive) continue;
-            this.addBuff(a, { key: 'relic:debuffShelter', persist: true, allowDead: true, mods: { dmgTakenMul: 1 - cfg.shelter } });
-            if (cfg.ignore > 0) {
-              this.addBuff(a, { key: 'relic:debuffIgnore', persist: true, allowDead: true, mods: { defIgnorePct: cfg.ignore, resIgnorePct: cfg.ignore } });
-            }
-          }
-        });
-      }
-    }
-    if (u.relicSkill) {
-      // 技能触发钩子（atkAfterSkill / spRegenStack）：注册在**单位生成**这一步而不是部署收尾 ——
-      // 部署会重复执行（初部署 / 再部署 / 召唤），挂 deploy 会叠出多份监听。
-      this.on('skillStart', ({ unit: su }) => {
-        if (su !== u) return;
-        const sk = u.relicSkill;
-        if (sk.window > 0) {
-          this.addBuff(u, { key: 'relic:afterSkill', duration: sk.window, refresh: 'replace', mods: { atkPct: Math.max(0, sk.mul - 1) } });
-        }
-        if (sk.spPer > 0) {
-          u.relicSkillUses = Math.min(sk.spMax, (Number(u.relicSkillUses) || 0) + 1);
-          this.addBuff(u, { key: 'relic:spStack', persist: true, allowDead: true, mods: { spRecoveryFlat: sk.spPer * u.relicSkillUses } });
-        }
-      }, { owner: u });
-    }
+    if(kind==='op')u.contractRedeployMul=ps?.input?.contractRedeployMul||1;
+    if(kind==='op' && ps?.bandId==='band_closur' && ps.input?.closurDebt>0) { u.debtPenalty=.9; u.markDirty(); }
     u.alive = false;
     u.deployed = false;
     u.items = [];

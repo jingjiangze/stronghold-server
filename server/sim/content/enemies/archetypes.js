@@ -6,7 +6,7 @@
 import { MOVE_SCALE, COLS, STEALTH_RESTORE } from '../../constants.js';
 import {
   HUSK_REBIRTH, BOOM_RADIUS, POLLUTION_INTERVAL, STEALTH_RESTORE_BY_KEY, DUCK_STEALTH_RESTORE, nthOf, stOf, safe, num, T, elem, hurt,
-  areaAllies, areaAlliesInTiles, zone, spawnChildren, stepToward, setHits, hitCount, setForm, auraBuff,
+  areaAllies, areaAlliesInTiles, zone, spawnChildren, stepToward, setHits, hitCount, setForm, absorbArts, auraBuff,
   unbalancedNow, castSlot,
 } from './helpers.js';
 import { hypot } from '../../detmath.js';
@@ -37,7 +37,10 @@ const unblockable = () => ({ spawn(b, e) { b.addBuff(e, { key: 'ab:unblockable',
 const runWhenHit = (v) => ({ taken(c, b, e, a) { if (a.on || !(v > 0)) return; a.on = true; b.addBuff(e, { key: 'ab:duckRun', persist: true, mods: { moveMul: 1 + v } }); } });
 
 /**
- * 频次 (the 14 器物 keys, kitTimes): maxHp = hits = the data's max HP × the spawn's HP multiplier. The round effects reach
+ * 频次 (the 14 器物 keys, kitTimes): raw HP keeps spawn and later aura modifiers; Unit._recalc converts its multiplier
+ * once through a shared soft growth curve. Owner 2026-10-29 R2 rejects a common100-hit ceiling: native30/35/45 must
+ * retain their tiers. [ASSUMED] growth approaches20/9, so native45 approaches100 while smaller relics stay smaller.
+ * The round effects reach
  * these units like any enemy (攻坚装备 / II / III leave out only 炎佑), but not 补给线 / 补给线II, whose `enemy_exclude` lists
  * exactly these 14 keys (activity_table aceffect_enemy_2 / 2_2, data/effects.json): that share (`mods.supplyHpMul`, co-op
  * 终极 R5–R15) comes out again — a 频次 enemy's death spawn inherits the parent's mods, so it travels with them. Whole hits:
@@ -47,7 +50,12 @@ const runWhenHit = (v) => ({ taken(c, b, e, a) { if (a.on || !(v > 0)) return; a
 const times = (artsOnly = false) => ({
   spawn(b, e) {
     const s = Number(e.mods && e.mods.supplyHpMul);
-    setHits(e, e.base.maxHp / (Number.isFinite(s) && s > 0 ? s : 1));
+    // Canonical native stats also cover effectRef copies and wave stat overrides:
+    // their extra HP belongs to growth, not to an inflated native hit baseline.
+    e.mem.hitCountBase = (b.data.getEnemy(e.def.raw?.effectRef ?? e.defId) ?? e.def).maxHp;
+    e.base.maxHp /= Number.isFinite(s) && s > 0 ? s : 1;
+    e.markDirty();
+    e.hp = e.s.maxHp;
     hitCount(b, e, true, artsOnly);
   },
 });
@@ -437,19 +445,20 @@ function artsBarrier(amount, { key = 'ab:artsBarrier', whileUp = null } = {}) {
     refresh(b, e, a) {
       a.left = amount;
       b.fx('phase', { x: e.x, y: e.y, id: e.id, kind: 'artsBarrier', value: amount });
-      b.addBuff(e, { key, persist: true, visible: true, mods: whileUp, injury(c) {
-        if (c.type !== 'arts' || !(a.left > 0)) return;
-        const take = Math.min(a.left, c.amount);
-        a.left -= take;
-        c.amount -= take;
-        if (a.left > 1e-6) return;
-        a.left = 0;
-        b.fx('shieldBreak', { x: e.x, y: e.y, id: e.id });
-        // Remove HP-changing bonuses after the breaking instance, even if a later effect dodges its overflow.
-        c.defer(() => b.removeBuff(e, c.buff));
-      } });
+      if (whileUp) b.addBuff(e, { key, persist: true, visible: true, mods: whileUp });
     },
     spawn(b, e, a) { if (amount > 0) a.refresh(b, e, a); },
+    hitIn(c, b, e, a) {
+      if (!(a.left > 0)) return;
+      a.left -= absorbArts(c, a.left);
+      if (a.left > 1e-6) return;
+      a.left = 0;
+      b.fx('shieldBreak', { x: e.x, y: e.y, id: e.id });
+      // the bonus it grants ends once the overflow of the breaking hit has landed (never before: an HP bonus removed
+      // first would rescale HP and make the overflow count twice)
+      if (c.dmg.cancel) b.removeBuff(e, key); else a.breaking = true;
+    },
+    taken(c, b, e, a) { if (a.breaking) { a.breaking = false; b.removeBuff(e, key); } },
   };
 }
 
@@ -611,13 +620,9 @@ function dmgZone(b, src, x, y, r, life, iv, amount, type = 'arts', kind = 'zone'
   } });
 }
 
-/**
- * A cooldown skill ability (`id` labels it for tests / other abilities). `turn`: the attack-turn fields of an attack-class
- * skill (helpers.js attackSkillOf — `atk`, `clip`, `own`; DESIGN §35.52), cast in the attack's turn instead of on its own.
- */
-const skill = (s, fire, { cond = null, sil = false, cd = null, icd = null, id = null, turn = null } = {}) => (s || cd != null) && fire ? ({
-  id: id ?? null, sil, cd: cd ?? s.cd, icd: icd ?? s.icd, cond, fire, sk: s || null,   // sk: its slot for the 'cast' event
-  ...turn,
+/** A cooldown skill ability (`id` labels it for tests / other abilities). */
+const skill = (s, fire, { cond = null, sil = false, cd = null, icd = null, id = null,fxDuration=null } = {}) => (s || cd != null) && fire ? ({
+  id: id ?? null, sil, cd: cd ?? s.cd, icd: icd ?? s.icd, cond, fire, sk: s || null,fxDuration,   // sk: its slot for the 'cast' event
 }) : null;
 
 /** Blink past the blocker along the path (弑君者 / 卢西恩). Returns the start position. */

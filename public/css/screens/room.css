@@ -443,6 +443,97 @@
 .specbar__who.is-offline { color: var(--text-dim); }
 .specbar__who > .icon { width: .16rem; height: .16rem; }
 
+/* ---- 危机合约 (shared/contracts.js; room.setContracts): the pill's entry (绝境 / 终极 only), the strip of picks above the
+   footer, and the picker's Modal (ui/contractPicker.js). The data comes from the shared table, so a tile's height follows
+   its description rather than a fixed box. ---- */
+.rs-pill__ctr {
+  display: inline-flex;
+  align-items: center;
+  gap: .06rem;
+  min-width: 0;
+  max-width: 2.4rem;
+  height: 78%;
+  padding: 0 .16rem;
+  font: inherit;
+  font-size: calc(.2 * var(--t));
+  font-weight: 800;
+  white-space: nowrap;
+  color: #cfe9ff;
+  background: rgba(120, 196, 255, .12);
+  border: 0;
+  border-radius: 999px;
+}
+.rs-pill__ctr .icon { flex: none; width: 1.2em; height: 1.2em; color: #9fd3ff; }
+.rs-pill__ctrname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rs-pill__ctrnum { flex: none; color: var(--mint-400); }
+.rs-pill__ctr:disabled { cursor: default; opacity: .7; }
+.rs-pill__ctr.is-ro { cursor: help; }
+.rs-pill__ctr:hover:not(:disabled), .rs-pill__ctr:focus-visible { filter: brightness(1.2); }
+.rs-ctrs {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .1rem;
+  margin: 0 .6rem .14rem;
+  font-size: calc(.14 * var(--t));
+  color: var(--text-lo);
+}
+.rs-ctrs__label { display: inline-flex; align-items: center; gap: .06rem; font-weight: 700; color: var(--text-md); }
+.rs-ctrs__label .icon { flex: none; width: 1.1em; height: 1.1em; color: #9fd3ff; }
+.rs-ctrs__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .06rem;
+  padding: .02rem .12rem;
+  color: var(--text-hi);
+  background: rgba(120, 196, 255, .08);
+  border: 1px solid rgba(120, 196, 255, .35);
+}
+.rs-ctrs__chip .num { color: #9fd3ff; }
+.rs-ctrs__total { color: var(--text-dim); }
+.cpick .modal__body { display: flex; flex-direction: column; gap: .12rem; min-height: 0; }
+.cpick__lead { margin: 0; color: var(--text-md); font-size: calc(.15 * var(--t)); line-height: 1.6; }
+.cpick__total { display: flex; align-items: baseline; gap: .08rem; color: var(--text-md); font-size: calc(.15 * var(--t)); }
+.cpick__total .icon { flex: none; align-self: center; width: 1.2em; height: 1.2em; color: #9fd3ff; }
+.cpick__total b { color: var(--mint-400); font-size: calc(.22 * var(--t)); }
+.cpick__picked { margin-left: auto; color: var(--text-lo); font-size: calc(.13 * var(--t)); }
+/* the sets scroll inside the dialog (a phone in landscape keeps its height): the actions stay in view below */
+.cpick__sets { display: flex; flex-direction: column; gap: .14rem; min-height: 0; max-height: 4.9rem; overflow-y: auto; scrollbar-width: thin; }
+.cpick__set { display: flex; flex-direction: column; gap: .08rem; }
+.cpick__sethead { display: flex; align-items: baseline; gap: .08rem; margin: 0; font-size: calc(.17 * var(--t)); font-weight: 800; }
+.cpick__en { color: var(--text-dim); font-size: calc(.11 * var(--t)); font-weight: 400; }
+.cpick__setnum { margin-left: auto; color: var(--text-lo); font-size: calc(.13 * var(--t)); }
+.cpick__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.2rem, 1fr)); gap: .08rem; }
+.cpick__tile {
+  display: flex;
+  flex-direction: column;
+  gap: .04rem;
+  padding: .1rem .12rem;
+  font: inherit;
+  font-size: calc(.14 * var(--t));
+  text-align: left;
+  color: var(--text-md);
+  background: rgba(0, 0, 0, .28);
+  border: 1px solid var(--line-2);
+}
+.cpick__tile:hover:not(:disabled), .cpick__tile:focus-visible { border-color: rgba(120, 196, 255, .6); }
+.cpick__tile.is-on { color: var(--text-hi); background: rgba(23, 249, 183, .08); border-color: var(--mint-600); }
+.cpick__tile.is-blocked { opacity: .55; }
+/* read-only (everybody but the host): the host's picks stay legible, disabled but not dimmed like an unavailable one */
+.cpick__tile.is-ro.is-blocked { opacity: 1; }
+.cpick__name { display: flex; align-items: baseline; gap: .06rem; font-size: calc(.16 * var(--t)); font-weight: 800; }
+.cpick__pts { margin-left: auto; color: #9fd3ff; }
+.cpick__desc { color: var(--text-lo); font-size: calc(.13 * var(--t)); line-height: 1.5; overflow-wrap: anywhere; }
+.cpick__hint { color: var(--text-dim); font-size: calc(.12 * var(--t)); line-height: 1.4; overflow-wrap: anywhere; }
+.cpick__hint--warn { color: #ffb066; }
+/* a short window: the picker's list takes what the screen leaves (§35.18's rule for the other dialogs) */
+@media (max-height: 520px) {
+  .cpick__sets { max-height: 60svh; }
+}
+
 /* ---- 名片干员 picker (PR #643 split 6) --------------------------------------------------------------------------- */
 .cardpick .modal__body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: .12rem; overflow: hidden; }
 .cardpick__bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: .12rem; }
@@ -741,7 +832,7 @@
   .rs-brief ul { font-size: min(calc(.16 * var(--t)), calc(13px + var(--t-step))); line-height: calc(1.35em - max(0px, var(--t-step))); }
   /* the difficulty's name in its 40 px pill and the key's 复制 in its 26 px button: capped so the line stays inside (a
      pixel more a step above 中). [ASSUMED] the caps */
-  .rs-pill__diff, .rs-pill__ver { font-size: min(calc(.28 * var(--t)), calc(20px + var(--t-step))); }
+  .rs-pill__diff, .rs-pill__ver, .rs-pill__ctr { font-size: min(calc(.28 * var(--t)), calc(20px + var(--t-step))); }
   .rs-key__code { font-size: calc(.36 * var(--t)); }
   .rs-key__copy { font-size: min(calc(.26 * var(--t)), calc(18px + var(--t-step))); }
   /* English 「Copy」's descenders came within 0.1 px of the button's bottom at 特大 (its cap top 7.4 px below the top): set

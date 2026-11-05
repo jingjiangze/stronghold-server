@@ -31,14 +31,11 @@
 //   boss_2/9 假想敌：铳      unblockable; highest-DEF target in range; erosion; ASPD ramp (+80 × 5) on the same target
 //                            (floor 20); 最终之罚 charge at the highest-DEF ground unit (disabled by the h07_02 override).
 //                            boss_9: damage ×0.2 while springs live, 盲信之誓 links (100 phys/s on the lines), 末日布道 dash.
-//   碎铳之簧 a/b/c           arts barrier (a held barrier in the ordered injury chain: absorbs arts after RES; NORMAL phys
-//                            ×0.1 and a 无来源 phys ADDITION counter on its attacker, erosion only when the counter lands) /
-//                            element shield (phys+arts ×0.1, broken by its own element burst; every (spCost+1)-th attack a
-//                            bouncing erosion shot) / 5-hit count shield (every (spCost+1)-th attack a ten-hit combo); always
-//                            unblockable (PRTS 能力修正: also without the shield); shield back 25 s after breaking. It passes
-//                            on as 无来源 HP loss to the highest-hatred 铳 (PART_TRANSFER) and, split, the other springs: the
-//                            arts variant every applied modifier — damage, heals, element (actrpa_passive ON_APPLIED_MODIFIER)
-//                            —, the others the damage they take at their injury stage (§35.34).
+//   碎铳之簧 a/b/c           arts barrier (absorbs arts after RES; phys ×0.1, counter phys + erosion) / element shield
+//                            (phys+arts ×0.1, broken by its own element burst; every (spCost+1)-th attack a bouncing erosion
+//                            shot) / 5-hit shield (every (spCost+1)-th attack a ten-hit combo); unblockable while shielded;
+//                            shield back 25 s after breaking; every damage taken costs 铳 as much (PART_TRANSFER, 无来源)
+//                            and, split, the other springs.
 //   boss_3/10 假想敌：管     summons 余音 (dark) every 40 s (20 s < 50 %); normal attacks strike dark 余音 (their pulse hurts
 //                            operators); 裂管之奏 3 strikes on every dark 余音 (AoE arts + apoptosis). boss_10 + 假想敌：弦
 //                            (invulnerable, gold 余音, 断弦之奏 AoE + flips them dark; leaves with 管).
@@ -70,17 +67,21 @@
 // fx kinds: 'beam' 'shell' 'explode' 'telegraph' 'charge' 'link' 'dash' 'column' 'tide' 'rockfall' 'tentacle' 'equip'
 //   'sword' 'vest' 'blink' 'summon' 'grow' 'phase' 'lpLoss' (x, y + extra {id, r, tiles, kind, tx, ty …}).
 
+import { launchBlackSnakeRow } from './bosses/blacksnake-projectiles.js';
+import {installNativeBossEscorts} from './bosses/periodic-escorts.js';
+import {patriotKit} from './bosses/patriot.js';
+import {pursuerKit} from './bosses/pursuer.js';
+import {touchKit,touchPollutKit} from './bosses/touch.js';
+import {suiShellKit,suiSecondKit,suiBodyKit,suiMissileKit} from './bosses/sui.js';
+import { BLACKSNAKE_TUNING, blackSnakeBlinkTarget, cancelBlackSnakeNormalWave, blackSnakeFireRows, blackSnakeFireSides, blackSnakeLeader, blackSnakeTargets, installBlackSnakePatrol, summonBlackSnakeAdds } from './bosses/blacksnake-tactics.js';
 import { MOVE_SCALE, MAX_ALIVE_ENEMIES } from '../constants.js';
+import { hypot, powi } from '../detmath.js';
+
 import { aggroCmp, areaSelectable } from '../targeting.js';
 import { compileRoute } from '../ai.js';
 import { normalizeRoute } from '../simdata.js';
-import {
-  ensureInstalled, abOf, attach, T, elem, hurt, targetsNear, allTargets, byPriority, areaAllies, areaAlliesInTiles, fieldAllies,
-  remainingRoute, stayRoute, stepToward, setHits, hitCount, lpLoss, blinkForward, canCast, unbalancedNow, nthOf,
-  castSlot, attackTurnSkill,
-} from './enemies.js';
-import { hypot, powi } from '../detmath.js';
-import { damageAttackType, isHpLoss } from '../attack.js';
+import { ensureInstalled, abOf, attach, T, elem, hurt, targetsNear, allTargets, byPriority, areaAllies, areaAlliesInTiles, fieldAllies, remainingRoute, stayRoute, stepToward, setHits, hitCount, lpLoss, blinkForward, canCast, unbalancedNow, absorbArts, nthOf, setForm, castSlot } from './enemies.js';
+
 
 // ---------------------------------------------------------------------------------------------------------------
 // constants
@@ -88,14 +89,13 @@ import { damageAttackType, isHpLoss } from '../attack.js';
 /**
  * Share of the damage a 剑/锤 or a 碎铳之簧 takes that its leader loses: 1, 等量 — PRTS talents (“斩胄之剑” / “破胄之锤”
  * "受到伤害时令假想敌：胄受到等量的无来源生命流失"; 碎铳之簧 (all three) "…令全场范围内仇恨值最高的1名假想敌：铳受到等量的无来源
- * 生命流失"; the arts variant's "被施加调整值后（调整值包括伤害、治疗、元素损伤等）"); the enemy data carries no ratio blackboard
- * (the handbook's "以一定比例" is that 1). The loss is 无来源 (hooks see
+ * 生命流失"); the enemy data carries no ratio blackboard (the handbook's "以一定比例" is that 1). The loss is 无来源 (hooks see
  * no source; the attacker keeps the credit — stats, the per-player pool tally) and follows EVERY damage taken: a
  * 剑/锤 only takes damage outside its invulnerable 初始模式 (its 出击模式 dive and 【瘫痪】). The two official texts
  * disagree on the dive: the PRTS talent says "受到伤害时" (any damage), the in-game handbook (data/enemies.json abilities,
  * PRTS 能力) "被击落时受到伤害以一定比例传递" (only once shot down) — the dive hits passing on is [ASSUMED] (the talent
- * text; ≤ 15 hits per dive). A loss passed on to a leader is one hit for 限伤 (sim/attack/health.js leaderHitCancelled, via
- * Battle.dealHPLose). v2.5: 0.5 [ASSUMED], and a 剑/锤 passed damage on only while grounded (DESIGN §20.10, §20.13).
+ * text; ≤ 15 hits per dive). A loss passed on to a leader is one hit for 限伤 (sim/damage.js leaderHitCancelled, via
+ * Battle.loseHp). v2.5: 0.5 [ASSUMED], and a 剑/锤 passed damage on only while grounded (DESIGN §20.10, §20.13).
  */
 export const PART_TRANSFER = 1;
 /** The 斩胄之剑 / 破胄之锤 share — the same PRTS 等量 as PART_TRANSFER (kept as a name for the blade kit and its tests). */
@@ -160,31 +160,6 @@ export const SELF_BOUND = Object.freeze([
 const ENEMY_SP_PER_SEC = 1, ANIMATE_DELAY = 2;
 const EQUIP_KEYS = Object.freeze(['enemy_10028_vtswd', 'enemy_10029_vtshld', 'enemy_10030_vtwand']);
 const SHELL_KEY = 'enemy_9016_acstmr', ECHO_KEY = 'enemy_9023_acdums', PHANTOM_KEY = 'enemy_2017_csphts';
-/**
- * The attack-class skills of the leaders and parts other than 昆图斯 (QUINTUS_CLIP): enemy key → skill prefabKey → the
- * length in s of the clip its official ability plays (prefab ability `_animKey`: fx/index.json units.<key>.skills.
- * <prefabKey>.abilities[].animKey → data/assets.json enemies.<key>.spine.animations), or 0 when the ability names no
- * clip. Each one is cast in place of a normal attack (`atk`, enemies.js attackTurnSkill — PRTS's skill rules,
- * 「大多数技能自动触发会占用攻击间隔」) and its cooldown counts from its clip's end (「同一技能的冷却时间于该技能结束时开始
- * 计时」). The class of each official ability: 卢西恩 / 不祥幻影 `aoe` MeleeAttack (Skill_2 / Skill), 胄 `1` (灭顶之灾)
- * RangedAttack Skill_1, 管 `1` (裂管之奏) MultiRangedAttack Skill, 弦 `1` (断弦之奏) RangedAttack Skill, 阿利斯泰尔 `equip` /
- * `equipA` (王权号令) RangedAttack Skill_1 and `Suicide` (斥退) MeleeAttack Skill_3, “萨米的意志” `Lasso` (自然涌动)
- * RangedAttack with no `_animKey` [ASSUMED: no clip, cooldown from the cast — its clips Skill_01_Begin / _Loop / _End
- * are a channel whose length the prefab does not give] and `Doom` MeleeAttack Skill_02 (DESIGN §35.29).
- */
-export const ATTACK_SKILL_CLIP = Object.freeze({
-  enemy_2016_csphtm: { aoe: 1.8 },
-  enemy_2017_csphts: { aoe: 1.8 },
-  enemy_9013_acstmk: { 1: 2.333 },
-  enemy_9013_acstmk_2: { 1: 2.333 },
-  enemy_9021_acduml: { 1: 4.167 },
-  enemy_9021_acduml_2: { 1: 4.167 },
-  enemy_9022_acdumm: { 1: 3.333 },
-  enemy_9032_aclionk: { equip: 3.667, equipA: 3.667, Suicide: 5.667 },
-  enemy_9033_acdeer: { Lasso: 0, Doom: 2.667 },
-});
-/** The `atk` / `clip` fields of attack-class skill `prefabKey` of enemy `e` (ATTACK_SKILL_CLIP). */
-const atkSkill = (e, prefabKey) => ({ atk: true, clip: ATTACK_SKILL_CLIP[e.defId]?.[prefabKey] ?? 0 });
 
 // ---------------------------------------------------------------------------------------------------------------
 // per-battle state, template resolution
@@ -299,6 +274,7 @@ function summonMods(b, hpRatio = null) {
 
 export function install(battle) {
   ensureInstalled(battle);
+  installNativeBossEscorts(battle);
   battle.on('enemySpawn', ({ enemy }) => onSpawn(battle, enemy), { priority: 90 });
   // "最终攻势中，敌方领袖不会受到侵蚀损伤" (PRTS 卫戍协议：盟约/PRTS盟约记录 规则; research 06 §10.1): leaders ignore erosion gauge damage
   battle.on('elementHit', (c) => { if (c.target && c.target.isBoss && c.dmg.element === 'erosion') c.dmg.cancel = true; }, { priority: 100 });
@@ -332,8 +308,18 @@ function patrolLoop() {
 }
 
 function mirror(b, e, tpl) {
-  if (b.data.raw?.config?.version?.rules?.bossMirrorShare === false) return;
+  if(e.defId==='enemy_1506_patrt'||e.defId==='enemy_1520_empgrd')return;
   const st = stOf(b);
+  if (e.defId === 'enemy_1515_bsnake' && b.players.length > 1 && b.opts?.bossMirror !== false && !st.mirrored.has(e.defId)) {
+    st.mirrored.add(e.defId);
+    b.after(0, () => {
+      if (!e.alive || b.aliveEnemies().filter(o => o.defId === e.defId).length >= 2) return;
+      const x = (b.rect.c0 + b.rect.c1) / 2 + 2;
+      const u = b.spawnEnemy(e.defId, { pos: [e.y, x], tag: 'boss', mods: e.mods });
+      if (u) u.mem.mirror = true;
+    });
+    return;
+  }
   const br = tpl && tpl.branches && tpl.branches.boss_battle_multi_player;
   if (!Array.isArray(br) || !br.length || st.mirrored.has(e.defId) || (b.opts && b.opts.bossMirror === false)) return;
   if (b.players.length < 2 || e.mem.mirror) return;
@@ -435,7 +421,7 @@ function kitHelm(ab, e, b, tpl) {
       },
     },
     s1 && {
-      cd: s1.cd, icd: s1.icd, sk: s1, ...atkSkill(e, '1'), cond: (b2) => shellTargets(b2).length > 0, // in the attack's turn
+      cd: s1.cd, icd: s1.icd, sk: s1, cond: (b2) => shellTargets(b2).length > 0,
       // 【灭顶之灾】 one shell, also below 20 %: the handbook's "额外发射<刺胄之弹>" is wrong in game (PRTS 能力修正 原因 6
       // "描述与游戏实际表现不符合": "【灭顶之灾】不会额外发射") and no blackboard holds a second shell (skill 1 has none)
       fire(b2, e2) {
@@ -700,71 +686,54 @@ function kitGun(ab, e, b) {
 function kitSpring(ab, e) {
   const kind = /9018/.test(e.defId) ? 'arts' : /9019/.test(e.defId) ? 'element' : 'hits';
   const scale = T(ab, '1.damage_scale') ?? 1, regen = T(ab, '1.regenerate_duration') ?? 0;
-  const P = { up: false, downAt: null };
+  const P = { up: false, barrier: 0, hits: 0, downAt: null };
   const gun = (b) => nearestOf(b, e, (o) => isGun(o));
   const raise = (b) => {
     P.up = true;
-    // [ASSUMED] actrpc_t_1's native filterDamageType=false accepts every HP type; PRTS's detailed row says phys/arts.
-    // Prefer the pinned native flag until client evidence settles the discrepancy (research 12, S86).
-    const pool = kind === 'arts' ? { shield: e.s.maxHp * (T(ab, '1.shield_ratio') ?? 0), shieldType: 'arts' }
-      : kind === 'hits' ? { shieldHits: T(ab, '1.block_damage_max_times') ?? 0 } : {};
-    b.addBuff(e, { key: 'boss:springShield', persist: true, visible: true, keepEmptyShield: true, ...pool,
-      injury(c) {
-        if (!P.up) return;
-        if (kind === 'arts' && c.type === 'phys' && damageAttackType(c.dmg) === 'NORMAL'
-          || kind === 'element' && (c.type === 'phys' || c.type === 'arts')) c.amount *= scale;
-      },
-      observeInjury(c) {
-        if (!P.up) return;
-        if (kind === 'arts' && !(c.buff.shield > 1e-6) || kind === 'hits' && !(c.buff.shieldHits > 0)) {
-          drop(b);
-          return;
-        }
-        // actrpa_t_1: NORMAL physical filter, even after prior cancellation; child is source-less ADDITION.
-        const source = c.source;
-        if (kind !== 'arts' || c.type !== 'phys' || damageAttackType(c.dmg) !== 'NORMAL' || !source?.alive) return;
-        b.dealDamage({ source: null, credit: e, target: source, amount: e.s.atk * (T(ab, '1.atk_scale') ?? 0),
-          type: 'phys', attackType: 'ADDITION', applyWay: 'NONE', calculation: 'precomputed',
-          ignoreSelect: true, origin: c.dmg, tags: ['springCounter'], onApplied() {
-            elem(b, e, source, 'erosion', e.s.atk * (T(ab, '1.ep_damage_ratio') ?? 0), { ignoreSelect: true, tags: ['springCounter'] });
-          } });
-      },
-    });
+    if (kind === 'arts') P.barrier = e.s.maxHp * (T(ab, '1.shield_ratio') ?? 0);
+    if (kind === 'hits') P.hits = T(ab, '1.block_damage_max_times') ?? 0;
+    b.addBuff(e, { key: 'boss:springShield', persist: true, visible: true, flags: { unblockable: true } }); // 护盾生效时，自身无法被阻挡
     b.fx('phase', { x: e.x, y: e.y, id: e.id, kind: `spring_${kind}` });
   };
   const drop = (b) => { P.up = false; P.downAt = b.time; b.removeBuff(e, 'boss:springShield'); b.fx('shieldBreak', { x: e.x, y: e.y, id: e.id }); };
-  const transfer = (b, c) => {
-    if (!(c.amount > 0) || c.cancelled || isHpLoss(c.dmg) || c.dmg?.tags?.includes(SPRING_SHARE_TAG)) return;
-    const credited = c.source || c.credit;
-    const credit = credited?.side === 'ally' ? credited : null;
-    // 仇恨值最高 (PRTS): the official BossSelector's logic is not in our data, so the hatred order is the engine's targeting
-    // one (targeting.js aggroCmp: taunt, then the latest arrival) applied to the guns — [ASSUMED] for enemy guns and ties.
-    const g = b.enemies.filter(o => o.alive && isGun(o)).sort(aggroCmp)[0];
-    const amount = c.amount * PART_TRANSFER;
-    if (g) b.dealHPLose({ source: null, credit, target: g, amount, origin: c.dmg });
-    // [ASSUMED] Preserve the project's equal split to other springs; PRTS explicitly specifies only the gun.
-    const others = b.enemies.filter(o => o.alive && o !== e && isSpring(o));
-    for (const target of others) b.dealHPLose({ source: null, credit, target, amount: amount / others.length,
-      origin: c.dmg, tags: [SPRING_SHARE_TAG] });
-  };
   const sk = ab.sk['1'];
   return [
     {
-      spawn(b) {
-        // PRTS corrects the handbook: unblockable even while the shield is regenerating.
-        b.addBuff(e, { key: 'boss:springUnblockable', persist: true, flags: { unblockable: true } });
-        raise(b);
-        if (kind === 'arts') {
-          // actrpa_passive: ON_APPLIED_MODIFIER, not HP-loss bookkeeping.
-          b.on('modifierApplied', c => { if (c.target === e) transfer(b, c); }, { owner: e });
-        } else {
-          // [ASSUMED] Native templates have DEFAULT priority, but prefab initial buff order is unavailable.
-          // Install after the first defence to preserve initial sharing order; regeneration reacquires only defence.
-          b.addBuff(e, { key: 'boss:springShare', persist: true, observeInjury(c) { transfer(b, c); } });
+      spawn(b) { raise(b); },
+      hitIn(c, b, e2) {
+        if (!P.up) return;
+        const ty = c.dmg.type;
+        if (kind === 'arts') {                           // 法术屏障: absorbs arts (after RES, like a shield); phys ×0.1 + counter
+          if (ty === 'arts') {
+            P.barrier -= absorbArts(c, P.barrier);
+            if (P.barrier <= 1e-6) { P.barrier = 0; drop(b); }
+          } else if (ty === 'phys') {
+            c.dmg.mul *= scale;
+            // the counter "对来源造成…无来源物理附加伤害" picks its attacker directly — no selection, so an airborne 起飞
+            // attacker takes it too (PRTS 异常效果 无法选择: "'直接选中'的能力…不受这些仅在选择时生效的异常效果制约")
+            const s = c.source, o = { ignoreSelect: true, tags: ['springCounter'] };
+            if (s && s.side === 'ally' && s.alive) { hurt(b, e2, s, e2.s.atk * (T(ab, '1.atk_scale') ?? 0), 'phys', o); elem(b, e2, s, 'erosion', e2.s.atk * (T(ab, '1.ep_damage_ratio') ?? 0), o); }
+          }
+        } else if (kind === 'element') {                 // 元素护盾: phys/arts heavily reduced
+          if (ty === 'phys' || ty === 'arts') c.dmg.mul *= scale;
+        } else if (ty === 'phys' || ty === 'arts' || ty === 'true') { // 频次护盾: negates N hits
+          c.dmg.cancel = true;
+          if (--P.hits <= 0) drop(b);
         }
       },
-      // elementBurst dispatch already precedes cooldown/status/HP resolution (ON_BEFORE_EP_BREAK_START).
-      burst(c, b) { if (kind === 'element' && P.up) drop(b); },
+      burst(c, b) { if (kind === 'element' && P.up) drop(b); },  // 自身元素损伤爆发时，护盾消失
+      taken(c, b, e2) {
+        if (!(c.amount > 0)) return;
+        if (c.dmg.tags && c.dmg.tags.includes(SPRING_SHARE_TAG)) return;       // a share never passes on again
+        const s0 = c.source || c.credit;                                       // a 无来源 burst still passes on (credited)
+        const src = s0 && s0.side === 'ally' ? s0 : null;
+        // 【盲信之誓】 受到伤害时令假想敌：铳受到等量的无来源生命流失 (PRTS); the even split to the other springs follows the
+        // 隐秘核心 handbook ("传递给<假想敌：铳>和场上其他<“碎铳之簧”>") — not in the PRTS talent, [ASSUMED] amount
+        const g = gun(b);
+        if (g) b.loseHp(g, c.amount * PART_TRANSFER, { source: src, from: c.dmg, sourceless: true });
+        const others = b.enemies.filter((o) => o.alive && o !== e2 && isSpring(o));
+        for (const o of others) b.loseHp(o, (c.amount * PART_TRANSFER) / others.length, { source: src, from: c.dmg, tags: [SPRING_SHARE_TAG], sourceless: true });
+      },
       tick(b, e2, a, dt) {
         if (!P.up && P.downAt != null && b.time - P.downAt >= regen) raise(b);
         const d = e2.mem.ab.dash;
@@ -878,7 +847,7 @@ function kitEcho(ab, e) {
 function pipeCore(ab, e, b, tpl, { form, prefix }) {
   const hi = T(ab, `1.${prefix}_t_1[high_hp].interval`) ?? 40, lo = T(ab, `1.${prefix}_t_1[low_hp].interval`) ?? hi, thr = T(ab, '1.hp_ratio') ?? 0;
   const key = ab.tS['1.enemy_key'] ?? ECHO_KEY;
-  const P = { acc: 0, atk: Infinity, heldUntil: 0 };   // first strike as soon as an echo of its form exists (engine attack rule)
+  const P = { acc: 0, atk: Infinity };   // first strike as soon as an echo of its form exists (engine attack rule)
   const summon = (b2, e2) => {
     const got = branchSpawn(b2, tpl, 'summon_enemy', 0, { mods: summonMods(b2), at: { x: e2.x, y: e2.y }, fallback: () => [b2.spawnEnemy(key, { pos: [e2.y, e2.x], route: toGoal(b2, e2.x, e2.y), mods: summonMods(b2) })].filter(Boolean) });
     for (const u of got) if (u.defId === ECHO_KEY && form === 'gold') setEchoForm(b2, u, 'gold');
@@ -891,16 +860,10 @@ function pipeCore(ab, e, b, tpl, { form, prefix }) {
       if (P.acc >= (e2.hpRatio < thr ? lo : hi)) { P.acc = 0; summon(b2, e2); }
       if (!canCast(e2, false, b2)) return;
       P.atk += dt;
-      if (P.atk < e2.s.interval || b2.time < P.heldUntil) return;
+      if (P.atk < e2.s.interval) return;
       const t = b2.rng.pick(echoesOf(b2, form));                 // 优先攻击…形态余音
       if (!t) return;
       P.atk = 0;
-      const cast = attackTurnSkill(b2, e2);                       // 裂管之奏 / 断弦之奏 take this attack's turn (DESIGN §35.29)
-      if (cast) {
-        // [ASSUMED] a longer clip holds this custom attack loop too (管: 4.167 s clip, 3 s interval; DESIGN §35.54).
-        P.heldUntil = b2.time + (cast.clip || 0);
-        return;
-      }
       e2.lastAttackAt = b2.time;
       e2.stats.attacks++;
       b2.fx('beam', { x: e2.x, y: e2.y, from: e2.id, to: t.id, kind: `${prefix}Strike` });
@@ -917,7 +880,7 @@ function kitPipe(ab, e, b, tpl) {
       death(c, b2) { for (const o of b2.aliveEnemies()) if (o.defId === 'enemy_9022_acdumm') b2.kill(o, null); }, // 弦 leaves with 管
     },
     s && {
-      cd: s.cd, icd: s.icd, sk: s, ...atkSkill(e, '1'), cond: (b2) => echoesOf(b2, 'dark').length > 0,
+      cd: s.cd, icd: s.icd, sk: s, cond: (b2) => echoesOf(b2, 'dark').length > 0,
       fire(b2, e2) { // 【裂管之奏】 three strikes on every dark echo
         const r = s.bb.range_radius ?? 0, ep = s.bb.ep_damage_ratio ?? 0;
         for (const echo of echoesOf(b2, 'dark')) for (let k = 0; k < 3; k++) b2.after(k * PIPE_STRIKE_GAP, () => {
@@ -937,7 +900,7 @@ function kitString(ab, e, b, tpl) {
     pipeCore(ab, e, b, tpl, { form: 'gold', prefix: 'acdumm' }),
     { spawn(b2, e2) { b2.addBuff(e2, { key: 'boss:eternal', persist: true, flags: { invulnerable: true, untargetable: true } }); } }, // 永久无敌
     s && {
-      cd: s.cd, icd: s.icd, sk: s, ...atkSkill(e, '1'), cond: (b2) => echoesOf(b2, 'gold').length > 0,
+      cd: s.cd, icd: s.icd, sk: s, cond: (b2) => echoesOf(b2, 'gold').length > 0,
       fire(b2, e2) { // 【断弦之奏】 AoE on every gold echo, which then turns dark
         const r = s.bb.range_radius ?? 0, ep = s.bb.ep_damage_ratio ?? 0;
         for (const echo of echoesOf(b2, 'gold')) {
@@ -958,30 +921,11 @@ function kitQuintus(ab, e, b, tpl) {
   const stageSkills = [['Tidewater', 'Rockfall', 'SummonTentac'], ['TidewaterG1', 'RockfallG1', 'SummonTentacG1'], ['TidewaterG2', 'RockfallG2', 'SummonTentacG2', 'Doom']];
   const skills = [];
   const atkRatio = T(ab, 'epdamage.attack@ep_damage_ratio') ?? 0;
-  // 【大潮】 / 【崩坍】 are attack-class (prefab ability MeleeAttack like the Attack; PRTS 「触发索敌和普通攻击相同」): they take the
-  // attack's turn (enemies.js attackSlotSkill; PRTS 「大多数技能自动触发会占用攻击间隔」), equal priorities at random. Every
-  // skill's cooldown counts from the end of its clip (QUINTUS_CLIP; PRTS 「同一技能的冷却时间于该技能结束时开始计时」): the
-  // third-form tide (3.5 + 1.667 s) alternates with the attack instead of coming on top of it every 3.5 s (DESIGN §35.19).
-  // 断裂生殖 / 物种爆发 (AnimatedActionToOwnerAbility) take the attack's turn too — PRTS's default (most skills; no
-  // exception noted for them) and arknights.wiki.gg's one action ("attacking once or using another ability") between two
-  // tides —, with a trigger of their own (`own`: the abilities' `_allowNoTarget` 1), so they also come with the attack
-  // ready and nothing in range (enemies.js onTick; DESIGN §35.55; until then on their own timers). 断裂生殖 「仅仍有未执行的小队动作指令时
-  // 可触发」: its level branch (blackboard branch_id; prefab MoveNextLevelBranch, not looping) is shared by the three forms
-  // and used up after its last phase (7 in act1autochess_h07_04 / _s); a template without the branch keeps the
-  // random-target fallback with no limit.
-  const tentLeft = (s) => {
-    const br = tpl && tpl.branches && tpl.branches[s.bs.branch_id ?? 'dslily_dstnta'];
-    return Array.isArray(br) && br.length ? br.length : Infinity;
-  };
   const mk = (name, stage) => {
     const s = ab.sk[name];
     if (!s) return null;
     const kind = name.replace(/G\d$/, '');
-    const phases = kind === 'SummonTentac' ? tentLeft(s) : Infinity;
-    const a = {
-      cd: s.cd, icd: s.icd, sk: s, stage, atk: true, own: !QUINTUS_ATTACK_SKILLS.has(kind), clip: QUINTUS_CLIP[kind] ?? 0,
-      cond: () => P.stage === stage && P.tent < phases, fire: (b2, e2) => QUINTUS[kind](b2, e2, s, P, tpl),
-    };
+    const a = { cd: s.cd, icd: s.icd, sk: s, stage, cond: () => P.stage === stage, fire: (b2, e2) => QUINTUS[kind](b2, e2, s, P, tpl) };
     skills.push(a);
     return a;
   };
@@ -1001,9 +945,6 @@ function kitQuintus(ab, e, b, tpl) {
   }];
   const grow = (b2, e2, n) => {
     P.stage = n; P.stageAt = b2.time;
-    // one form's bonus at a time (the key is shared): the official AtkUp1 / AtkUp2 are mode-scoped talents (G1 / G2),
-    // so the third form is +70 %, not 40 + 70 (arknights.wiki.gg's +110 %, unsourced) [ASSUMED: inferred from where the
-    // talents sit; footage of the third-form panel ATK at base × 2.1 would make it one key per form; DESIGN §35.19]
     b2.addBuff(e2, { key: 'boss:grow', persist: true, visible: true, mods: { atkPct: T(ab, `atkup${n}.atk`) ?? 0 } });
     for (const a of skills) if (a.stage === n) a.left = a.icd;   // the new form's skills start from their initial cooldown
     b2.fx('grow', { x: e2.x, y: e2.y, id: e2.id, stage: n });
@@ -1011,21 +952,6 @@ function kitQuintus(ab, e, b, tpl) {
   stageSkills.forEach((names, i) => names.forEach((n) => list.push(mk(n, i))));
   return list;
 }
-
-/** 昆图斯's skills whose trigger is the attack's (「触发索敌和普通攻击相同」: MeleeAttack); 断裂生殖 / 物种爆发 trigger on their own. */
-const QUINTUS_ATTACK_SKILLS = new Set(['Tidewater', 'Rockfall']);
-/**
- * The clip of each 昆图斯 skill, in s: its official ability's animKey (prefab battle/enm_pfb_18.ab — fx/index.json units.
- * enemy_1521_dslily.skills: tidewater* Skill_02, rockfall* Skill_01, summontentac* Skill_03, doom Skill_04; not
- * looping, `_maxAnimScale` 1.0: never faster) → that clip's length in the model (data/assets.json
- * enemies.enemy_1521_dslily.spine.animations). The skill's cooldown counts from the clip's end (enemies.js castNow).
- * [ASSUMED] the length holds under an attack-speed cut too, as the engine's normal attack clip does (ai.js clipSpeed);
- * the skills' abilities share the timing fields of 昆图斯's own Attack (`_timeMode` 0, `_maxAnimScale` 1.0), but their
- * `_affectedBySlowDown` 1 allows a slower clip. So the third-form tide is ready 3.5 + 1.667 = 5.167 s after its cast
- * whatever the slow: an attack interval past that (寒冷's −30 gives 5.0 s; 寒冷 plus any further cut crosses it) makes
- * every turn a tide, with no normal attack (DESIGN §35.19, CHANGELOG 0.3.2).
- */
-export const QUINTUS_CLIP = Object.freeze({ Tidewater: 1.667, Rockfall: 3, SummonTentac: 2, Doom: 4.467 });
 
 const QUINTUS = {
   Tidewater(b, e, s) { // 【大潮】 "对场上所有我方单位…": every operator it can select (fieldAllies): arts + neural
@@ -1082,10 +1008,8 @@ function lucienCore(ab, e) {
     s && {
       // cast with a target in the radius (PRTS 技能 "需要目标"; 不祥幻影 "仅在半径2范围内存在我方单位时触发"): the trigger
       // selection (targetsNear — PRTS 选择器 "所有触发选择器通常不无视迷彩"): an airborne (起飞) operator evades a ground
-      // leader (对地规避 — counting her spent the skill on nobody, §21.22), nor does an unblocking 隐匿 or 迷彩 one count.
-      // In the attack's turn: a swing's (blocked) or, with that selector of its own (`own`), the ready attack of an
-      // unblocked one (enemies.js onTick; DESIGN §35.29)
-      cd: s.cd, icd: s.icd, sk: s, ...atkSkill(e, 'aoe'), own: true, cond: (b) => targetsNear(b, e, LUCIEN_AOE_RADIUS).length > 0,
+      // leader (对地规避 — counting her spent the skill on nobody, §21.22), nor does an unblocking 隐匿 or 迷彩 one count
+      cd: s.cd, icd: s.icd, sk: s, cond: (b) => targetsNear(b, e, LUCIEN_AOE_RADIUS).length > 0,
       fire(b, e2) {
         // "该技能伤害无视迷彩": an area selection (areaAllies) — a 迷彩 operator is hit, an unblocking 隐匿 one not
         b.fx('explode', { x: e2.x, y: e2.y, r: LUCIEN_AOE_RADIUS, kind: 'crimsonAoe' });
@@ -1125,7 +1049,7 @@ function kitLion(ab, e, b) {
     const sk = P.adv && eqA ? eqA : eq;
     const t = b2.rng.pick(targetsNear(b2, e2, range()));
     if (!t) return false;
-    castSlot(b2, e2, sk, ATTACK_SKILL_CLIP[e2.defId]?.equip ?? 0);   // 【王权号令】: equip / equipA, an attack-turn clip (§35.57)
+    castSlot(b2, e2, sk);   // 【王权号令】: equip / equipA (display only)
     const r0 = t.tileR, c0 = t.tileC;
     const tiles = [[r0, c0], [r0 + 1, c0], [r0 - 1, c0], [r0, c0 + 1], [r0, c0 - 1]];
     b2.fx('telegraph', { x: c0, y: r0, r: 1, kind: 'royalDecree', tiles: 'plus', id: e2.id });
@@ -1170,6 +1094,7 @@ function kitLion(ab, e, b) {
         }
         if (!canCast(e2, false, b2)) return;
         P.sp += dt * ENEMY_SP_PER_SEC;
+        if (P.sp >= cost && decree(b2, e2)) P.sp = 0;
         // 【莫非王土】: ANIMATE_DELAY s after equipment first lies on the field, then once per 王权号令 cycle
         const has = equipment(b2).length > 0;
         if (!has) { P.nextAnim = null; return; }
@@ -1183,15 +1108,8 @@ function kitLion(ab, e, b) {
       hitOut(c, b2, e2) { if (P.wand && c.dmg.isAttack) c.dmg.type = 'arts'; },
       dealt(c, b2, e2) { if (!P.wand) return; P.wand = false; if (disarm > 0) b2.applyStatus(c.target, 'disarm', { duration: disarm, source: e2 }); },
     },
-    // 【王权号令】 (equip / equipA, RangedAttack, priority 1): with its SP full, cast in the attack's turn (DESIGN §35.29;
-    // until 0.3.2 at once, on top of the attacks); the SP restarts at the cast
-    eq && {
-      cd: 0, icd: 0, pr: eq.pr ?? 0, atk: true, clip: ATTACK_SKILL_CLIP[e.defId]?.equip ?? 0,
-      cond: (b2, e2) => P.sp >= cost && targetsNear(b2, e2, range()).length > 0,
-      fire(b2, e2) { if (decree(b2, e2)) P.sp = 0; },
-    },
     su && {
-      cd: su.cd, icd: su.icd, sk: su, ...atkSkill(e, 'Suicide'),
+      cd: su.cd, icd: su.icd, sk: su,
       fire(b2, e2) { // 【斥退】 "对场上所有我方单位…": every operator it can select (fieldAllies)
         b2.fx('telegraph', { x: e2.x, y: e2.y, r: 99, kind: 'repel', id: e2.id });
         for (const u of fieldAllies(b2, e2)) hurt(b2, e2, u, e2.s.atk * (su.bb.atk_scale ?? 0), 'arts');
@@ -1212,7 +1130,7 @@ function kitDeer(ab, e) {
   const dr = T(ab, 'Madness.damage_resistance') ?? 0;
   const atkN = T(ab, 'Madness.enemy_smdeer_mad[attack].max_cnt') ?? 1, skN = T(ab, 'Madness.enemy_smdeer_mad[skill].max_target') ?? 1;
   const lasso = ab.sk.Lasso, doom = ab.sk.Doom;
-  const P = { low: false, acc: Infinity, heldUntil: 0 };   // like engine attacks, the first 冰凌 comes as soon as it has a target
+  const P = { low: false, acc: Infinity };   // like engine attacks, the first 冰凌 comes as soon as it has a target
   return [
     {
       spawn(b, e2) { e2.profile.noAttack = true; },
@@ -1224,16 +1142,10 @@ function kitDeer(ab, e) {
         }
         if (!canCast(e2, false, b)) return;
         P.acc += dt;
-        if (P.acc < e2.s.interval || b.time < P.heldUntil) return;
+        if (P.acc < e2.s.interval) return;
         const cands = fairOrder(b, e2, allTargets(b, e2), P);
         if (!cands.length) return;
         P.acc = 0;
-        const cast = attackTurnSkill(b, e2);                        // 自然涌动 / Doom take this attack's turn (DESIGN §35.29)
-        if (cast) {
-          // [ASSUMED] no 冰凌 inside its skill clip even with a shortened interval (DESIGN §35.54).
-          P.heldUntil = b.time + (cast.clip || 0);
-          return;
-        }
         const cols = [];
         for (const t of cands) { if (!cols.includes(t.tileC)) cols.push(t.tileC); if (cols.length >= (P.low ? atkN : 1)) break; }
         for (const c of cols) { // 【冰凌】 its normal attack: the whole column (an area selection: no unblocking 隐匿 operator)
@@ -1246,7 +1158,7 @@ function kitDeer(ab, e) {
       },
     },
     lasso && {
-      cd: lasso.cd, icd: lasso.icd, sk: lasso, ...atkSkill(e, 'Lasso'), cond: (b) => allTargets(b, e).length > 0,
+      cd: lasso.cd, icd: lasso.icd, sk: lasso, cond: (b) => allTargets(b, e).length > 0,
       fire(b, e2) { // 【自然涌动】 stun + arts per second
         const n = P.low ? skN : (lasso.bb.max_target ?? 1);
         const dur = lasso.bb.projectile_life_time ?? 0;
@@ -1259,7 +1171,7 @@ function kitDeer(ab, e) {
       },
     },
     doom && {
-      cd: doom.cd, icd: doom.icd, sk: doom, ...atkSkill(e, 'Doom'),
+      cd: doom.cd, icd: doom.icd, sk: doom,
       fire(b, e2) {
         b.fx('telegraph', { x: e2.x, y: e2.y, r: 99, kind: 'samiDoom', id: e2.id });
         for (const u of fieldAllies(b, e2)) hurt(b, e2, u, e2.s.atk * (doom.bb.atk_scale ?? 0), 'arts');
@@ -1271,7 +1183,464 @@ function kitDeer(ab, e) {
 
 // ---------------------------------------------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------------------------------------------
+// “不死的黑蛇” (boss_11 — the 黑蛇 enemy MOD, tools/local-extract/build-blacksnake-mod.mjs)
+//
+// The mod's one leader (enemy_1515_bsnake). She is a STORY boss (`hideInStage: true`, fought in H8-4 / JT8-3 / TN-4), so
+// the 卫戍协议 season ships no skill blackboards for her: the panel is the handbook's level-0 line (生命 50000 / 攻击 770
+// / 防御 800 / 法抗 50 / 攻击间隔 4.5s / 移动速度 0.5 / 攻击半径 2.0 / 重量 6, 免疫 沉默/眩晕/沉睡/冻结/浮空) and every number below
+// is a DESIGN VALUE lifted from the handbook's ability text or the PRTS skill table ([ASSUMED]). They are named
+// constants here — the ONE place to tune the fight.
+//
+// HER KIT, in the original's order:
+//   * 普攻      true damage + 30.5 s of 【烈焚灼息】 on the target (the handbook: "攻击造成真实伤害并对目标施加【烈焚灼息】").
+//   * 点燃      CD 19 s (PRTS 19.0/19.0): 2 allies WITHOUT 烈焚灼息 are marked for 30.5 s.
+//   * 引爆      CD 35 s (PRTS 35.0/35.0): every marked ally takes 100 %-ATK arts, its mark ends, and a 100 %-ATK arts
+//               splash hits the ally's own 4 neighbours, marking THEM 30.5 s (the target itself is left unmarked — the
+//               handbook: "对其与周围四格造成法术伤害且对溅射目标施加【烈焚灼息】(不含目标自身)").
+//   * 烈焚灼息  the debuff: TRUE damage each second, ramping LINEARLY 20 → 200 over 30 s (PRTS talent: "初始伤害量为50/s，在
+//               30s内线性提升至230/s"), never stacking (re-application refreshes, PRTS: "重复施加时刷新持续时间，不可叠加"),
+//               resistible (the status carries no 抵抗 itself — 抵抗 shortens it like any status). An ally carrying it deals
+//               30 % LESS damage to her (PRTS: "附带【烈焚灼息】的单位对自身造成的伤害降低至50%").
+//   * 不息恶火  the death phase: invulnerable, immovable, unblockable, inert; every 2 s one fireball sweeps in from the
+//               left of each row (10 waves), each hitting the first ally it meets for 100 %-ATK arts (PRTS 释放【不息恶火】).
+//   * Two knock-outs (the handbook's 每次被击败时释放当前波次): the FIRST revives her at 100 % after 5 s and enters 狂暴
+//               (生命上限 +50 %, 攻击力 +50 %, PRTS 重生/狂暴) — 不息恶火 fires as it begins; the SECOND does NOT revive:
+//               5 s of 不息恶火 and she leaves the field (免杀 — a scripted exit, not a kill credit).
+//
+// Two players alternate targets (fairOrder) like every other leader; she is 不可阻挡 — a persistent buff her kit adds at
+// spawn — and she WALKS: the mod's wave template gives her a patrol (docs/MOD-BLACKSNAKE.md §她的路线), which she circles
+// for the whole round. Between swings she walks; she stands only for her own attack clip (ai.js attackStand), so the
+// fight reads as 卢西恩's — one attack, then a walk — instead of a turret. (Her earlier 自缚/noMove is gone: it froze
+// her on every field, which was the 「黑蛇无法行走」 report. See SELF_BOUND above.) The 能量聚合体 summon of the 狂暴 form
+// uses a runtime inline enemy record because the season ships no autochess data row for Energy Crystal; the mod
+// supplies its PRTS 6000 HP / 200 DEF / 20 RES profile and 25 s cardinal burst. Owner 2026-10-19 values are in BLACKSNAKE_TUNING.
+
+/** 黑蛇 constants — the design values of the fight, in one place ([ASSUMED]; see the block above). */
+const BS = Object.freeze({
+  // Source animation seconds follow the selected battle speed (1x / 2x).
+  visualRate: 1,
+  /** 攻击半径 (handbook 攻击半径 2.0) — the reach of 点燃 / 引爆's targeting. */
+  reach: 2.0,
+  /** 烈焚灼息: duration (PRTS 30.5 s), the DoT ramp (20 → 200 over 30 s, PRTS 天赋) and the ally's damage cut on the caster. */
+  burnDur: 30.5, burnFrom: BLACKSNAKE_TUNING.burnFrom, burnTo: BLACKSNAKE_TUNING.burnTo, burnRamp: 30,
+  /** The caster takes this share of an attacker's damage while that attacker carries 烈焚灼息 (PRTS "降低至50%"). */
+  burnAtkCut: BLACKSNAKE_TUNING.burnAtkCut,
+  /** 点燃: CD / INIT (PRTS 19.0) and the number of unmarked allies it marks (handbook "至多2名"). */
+  igniteCd: BLACKSNAKE_TUNING.igniteCd, igniteInit: BLACKSNAKE_TUNING.igniteCd, igniteTargets: 2,
+  /** 引爆: CD / INIT (PRTS 35.0) and its damage scale on the main target (handbook "100%法术普通伤害"). */
+  detonateCd: 35, detonateInit: 35, detonateScale: 1.0, detonateSplashScale: 1.0,
+  /** 重生 (PRTS: 首次被击败 5 s 重生 100 % 生命) and 狂暴 (PRTS: 生命上限 / 攻击力 +50 %). */
+  reviveDur: 5, reviveHp: 1.0, rageHpPct: 0, rageAtkPct: BLACKSNAKE_TUNING.rageAtk / BLACKSNAKE_TUNING.atk - 1,
+  /** Unceasing Evil Fire: 10 row-wide shots every 2 s; first fire returns to rage at 28 s with 15 s invulnerability,
+   * second fire ends the fight at 28 s. The second defeat waits 5 s before its fire; crystals fuse after 25 s. */
+  fireGap: 2, fireWaves: 10, fireExit: 28, crystalFuse: 25, crystalHp: BLACKSNAKE_TUNING.crystalHp,
+  // Test-exclusive additions keyed to the supplied video: cross-shaped heavy
+  // slash and a staged, field-wide meteor barrage while she is still active.
+  heavyInit: 8, heavyCd: BLACKSNAKE_TUNING.heavyCd, heavyWindup: 1.1,
+  barrageInit: 17, barrageCd: BLACKSNAKE_TUNING.barrageCd, barrageColumns: 5, barrageGap: 0.85,
+});
+
+/** Throw 烈焚灼息 on an ally for `dur` s, refreshing (never stacking). The DoT ticks every second with the ramp. */
+function applyBurn(b, src, u, dur = BS.burnDur) {
+  if (!u || !u.alive) return;
+  b.addBuff(u, {
+    key: 'boss:bsBurn', duration: dur, refresh: 'extend', visible: true, source: src,
+    data: { t0: b.time },
+    interval: 1,
+    onTick: ({ battle, unit, buff }) => {
+      const elapsed = Math.min(BS.burnRamp, Math.max(0, battle.time - (buff.data.t0 ?? battle.time)));
+      const dmg = BS.burnFrom + (BS.burnTo - BS.burnFrom) * (elapsed / BS.burnRamp);
+      // 真实伤害 (handbook "每秒造成真实伤害") — sourceless: it keeps ticking even while she is in a phase of 不息恶火.
+      battle.dealDamage(src && src.alive ? src : null, unit, { amount: dmg, type: 'true', canDodge: false, ignoreSelect: true, tags: ['enemyAbility', 'bsBurn'] });
+    },
+  });
+}
+
+/** Whether an ally now carries 烈焚灼息. */
+const hasBurn = (u) => !!(u && u.findBuff && u.findBuff('boss:bsBurn'));
+
+/** 【引爆】's one ally: 100 % arts, its mark ends, a splash marks the 4 neighbours (the target itself is NOT re-marked). */
+function detonate(b, e, u) {
+  b.fx('explode', { x: u.x, y: u.y, id: u.id, r: 1.5, kind: 'bsDetonate', tiles: 'plus' });
+  hurt(b, e, u, e.s.atk * BS.detonateScale, 'arts', { ignoreSelect: true, tags: ['bsDetonate'] });
+  b.removeBuff(u, 'boss:bsBurn');
+  for (const v of areaAlliesInTiles(b, e, u.tileR, u.tileC, 'plus', 1)) {
+    if (v === u) continue;
+    hurt(b, e, v, e.s.atk * BS.detonateSplashScale, 'arts', { ignoreSelect: true, tags: ['bsDetonate'] });
+    applyBurn(b, e, v);
+  }
+}
+
+/** PRTS energy crystal: a stationary 6500-HP summon that bursts after 25 s in four cardinal directions. */
+function spawnBlackSnakeCrystal(b, e, pos) {
+  const crystal = b.spawnEnemy('enemy_blacksnake_energy_crystal', {
+    pos, tag: 'part', countInTotal: false,
+    def: {
+      name: '能量聚合体', rank: 'ELITE', notCountInTotal: true, staticBody: true, applyWay: 'NONE',
+      stats: { maxHp: BS.crystalHp, atk: 0, def: BLACKSNAKE_TUNING.crystalDef, res: BLACKSNAKE_TUNING.crystalRes, moveSpeed: 0, bat: 2, aspd: 100, rangeRadius: 0, blockCnt: 1, massLevel: 0, dmgType: 'none' },
+    },
+  });
+  if (!crystal) return;
+  crystal.profile.noAttack = true;
+  b.addBuff(crystal, {
+    key: 'boss:bsCrystalFuse', duration: BS.crystalFuse, refresh: 'replace', visible: true,
+    onExpire: ({ battle, unit }) => {
+      if (!unit.alive) return;
+      battle.fx('explode', { x: unit.x, y: unit.y, id: unit.id, r: 1, kind: 'bsCrystal' });
+      const allies = battle.allies();
+      const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      for (const [dr, dc] of dirs) {
+        const target = allies.filter((a) => dr === 0 ? a.tileR === unit.tileR : a.tileC === unit.tileC)
+          .filter((a) => (a.tileR - unit.tileR) * dr + (a.tileC - unit.tileC) * dc > 0)
+          .sort((a, z) => Math.abs(a.tileR - unit.tileR) + Math.abs(a.tileC - unit.tileC)
+            - Math.abs(z.tileR - unit.tileR) - Math.abs(z.tileC - unit.tileC))[0];
+        if (!target) continue;
+        const dealt = hurt(battle, unit, target, BLACKSNAKE_TUNING.crystalDamage, 'arts', { tags: ['bsCrystal'] });
+        if (dealt > 0) applyBurn(battle, unit, target);
+        battle.fx('beam', { x: unit.x, y: unit.y, to: target.id, id: unit.id, kind: 'bsCrystal' });
+      }
+      battle.kill(unit, null);
+    },
+  });
+}
+
+function kitBlackSnake(ab, e, b) {
+  const atkRatio = T(ab, 'attack@ep_damage_ratio') ?? 0;
+  const P = { igniteLeft: BS.igniteInit, detonateLeft: BS.detonateInit, heavyLeft: BS.heavyInit,
+    barrageLeft: BS.barrageInit, barrageShots: 0, barrageNext: 0,
+    blinkLeft: BLACKSNAKE_TUNING.blinkFirst, periodicLeft: BLACKSNAKE_TUNING.periodicFire, periodicRow: 0,
+    phase: 0, fireWaves: 0, fireAt: 0, exitAt: 0, dead: false,
+    summonLeft: BLACKSNAKE_TUNING.firstSummonInit, healthSummons: [0, 0] };
+  const ownTargets = (battle, unit, list = allTargets(battle, unit)) => blackSnakeTargets(battle, unit, byPriority(unit, list));
+  // Owner values are stage-specific base damage; external ATK modifiers still apply.
+  const stageDamage = (unit, normal, rage = normal) => {
+    const raging = P.phase !== 0;
+    return (raging ? rage : normal) * (unit.s.atk / (raging ? BLACKSNAKE_TUNING.rageAtk : BLACKSNAKE_TUNING.atk));
+  };
+  const healthSummons = (battle, unit, defeated = false) => {
+    const phase = P.phase === 0 ? 0 : 1;
+    const loss = defeated ? 1 : 1 - unit.hp / unit.s.maxHp;
+    const count = Math.min(5, Math.floor(loss * 5 + 1e-7));
+    const triggered = P.healthSummons[phase] < count;
+    if (triggered) {
+      cancelBlackSnakeNormalWave(unit);
+      P.summonLeft = phase ? BLACKSNAKE_TUNING.secondSummonGap : BLACKSNAKE_TUNING.firstSummonGap;
+    }
+    while (P.healthSummons[phase] < count) {
+      P.healthSummons[phase]++;
+      summonBlackSnakeAdds(battle, unit, phase ? 'secondStrong' : 'firstStrong');
+    }
+    return triggered;
+  };
+  const castLock = (battle, unit) => battle.addBuff(unit, { key: 'boss:bsSkillCast', duration: 59 / 30 * BS.visualRate,
+    refresh: 'replace', flags: { disarm: true, noMove: true } });
+  const cast = (battle, unit, cue, hit, run) => {
+    castLock(battle, unit);
+    battle.fx(cue, { x: unit.x, y: unit.y, id: unit.id, kind: cue, dur: 59 / 30, rage: P.phase === 2 });
+    battle.after(hit * BS.visualRate, () => {
+      if (unit.alive && [0, 2].includes(P.phase) && unit.findBuff('boss:bsSkillCast')) run();
+    }, { owner: unit });
+  };
+  /** The operator damage cut while it carries 烈焚灼息 (a 'taken' handler on the LEADER, not the ally: the cut is hers). */
+  const burnCut = {
+    taken(c, b2, e2) {
+      const s = c.source;
+      if (!s || s.side !== 'ally' || !hasBurn(s)) return;
+      const ty = c.dmg.type;
+      if (ty !== 'phys' && ty !== 'arts' && ty !== 'true') return;
+      c.dmg.mul *= (1 - BS.burnAtkCut);
+    },
+  };
+  /** 不息恶火: one fireball per row, sweeping right from the field's left edge, hitting the first ally each meets. */
+  const fireVolley = (b2, e2, periodic = false) => {
+    if (!blackSnakeLeader(b2, e2)) return;
+    const duration = periodic ? (b2.rect.c1 - b2.rect.c0 + 1.3) / 2.5 : Math.max(0.1, P.exitAt - b2.time);
+    b2.fx('bsFireVolley', { x: e2.x, y: e2.y, id: e2.id, kind: 'bsFireVolley', dur: duration,
+      hazardKey: periodic ? `periodic:${e2.id}:${b2.tickCount}` : `phase:${e2.id}:${P.phase}:${P.fireStarted}`, periodic });
+    let rows = blackSnakeFireRows(b2);
+    if (periodic) {
+      const targets = [...new Set(b2.allies().filter(u => u.alive && u.kind === 'op').map(u => u.tileR))].sort((a, b) => a - b);
+      rows = [(targets.length ? targets : rows)[P.periodicRow++ % (targets.length || rows.length)]];
+    }
+    for (const side of blackSnakeFireSides(b2)) for (const row of rows) launchBlackSnakeRow(b2, e2, row,
+      { side, damage: stageDamage(e2, P.phase === 5 ? BLACKSNAKE_TUNING.finalRowFireDamage : BLACKSNAKE_TUNING.rowFireDamage) });
+  };
+  const barrageColumn = (b2, e2, index) => {
+    const R = b2.rect;
+    const Z = e2.profile.zoneBounds || R;
+    const col = Math.round(Z.c0 + (Z.c1 - Z.c0) * ((index + 1) / (BS.barrageColumns + 1)));
+    for (let row = R.r0; row <= R.r1; row++) {
+      const lead = 0.28, fall = 0.52;
+      b2.fx('bsMeteor', { x: col, y: row, id: e2.id, kind: 'bsMeteor', column: index, lead, fall });
+      b2.after(lead + fall, () => {
+        if (!e2.alive || ![0, 2].includes(P.phase)) return;
+        for (const u of ownTargets(b2, e2, areaAlliesInTiles(b2, e2, row, col, 'box', 0))) {
+          hurt(b2, e2, u, stageDamage(e2, BLACKSNAKE_TUNING.barrageDamage, BLACKSNAKE_TUNING.rageBarrageDamage), 'arts', { tags: ['bsMeteor'] });
+          applyBurn(b2, e2, u);
+        }
+      }, { owner: e2 });
+    }
+  };
+  const beginFire = (b2, e2, final) => {
+    cancelBlackSnakeNormalWave(e2);
+    P.phase = final ? 5 : 3;
+    P.summonAt = b2.time;
+    P.barrageShots = 0;
+    b2.removeBuff(e2, 'boss:bsHeavyCast');
+    b2.removeBuff(e2, 'boss:bsSkillCast');
+    P.fireWaves = 0;
+    P.fireAt = b2.time;
+    P.fireStarted = b2.time;
+    const duration = final ? BLACKSNAKE_TUNING.finalFireDuration : BS.fireExit;
+    P.exitAt = b2.time + duration;
+    e2.profile.noAttack = true;
+    b2.addBuff(e2, { key: 'boss:bsFirePhase', duration, refresh: 'replace', visible: true,
+      flags: { invulnerable: true, untargetable: true, unblockable: true, noMove: true, noBlock: true, disarm: true } });
+    setForm(b2, e2, final ? 'blackSnakeFinalFire' : 'blackSnakeFire', 'phase', { kind: 'bsFireStart', final, dur: duration });
+  };
+  const summonCrystals = (b2, e2) => {
+    const R = b2.rect;
+    const spots = [[Math.max(R.r0, Math.min(R.r1, Math.round(e2.y) - 1)), Math.max(R.c0, Math.min(R.c1, Math.round(e2.x) - 2))],
+      [Math.max(R.r0, Math.min(R.r1, Math.round(e2.y) + 1)), Math.max(R.c0, Math.min(R.c1, Math.round(e2.x) + 2))]];
+    for (const pos of spots) spawnBlackSnakeCrystal(b2, e2, pos);
+  };
+  return [
+    burnCut,
+    {
+      spawn(b2, e2) {
+        // The mod's own record (data/enemies.json) still carries the handbook's raw line (攻击 770 / 防御 800 / 攻击半径 8):
+        // the owner's 2026-10-19 numbers — 攻击 542 / 防御 700 / 攻击半径 6, the values every skill below is written against —
+        // are applied here, in one place, so `stageDamage`'s normalisation (unit.s.atk / BLACKSNAKE_TUNING.atk) stays 1:1
+        // and the skill hits read 825 / 328 / 632.6 exactly (docs/design/owner-update-20261018.md).
+        if (e2.base) {
+          e2.base.atk = BLACKSNAKE_TUNING.atk;
+          e2.base.def = BLACKSNAKE_TUNING.def;
+          e2.base.rangeRadius = BLACKSNAKE_TUNING.rangeRadius;
+          if (typeof e2.markDirty === 'function') e2.markDirty();
+        }
+        P.nodes = installBlackSnakePatrol(b2, e2);
+        e2.profile.maxTargets = 1;
+        e2.profile.attackAnimationRate = BS.visualRate;
+        e2.profile.attackWindupFx = 'bsAttackWindup';
+        if (e2.bossPool) {
+          // The shared pool already represents the whole fight. Split it in
+          // the original 1 : 1.5 life ratio instead of refilling or ending it at
+          // the first knockout. Leave one HP until the final fire curtain ends.
+          P.poolBoundary = e2.bossPool.maxHp * (1 - BLACKSNAKE_TUNING.firstLifeShare);
+          e2.bossHpWindow = { min: P.poolBoundary, max: e2.bossPool.maxHp };
+          b2._syncBossHp(e2);
+        }
+        b2.fx('bsSpawn', { x: e2.x, y: e2.y, id: e2.id, kind: 'bsSpawn' });
+        // 无法被阻挡, kept from the 巨型单位 line — but WITHOUT 自缚: the persistent buff here carries no `noMove`, so she
+        // walks her patrol (the route's `patrol` steps + bosses.js patrolLoop) and can never be pinned by a blocker on
+        // the way. `selfBound` is deliberately absent too: she is a walking leader, so 余 S2 / 推击 may move her, exactly
+        // like the game's other walking leaders (卢西恩 / 假想敌：铳 — docs/history/0.1.2.md §21.19).
+        b2.addBuff(e2, { key: 'boss:bsUnblockable', persist: true, flags: { unblockable: true } });
+      },
+      // 普攻: true damage + a fresh 30.5 s mark (the handbook's 黑蛇形态).
+      dealt(c, b2, e2) {
+        const t = c.target;
+        if (!t || !t.alive) return;
+        if (atkRatio > 0) elem(b2, e2, t, 'neural', e2.s.atk * atkRatio);
+        applyBurn(b2, e2, t);
+        b2.fx('bsHit', { x: t.x, y: t.y, id: t.id, kind: 'bsHit', rage: P.phase === 2 });
+      },
+      tick(b2, e2, a, dt) {
+        if (e2.bossHpWindow && (P.phase === 0 || P.phase === 2)
+          && e2.bossPool.hp <= e2.bossHpWindow.min + 1e-8) b2.kill(e2, null);
+        // ── 不息恶火 (the death phase) takes over everything while it runs ──
+        if (P.phase === 3 || P.phase === 5) {
+          e2.profile.noAttack = true;
+          if (b2.time >= P.summonAt - 1e-8 && b2.time < P.exitAt - 1e-8) {
+            summonBlackSnakeAdds(b2, e2, P.phase === 5 ? 'final' : 'transition');
+            P.summonAt = b2.time + (P.phase === 5 ? BLACKSNAKE_TUNING.finalSummonGap : BLACKSNAKE_TUNING.transitionSummonGap);
+          }
+          if (b2.time + 1e-9 >= P.fireAt && P.fireWaves < (P.phase === 5 ? BLACKSNAKE_TUNING.finalFireWaves : BS.fireWaves)) { P.fireWaves++; P.fireAt = b2.time + (P.phase === 5 ? BLACKSNAKE_TUNING.finalFireGap : BS.fireGap); fireVolley(b2, e2); }
+          if (b2.time + 1e-9 >= P.exitAt) {
+            b2.removeBuff(e2, 'boss:bsFirePhase');
+            if (P.phase === 3) {
+              P.phase = 2;
+              P.summonLeft = BLACKSNAKE_TUNING.secondSummonInit;
+              P.igniteLeft = BS.igniteInit; P.detonateLeft = BS.detonateInit;
+              P.heavyLeft = BS.heavyInit; P.barrageLeft = BS.barrageInit;
+              P.periodicLeft = BLACKSNAKE_TUNING.periodicFire;
+              e2.profile.noAttack = false;
+              setForm(b2, e2, 'blackSnakeRage', 'phase', { kind: 'bsRageReturn' });
+              b2.addBuff(e2, { key: 'boss:bsReturnCast', duration: 83 / 30 * BS.visualRate, refresh: 'replace',
+                flags: { noMove: true, disarm: true } });
+              b2.addBuff(e2, { key: 'boss:bsReturnInvuln', duration: 15, refresh: 'replace', visible: true, flags: { invulnerable: true } });
+            } else {
+              P.phase = 6;
+              b2.fx('bsExit', { x: e2.x, y: e2.y, id: e2.id, kind: 'bsExit' });
+              if (e2.bossPool) { e2.bossHpWindow = null; e2.bossPool.damage(null, e2.bossPool.hp); }
+              b2.kill(e2, null);
+            }
+          }
+          return;
+        }
+        if (P.phase === 1 || P.phase === 4) { e2.profile.noAttack = true; return; }
+        if (e2.route?.legIdx >= e2.route?.legs.length - 1) { e2.route.legIdx = 0; e2.route.pts = null; }
+        const reinforced = healthSummons(b2, e2);
+        if (!reinforced) P.summonLeft -= dt;
+        if (P.summonLeft <= 0) {
+          summonBlackSnakeAdds(b2, e2, P.phase === 2 ? 'second' : 'first');
+          P.summonLeft = P.phase === 2 ? BLACKSNAKE_TUNING.secondSummonGap : BLACKSNAKE_TUNING.firstSummonGap;
+        }
+        P.blinkLeft -= dt;
+        if (P.phase === 2) {
+          P.periodicLeft -= dt;
+          if (P.periodicLeft <= 0) { P.periodicLeft += BLACKSNAKE_TUNING.periodicFire; fireVolley(b2, e2, true); }
+        }
+        if (P.barrageShots > 0 && b2.time + 1e-9 >= P.barrageNext) {
+          const index = BS.barrageColumns - P.barrageShots;
+          barrageColumn(b2, e2, index);
+          P.barrageShots--;
+          P.barrageNext = b2.time + BS.barrageGap;
+        }
+        P.heavyLeft -= dt; P.barrageLeft -= dt; P.igniteLeft -= dt; P.detonateLeft -= dt;
+        if (!canCast(e2, false, b2) || e2.findBuff('boss:bsSkillCast')) return;
+        if (P.blinkLeft <= 0 && P.nodes?.length > 1) {
+          // A failed roll consumes this entire window; never retry every sim tick.
+          P.blinkLeft = BLACKSNAKE_TUNING.blinkCooldown;
+          const blink = b2.rng.chance(BLACKSNAKE_TUNING.blinkChance);
+          b2.fx('bsBlinkCheck', { id: e2.id, success: blink });
+          const target = blackSnakeBlinkTarget(b2, e2);
+          if (blink && target) {
+            const duration = BLACKSNAKE_TUNING.blinkWindup + BLACKSNAKE_TUNING.blinkRecovery;
+            b2.addBuff(e2, { key: 'boss:bsSkillCast', duration, refresh: 'replace', flags: { noMove: true, disarm: true } });
+            b2.fx('bsBlinkWindup', { x: e2.x, y: e2.y, id: e2.id, dur: duration, clip: 'Skill_3', kind: 'bsBlinkWindup' });
+            b2.after(BLACKSNAKE_TUNING.blinkWindup, () => {
+              if (!e2.alive || ![0, 2].includes(P.phase) || !e2.findBuff('boss:bsSkillCast')) return;
+              // An obstacle or displacement during the wind-up invalidates the old destination.
+              const landing = blackSnakeBlinkTarget(b2, e2);
+              if (!landing) return;
+              const fx = e2.x, fy = e2.y;
+              b2._unblock(e2); e2.x = landing[1]; e2.y = landing[0]; e2.tileC = landing[1]; e2.tileR = landing[0];
+              if (e2.route) { e2.route.pts = null; e2.route.waitLeft = null; }
+              b2.fx('bsBlink', { x: e2.x, y: e2.y, fx, fy, id: e2.id, kind: 'bsBlink', dur: BLACKSNAKE_TUNING.blinkRecovery });
+            }, { owner: e2 });
+            return;
+          }
+        }
+        if (P.heavyLeft <= 0) {
+          const target = ownTargets(b2, e2)[0];
+          if (target) {
+            P.heavyLeft = BS.heavyCd;
+            castLock(b2, e2);
+            b2.fx('bsHeavyWindup', { x: e2.x, y: e2.y, id: e2.id, kind: 'bsHeavyWindup', dur: BS.heavyWindup });
+            const row = target.tileR, col = target.tileC;
+            b2.addBuff(e2, { key: 'boss:bsHeavyCast', duration: BS.heavyWindup * BS.visualRate, refresh: 'replace',
+              onExpire: ({ battle }) => {
+                if (!e2.alive || ![0, 2].includes(P.phase)) return;
+                battle.fx('bsHeavyImpact', { x: col, y: row, id: e2.id, r: 2, tiles: 'plus', kind: 'bsHeavyImpact' });
+                for (const u of ownTargets(battle, e2, areaAlliesInTiles(battle, e2, row, col, 'plus', 2))) {
+                  hurt(battle, e2, u, stageDamage(e2, BLACKSNAKE_TUNING.heavyDamage, BLACKSNAKE_TUNING.rageHeavyDamage), 'arts', { tags: ['bsHeavy'] });
+                  applyBurn(battle, e2, u);
+                }
+              } });
+            return;
+          }
+        }
+        if (P.barrageLeft <= 0 && P.barrageShots === 0 && ownTargets(b2, e2).length) {
+          P.barrageLeft = BS.barrageCd;
+          P.barrageShots = BS.barrageColumns;
+          P.barrageNext = b2.time + 31 / 30 * BS.visualRate;
+          castLock(b2, e2);
+          b2.fx('bsSkill2Cast', { x: e2.x, y: e2.y, id: e2.id, kind: 'bsSkill2Cast', dur: 59 / 30 });
+          return;
+        }
+        // ── 点燃: mark up to N allies that carry no 烈焚灼息 ──
+        if (P.igniteLeft <= 0) {
+          const pool = ownTargets(b2, e2).filter((u) => !hasBurn(u));
+          const picks = ownTargets(b2, e2, pool).slice(0, BS.igniteTargets);
+          if (picks.length) {
+            P.igniteLeft = BS.igniteCd;
+            cast(b2, e2, 'bsIgniteCast', 7 / 6, () => {
+              for (const u of picks) if (u.alive) { applyBurn(b2, e2, u); b2.fx('ignite', { x: u.x, y: u.y, id: u.id, kind: 'bsIgnite', rage: P.phase === 2 }); }
+            });
+            return;
+          }
+        }
+        // ── 引爆: every marked ally ──
+        if (P.detonateLeft <= 0) {
+          const marked = ownTargets(b2, e2).filter(hasBurn);
+          if (marked.length) {
+            P.detonateLeft = BS.detonateCd;
+            cast(b2, e2, 'bsDetonateCast', 31 / 30, () => {
+              for (const u of marked) if (u.alive && hasBurn(u)) detonate(b2, e2, u);
+            });
+          }
+        }
+      },
+      /**
+       * The knock-outs (the handbook's 每次被击败时释放当前波次). Returning true hides the kill: the first is a rebirth,
+       * the second a scripted exit (免杀) — neither is a kill credit.
+       */
+      killed(c, b2, e2) {
+        if ([1, 3, 4, 5].includes(P.phase)) return true;
+        if (P.phase >= 6) return false;
+        const first = P.phase === 0;
+        healthSummons(b2, e2, true);
+        cancelBlackSnakeNormalWave(e2);
+        if (e2.bossPool && first && e2.bossPool.hp > P.poolBoundary) e2.bossPool.damage(null, e2.bossPool.hp - P.poolBoundary);
+        P.phase = first ? 1 : 4;
+        P.barrageShots = 0;
+        b2.removeBuff(e2, 'boss:bsHeavyCast');
+        b2.removeBuff(e2, 'boss:bsSkillCast');
+        e2.profile.noAttack = true;
+        e2.hp = Math.min(1, e2.s.maxHp);
+        if (first) {
+          b2.addBuff(e2, {
+            key: 'boss:bsRevive', duration: BS.reviveDur * BS.visualRate, visible: true, persist: true,
+            flags: { invulnerable: true, untargetable: true, unblockable: true, noMove: true, noBlock: true, disarm: true },
+            onTick: ({ battle }) => { battle.fx('telegraph', { x: e2.x, y: e2.y, r: 1, dur: 0.5, kind: 'bsRevive', id: e2.id }); },
+            onExpire: ({ battle }) => {
+              if (!e2.alive) return;
+              e2.hp = Math.max(1, e2.s.maxHp * BS.reviveHp);
+              b2.addBuff(e2, { key: 'boss:bsRage', persist: true, visible: true, mods: { atkPct: BS.rageAtkPct } });
+              if (e2.bossPool) {
+                // Keep above the engine's 1 HP dust floor, including fractional damage and pool sync.
+                e2.bossHpWindow = { min: 2, max: P.poolBoundary };
+                battle._syncBossHp(e2);
+              } else e2.base.maxHp = Math.round(e2.base.maxHp * (1 + BS.rageHpPct));
+              if (typeof e2.markDirty === 'function') e2.markDirty();
+              void e2.s;
+              e2.hp = e2.s.maxHp;
+
+              summonCrystals(battle, e2);
+              beginFire(battle, e2, false);
+            },
+          });
+          setForm(b2, e2, 'blackSnakeReborn', 'telegraph', { r: 1, dur: BS.reviveDur, kind: 'bsReborn' });
+        } else {
+          setForm(b2, e2, 'blackSnakeFinal', 'telegraph', { kind: 'bsFinal', dur: BS.reviveDur });
+          b2.addBuff(e2, { key: 'boss:bsFinalDelay', duration: 16 / 3 * BS.visualRate, refresh: 'replace', visible: true,
+            flags: { invulnerable: true, untargetable: true, unblockable: true, noMove: true, noBlock: true, disarm: true },
+            onExpire: ({ battle }) => { if (e2.alive) beginFire(battle, e2, true); },
+          });
+        }
+        return true;
+      },
+    },
+  ];
+}
+
+
 export const BOSS_KITS = Object.freeze({
+  enemy_2126_dycyue:suiShellKit,
+  enemy_2127_dysuih:suiSecondKit,
+  enemy_2128_dysuib:suiBodyKit,
+  enemy_2128_dysuib_s1:suiBodyKit,
+  enemy_2128_dysuib_sp:suiBodyKit,
+  enemy_2130_dyswrd:suiMissileKit,
+  enemy_2131_dyfire:suiMissileKit,
+  enemy_8018_etouch:touchKit,
+  enemy_8019_pollut:touchPollutKit,
+  enemy_8019_pollut_2:touchPollutKit,
+  enemy_8019_pollut_3:touchPollutKit,
+  enemy_1506_patrt:patriotKit,
+  enemy_1520_empgrd:pursuerKit,
   enemy_9013_acstmk: kitHelm,          // boss_1 假想敌：胄
   enemy_9013_acstmk_2: kitHelm,        // boss_8 假想敌：胄 (隐秘核心)
   enemy_9014_acstma: kitBlade,         // “斩胄之剑”
@@ -1294,5 +1663,6 @@ export const BOSS_KITS = Object.freeze({
   enemy_10029_vtshld: kitEquip,        // 防护背心
   enemy_10030_vtwand: kitEquip,        // 冲击式施术单元
   enemy_9033_acdeer: kitDeer,          // boss_7 “萨米的意志”
+  enemy_1515_bsnake: kitBlackSnake,    // boss_11 不死的黑蛇
 });
 export const BOSS_KEYS = Object.freeze(Object.keys(BOSS_KITS));

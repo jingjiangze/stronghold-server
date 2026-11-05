@@ -26,7 +26,7 @@ import { enabled as federationEnabled, currentNode } from '../federation.js';
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MIN_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
+import { difficultiesFor, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MIN_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
 // seat counts through the namespace: the live constants (before the 10-seat package) have MAX_SEATS 4 and no DEFAULT_SEATS
 import * as SEAT_CONST from '../../../shared/constants.js';
 import { RANDOM_MODE, RANDOM_MODE_NAME } from '../../../shared/randomMode.js';
@@ -487,7 +487,7 @@ function RoomProtocol({ room, variant, onClose, onPick, busy, leaving = false })
     <section class="rs-proto__side">
       <h2 class="rs-proto__title">${t('选择模拟协议')}</h2>
       <div class="proto-list rs-proto__list" role="radiogroup" aria-label=${t('模拟难度')}>
-        ${DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${room.mode} difficulty=${d} selected=${pick === d} onSelect=${setPick}
+        ${difficultiesFor(room.mode).map((d) => html`<${ProtoCard} key=${d} roomMode=${room.mode} difficulty=${d} selected=${pick === d} onSelect=${setPick}
           random=${room.random === true} variant=${variant} />`)}
       </div>
       <button type="button" class="proto-start rs-proto__ok" disabled=${!!busy} onClick=${() => (pick === room.difficulty ? onClose() : onPick(pick))}>
@@ -500,7 +500,7 @@ function RoomProtocol({ room, variant, onClose, onPick, busy, leaving = false })
 }
 
 /** ⚙ of the bottom pill: 私密房间, 人数上限 (with the 10-seat constants), AI 队友最后选择, 不限时, 无限火力 branch. */
-function RoomOptions({ room, facts, myId, busy, online, variant, onPrivate, onSeatCap, onAiLast, onAiTakeover, onAiRandom, onVariant, soloOption, onSoloUnlimited, onClose, leaving = false }) {
+function RoomOptions({ room, facts, myId, busy, online, variant, onPrivate, onSeatCap, onAiLast, onAiTakeover, onAiRandom, onVariant, soloOption, onSoloUnlimited, incompleteOption, onIncompleteMaps, onClose, leaving = false }) {
   const coop = room.mode !== 'solo';
   const host = facts.isHost;
   useEffect(() => {
@@ -518,6 +518,8 @@ function RoomOptions({ room, facts, myId, busy, online, variant, onPrivate, onSe
     <${AiTakeoverToggle} option=${aiTakeoverOption(room, myId)} busy=${busy} onToggle=${onAiTakeover} />
     <${AiRandomToggle} option=${aiRandomOption(room, myId)} busy=${busy} onToggle=${onAiRandom} />
     <${SoloUnlimitedToggle} option=${soloOption} busy=${busy} onToggle=${onSoloUnlimited} />
+    <label class="rs-opt"><input type="checkbox" checked=${room.incompleteMaps === true} disabled=${!host || !!busy || !online} onChange=${(e) => onIncompleteMaps(e.currentTarget.checked)} />
+      <span>${t('包含无场景地图')}<small>${t('默认关闭：只在有官方场景包的地图里抽；开启后无第三层的地图也会被抽到，退回程序化棋盘')}</small></span></label>
     ${room.random === true ? html`<div class="rs-opt rs-opt--variant"><span>${t('模式分支')}</span>
       <div class="dpick" role="radiogroup" aria-label=${t('模式分支')}>
         ${[['blitz', t('快速突袭 {totalRounds} 回合', { totalRounds: RANDOM_MODE.totalRounds })], ['endurance', t('持久鏖战 {totalRounds} 回合', { totalRounds: RANDOM_MODE.endurance.totalRounds })], ['marathon', t('最长时赛 {totalRounds} 回合', { totalRounds: RANDOM_MODE.marathon.totalRounds })]].map(([v, label]) => html`
@@ -791,6 +793,7 @@ export function RoomScreen() {
     if (sent && alive.current) setVersionOpen(false);
   };
   // 「不限时」（§35.23.10）：单人计时版本房才有；记进本机偏好，下次建单人房沿用
+  const setIncompleteMaps = (on) => run('incmaps', () => net.request('room.setIncompleteMaps', { on }));
   const setSoloUnlimited = async (on) => {
     const sent = await run('solofree', () => net.request('room.setSoloUnlimited', { on }));
     if (sent) savePref('lobby.soloUnlimited', on === true);
@@ -951,7 +954,7 @@ export function RoomScreen() {
           </button>
           ${optsShown ? html`<${RoomOptions} room=${room} facts=${facts} myId=${me.playerId} busy=${busy} online=${online} variant=${variant}
             onPrivate=${setPrivate} onSeatCap=${setSeatCap} onAiLast=${setAiLast} onAiTakeover=${setAiTakeover} onAiRandom=${setAiRandom} onVariant=${setVariant}
-            soloOption=${soloOpt} onSoloUnlimited=${setSoloUnlimited} onClose=${() => setOpts(false)} leaving=${optsLeaving} />` : null}
+            soloOption=${soloOpt} incompleteOption=${{ on: room.incompleteMaps === true, editable: facts.isHost }} onIncompleteMaps=${setIncompleteMaps} onSoloUnlimited=${setSoloUnlimited} onClose=${() => setOpts(false)} leaving=${optsLeaving} />` : null}
         </div>
       </div>
       <div class="rs-foot__right">

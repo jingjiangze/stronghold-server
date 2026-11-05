@@ -196,6 +196,10 @@ export class MatchEconomy {
    * 且只能在自己还没 Ready 的 PREP 里做（`econGate` 已经覆盖存活/阶段/ready 三条）。
    */
   econDeposit(ps) {
+    // 没有协同经济的房间（独立模拟 / 单人肉鸽的 econSolo / 未开 economy.team）根本没有团队储备：不拦的话这一句
+    // 会把个人资金扣进一个谁也看不见、也取不出来的池子（econGate 只管存活/阶段/ready）。与 econRequest /
+    // econBuyProject 同一道闸、同一个错误码。
+    if (!this.teamEcon) return fail(ERR.WRONG_PHASE, 'team economy disabled');
     const gate = this.econGate(ps);
     if (gate) return gate;
     if (this.econDepositedBy.has(ps.playerId)) return fail(ERR.RATE, 'already deposited this round');

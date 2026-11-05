@@ -59,7 +59,6 @@ import { num, talentBb, moduleBb, traitBb, skillRec, toggleBuff, up } from '../s
 import { absoluteRangeKeys, canTargetEnemy, sortEnemyTargets } from '../../../targeting.js';
 import { bodyInRange } from '../../../body.js';
 import { noOperatorBeside } from './op-phatom.js';
-import { cancelDamage } from '../../../attack.js';
 
 const S1 = 'skchr_crosly_1';
 const S2 = 'skchr_crosly_2';
@@ -108,8 +107,8 @@ function smokeHit(battle, st, ctx) {
     if (d.attackId) st.last.set(e, { id: d.attackId, miss });
   }
   if (!miss) return;
-  const cancelled = cancelDamage(d, 'miss');
-  if (cancelled) ctx.stopPropagation = true;
+  d.cancel = true;
+  ctx.stopPropagation = true;
   if (ctx.target) battle.fx('dodge', { x: ctx.target.x, y: ctx.target.y, id: ctx.target.id });
 }
 

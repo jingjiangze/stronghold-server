@@ -214,6 +214,7 @@
 import { PHASE, modeIdFor } from '../../shared/constants.js';
 import { isContentHash } from '../../shared/plugins/identity.js';
 import { DEFAULT_VERSION, versionById } from '../../shared/versions.js';
+import { poolGroupSizes, poolCopyScale } from '../../shared/playerCapacity.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
@@ -247,6 +248,8 @@ import { installTestTrace } from './testTrace.js';
 import { MatchTestCommands } from './match/testCommands.js';
 import { MatchOffers } from './match/offers.js';
 import { createExternalAI } from './llmGate.js';
+import { contractEffects } from '../../shared/contractEffects.js';
+import { strategyBoostEnabled } from '../../shared/strategyBoost.js';
 
 export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS } from './match/common.js';
 
@@ -326,6 +329,17 @@ export class Match {
     this.gd = new GameData(this.data, this.modeId);
     if (!this.difficulty) this.difficulty = this.gd.difficulty;
     this.isSolo = this.mode === 'solo' || this.gd.isSolo;
+    /**
+     * 危机合约 (shared/contracts.js; opts.contracts, the lobby's room.setContracts — already resolved there) and the
+     * modifiers they resolve to (shared/contractEffects.js). An empty list is a match without contracts: `fx` is
+     * all-neutral (opStatMul 1/1/1, healMul 1, bondLayerCap null) and every consumer below hands the sim nothing
+     * (MatchCombat._contractOpts). `fx` is shared by the whole match — a contract is the ROOM's challenge, not a
+     * player's.
+     * @type {Readonly<string[]>}
+     */
+    this.contracts = Object.freeze(Array.isArray(opts.contracts) ? opts.contracts.filter((id) => typeof id === 'string') : []);
+    /** @type {ReturnType<typeof contractEffects>} */
+    this.fx = contractEffects(this.contracts);
     /** 「AI 队友最后选择」 (opts.aiPicksLast, GitHub #338): humans draft before AI seats (MatchPhases.humansFirst) */
     this.aiPicksLast = !this.isSolo && opts.aiPicksLast === true;
     this.ownsScheduler = !opts.scheduler;
@@ -438,6 +452,13 @@ export class Match {
     if (!this.players.size) throw new TypeError('Match: seats required');
     this.order = [...this.players.values()].sort((a, b) => a.seat - b.seat);
     /**
+     * 危机合约's strategy boost (shared/strategyBoost.js): a selection worth ≥ STRATEGY_BOOST_SCORE at a contract
+     * difficulty upgrades every strategy's numbers (server/sim/content/bands reads `gd.strategyBoost`). Fixed once, at
+     * the match's start, from the players that begin it — a later departure must not halve a decision already made.
+     * Without contracts `crisisActive` is false and the flag is off, which is every match that came before.
+     */
+    this.gd.strategyBoost = strategyBoostEnabled(this.contracts, this.difficulty, this.order.filter((p) => p.alive).length);
+    /**
      * Spectator seats (opts.spectators / addSpectator): playerId → a stand-in every watch path treats like an eliminated
      * human (alive false; no PlayerState, never a field's player or authority).
      * @type {Map<string, { playerId: string, isBot: false, left: false, alive: false, connected: true, spectator: true }>}
@@ -462,7 +483,21 @@ export class Match {
     this.disabledBonds = bans.drawn;
     this.staticInactiveBonds = bans.staticOff;
     this.bannedChess = bans.banned;
-    this.pool = new SharedPool(this.gd, { banned: bans.banned });
+    /**
+     * 分组牌库 (owner 2026-11-05「每四人一个分组牌库」): one SharedPool per group of ≤4 seats, in seat order
+     * (shared/playerCapacity.js poolGroupSizes / poolCopyScale). Every group gets the complete original 4-player stock,
+     * so groups no longer draw down one shared map; each seat's `poolId` picks its group (poolFor, PlayerState.poolGroup).
+     * `this.pool` stays the first group for the paths that still read the single pool.
+     */
+    const groupSizes = poolGroupSizes(this.order.length);
+    this.pools = groupSizes.map((size) => new SharedPool(this.gd, {
+      banned: bans.banned,
+      copyScale: poolCopyScale(size),
+    }));
+    this.pool = this.pools[0];
+    const groupOfSeat = [];
+    groupSizes.forEach((size, gi) => { for (let k = 0; k < size; k++) groupOfSeat.push(gi); });
+    this.order.forEach((ps, i) => { ps.poolId = groupOfSeat[i] ?? 0; });
     this.itemPool = new SharedItemPool(this.gd, () => this.order);
     // 自选编队 (0.2.0): each human's slotted DIY pieces get their own stock — none for one whose bonds are all off this
     // match (player/diy.js initDiyStock); no randomness is drawn here

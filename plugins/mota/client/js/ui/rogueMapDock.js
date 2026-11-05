@@ -29,23 +29,26 @@ export function RogueMapDock({ pub, disabled = false }) {
   const title = stage && stage.name ? stage.name : (stageId || t('未知战场'));
 
   const mini = open ? minimap(stage) : null;
+  // 位置在右下角、抬到 bottom 2.4rem（设计单位 1rem = 100 设计 px，1280×720 下 1rem≈66.7px）：
+  // 2.4rem ≈ 160px 清得开收起态的商店标签（≈56px），展开的商店栏按 CSS 估算约 243px 高 —— 若真机量到仍压住
+  // 商店卡片，把 bottom 提到 3.7rem（≈247px），不要凭空往上加。⚠ 祖先若带 transform，fixed 的 bottom 会按其
+  // 边框盒算 —— 实测 bottom 9.6rem 会算出视口外坐标。
+  // ⚠ htm 的模板里不能写 JS 式 `//` 注释：`/` 会进解析器的自闭合分支（htm.module.js `(h=h[0]).push`），整屏 SYSTEM FAULT。
   return html`<div class="rmap" data-testid="rogue-map-dock"
-      // 位置回到「右下角 .6rem」——这是唯一拿到过真机视觉证据的位置；抬到商店栏上方（bottom 9.6rem）实测会被带 transform 的祖先算出视口外的坐标，
-      // 与商店栏最后一格轻微重叠是已知观感问题，等有 CSS 变量方案再收
-      style="position:fixed;right:.6rem;bottom:.6rem;z-index:40;width:min(240px,42vw);font-size:12px;
+      style="position:fixed;right:.12rem;bottom:2.4rem;z-index:40;width:min(1.8rem,26vw);font-size:calc(.13 * var(--t));
              background:rgba(12,14,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#e8eaf0;overflow:hidden">
     <button type="button" data-testid="rogue-map-toggle" onClick=${() => setOpen((v) => !v)}
       aria-expanded=${open}
-      style="all:unset;cursor:pointer;display:flex;gap:.45rem;align-items:center;width:100%;padding:.4rem .55rem;box-sizing:border-box">
+      style="all:unset;cursor:pointer;display:flex;gap:.09rem;align-items:center;width:100%;padding:.08rem .1rem;box-sizing:border-box">
       <${Icon} name="rook" />
-      <b>${t('地图')}</b>
-      <span style="opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title}</span>
-      ${last ? html`<span class="num" style="margin-left:auto;opacity:.7">R${round}/${last}</span>` : null}
+      <b style="flex:0 0 auto;white-space:nowrap">${t('地图')}</b>
+      <span style="min-width:0;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title}</span>
+      ${last ? html`<span class="num" style="margin-left:auto;flex:0 0 auto;opacity:.7">R${round}/${last}</span>` : null}
       <span style="opacity:.6">${open ? '▾' : '▸'}</span>
     </button>
-    ${open ? html`<div style="padding:0 .55rem .5rem">
-      ${mini || html`<div style="opacity:.6;padding:.2rem 0">${t('战场缩略图待载入…')}</div>`}
-      ${next ? html`<div style="margin-top:.35rem;opacity:.75">${t('下一场：')}${next.name || nextId}</div>` : null}
+    ${open ? html`<div style="padding:0 .1rem .08rem">
+      ${mini || html`<div style="opacity:.6;padding:.04rem 0">${t('战场缩略图待载入…')}</div>`}
+      ${next ? html`<div style="margin-top:.07rem;opacity:.75">${t('下一场：')}${next.name || nextId}</div>` : null}
     </div>` : null}
   </div>`;
 }

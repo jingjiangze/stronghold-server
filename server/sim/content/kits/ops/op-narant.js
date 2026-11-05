@@ -43,9 +43,10 @@ import { boundedCount } from '../../../../../shared/plugins/limits.js';
 import { bbCap } from '../../../../../shared/plugins/officialBounds.js';
 import { textCount } from '../../../../../shared/plugins/textNumber.js';
 import { num, talentBb, moduleBb, traitBb, skillRec, statBuff, toggleBuff, onHitBy, enemiesInGrid, cheb, up, giveSp } from '../shared/tier1.js';
-import { canTargetEnemy } from '../../../targeting.js';
-import { isHpLoss, cancelDamage } from '../../../attack.js';
 import { hypot } from '../../../detmath.js';
+import { canTargetEnemy } from '../../../targeting.js';
+import { isHpLoss } from '../../../damage.js';
+
 
 const S1 = 'skchr_narant_1';
 const S2 = 'skchr_narant_2';
@@ -109,8 +110,8 @@ function missHit(battle, st, ctx) {
     if (d.attackId) st.last.set(e, { id: d.attackId, miss });
   }
   if (!miss) return;
-  const cancelled = cancelDamage(d, 'miss');
-  if (cancelled) ctx.stopPropagation = true;
+  d.cancel = true;
+  ctx.stopPropagation = true;
   if (ctx.target) battle.fx('dodge', { x: ctx.target.x, y: ctx.target.y, id: ctx.target.id });
 }
 function installMiss(battle, unit, phys, arts) {
@@ -217,9 +218,9 @@ export default {
           const reset = () => { unit.mem.narantLoot = { a: 0, d: 0 }; };
           reset();
           battle.on('deploy', (c) => { if (c.unit === unit) reset(); }, { owner: unit });
-          battle.on('damageBeforeApply', (c) => {
+          battle.on('damaged', (c) => {
             const e = c.target;
-            if (c.source !== unit || !c.dmg?.isAttack || !e || !e.alive || e.side !== 'enemy' || !up(unit)) return;
+            if (c.source !== unit || !c.dmg?.isAttack || !e || e.side !== 'enemy' || !up(unit)) return;
             const times = nearTimes > 1 && cheb(unit, e) <= 1 ? nearTimes : 1;
             const me = unit.mem.narantLoot;
             let per = losses.get(e);

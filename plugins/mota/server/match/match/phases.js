@@ -290,6 +290,22 @@ export class MatchPhases {
   }
 
   /**
+   * 「包含无场景地图」 (Match opts.incompleteMaps, room.setIncompleteMaps; off by default): the stage pool every draw below
+   * starts from. Off, only the stages with an official scene package stay (server/match/sceneStages.js, the Set Match puts
+   * on `this.sceneStages` / the gd); on, the mode's full list. Narrowing to nothing (no manifest, a tier whose maps all
+   * lack a scene) falls back to the full pool, so a draw never runs dry.
+   * @returns {string[]}
+   */
+  _stagePool() {
+    const pool = Array.isArray(this.gd?.mode?.stages) ? this.gd.mode.stages : [];
+    const scene = this.sceneStages instanceof Set ? this.sceneStages
+      : (this.gd && this.gd.sceneStages instanceof Set ? this.gd.sceneStages : null);
+    if (this.incompleteMaps === true || !scene) return pool;
+    const kept = pool.filter((id) => scene.has(id));
+    return kept.length ? kept : pool;
+  }
+
+  /**
    * 每回合从模式的 stages 池里按权重抽一张战场（业主 2026-10-17：14 回合场景不同步，只在 boss 场合变化）。
    *
    * 随机流独立派生（`deriveSeed(seed, 'stage:<round>')`），所以不会扰动 rngWaves / rngDraft 的序列，
@@ -299,11 +315,25 @@ export class MatchPhases {
   /** 第 r 回合该用哪张图（纯函数：不碰状态，重放/预测都走它）。池不足 2 张时返回 null（沿用当前图）。 */
   stageIdForRound(r) {
     if (this.stageForced) return null;
-    const pool = Array.isArray(this.gd.mode?.stages) ? this.gd.mode.stages : [];
+    // 肉鸽（2026-11-04）：节点决定本回合的地图层级 —— rogue-core 的 mixin 把节点 tier 解析成
+    // `rogue_ro4_<tier>-*` 里的一张。插件未安装（无 rogueStageFor）或该 tier 没有可用图时返回 null，
+    // 落回下面的权重抽取（Boss 回合的 b-* 过滤仍保留为兜底）。`stageForced` 仍优先：编辑器「试玩这张图」不被覆盖。
+    if (this.isRogue === true && typeof this.rogueStageFor === 'function') {
+      const s = this.rogueStageFor(r);
+      if (s) return s;
+    }
+    const pool = this._stagePool();
     let cands = pool
       .map((id) => [id, this.gd.stage(id)])
       .filter(([, st]) => st && st.active !== false && Number(st.weight) > 0)
       .map(([id, st]) => [id, Number(st.weight)]);
+    // 肉鸽 Boss 节点（2026-11-03）：只从官方 `b-*` 变体图里抽 —— Boss 本体的出怪挂在那些图的出怪表上；
+    // 过滤后一张都没有时回全池（老数据 / 未重新生成时行为不变）。「包含无场景地图」的收窄在 `_stagePool()` 里已做完，
+    // 所以 b-* 依旧优先。其余（排除上一张、权重、seed 派生）照旧。
+    if (this.isRogue === true && r === this.gd.bossRound) {
+      const bossCands = cands.filter(([id]) => /rogue_.*_b-/.test(String(id)));
+      if (bossCands.length) cands = bossCands;
+    }
     if (cands.length < 2) return null;
     // 「每回合换图」的换：不上一回合刚打过的那张（否则相邻两回合可能抽到同一张，看起来像没换）。
     // 用 r-1 自己的派生流再算一次，保持确定性（重放/预测同一条链）；池里只剩这一张时仍然用它。
@@ -356,7 +386,7 @@ export class MatchPhases {
   bossStageFor(r) {
     const id = this.stageIdForRound(r);
     if (id && id !== this.stageId) return id;
-    const cands = (Array.isArray(this.gd.mode.stages) ? this.gd.mode.stages : [])
+    const cands = this._stagePool()
       .filter((x) => x !== this.stageId && this.gd.stage(x) && this.gd.stage(x).active !== false && Number(this.gd.stage(x).weight) > 0);
     if (!cands.length) return id || this.stageId;
     const rng = createRng(deriveSeed(this.seed, `stage-boss:${r}`));
@@ -440,6 +470,10 @@ export class MatchPhases {
         }
       }
     } catch (e) { this.reportError?.('rogue affix toast', e); }
+    // 肉鸽节点推进（P0，2026-11-03）：rogue-core 插件的 mixin 提供；未安装时 typeof 守卫跳过。
+    try {
+      if (this.isRogue === true && typeof this.rogueNodeBegin === 'function') this.rogueNodeBegin(r);
+    } catch (e) { this.reportError?.('rogue node', e); }
     // 攻防回合：狩猎期窗口内每回合红蓝互换攻守（首攻红队）；非攻防回合两者为 null。
     const role = this.roleTeamsFor(r);
     this.attackingTeam = role ? role.attack : null;
@@ -448,15 +482,20 @@ export class MatchPhases {
     // 战场刷新（业主 2026-10-22 定稿）：
     //   * 「随机地图」开着（默认）：协同共竞**每回合**抽一张新图（原有规则）；其他玩法沿用官方规则（开局一张，只在 boss 关换）。
     //   * 关掉：开局前已经随机抽了一张（Match 的 setupMatchWaves），整局不换，**只在 boss 关（含隐藏 boss 关）刷新一次**。
+    //   * 肉鸽例外（2026-11-03）：**与「随机地图」开关无关**，每回合都换图 —— 「每层不同地图」是玩法本体，
+    //     而 `randomStage` 默认 false，写在「开着才换」的分支里等于永远不换。
     // 关闭态的下一张图提前一回合算进 `nextStageId`，客户端在本回合空闲时预热场景包（换图不白屏）。
     // 顺序要紧：必须在 `_planBossWaves` 之前（同一关的出战表按新图的几何算）。
     const bossNext = (x) => x === this.gd.bossRound || x === this.gd.hiddenRound;
-    if (this.randomStage !== true) {
+    if (this.isRogue === true) {
+      // 肉鸽：每回合换图（stageIdForRound 自带 seed 派生、且排除上一张，重放安全）
+      this.pickRoundStage(r);
+    } else if (this.randomStage !== true) {
       // 业主 2026-10-27：**关掉就整局同一张图** —— boss 关也不再刷新。此前「关 = 开局一张、boss 关刷新一次」
       // 会让玩家在 R14/R15 看到地图被换掉（线上反馈「关了还是被切图」）。
       this.nextStageId = this.stageId;
-    } else if (this.isXie || this.isRogue === true) {
-      // 协同共竞与肉鸽都每回合换图（肉鸽靠它做「每层不同地图」）；stageIdForRound 自带 seed 派生，重放安全
+    } else if (this.isXie) {
+      // 协同共竞每回合换图（「随机地图」开着时）；stageIdForRound 自带 seed 派生，重放安全
       this.pickRoundStage(r);
     } else if (bossNext(r)) {
       this.pickBossStage(r);
@@ -484,7 +523,9 @@ export class MatchPhases {
     // round start: its recompute() checks the board on the field the player deploys on this round (deployFieldOf reads
     // the boss pairing), so R14 → R15 never re-checks a boss-field board against the normal field (user playtest #5
     // item 7). rngWaves is used only here, so the order leaves every random stream unchanged.
-    const isBoss = r === this.gd.bossRound || r === this.gd.hiddenRound;
+    // 肉鸽（mode_rogue_*）例外（2026-11-03）：Boss / 隐藏回合仍按**普通战斗**打 —— 官方图在 Boss 半场（rows 0–5）
+    // 没有部署格，Boss 本体由该图的出怪表带 `tag:'boss'` 出场（tools/build-rogue-maps-v2.mjs）。其它模式逐字不变。
+    const isBoss = this.isRogue !== true && (r === this.gd.bossRound || r === this.gd.hiddenRound);
     if (isBoss) {
       this._planBossWaves();
     } else {

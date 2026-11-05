@@ -1,3 +1,4 @@
+import { installWebTraits } from './webTraits20261101.js';
 // server/sim/content/garrisons/battle.js — IN_BATTLE 特质 (garrisons) of the operators on the field.
 //
 // Each operator carries `unit.def.raw.garrisonIds` (elite chess carry the `_b` garrisons); the IN_BATTLE ones are
@@ -37,12 +38,14 @@
 //                       ignore and dealt/taken multipliers; a tie keeps the type).
 //   NONE                风丸 "2 copies merge" — prep rule (chess.upgradeNum 2), nothing in battle.
 //
-// Hooks: priority 0, except 弱点伤害 (damageCalculate, WEAKNESS_PRIORITY −10: decided on the final amount after the ATK
+// Hooks: priority 0, except 弱点伤害 (hit, WEAKNESS_PRIORITY −10: decided on the final amount after the ATK
 // multipliers). install() registers nothing when no operator carries an IN_BATTLE garrison.
 
 import * as S from '../support/index.js';
-import { mitigate, attackInput } from '../../attack.js';
+import { mitigate } from '../../damage.js';
 import { frontOf } from '../../dir.js';
+import { installOwnerBattle } from './ownerBattle.js';
+import { ownerLayerCap } from '../support/ownerLayerCap.js';
 
 const ids = (s) => String(s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const EMPTY = Object.freeze([]);
@@ -54,37 +57,12 @@ function garrisonIdsOf(u) {
   return Array.isArray(list) ? list : EMPTY;
 }
 
-/** 远牙: the trait its own traits grant also gains on body / substitute switches (act2autochess_gar_event_onstart). */
-const FAR_TOOTH_CHAR = 'char_430_fartth';
-let FAR_TOOTH = null;
-let FAR_TOOTH_DATA = null;
-const FAR_TOOTH_DEFAULT = Object.freeze(new Set(['garrison_108_a', 'garrison_108_b']));
-/**
- * The garrison ids 远牙's own traits grant (bbStr.give_garrison_id): garrison_108_a/b (granted by garrison_148_a/b), or
- * on another version's build (S.isVersionData) the grants found by charId over its official chess records — garrison
- * and chess ids are season-local.
- */
-function farToothGrants() {
-  const d = S.gameData();
-  if (!S.isVersionData(d)) return FAR_TOOTH_DEFAULT;
-  if (FAR_TOOTH_DATA !== d) {
-    FAR_TOOTH_DATA = d;
-    FAR_TOOTH = new Set();
-    for (const [id, c] of Object.entries(d.chess || {})) {
-      if (c?.charId !== FAR_TOOTH_CHAR || !S.isOfficialId('chess', id) || !Array.isArray(c.garrisonIds)) continue;
-      for (const gid of c.garrisonIds) {
-        const give = S.garrisonRecord(gid)?.bbStr?.give_garrison_id;
-        if (typeof give === 'string' && give) FAR_TOOTH.add(give);
-      }
-    }
-  }
-  return FAR_TOOTH;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // install
 
 export function install(battle) {
+  installOwnerBattle(battle);
+  installWebTraits(battle);
   const all = [];
   const owned = new Map(); // unit → Set(garrisonId)
   const add = (unit, g, grantedBy = null) => {
@@ -112,8 +90,8 @@ export function install(battle) {
 
   const grants = [];
   for (const it of all.slice()) {
-    if (it.key !== 'ADD_BOND' && it.g.battleRuneKey !== 'give_garrion_to_front') continue;
-    const g2 = S.garrisonRecord(it.bbStr.give_garrison_id ?? it.bbStr.give_garrion_id);
+    if (it.key !== 'ADD_BOND') continue;
+    const g2 = S.garrisonRecord(it.bbStr.give_garrison_id);
     if (!g2 || g2.eventType !== 'IN_BATTLE') continue;
     for (const t of grantTargets(battle, it)) {
       const got = add(t, g2, it);
@@ -222,11 +200,11 @@ export function fireGain(battle, it) {
   // granted a fresh 10 (PR #178 review). The base amount counts toward it (魔王's extra does not, as in gainLayers).
   const whole = it.bbStr.bond_type === 'bond_actived_maxstack' && Number.isFinite(it.cap);
   if (whole) {
-    n = Math.min(Math.floor(n), Math.max(0, Math.floor(it.cap) - (it.wholeUsed ?? 0)));
+    n = Math.min(Math.floor(n), Math.max(0, Math.floor(ownerLayerCap(battle, it.unit, it.cap)) - (it.wholeUsed ?? 0)));
     if (!(n > 0)) return 0;
   }
   const added = S.gainLayers(battle, {
-    playerId: it.unit.ownerId, bonds, n, requireActive: true, source: it.unit, reason: 'garrison',
+    playerId: it.unit.ownerId, bonds, n, requireActive: it.bbStr.require_active !== 'false', source: it.unit, reason: 'garrison',
     cap: whole ? Infinity : it.cap, capKey: whole ? null : it.capKey,
   });
   if (whole && added > 0) it.wholeUsed = (it.wholeUsed ?? 0) + n;
@@ -268,18 +246,6 @@ function ammoScope(it, u) {
 }
 
 const INSTALLERS = {
-  act1autochess_gar_event_recoverhp_enemy_abflag_inrange(battle, list) {
-    battle.on('statusApplied', ({ target, status, entered }) => {
-      if (!entered || target?.side !== 'enemy') return;
-      for (const it of list) {
-        if (status !== (AB_FLAG_STATUS[S.num(it.bb.check_ab_flag, 16)] ?? 'freeze') || !S.onField(it.unit) || !S.inRange(it.unit, target)) continue;
-        // [ASSUMED] The text only says "数次". One pulse immediately, then two at one-second intervals.
-        for (let i = 0; i < 3; i++) battle.after(i, () => {
-          if (S.onField(it.unit)) battle.heal({ source: it.unit, target: it.unit, amount: it.unit.s.maxHp * S.num(it.bb.hp_ratio) });
-        });
-      }
-    });
-  },
   act1autochess_gar_event_useskill(battle, list) {
     const m = byUnit(list);
     battle.on('skillStart', ({ unit }) => {
@@ -357,8 +323,7 @@ const INSTALLERS = {
     });
     // Player-confirmed: 远牙's granted trait also gains on each body / substitute switch (DESIGN §28.5).
     // Restrict this extra trigger to that trait; use its existing amounts, active-bond checks and battle cap.
-    const granted = farToothGrants();
-    const farTooth = byUnit(list.filter((it) => granted.has(it.gid)));
+    const farTooth = byUnit(list.filter((it) => it.gid === 'garrison_108_a' || it.gid === 'garrison_108_b'));
     if (farTooth.size) battle.on('dollSwap', ({ unit }) => {
       const arr = farTooth.get(unit);
       if (arr) for (const it of arr) fireGain(battle, it);
@@ -476,11 +441,13 @@ function installReaders(battle, by) {
   const recompute = () => { for (const it of list) applyReader(battle, it); };
   recompute();
   let pending = false;
-  battle.on('layerGain', () => {
+  const queueRecompute = () => {
     if (pending) return;
     pending = true;
     battle.after(0, () => { pending = false; recompute(); });
-  });
+  };
+  battle.on('layerGain', queueRecompute);
+  battle.on('layerLoss', queueRecompute);
   const onstart = by.get('act2autochess_gar_eff_attrByBond_add_onstart');
   if (onstart) {
     const m = byUnit(onstart);
@@ -508,17 +475,15 @@ export function weaknessType(source, target, dmg) {
     resIgnorePct: S.num(dmg.resIgnorePct, 0) + (ss ? S.num(ss.resIgnorePct, 0) : 0),
     resIgnoreFlat: S.num(dmg.resIgnoreFlat, 0) + (ss ? S.num(ss.resIgnoreFlat, 0) : 0),
   };
-  const ts = target.s;
-  // Native weakness theory includes ATK/scales/additions/penetration, not source damage or injury multipliers.
-  const ph = mitigate(attackInput(dmg.amount, 'phys', ts), 'phys', ts, ign);
-  const ar = mitigate(attackInput(dmg.amount, 'arts', ts), 'arts', ts, ign);
+  const ph = mitigate(dmg.amount, 'phys', target.s, ign) * (ss ? S.num(ss.physDealtMul, 1) : 1) * S.num(target.s.physTakenMul, 1);
+  const ar = mitigate(dmg.amount, 'arts', target.s, ign) * (ss ? S.num(ss.artsDealtMul, 1) : 1) * S.num(target.s.artsTakenMul, 1);
   if (ar > ph + 1e-9) return 'arts';
   if (ph > ar + 1e-9) return 'phys';
   return dmg.type;
 }
 const bound = (t) => !!(t.s && t.s.flags && t.s.flags.bind) || !!t.findBuff('bind');
 
-/** Priority of the 弱点伤害 conversion: after default-priority source calculation modifiers, so the scaled input decides. */
+/** Priority of the 弱点伤害 conversion: after every default-priority hit modifier, so the final amount decides. */
 export const WEAKNESS_PRIORITY = -10;
 
 function installHitMods(battle, by) {
@@ -550,7 +515,7 @@ function installHitMods(battle, by) {
   }
   const chaos = new Set((by.get('act1autochess_gar_eff_chaos') ?? EMPTY).map((it) => it.unit));
   if (chaos.size) {
-    battle.on('damageCalculate', ({ source, target, dmg }) => {
+    battle.on('hit', ({ source, target, dmg }) => {
       if (!source || !chaos.has(source) || !target || target.side !== 'enemy' || !dmg) return;
       if (dmg.type === 'phys' || dmg.type === 'arts') dmg.type = weaknessType(source, target, dmg);
     }, { priority: WEAKNESS_PRIORITY });

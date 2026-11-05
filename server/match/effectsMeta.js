@@ -536,6 +536,11 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
     bandId: () => ps.bandId,
     teamMedicGranted: () => m.teamMedicGranted(),
     shopLevel: () => ps.shop.level,
+    /**
+     * 商店牌库的分组号 (owner 2026-11-05「每四人一个分组牌库」): 4 人一组的分组号, assigned by `Match` from
+     * shared/playerCapacity.js poolGroupSizes. 0 before the assignment (and for every 4-seat or smaller room).
+     */
+    poolId: () => ps.poolId ?? 0,
     bond: (id) => (ps.bonds[id] ? { ...ps.bonds[id] } : null),
     bonds: () => Object.fromEntries(Object.entries(ps.bonds).map(([k, v]) => [k, { ...v }])),
     bondActive: (id) => !!(ps.bonds[id] && ps.bonds[id].active),
@@ -643,7 +648,7 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
         return typeof opts.filter === 'function' ? !!opts.filter(id) : true;
       };
       const extra = typeof ps.diyStockEntries === 'function' ? ps.diyStockEntries() : null;
-      return m.pool.roll(rng, { maxTier: Number.isInteger(opts.maxTier) ? opts.maxTier : 6, tier: Number.isInteger(opts.tier) ? opts.tier : null, filter: f, extra, ignoreCounts: opts.ignoreCounts === true });
+      return ps.poolGroup().roll(rng, { maxTier: Number.isInteger(opts.maxTier) ? opts.maxTier : 6, tier: Number.isInteger(opts.tier) ? opts.tier : null, filter: f, extra, ignoreCounts: opts.ignoreCounts === true });
     },
     rollItem: (opts = {}) => rolls.rollItemId(opts),
     /**
@@ -654,6 +659,8 @@ export function makeCtx(m, ps, source, hook, ev = null, preview = null) {
       shopLevel: ps.shop.level,
       // a shared-pool draw also takes the player's 自选 stock, its bonds read through the player's view (rollChess)
       extra: typeof ps.diyStockEntries === 'function' ? ps.diyStockEntries() : null, chessOf: (id) => gd.chess(id),
+      // the player's own 4-player group pool (owner 2026-11-05 分组牌库); `...opts` may override it
+      pool: ps.poolGroup(),
       ...opts,
     }),
     /**

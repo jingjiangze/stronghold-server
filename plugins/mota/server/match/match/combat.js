@@ -13,9 +13,26 @@ import { previewPlayer } from '../preview.js';
 import { morphBattleOpt } from '../../../shared/plugins/rules.js';
 
 export class MatchCombat {
+  /**
+   * 危机合约 (shared/contractEffects.js) as the Battle options server/sim/Battle.js reads: `contractOpStatMul`,
+   * `contractHealMul`, `contractLayerCap` (copied onto the battle's data view — players.js / damage.js /
+   * economy.js read them from there). Only non-neutral keys go out: a room without contracts (or with contracts that
+   * touch none of the three) passes exactly the options it always passed, and Battle grows no data key.
+   */
+  _contractOpts() {
+    const fx = this.fx;
+    if (!fx) return {};
+    const op = fx.opStatMul;
+    return {
+      ...(op && (op.atk !== 1 || op.def !== 1 || op.hp !== 1) ? { contractOpStatMul: { ...op } } : {}),
+      ...(fx.healMul !== 1 ? { contractHealMul: fx.healMul } : {}),
+      ...(fx.bondLayerCap != null ? { contractLayerCap: { cap: fx.bondLayerCap } } : {}),
+    };
+  }
+
   /** Construct a battle; a constructor failure yields a finished stand-in (clean result) and is logged. */
   newBattle(opts, { preview = false } = {}) {
-    const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts, ...morphBattleOpt(this.rules),
+    const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts, ...this._contractOpts(), ...morphBattleOpt(this.rules),
       ...(preview ? { logger: {}, quiet: true } : {}) };
     try {
       return new this.BattleClass(full);
@@ -94,6 +111,29 @@ export class MatchCombat {
 
   _normalBattle(ps) { return this.newBattle(this._normalOpts(ps)); }
 
+  /**
+   * 本场战斗的模拟场地 rect（Battle 寻路 / 部署的边界）。
+   *
+   * 肉鸽（mode_rogue_*）：官方图就是棋盘，用该图 `rogueFrame` 的**完整边界**（clamp 到 19×21）——
+   * rows 9–12 的窗口只覆盖官方图的一部分，路线端点会被吸附、传送 steps 失效（2026-11-03 审计）。
+   * 其它模式（含非肉鸽的 `randomStage` / `isXie` / boss 回合）逐字保持 `GEO.NORMAL_RECT`。
+   * @returns {{r0:number,r1:number,c0:number,c1:number}}
+   */
+  _fieldRect() {
+    if (this.isRogue === true) {
+      const frame = this.gd && typeof this.gd.stage === 'function' ? this.gd.stage(this.stageId)?.rogueFrame : null;
+      if (frame && Number.isFinite(Number(frame.row)) && Number.isFinite(Number(frame.col))) {
+        const clampI = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.trunc(v)));
+        const r0 = clampI(Number(frame.row), 0, GEO.ROWS - 1);
+        const c0 = clampI(Number(frame.col), 0, GEO.COLS - 1);
+        const h = Math.max(1, Math.trunc(Number(frame.h)) || 1);
+        const w = Math.max(1, Math.trunc(Number(frame.w)) || 1);
+        return { r0, r1: clampI(r0 + h - 1, r0, GEO.ROWS - 1), c0, c1: clampI(c0 + w - 1, c0, GEO.COLS - 1) };
+      }
+    }
+    return { ...GEO.NORMAL_RECT };
+  }
+
   /** Battle options of a player's normal field (after the onBattleStart handlers). */
   _normalOpts(ps, { preview = false, board = ps.board } = {}) {
     const wave = preview ? structuredClone(this.wave) : this.wave;
@@ -152,7 +192,7 @@ export class MatchCombat {
       modeId: this.modeId,
       round: this.round,
       stageId: this.stageId,
-      rect: { ...GEO.NORMAL_RECT },
+      rect: this._fieldRect(),
       timeLimit: wave.timeLimit,
       players: [ev.input && typeof ev.input === 'object' ? ev.input : input],
       spawns: this._sanitizeSpawns(Array.isArray(ev.spawns) ? ev.spawns : spawns, ps.playerId),
@@ -162,6 +202,9 @@ export class MatchCombat {
       fieldId: `n:${ps.playerId}`,
       enemyOverrides: wave.overrides,
       waveId: wave.templateId,
+      // 危机合约 (shared/contractEffects.js): the room-wide battle modifiers — this object is also what the
+      // client-side field's BattleSpec is built from (clientCombat._ccField), so the browser sim reads them too
+      ...this._contractOpts(),
     };
   }
 

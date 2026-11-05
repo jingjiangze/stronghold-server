@@ -1,10 +1,8 @@
 // server/sim/content/kits/ops/chess_char_5_06-etlchi.js — 隐德来希 (char_4010_etlchi) kit, tier 5.
 // Conventions of the tier-5 kits: ../shared/tier5.js; kit contract and rules: ../README.md.
 
-import { damageAttackType, mitigate } from '../../../attack.js';
-import {
-  RING1, num, on, talent, talentRec, skillGrid, mods, dist, lazySkills, instantKind,
-} from '../shared/tier5.js';
+import { mitigate } from '../../../damage.js';
+import { RING1, num, on, talent, talentRec, skillGrid, mods, dist, lazySkills, instantKind } from '../shared/tier5.js';
 
 /** 隐德来希 S3 "每次攻击对心烛至少造成35%攻击力的伤害". */
 const CANDLE_MIN_ATK = 0.35;
@@ -29,7 +27,6 @@ export default {
     const candleKey = talentRec(chess, 2)?.bbStr?.take_extra_enemy_key ?? CANDLE_KEY;
     const aroundN = (battle, a) => battle.foesInRadius(a.x, a.y, RING1).length;
     return {
-      trait: { selfHealFilter: dmg => damageAttackType(dmg) !== 'BUFF' },
       skills: lazySkills({
         skchr_etlchi_1: () => ({ kind: instantKind(chess, def), attack: { atkScale: num(bb.atk_scale, 1), hits: 2 } }),
         skchr_etlchi_2: () => ({

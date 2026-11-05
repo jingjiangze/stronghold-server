@@ -26,7 +26,7 @@
 
 import { PHASE, BOND_LAYER_CAP } from '../../shared/constants.js';
 import { morphSlotPolicy, ruleOption } from '../../shared/plugins/rules.js';
-import { FIELD, canPlace, placeClass, positionClass, parseKey } from './board.js';
+import { inField, rectOfMap, canPlace, placeClass, positionClass, parseKey } from './board.js';
 import { computeBonds } from './bondsMeta.js';
 
 const PHASES = new Set(Object.values(PHASE));
@@ -41,6 +41,10 @@ export function collectViolations(m, { limit = 25 } = {}) {
   const fail = (msg) => { if (out.length < limit) out.push(msg); };
   const gd = m.gd;
   const held = new Map();
+  // copies held per 4-player pool group (owner 2026-11-05「每四人一个分组牌库」): each group balances its own stock,
+  // so the room-wide `held` above must not be used for the pool check (it would count another group's pieces)
+  const heldOfGroup = new Map();
+  const groupHeld = (gid) => { let g = heldOfGroup.get(gid); if (!g) heldOfGroup.set(gid, g = new Map()); return g; };
   const uids = new Set();
   const banned = new Set(m.bannedChess || []);
   const note = (ps, p) => {
@@ -116,6 +120,10 @@ export function collectViolations(m, { limit = 25 } = {}) {
         const base = gd.baseIdOf(p.id);
         const tally = rec.isDiy ? diyHeld : held;
         tally.set(base, (tally.get(base) || 0) + (p.poolCopies || 0));
+        if (tally === held) {
+          const g = groupHeld(ps.poolId ?? 0);
+          g.set(base, (g.get(base) || 0) + (p.poolCopies || 0));
+        }
       } else if (p.kind === 'item') {
         if (!gd.item(p.id)) fail(`${id}: unknown item ${p.id}`);
         countItem(p);
@@ -135,7 +143,8 @@ export function collectViolations(m, { limit = 25 } = {}) {
     const dmap = typeof m.deployMapFor === 'function' ? m.deployMapFor(ps) : ps.deployMap();
     for (const [k, p] of ps.board) {
       const [r, c] = parseKey(k);
-      if (!(r >= FIELD.r0 && r <= FIELD.r1 && c >= FIELD.c0 && c <= FIELD.c1)) fail(`${id}: piece outside the board at ${k}`);
+      // the boundary is the field this player deploys on (a rogue stage's own frame; FIELD on the classic board)
+      if (!inField(r, c, rectOfMap(dmap))) fail(`${id}: piece outside the board at ${k}`);
       if (p.kind === 'item') { fail(`${id}: item ${p.id} stands on the board`); continue; }
       const rec = p.kind === 'token' ? pgd.token(p.id) : pgd.chess(p.id);
       const cls = p.kind === 'chess' ? placeClass(ps, rec) : positionClass(rec);
@@ -199,13 +208,20 @@ export function collectViolations(m, { limit = 25 } = {}) {
     for (const [base, n] of diyHeld) if (!(ps.diyStock && ps.diyStock.has(base)) && n !== 0) fail(`${id}: 自选 slot ${base} without stock holds ${n} copies`);
   }
 
-  // shared pool accounting
-  for (const [base, e] of m.pool.entries) {
-    if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool ${base}: balance ${e.left} cap ${e.cap}`);
-    const h = held.get(base) || 0;
-    if (e.left + h !== e.cap) fail(`pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+  // shared pool accounting, per pool group (owner 2026-11-05 分组牌库): a group's stock balances against the copies its
+  // own players hold — `held` above spans the whole room and must not be used here. A single pool keeps the old text.
+  const pools = m.pools && m.pools.length ? m.pools : [m.pool];
+  for (let gid = 0; gid < pools.length; gid++) {
+    const pool = pools[gid];
+    const gheld = heldOfGroup.get(gid) || new Map();
+    const tag = pools.length > 1 ? `[${gid}]` : '';
+    for (const [base, e] of pool.entries) {
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool${tag} ${base}: balance ${e.left} cap ${e.cap}`);
+      const h = gheld.get(base) || 0;
+      if (e.left + h !== e.cap) fail(`pool${tag} ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+    }
+    for (const [base, n] of gheld) if (!pool.has(base) && n !== 0) fail(`non-pool chess${tag} ${base} holds ${n} copies`);
   }
-  for (const [base, n] of held) if (!m.pool.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
 
   // Displayed shop cards and item rewards may overdraw; itemPool.debt is that overage (#624). Fixed gift families
   // may overdraw without a debt entry. debt > over is always a missed repay or a debt recorded for a piece not kept.

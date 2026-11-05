@@ -20,6 +20,8 @@ export const PLUGIN_API = Object.freeze({ current: 2, min: 1 });
 
 // 座位上限：原版 4。放开到 20（20 人方案阶段 1）。
 // DEFAULT_SEATS 是「默认房间大小」——UI 的「人数上限」只在 MAX_SEATS > DEFAULT_SEATS 时出现。
+/** 0.4.3 sim 需要的基准座位数（一个商店池多少人）；比例规则一律按 `players / BASE_SEATS` 计，不按 MAX_SEATS。 */
+export const BASE_SEATS = 4;
 export const MAX_SEATS = 20;
 export const DEFAULT_SEATS = 4;
 /** 分队（阶段 2）：4 个颜色组，每组最多 TEAM_MAX 人 */
@@ -38,6 +40,16 @@ export const MAX_SPECTATORS = (() => {
   const raw = typeof process !== 'undefined' && process.env ? Number(process.env.SP_MAX_SPECTATORS) : NaN;
   return Number.isInteger(raw) && raw > 0 ? raw : Infinity;
 })();
+/** 房间简介最大长度（码点）：协议层 room.setDesc 校验与服务端 cleanRoomDesc 共用一个数。 */
+export const ROOM_DESC_MAX = 60;
+/** 可选房间档位：3 的倍数（12 = 三组各 4 人，分队刚好满员），4 是原版基准，20 是房间上限。 */
+export const ROOM_CAPACITIES = Object.freeze([4, 8, 12, 16, 20]);
+/** 商店池分队的显示名（按 1 起的 pool id）；20 席最多 5 组，其余是余量。 */
+export const SQUAD_NAMES = Object.freeze(['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta']);
+/** 一局发牌的最大张数 = 最大 g.choice 下标 + 1（20 席发 22 张 → 上限 22）。 */
+export const MAX_DRAFT_CARDS = MAX_SEATS + 2;
+/** 摊还拦截 (联防) 提前撤离所需的存活玩家同意比例。 */
+export const UNITE_ABANDON_RATIO = 0.8;
 export const ROOM_CODE_LEN = 4;
 export const NAME_MAX_LEN = 12;
 
@@ -49,6 +61,11 @@ export const NAME_MAX_LEN = 12;
 export const LEGACY_DIFFICULTIES = ['FUNNY', 'NORMAL', 'HARD', 'ABYSS'];
 export const DIFFICULTY_TIERS = Array.from({ length: 20 }, (_, i) => `N${i + 1}`);
 export const DIFFICULTIES = [...DIFFICULTY_TIERS];
+/**
+ * 2026-11-03 业主：N1–N20 只属于肉鸽；标准/同盟/对抗/协同共竞仍用旧 4 档。
+ * 协议层继续同时接受两套（老房间 / 老客户端 / 历史统计不炸），选择器与大厅/版本校验读这张表。
+ */
+export const difficultiesFor = (roomMode) => (roomMode === 'rogue' ? DIFFICULTY_TIERS : LEGACY_DIFFICULTIES);
 /** 旧档名 → 新档（只在需要「同一难度」语义的地方用：默认档、统计归并）。 */
 export const LEGACY_DIFFICULTY_ALIAS = Object.freeze({ FUNNY: 'N1', NORMAL: 'N8', HARD: 'N14', ABYSS: 'N20' });
 const LEGACY_NAMES = { FUNNY: N_('标准模拟'), NORMAL: N_('险境模拟'), HARD: N_('绝境模拟'), ABYSS: N_('终极模拟') };
@@ -91,10 +108,18 @@ export const REVIVAL_COST_STEP = 5;
 export const REVIVAL_UNAVAILABLE_REASONS = Object.freeze(['left', 'already-used', 'disabled', 'match-ended', 'no-voter', 'pool', 'window-closed', 'window-expired']);
 
 
+// 训练模式 (入门协议): data/config.json `mode_training_1` is a LOCAL (solo) mode, so its id does not follow the
+// single/multi naming rule. The host client imports these from /shared/constants.js (the plugin copy is what the
+// browser overlay serves), so keep the same names here.
+export const TRAINING_DIFFICULTY = 'TRAINING';
+export const TRAINING_MODE_ID = 'mode_training_1';
+
 // modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi; a room `variant`
 // (e.g. 'xie' = 协同共竞) overrides the type, giving `mode_<variant>_<difficulty>` (DESIGN §29).
 export const modeIdFor = (roomMode, difficulty, variant = null) =>
-  `mode_${variant || (roomMode === 'solo' ? 'single' : 'multi')}_${difficulty.toLowerCase()}`;
+  difficulty === TRAINING_DIFFICULTY
+    ? TRAINING_MODE_ID
+    : `mode_${variant || (roomMode === 'solo' ? 'single' : 'multi')}_${difficulty.toLowerCase()}`;
 
 export const PHASE = Object.freeze({
   LOBBY: 'LOBBY',
@@ -186,8 +211,11 @@ export function layerGainRoom(before, n) {
  * Checked in server/sim/damage.js (dealDamage after DEF / RES and every multiplier, before shields; Battle.loseHp — not
  * the 胄 drone link's pool share, `noHitLimit`, DESIGN §25.13.4). Minions, normal rounds and 联防 are unaffected.
  * 0 / Infinity = off.
+ *
+ * 本树 2026-11-03 裁决：新 boss 血量 40 万 ~ 500 万，官方的 300000 会把主力一击全部吃掉，故上限提到 1000000。
+ * 命中时的具体处置以消费方为准（0.4.3 sim 的 server/sim/damage.js leaderHitDamage 是钳制而非作废）。
  */
-export const BOSS_HIT_LIMIT = 300000;
+export const BOSS_HIT_LIMIT = 1000000;
 
 // Snapshot unit flag bits (DESIGN §8.2)
 export const UF = Object.freeze({
@@ -374,6 +402,18 @@ export const emoteArtGroup = (id) => { const e = emoteInfo(id); return e ? `emot
 export const emoteArtPath = (id) => { const e = emoteInfo(id); return e ? `/assets/local/emoticon/${e.dir}/${e.picId}.png` : null; };
 export const EMOTE_COOLDOWN_MS = 1000; // activity_table autoChessData.constData.chatCD (s)
 export const EMOTE_BUBBLE_MS = 3000;   // constData.chatTime (s): how long a bubble stays up
+
+// 对局文字聊天（0.4.3 shared 补齐）：长度按**字符**计（中文是常态），冷却独立于表情，避免表情阻塞聊天。
+export const CHAT_MAX_LEN = 40;
+export const CHAT_COOLDOWN_MS = 2000;
+/** 一句话在屏幕上停留多久后淡出。 */
+export const CHAT_LINE_MS = 18000;
+/** 同时显示几行，超出时最旧的提前淡出。 */
+export const CHAT_VISIBLE = 6;
+/** 客户端历史视图保留的行数。 */
+export const CHAT_KEEP = 60;
+/** 房间聊天（room.chat / m.roomChat）保留的行数：服务端 room.state 重放与客户端裁剪共用。 */
+export const ROOM_CHAT_KEEP = 60;
 
 export const DEPLOY_CAP_MAX = 12;
 

@@ -20,7 +20,7 @@
 // Texts go through t() (docs/I18N.md).
 
 import { DEFAULT_VERSION, VERSIONS, versionById, versionSlug } from '../../shared/versions.js';
-import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultyRank, modeIdFor } from '../../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, TRAINING_DIFFICULTY, difficultyRank, modeIdFor } from '../../shared/constants.js';
 import { t, N_ } from '../../shared/i18n.js';
 import { loadPref, savePref, store as appStore } from './store.js';
 
@@ -182,6 +182,8 @@ export function periodLine(id) {
 /**
  * The difficulties a version offers in a room mode: DIFFICULTIES whose mode its config lists (config.modes[modeIdFor()]);
  * all four without a config (the page has not loaded it yet).
+ * 训练模式（入门协议 `mode_training_1`）追加在单人房的末尾：它不在 DIFFICULTIES 里（不进难度阶梯），但数据里有这条
+ * mode 时服务端就允许单人房选它（server/lobby.js offersTraining），所以这里也照同一条规则把它列出来。coop 房不列。
  * @param {any} config the shown data's config.json
  * @param {'solo'|'coop'} roomMode
  * @returns {string[]}
@@ -190,10 +192,14 @@ export function offeredDifficulties(config, roomMode) {
   const modes = isObj(config?.modes) ? config.modes : null;
   if (!modes) return [...DIFFICULTIES];
   const tiers = DIFFICULTIES.filter((d) => isObj(modes[modeIdFor(roomMode, d)]));
-  if (tiers.length) return tiers;
-  // 2026-11-02：老版本的数据里只有旧 4 档 ⇒ 回退到旧档（与 server/versions.js 的 offered 同一条规则）
-  const legacy = LEGACY_DIFFICULTIES.filter((d) => isObj(modes[modeIdFor(roomMode, d)]));
-  return legacy.length ? legacy : [...DIFFICULTIES];
+  let list = tiers;
+  if (!list.length) {
+    // 2026-11-02：老版本的数据里只有旧 4 档 ⇒ 回退到旧档（与 server/versions.js 的 offered 同一条规则）
+    const legacy = LEGACY_DIFFICULTIES.filter((d) => isObj(modes[modeIdFor(roomMode, d)]));
+    list = legacy.length ? legacy : [...DIFFICULTIES];
+  }
+  if (roomMode !== 'solo' || !isObj(modes[modeIdFor(roomMode, TRAINING_DIFFICULTY)])) return list;
+  return list.includes(TRAINING_DIFFICULTY) ? list : [...list, TRAINING_DIFFICULTY];
 }
 
 /**

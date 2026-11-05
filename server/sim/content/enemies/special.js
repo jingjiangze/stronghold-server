@@ -2,15 +2,16 @@
 // …) and their part of KITS (split from content/enemies.js).
 
 import { ALLY_COLLIDER_RADIUS } from '../../constants.js';
+import {capEnemyBurstHit} from '../../../../shared/enemyPressure.js';
 import { canTargetAlly, areaSelectable } from '../../targeting.js';
-import { periodicDamage } from '../../attack.js';
+import { periodicDamage } from '../../damage.js';
 import {
   BOOM_RADIUS, nthOf, stOf, T, elem, hurt, targetsNear, allTargets, areaAllies, areaAlliesInTiles, byPriority,
-  stayRoute, spawnChildren, expose, auraBuff, watchDeaths, onTerrain, castSlot, grantHitShield, attackSkillOf,
+  stayRoute, spawnChildren, expose, auraBuff, watchDeaths, onTerrain, castSlot,
 } from './helpers.js';
 import {
   unblockable, runWhenHit, blockWeight, taunt, maxTargets, ep, nthAttackPower, lowHpBuff, deathBoom, setFloat, float,
-  reborn, frontGuard, unbalanced, skill, kitEp, kitPrisoner, kitStun3,
+  reborn, frontGuard, faceMove, unbalanced, skill, kitEp, kitPrisoner, kitStun3,
 } from './archetypes.js';
 import { hypot } from '../../detmath.js';
 import { passengerBus } from './passengers.js';
@@ -171,10 +172,12 @@ function kitRush(ab) {
       while (a.acc >= iv - 1e-9 && a.tries < max && guard++ < STEP_PER_TICK) { a.acc -= iv; a.tries++; a.n++; grew = true; } // loop-cap: stepOf interval
       if (grew) b.addBuff(e, { key: 'ab:rush', mods: { moveMul: 1 + ms * a.n }, persist: true });
     },
+    hitOut(c,b,e) { if(c.dmg.isAttack)c.dmg.amount=capEnemyBurstHit(b,e,c.dmg.amount,2); },
     dealt(c, b, e, a) {
       if (!a.on) return;
       const t = c.target;
-      const amount = e.s.moveSpeed * scale;
+      // The charge rider and its triggering normal hit share one complete-attack budget.
+      const amount = capEnemyBurstHit(b,e,e.s.moveSpeed*scale,2);
       stop(b, e, a);
       if (t && t.alive && amount > 0) b.dealDamage(e, t, { amount, type: 'phys', canDodge: false, isSkill: true, noSp: true, tags: ['enemyAbility', 'rush'] });
     },
@@ -196,7 +199,7 @@ function kitFirstAoe(ab) {
       a.done = true;
       b.fx('explode', { x: c.target.x, y: c.target.y, r: 1, kind: 'aoeAttack' });
       for (const u of b.alliesInRadius(c.target.x, c.target.y, 1)) {
-        if (u !== c.target) hurt(b, e, u, e.s.atk * scale, 'phys', { ignoreSelect: true, tags: ['aoeAttack'] });
+        if (u !== c.target) hurt(b, e, u, capEnemyBurstHit(b,e,e.s.atk*scale), 'phys', { ignoreSelect: true, tags: ['aoeAttack'] });
       }
     },
   }];
@@ -281,27 +284,6 @@ function catapultVolley(ab, b, e, aim) {
 // ---------------------------------------------------------------------------------------------------------------
 // this family's part of KITS (content/enemies.js spreads the parts in this order)
 
-/**
- * 心虚设计师: while a living blocker stands off the same column, the front is that side; otherwise the walk
- * (faceMove). The unit's `dir` and the display-only snapshot `face` use the same sign, so the model turns with the
- * cut. A blocker on the same column keeps the last sign [ASSUMED: PRTS names the front, not a same-column tie].
- */
-function faceCrshd(b, e, a) {
-  const blk = e.blockedBy;
-  let sign = null;
-  if (blk && blk.alive) {
-    const dx = blk.x - e.x;
-    if (Math.abs(dx) > 1e-6) sign = dx > 0 ? 1 : -1;
-  } else {
-    const dx = e.x - a.px;
-    if (Math.abs(dx) > 1e-6) sign = dx > 0 ? 1 : -1;
-  }
-  if (sign != null) a.facing = sign;
-  e.facing = a.facing;
-  e.mem.publishFacing = true;
-  a.px = e.x;
-}
-
 export const SPECIAL_KITS = Object.freeze({
   // --- SPECIAL 特异 / others
   enemy_1045_hammer: kitStun3,                                       // 粉碎攻坚手 · every 3rd attack stuns
@@ -317,7 +299,7 @@ export const SPECIAL_KITS = Object.freeze({
   enemy_1302_ymtro_2: (ab) => [blockWeight(4), passengerBus(ab)],    // “越长尘” · block ≥4, carries up to Bus.max_cnt
   enemy_1329_cbshld: kitDefDecay,                                    // 弧光镜卫 · DEF/RES drop with every damage instance
   enemy_1329_cbshld_2: kitDefDecay,                                  // 弧光镜卫长 · same
-  enemy_1249_lysdb_2: (ab) => [{ spawn(b, e) { grantHitShield(b, e, T(ab, 'Shield.max_block_damage_cnt') ?? 0); } }], // 莱茵生命防卫科高级成员 · blocks one phys/arts hit
+  enemy_1249_lysdb_2: (ab) => [{ spawn(b, e, a, ab2) { ab2.hitShield = T(ab, 'Shield.max_block_damage_cnt') ?? 0; } }], // 莱茵生命防卫科高级成员 · blocks one phys/arts hit
   enemy_1402_tgshd_2: kitExposeOnHit,                                // 重装侦察兵 · exposes its attackers 5 s
   enemy_1081_sotisd: (ab) => [taunt(T(ab, 'taunt.taunt_level') ?? 0)], // 游击队盾卫 · taunt +1
   enemy_1427_lrnazg: kitNazg,                                        // “灵幛” · attack hits everyone around it (+ on infection tiles)
@@ -330,6 +312,7 @@ export const SPECIAL_KITS = Object.freeze({
     death(c, b) { stOf(b).chalices = Math.max(0, (stOf(b).chalices ?? 1) - 1); },
   }],
   enemy_1025_reveng: (ab) => [lowHpBuff(0.5, { atkPct: T(ab, 'atkup.atk') ?? 0 })],     // 寻仇者 · ATK up below half HP
+  enemy_1025_reveng_2: (ab) => [lowHpBuff(0.5, { atkPct: T(ab, 'atkup.atk') ?? 0 })],   // 红刀复仇者 · native upgraded blackboard, distinct from the named bounty
   enemy_1021_bslime: (ab) => [deathBoom({ scale: T(ab, 'boom.atk_scale') ?? 0 })],       // 高能源石虫 · death: phys blast
   enemy_1067_snslime: (ab, e) => [deathBoom({ scale: T(ab, 'boom.atk_scale') ?? 0, r: (e.def.raw.stats && e.def.raw.stats.rawRangeRadius) || BOOM_RADIUS, status: { key: 'cold', dur: T(ab, 'boom.freeze') ?? 0 } })], // 冰爆源石虫 · death: phys blast + cold
   enemy_1069_icebrk_2: (ab) => [{ hitOut(c, b, e) { if (c.dmg.isAttack && c.target.s.flags.freeze) c.dmg.amount *= T(ab, 'atkup.atk_scale') ?? 1; } }], // 雪怪小队破冰者 · ×3 vs frozen
@@ -356,12 +339,12 @@ export const SPECIAL_KITS = Object.freeze({
         // one not (areaSelectable; it used to skip 迷彩 like a normal attack)
         const t = b.allies().filter((a) => areaSelectable(e, a) && Math.abs(Math.round(a.y) - r0) <= 1 && Math.abs(Math.round(a.x) - c0) <= 1)
           .sort((p, q) => q.hpRatio - p.hpRatio)[0];
-        if (t) { b.fx('explode', { x: t.x, y: t.y, r: 0.5, kind: 'cannon' }); hurt(b, e, t, e.s.atk * (ab.sk.Cannon.bb.atk_scale ?? 0), 'arts'); }
+        if (t) { b.fx('explode', { x: t.x, y: t.y, r: 0.5, kind: 'cannon' }); hurt(b, e, t, capEnemyBurstHit(b,e,e.s.atk*(ab.sk.Cannon.bb.atk_scale??0),CANNON_SHOTS), 'arts'); }
       }, { owner: e });
-    }, { cond: (b, e) => inRange(b, e).length > 0, turn: attackSkillOf('enemy_1273_stmgun_2', 'Cannon') })];   // the attack's turn (DESIGN §35.52)
+    }, { cond: (b, e) => inRange(b, e).length > 0 })];
   },
   // 萨卡兹骸骨拷打者 · heals + ATK stack when a unit within Attack.range_radius is knocked out; leaves 2 血珀 on death — they
-  // stay where it fell, uncounted, and bleed out (enemy_1367_dseed). This mode has no 唤血祭坛 to pulse them.
+  // stay where it fell and wait for a 唤血祭坛 that this mode has none of (inert, not counted)
   enemy_1364_spnaxe_2: (ab) => [{
     death(c, b, e) {
       const key = ab.tS['Summon.enemy_key'], n = T(ab, 'Summon.cnt') ?? 0;
@@ -377,20 +360,6 @@ export const SPECIAL_KITS = Object.freeze({
       b.addBuff(e, { key: 'ab:torture', refresh: 'stack', stacks: 1, maxStacks: T(ab, 'Attack.max_stack_cnt') ?? 1, persist: true, mods: { atkPct: T(ab, 'Attack.atk') ?? 0 } });
     },
     hitOut(c, b, e) { if (c.dmg.isAttack && c.target !== e.blockedBy) c.dmg.amount *= T(ab, 'Attack.attack@ranged_atk_scale') ?? 1; },
-  }],
-  // 血珀 · PRTS 天赋: 自缚, 失衡免疫, 不攻击, 无法被阻挡. With no 唤血祭坛 / 沥血王座 on the field, lose Passive.hp_ratio of
-  // max HP per second (true 流失, can kill). The handbook line is the altar rebirth ("在祭坛处重生为新生血裔"); this mode
-  // has no altar, so that pulse is not modelled. Passive.damage_resistance is 0 (0% 庇护) and applies nothing.
-  enemy_1367_dseed: (ab) => [{
-    spawn(b, e) {
-      e.profile.noAttack = true;
-      b.addBuff(e, { key: 'ab:dseed', persist: true, flags: { selfBound: true, noMove: true, unblockable: true, noDisplace: true } });
-    },
-    iv: 1,
-    tick(b, e) {
-      const r = T(ab, 'Passive.hp_ratio') ?? 0;
-      if (r > 0) b.loseHp(e, e.s.maxHp * r);
-    },
   }],
   enemy_1501_demonk: () => [maxTargets(2)],                          // 萨卡兹百夫长 · attacks 2 targets
   enemy_10018_sgrobh: () => [maxTargets(2)],                         // “独轮车玩具” · attacks 2 targets
@@ -426,18 +395,18 @@ export const SPECIAL_KITS = Object.freeze({
             // "对碰撞范围内的1名当前生命值最高的我方单位" — an area selection: never an airborne 起飞 ally nor an unblocking
             // 隐匿 one (PRTS “帝国的甲胄”; areaAlliesInTiles)
             const t = areaAlliesInTiles(b, e, lock.tileR, lock.tileC, 'box', 1).sort((p, q) => q.hp - p.hp)[0];
-            if (t) hurt(b, e, t, e.s.atk, 'phys');
+            if (t) hurt(b, e, t, capEnemyBurstHit(b,e,e.s.atk,n), 'phys');
           }
         }, { owner: e });
       },
-      hitOut(c, b, e) { if (c.dmg.isAttack && c.target !== e.blockedBy) c.dmg.amount *= T(ab, 'range.attack@atk_scale_range') ?? 1; },
+      hitOut(c, b, e) { if(c.dmg.isAttack){if(c.target!==e.blockedBy)c.dmg.amount*=T(ab,'range.attack@atk_scale_range')??1;c.dmg.amount=capEnemyBurstHit(b,e,c.dmg.amount,e.mem.ab.multi||1);} },
     }, mc ? {
       cd: mc.cd, icd: mc.icd, sk: mc, fire(b, e) { e.mem.ab.multi = boundedCount(mc.bb.times ?? 1, PLUGIN_TIMES_MAX, 1); },
       dealt(c, b, e) {
         const m = e.mem.ab.multi;
         if (!(m > 1)) return;
         e.mem.ab.multi = 0;
-        for (let i = 1; i < m; i++) hurt(b, e, c.target, e.s.atk, 'phys');
+        for (let i = 1; i < m; i++) hurt(b, e, c.target, capEnemyBurstHit(b,e,e.s.atk,m), 'phys');
       },
     } : null];
   },
@@ -476,9 +445,9 @@ export const SPECIAL_KITS = Object.freeze({
     },
   }],
   enemy_10094_crstf: kitEp('neural', 'ep.ep_damage_ratio'),          // 临时收音师 · neural on hit (filming zones n/a → always)
-  enemy_10097_crshd: (ab) => [                                       // 心虚设计师 · neural to its blocker every s; front damage −80 % (faces the blocker, else the walk)
+  enemy_10097_crshd: (ab) => [                                       // 心虚设计师 · neural to its blocker every s; front damage −80 % (faces its walk)
     { iv: 1, tick(b, e) { if (e.blockedBy) elem(b, e, e.blockedBy, 'neural', e.s.atk * (T(ab, 'block.ep_damage_ratio') ?? 0)); } },
-    frontGuard(T(ab, 'weakness.damage_resistance') ?? 0, faceCrshd), // 减少来自正面的物理/法术伤害 (#869)
+    frontGuard(T(ab, 'weakness.damage_resistance') ?? 0, faceMove),  // 减少来自正面的物理/法术伤害 (cameras absent: it never turns)
   ],
   enemy_10098_crhro: (ab) => [ep('neural', T(ab, 'inside.attack@ep_damage_ratio') ?? 0), // 主角阵营角色 · neural on hit; 重生 once (reborn.duration s, full HP)
     reborn({ dur: T(ab, 'reborn.duration') ?? 0, invincible: T(ab, 'reborn.invincible') ?? 0 })],

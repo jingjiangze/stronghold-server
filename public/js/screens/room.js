@@ -9,8 +9,10 @@
 // maintainer's decision of 2026-10-21), so the difficulty is chosen here — the host's pill (or ⚙'s 模拟难度 row) opens
 // 选择模拟协议 (screens/lobby.js ProtocolSelect) whose 确认 sends room.setDifficulty; the dialog closes only once the
 // server took it (a refusal keeps it open with the error toast), and its hint states the server's rules: the other
-// doctors have to ready again, a plugin mode the host chose is left. ⚙ 同盟设置 lists the 模拟难度 and the
-// 「AI 队友最后选择」 switch. The other doctors (and spectators) open the same screens read-only — the cards shown,
+// doctors have to ready again, a plugin mode the host chose is left. ⚙ 同盟设置 lists the 模拟难度, the
+// 「AI 队友最后选择」 switch and the 「包含无场景地图」 switch (room.setIncompleteMaps: off, the match draws only stages with
+// an official scene package; on, scene-less stages come back on the procedural board). The other doctors (and spectators)
+// open the same screens read-only — the cards shown,
 // not chosen, 由创建者选择 / 由创建者设置 — and a toast tells them when the host changed the difficulty [ASSUMED: a
 // remake aid, since the change reset their ready state; how the event tells the others is not recorded].
 //
@@ -45,6 +47,10 @@
 // vote — ui/versionVote.js, the strip between the 观战席 and the footer); everybody else reads it (由创建者发起). It is off
 // during a vote, with gameplay plugins on (they play 第二期下半 only) and offline. A switch is told to everybody (a toast,
 // never on entering a room), and a room whose version is not this browser's lobby choice says that leaving restores it.
+// 危机合约 (Crisis Contracts; shared/contracts.js, the server's room.setContracts): the difficulty pill carries the entry
+// once the room's difficulty is 绝境 / 终极 (contractsAllowedAt) — the host opens ui/contractPicker.js and sends the ticks
+// on 确认, everybody else opens it read-only; the picks show as a strip above the footer (room.state.contracts, omitted
+// while empty). A room below 绝境 shows no entry, and the server clears a selection its room no longer supports.
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
@@ -63,6 +69,7 @@ import { LoadoutButton } from './loadout.js';
 import { PluginTag, VersionTag, isModdedRoom } from '../ui/pluginTag.js';
 import { VersionVote, versionVoteOf } from '../ui/versionVote.js';
 import { VersionPicker } from '../ui/versionPicker.js';
+import { ContractChips, ContractPicker, contractsOption } from '../ui/contractPicker.js';
 import { DEFAULT_VERSION, lobbyVersion, needsContent, offeredDifficulties, roomVersion, serverDefaultVersion, soloTimedOf, soloTimeMsgid, versionLabel } from '../versions.js';
 import { hasScriptConsent, rememberScriptConsent, pageVersion } from '../content.js';
 import { net } from '../net.js';
@@ -157,6 +164,20 @@ export function roomFacts(room, myId) {
 export function aiLastOption(room, myId) {
   if (!room || room.mode === 'solo') return null;
   return { on: room.aiPicksLast === true, editable: room.hostId != null && room.hostId === myId };
+}
+
+/**
+ * The room option 「包含无场景地图」 (room.setIncompleteMaps, room.state.incompleteMaps): off (the default) every stage pool
+ * keeps only the stages with an official scene package; on, stages without one come back and play on the procedural
+ * board. Every mode has it (the map pools of solo, co-op and 肉鸽 alike). The host switches it, the others see it
+ * read-only (the server refuses anyone else).
+ * @param {any} room room.state payload
+ * @param {any} myId
+ * @returns {{ on: boolean, editable: boolean } | null}
+ */
+export function incompleteMapsOption(room, myId) {
+  if (!room) return null;
+  return { on: room.incompleteMaps === true, editable: room.hostId != null && room.hostId === myId };
 }
 
 /** Spectator handover is available in default-version co-op rooms (plugin content included), with a host opt-in. */
@@ -395,6 +416,21 @@ function AiLastToggle({ option, busy, onToggle }) {
   </div>`;
 }
 
+/** The room option 「包含无场景地图」: the host toggles it, everybody else sees its state. */
+function IncompleteMapsToggle({ option, busy, onToggle }) {
+  if (!option) return null;
+  return html`<div class="ailast">
+    <${Tooltip} text=${t('默认关闭：只在有官方场景包的地图里抽。开启后，没有场景包的地图也会被抽到，第三层退回程序化棋盘。')}>
+      <button type="button" role="switch" aria-checked=${option.on ? 'true' : 'false'} data-testid="room-incomplete-maps"
+          class=${`dpick__opt ailast__opt${option.on ? ' is-active' : ''}`} disabled=${!option.editable || !!busy}
+          onClick=${() => option.editable && onToggle(!option.on)}>
+        <${Icon} name="check" class=${option.on ? 'is-on' : ''} />${t('包含无场景地图')}
+      </button>
+    <//>
+    ${option.editable ? null : html`<span class="t-dim">${t('由创建者设置')}</span>`}
+  </div>`;
+}
+
 function AiTakeoverToggle({ option, busy, onToggle }) {
   if (!option) return null;
   return html`<div class="ailast">
@@ -429,7 +465,7 @@ function AiRandomToggle({ option, busy, onToggle }) {
 /**
  * ⚙ of the bottom pill (co-op): 同盟设置 — the 模拟难度 (opens 选择模拟协议: the host's 确认, the others' read-only view)
  * and the 「AI 队友最后选择」 switch. Closes on a click outside it or Esc.
- */function RoomOptions({ option, takeoverOption, onAiTakeover, aiRandomOption = null, onAiRandom, soloOption = null, room, isHost, busy, onAiLast, onSoloUnlimited, onDifficulty, onClose, version = null }) {
+ */function RoomOptions({ option, takeoverOption, onAiTakeover, aiRandomOption = null, onAiRandom, soloOption = null, incompleteOption = null, room, isHost, busy, onAiLast, onSoloUnlimited, onIncompleteMaps, onDifficulty, onClose, version = null }) {
   const info = difficultyInfo(room.mode, room.difficulty);
   const title = soloOption ? t('模拟设置') : t('同盟设置');
   useEffect(() => {
@@ -465,6 +501,7 @@ function AiRandomToggle({ option, busy, onToggle }) {
     ${soloOption
       ? html`<${SoloUnlimitedToggle} option=${soloOption} busy=${busy} onToggle=${onSoloUnlimited} />`
       : html`<${AiLastToggle} option=${option} busy=${busy} onToggle=${onAiLast} />`}
+    <${IncompleteMapsToggle} option=${incompleteOption} busy=${busy} onToggle=${onIncompleteMaps} />
   </div>`;
 }
 
@@ -522,6 +559,8 @@ export function RoomScreen() {
   const [protoOpen, setProtoOpen] = useState(false);
   const [protoPick, setProtoPick] = useState(null);
   const [opts, setOpts] = useState(false);
+  // 危机合约 (shared/contracts.js; room.setContracts): the picker over the room — the host ticks, the others read
+  const [contractsOpen, setContractsOpen] = useState(false);
   // the host's change of difficulty, told to the others (see the header); never on entering a room or switching rooms
   const seenDiff = useRef(room ? `${room.code}|${room.difficulty}` : '');
   useEffect(() => {
@@ -584,6 +623,12 @@ export function RoomScreen() {
     if (ok) run(`kick${seat}`, () => net.request('room.kick', { seat, playerId }));
   };
   const setDifficulty = (difficulty) => run('diff', () => net.request('room.setDifficulty', { difficulty }));
+  // 危机合约 (shared/contracts.js): the host's 确认 replaces the room's selection (room.setContracts { contracts }); the
+  // picker closes only once the server took it — a refusal (a stale pick after the room changed) stays open with the toast
+  const setContracts = async (contracts) => {
+    const sent = await run('contracts', () => net.request('room.setContracts', { contracts }));
+    if (sent && alive.current) setContractsOpen(false);
+  };
   // 潜入需要一个「可接的 AI 席」，而 coop 房默认不填 AI ⇒ 开启「AI 协作」时若一个 AI 席都没有，自动补一个。
   const setAiTakeover = (on) => run('aihandover', async () => {
     // 潜入：先保证房里**有可接的 AI 席**（coop 房默认不填 AI），再开接管开关 —— 顺序反了会「开了但没人可接」。
@@ -600,6 +645,8 @@ export function RoomScreen() {
     const sent = await run('solofree', () => net.request('room.setSoloUnlimited', { on }));
     if (sent) savePref('lobby.soloUnlimited', on === true);
   };
+  // 「包含无场景地图」: the room is the authority (no pref — the host's switch is what the match plays with)
+  const setIncompleteMaps = (on) => run('incompletemaps', () => net.request('room.setIncompleteMaps', { on }));
   // spectator seats: the host frees one; a spectator takes a free player seat with room.join of this room
   const removeSpectator = (playerId) => run(`rs${playerId}`, () => net.request('room.removeSpectator', { playerId }));
   const sit = () => run('sit', () => net.request('room.join', { code: room.code, ...(room.test ? { testAck: true } : {}) }));
@@ -676,8 +723,12 @@ export function RoomScreen() {
     ? t('确认后将退出插件模式「{name}」', { name: pluginMode })
     : facts.humans.length > 1 ? t('更改难度后，其他博士需要重新准备就绪') : '';
   const aiLast = aiLastOption(room, me.playerId);
+  // 危机合约: null below 绝境 (the pill shows no entry, as the server keeps such a room's list empty); past it the host
+  // picks and everybody else reads
+  const contractsCtl = contractsOption(room, me.playerId);
   const soloTimed = soloTimedOf(pageVersion() === roomVersion(room) ? getConfig() : null, roomVersion(room));
   const soloOpt = soloUnlimitedOption(room, me.playerId, soloTimed);
+  const incompleteOpt = incompleteMapsOption(room, me.playerId);
   const soloBrief = soloTimeMsgid('brief', { timed: soloTimed, unlimited: room.soloUnlimited === true });
   const modeName = coop ? t('同盟模拟') : t('独立模拟');
   // the room's version (DESIGN §35.23): the pill and ⚙'s row on a server that enables versions (or in a version room)
@@ -765,6 +816,7 @@ export function RoomScreen() {
       </aside>`}
     </main>
     <${SpectatorBar} facts=${facts} myId=${me.playerId} busy=${busy} onRemove=${removeSpectator} onSit=${sit} />
+    <${ContractChips} room=${room} />
     <${VersionVote} room=${room} />
     ${bannerText ? html`<p class="rs-verbanner" data-testid="version-banner"><${Icon} name="info" />${bannerText}</p>` : null}
 
@@ -775,12 +827,15 @@ export function RoomScreen() {
         <div class="rs-pill">
           <button type="button" class=${`rs-pill__diff${facts.isHost ? '' : ' is-ro'}`} disabled=${facts.isHost && !!busy} onClick=${openProto}
             title=${facts.isHost ? t('更改模拟难度') : t('由创建者选择')}><${DifficultyIcon} difficulty=${room.difficulty} />${DIFFICULTY_NAMES[room.difficulty] ? t(DIFFICULTY_NAMES[room.difficulty]) : ''}<span class="num rs-pill__code">${info.code}</span></button>
+          ${contractsCtl ? html`<button type="button" class=${`rs-pill__ctr${contractsCtl.editable ? '' : ' is-ro'}`} data-testid="room-contracts"
+            onClick=${() => { setOpts(false); setContractsOpen(true); }} aria-haspopup="dialog"
+            title=${contractsCtl.editable ? t('选择危机合约') : t('危机合约由创建者选择')} aria-label=${t('危机合约')}><${Icon} name="snow" /><span class="rs-pill__ctrname">${t('危机合约')}</span>${(room.contracts || []).length ? html`<span class="num rs-pill__ctrnum">${room.contracts.length}</span>` : null}</button>` : null}
           ${versionCtl ? html`<${Tooltip} text=${versionCtl.why} class="rs-pill__version"><button type="button" class=${`rs-pill__ver${versionCtl.editable ? '' : ' is-ro'}`} data-testid="room-version"
             disabled=${versionCtl.disabled} onClick=${versionCtl.onOpen} aria-label=${t('游戏版本：{name}', { name: versionLabel(curVersion) })}><${Icon} name="book" /><span class="rs-pill__vername">${versionLabel(curVersion)}</span></button><//>` : null}
           ${aiLast || soloOpt ? html`<button type="button" class=${`rs-pill__gear${opts ? ' is-on' : ''}`} onClick=${() => setOpts((v) => !v)} title=${aiLast ? t('同盟设置') : t('模拟设置')} aria-label=${aiLast ? t('同盟设置') : t('模拟设置')}
             aria-expanded=${opts ? 'true' : 'false'}><${GearGlyph} /></button>` : null}
-          ${opts && (aiLast || soloOpt) ? html`<${RoomOptions} takeoverOption=${aiTakeoverOption(room, me.playerId)} onAiTakeover=${setAiTakeover} aiRandomOption=${aiRandomOption(room, me.playerId)} onAiRandom=${setAiRandom} option=${aiLast} soloOption=${soloOpt} room=${room} isHost=${facts.isHost} busy=${busy} onAiLast=${setAiLast}
-            onSoloUnlimited=${setSoloUnlimited} onDifficulty=${openProto} onClose=${() => setOpts(false)} version=${versionCtl} />` : null}
+          ${opts && (aiLast || soloOpt) ? html`<${RoomOptions} takeoverOption=${aiTakeoverOption(room, me.playerId)} onAiTakeover=${setAiTakeover} aiRandomOption=${aiRandomOption(room, me.playerId)} onAiRandom=${setAiRandom} option=${aiLast} soloOption=${soloOpt} incompleteOption=${incompleteOpt} room=${room} isHost=${facts.isHost} busy=${busy} onAiLast=${setAiLast}
+            onSoloUnlimited=${setSoloUnlimited} onIncompleteMaps=${setIncompleteMaps} onDifficulty=${openProto} onClose=${() => setOpts(false)} version=${versionCtl} />` : null}
         </div>
       </div>
       <div class="room-bar__right rs-foot__right">
@@ -806,6 +861,8 @@ export function RoomScreen() {
       serverDefault=${serverDefault} roomMode=${room.mode} editable=${versionEditable && !versionWhy} busy=${busy === 'version'}
       note=${versionEditable ? versionWhy || (facts.humans.length > 1 ? t('其他博士同意后才会切换；切换后需要重新准备。') : null) : t('由创建者发起')}
       onPick=${proposeVersion} onClose=${() => setVersionOpen(false)} />` : null}
+    ${contractsOpen && contractsCtl ? html`<${ContractPicker} room=${room} editable=${contractsCtl.editable} busy=${busy === 'contracts'}
+      onConfirm=${setContracts} onClose=${() => setContractsOpen(false)} />` : null}
   </div>`;
 }
 

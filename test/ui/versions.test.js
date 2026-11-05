@@ -15,7 +15,7 @@ const mem = new Map();
 globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
 const V = await import('../../public/js/versions.js');
 const { createStore, initialState } = await import('../../public/js/store.js');
-const { DIFFICULTIES } = await import('../../shared/constants.js');
+const { DIFFICULTIES, TRAINING_DIFFICULTY } = await import('../../shared/constants.js');
 
 const CS = (c) => c.repeat(64);
 const LIST = V.sanitizeVersions([
@@ -80,8 +80,8 @@ test('setLobbyVersion: saved as sp.pref.lobby.version and shown at once; an unkn
 
 test('offeredDifficulties / fallbackDifficulty: a version\'s modes; the server\'s rule — the highest offered below, else the lowest', () => {
   const read = (rel) => JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
-  assert.deepEqual(V.offeredDifficulties(read('data/config.json'), 'solo'), DIFFICULTIES, '第二期下半: all four');
-  assert.deepEqual(V.offeredDifficulties(read('data/versions/act1autochess/config.json'), 'solo'), ['FUNNY', 'NORMAL', 'HARD'], '第一期下半: no 终极');
+  assert.deepEqual(V.offeredDifficulties(read('data/config.json'), 'solo'), [...DIFFICULTIES, TRAINING_DIFFICULTY], '第二期下半: all four + 训练模式 (mode_training_1)');
+  assert.deepEqual(V.offeredDifficulties(read('data/versions/act1autochess/config.json'), 'solo'), ['FUNNY', 'NORMAL', 'HARD', TRAINING_DIFFICULTY], '第一期下半: no 终极 (+ 训练模式)');
   assert.deepEqual(V.offeredDifficulties(read('data/versions/act2autochess-v2_1/config.json'), 'coop'), ['FUNNY', 'NORMAL', 'HARD'], '第二期上半: no 终极');
   assert.deepEqual(V.offeredDifficulties(null, 'coop'), DIFFICULTIES, 'no config yet: all four');
   assert.equal(V.fallbackDifficulty(['FUNNY', 'NORMAL', 'HARD'], 'ABYSS'), 'HARD');

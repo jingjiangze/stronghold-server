@@ -1,10 +1,7 @@
 // server/sim/content/kits/ops/chess_char_4_18-mudrok.js — 泥岩 (char_311_mudrok) kit, tier 4.
 // Conventions of the tier-4 kits: ../shared/tier4.js; kit contract and rules: ../README.md.
 
-import {
-  AURA, num, tbb, grid, batFlat, enemyHasTag, targetsInGrid, whileDeployed, pulse, toggleBuff, alt, lonely,
-  withDefaults,
-} from '../shared/tier4.js';
+import { AURA, num, tbb, grid, batFlat, enemyHasTag, targetsInGrid, whileDeployed, pulse, toggleBuff, alt, lonely, withDefaults } from '../shared/tier4.js';
 
 export default withDefaults({
   // ===== 泥岩 (unyield) S2 岩崩锤 — next attack: heal 4 %, 190 % phys to all ground enemies around, 30 % stun; talents
@@ -86,8 +83,6 @@ export default withDefaults({
             if (broken <= 0) return;
             unit.mem.layers = left;
             battle.heal(unit, unit, unit.s.maxHp * num(t0.hp_ratio, 0.2) * broken, { self: true });
-            // 第一期精英「沃土予身」returns `sp` per broken layer. Today's record has no such key (num → 0).
-            if (num(t0.sp) > 0) unit.skill?.gainSp(num(t0.sp) * broken, 'talent');
             battle.fx('shieldBreak', { x: unit.x, y: unit.y, id: unit.id });
           }, { owner: unit });
         } },

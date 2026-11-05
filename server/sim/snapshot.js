@@ -17,6 +17,7 @@
 // is blocked or revealed, nor in the seconds after a block before it hides again — targeting.js enemyStealthed), an
 // ally's = 隐匿 / 迷彩 whatever it blocks.
 
+import { operatorSfxState20261101 } from '../../shared/operatorSfxModes20261101.js';
 import { UF, ANIM } from '../../shared/constants.js';
 import { DIE_ANIM_TIME, ATTACK_ANIM_TIME, DEPLOY_ANIM_TIME } from './constants.js';
 import { enemyStealthed } from './targeting.js';
@@ -27,29 +28,32 @@ const r1 = (v) => Math.round(v * 10) / 10;
 /** Static per-unit info sent on spawn / in m.field. */
 export function unitInfo(u) {
   const d = u.def || {};
-  const interval = u.s?.interval;
-  const atkInterval = Number.isFinite(interval) && interval > 0 ? Math.round(interval * 1000) / 1000 : undefined;
-  // Seed from the first published value, before a later buff can change the interval.
-  if (u._rateSent === undefined) u._rateSent = atkInterval;
+  const operatorSfx = operatorSfxState20261101(u);
+  /*
+   * ⚠ **`u.spine` 优先于 `d.spine`** —— 自选编队上场时,上场的是**被选中的干员**,而那个 id
+   * 只有 `battleInput` 知道(它在 sim 展开 `diy` 之前就把干员 id 写进了 `u.spine`,见 player/round.js)。
+   * 不认它的话这里会回落到棋子的模型 id,渲染端第一步就查不到皮肤,只能靠 `skinOf` 兜底 ——
+   * 而下面那个判等又会因为"两边的 id 相同"把 `skinOf` 省掉,两道保险一起失效,
+   * 表现就是「休息期有皮肤、一进战斗变原皮」。
+   */
+  const spine = u.spine ?? d.spine ?? d.charId ?? u.defId;
   return {
     id: u.id,
     kind: u.kind,
     side: u.side,
+    ...(operatorSfx ? { operatorSfx } : {}),
+      ...(u.hitArea?{hitArea:u.hitArea}:{}),
+      ...(u.mods?.eventTeam?{eventTeam:u.mods.eventTeam}:{}),
     ownerId: u.ownerId ?? null,
     defId: u.defId,
     name: u.name,
     tier: d.tier ?? (d.rank === 'BOSS' ? 3 : d.rank === 'ELITE' ? 2 : 1),
     golden: !!d.golden,
-    // The unit's OWN attack interval in game seconds (units.js `s.interval`: bat × batPct × 100 / aspd, i.e. with the buffs
-    // this record carries). The renderer stretches the attack clip over it (render/attackRate.js): without it a view started
-    // from the operator's base-record guess and swung in slow motion until two attacks had been measured.
-    atkInterval,
-    spine: d.spine ?? d.charId ?? u.defId,
-    // 皮肤 (docs/SKINS.md): the owning player's chosen skinId. `undefined` (not null) on purpose — JSON.stringify drops
-    // it, so an install with no skins produces the exact same wire format as before and the §8.2 contract holds; the key
-    // only appears where a skin is actually in play.
-    skin: u.skin ?? undefined,
+    spine,
+    ...(u.side==='enemy'&&Number.isFinite(d.raw?.renderScale)?{renderScale:Math.max(.25,Math.min(2,d.raw.renderScale))}:{}),
+    ...(['enemy_1081_sotisd','enemy_1081_sotisd_2'].includes(u.defId)&&Number.isFinite(u.mods?.patriotGuardScale)?{renderScale:Math.max(.5,Math.min(1,u.mods.patriotGuardScale))}:{}),
     avatar: d.avatar ?? d.charId ?? u.defId,
+      ...(d.raw?.nativeParticleOnly?{nativeParticleOnly:true}:{}),
     ...(d.voice ? { voice: d.voice } : {}),
     x: r2(u.x),
     y: r2(u.y),
@@ -64,6 +68,7 @@ export function unitInfo(u) {
     uid: u.uid ?? undefined,
     // DESIGN §16: the equipped skill's index (the renderer / audio pick that skill's Spine clip and sound)
     skillIndex: u.side === 'ally' && Number.isInteger(d.skill?.index) ? d.skill.index : undefined,
+    skillActive: u.side === 'ally' && u.skill ? !!u.skill.active : undefined,
     // an ally whose skill is an ammo magazine: the renderer shows it as the segmented bar under the HP bar (b.snap `ammo`) and
     // draws no sustained skill aura for it — known from the unit's first appearance, before any snapshot or skill event
     ammoSkill: u.side === 'ally' && u.skill?.kind === 'ammo' ? true : undefined,
@@ -82,6 +87,28 @@ export function unitInfo(u) {
     // full potential, no 练度 — a stand-in, a prototype 自选 pick)
     potential: u.side === 'ally' && u.kind === 'op' && d.loadout?.potentialIsDefault === false ? d.loadout.potential : undefined,
     cultivate: u.side === 'ally' && u.kind === 'op' && Number.isInteger(u.cultivate) ? u.cultivate : undefined,
+    /*
+     * 干员皮肤 (docs/SKINS.md): the model / avatar this unit is drawn with instead of its default ones.
+     *
+     * It comes off the UNIT, not the def: the def is cached per (chessId, loadout) and shared by every player who
+     * fields that chess, while a skin is one player's choice. Without this the model reverted to the operator's
+     * default the instant a battle started, which is the bug reported as 「一进入战斗皮肤就会没」.
+     *
+     * ⚠ `skinOf` 必须和 `skin` **一起**下达。自选编队上场时渲染端拿到的 `spine` 是**被选中干员**,而皮肤要按
+     * **归属 id** 查目录(`assets.js spineEntry` 先按 `id` 查、失败再按 `skinOf` 查)。只给 `skin` 不给 `skinOf`,
+     * 第二步就无从查起 —— **静默**退回默认模型,又一次「一进战斗就没」。休整期那条路径(`views.js _skinFor`)
+     * 两者都给,所以缺口只在战斗这一段。
+     *
+     * Spread rather than a plain `skin: undefined`, like `items` / `standInFor` above: a present-but-undefined key
+     * is invisible on the wire yet still passes `'skin' in info`, which is a trap for the next reader.
+     */
+    ...(u.side === 'ally' && u.kind === 'op' && typeof u.skin === 'string' && u.skin
+      /*
+       * ⚠ 判等要跟 **`d.spine`**(= 上面第 36 行算出来的那个 spine),不是 `u.spine` —— `u` 上没有 `spine`,
+       * 写 `u.spine` 会让判等恒为真、每个带皮肤的普通棋子都白带一个 `skinOf`(我第一版就是这么写的)。
+       */
+      ? { skin: u.skin, ...(typeof u.skinOf === 'string' && u.skinOf && u.skinOf !== spine ? { skinOf: u.skinOf } : {}) }
+      : null),
   };
 }
 
@@ -220,24 +247,6 @@ export function chargeView(u) {
   if (u.side !== 'ally' || !sk || sk.noSkill || !(sk.maxCharges > 1)) return null;
   return [Math.max(0, Math.min(sk.maxCharges, Math.floor(sk.charges || 0))), sk.maxCharges];
 }
-
-/**
- * `moteView(u)` = a unit's orbiting 「微尘」: `[count, wide]` (wide = the S2 半径扩大), null without a ring: 魔王's T1
- * 过往尘埃 (kits/ops/chess_char_4_25-cetsyr.js sets `unit.moteRing`, read when the snapshot is taken; at most three, six
- * while S2 runs) — display only: render/motes.js draws that many motes circling her, the sim's own mote logic (a mote
- * touching an operator, respawn after 6 s, S2 hitting enemies instead) is untouched.
- */
-export function moteView(u) {
-  if (typeof u.moteRing !== 'function') return null;
-  const v = u.moteRing();
-  if (!Array.isArray(v) || !Number.isFinite(v[0])) return null;
-  const n = Math.max(0, Math.min(MOTE_MAX, Math.floor(v[0])));
-  if (n <= 0) return null;
-  return [n, v[1] ? 1 : 0];
-}
-
-/** Upper bound of the mote count a snapshot may carry (the sim's own caps: 3, six while S2 runs). */
-export const MOTE_MAX = 9;
 
 /** Units included in a snapshot: deployed & visible, plus recently dead ones (DIE animation). */
 export function snapshotUnits(units, t) {

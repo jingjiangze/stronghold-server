@@ -1,3 +1,4 @@
+import {ownerLayerCap} from './ownerLayerCap.js';
 // server/sim/content/support/index.js — shared helpers of content wave B (bonds, garrisons, items, bands, choices).
 //
 // Battle side and prep side read the same frozen game data (server/data.js). Everything here is pure and deterministic;
@@ -19,7 +20,6 @@
 
 import { getData } from '../../../data.js';
 import { grantedBondsByMorph } from '../../../../shared/plugins/rules.js';
-import { RECORD_MAPS } from '../../../../shared/plugins/dataUtils.js';
 import { COLS, DIRECT_BONUS_STACKING } from '../../constants.js';
 import { frontOf, offsetTile } from '../../dir.js';
 import { bodyInKeys, bodyDist, bodyInRadius, bodyOnTile, bodyTileReach, bodyInRange } from '../../body.js';
@@ -45,7 +45,7 @@ export function gameData() {
   return DATA;
 }
 /** Tests only: swap the data object (null → reload the singleton). Also drops derived caches. */
-export function setGameData(d) { DATA = d ?? null; CORE = null; EFFECT_ITEMS = new WeakMap(); }
+export function setGameData(d) { DATA = d ?? null; CORE = null; }
 
 export const bondRecord = (id) => own(gameData().bonds, id);
 export const itemRecord = (id) => own(gameData().items, id);
@@ -60,81 +60,22 @@ export const itemKeyOf = (id) => String(itemRecord(id)?.effectRef ?? id ?? '').r
 /** True for golden (进阶) items / elite chess ids. */
 export const isGoldenId = (id) => /_b$/.test(String(id ?? ''));
 
-/**
- * Whether `data` (default: the loaded data) is another official version's build (config.version, data/versions/*;
- * DESIGN §35.22.3). Only such data finds hand-written behaviour by charId / effectId: the default data and the plugin
- * content sets built on it carry no config.version and keep the by-id lookups of before versions M0, so a plugin that
- * patches an official record's charId or effectId changes that record, not which kit or item behaviour runs.
- */
-export const isVersionData = (data = gameData()) => !!(data && typeof data === 'object' && data.config?.version);
-
-/** Historical season-one semantics; absent version metadata always means today's rules. */
-export const isFirstPeriod = (data = gameData()) => isVersionData(data) && data.config.season === 'act1autochess';
-
-/**
- * Whether `id` names an official record of data file `file` (`chess`, `items` …), not a plugin's namespaced one
- * (shared/plugins/dataUtils.js RECORD_MAPS: chess_x_ / item_x_ …).
- */
-export const isOfficialId = (file, id) => !String(id ?? '').startsWith(`${RECORD_MAPS[file]?.[0] ?? '\0'}_`);
-
-/**
- * The behaviour of an item is named by the normal record's effectId (versions M0, docs/SIM.md §7.2): another official
- * version reuses item ids for other effects, while an effectId keeps its meaning. A golden record (effectId
- * eff_acgarmNNN) counts as its normal one (baseId); a plugin record follows its effectRef; a plugin record without one
- * (item_x_) has no official behaviour (null). itemKeyOf stays the item's identity (combo partners, buff keys, labels).
- * The dispatchers use it on another version's build only (isVersionData); the default data keeps the item key.
- */
-export function itemEffectKey(id) {
-  let rec = itemRecord(id);
-  if (!rec) return null;
-  if (rec.effectRef != null) rec = itemRecord(rec.effectRef);
-  else if (!isOfficialId('items', rec.id ?? id)) return null;
-  if (rec && rec.baseId && rec.baseId !== rec.id) rec = itemRecord(rec.baseId);
-  return typeof rec?.effectId === 'string' ? rec.effectId : null;
-}
-
-/**
- * Ids of the official item records of `items` ({ id: record }) whose behaviour is `effectId` (itemEffectKey), in data
- * order: no plugin record (item_x_, or one that carries an effectRef — it copies its base's effectId). `normalOnly`
- * drops the golden records.
- */
-export function officialItemIdsWithEffect(items, effectId, { normalOnly = false } = {}) {
-  const out = [];
-  if (!items || typeof items !== 'object' || typeof effectId !== 'string') return out;
-  for (const [id, rec] of Object.entries(items)) {
-    if (!rec || typeof rec !== 'object' || rec.effectRef != null || !isOfficialId('items', id)) continue;
-    const golden = !!rec.baseId && rec.baseId !== id;
-    if (golden ? !normalOnly && own(items, rec.baseId)?.effectId === effectId : rec.effectId === effectId) out.push(id);
-  }
-  return out;
-}
-
-let EFFECT_ITEMS = new WeakMap();
-/** officialItemIdsWithEffect over the loaded data (gameData()), cached per data object. */
-export function itemIdsWithEffect(effectId, { normalOnly = false } = {}) {
-  const d = gameData();
-  let m = EFFECT_ITEMS.get(d);
-  if (!m) { m = new Map(); EFFECT_ITEMS.set(d, m); }
-  const k = `${normalOnly ? 'n' : 'a'}:${effectId}`;
-  if (!m.has(k)) m.set(k, Object.freeze(officialItemIdsWithEffect(d.items, effectId, { normalOnly })));
-  return m.get(k);
-}
-
-/** 突变细胞's effect: 凯瑟琳's one-cell allowance (bands/meta.js, server/match/player/prep.js) counts its normal records. */
+// --- 0.3.3 兼容 shim：0.4.3 的 support/index.js 没有突变细胞导出，但 0.3.3 的 prep.js 仍导入它。---
 export const MUTATION_CELL_EFFECT = 'eff_acarm072';
-/** 突变细胞's normal record in the default data: data without config.version (isVersionData) counts it by this id. */
 export const MUTATION_CELL_ID = 'chess_item_5_08_e_a';
-/**
- * The 突变细胞 ids 凯瑟琳's one-cell allowance counts in `data`: MUTATION_CELL_ID, or on another version's build the
- * official normal records of MUTATION_CELL_EFFECT (上半: chess_item_6_08_e_a).
- */
-export const mutationCellIds = (data = gameData()) => (isVersionData(data)
-  ? officialItemIdsWithEffect(data.items, MUTATION_CELL_EFFECT, { normalOnly: true }) : [MUTATION_CELL_ID]);
-/** Whether item `id` is a 突变细胞 the allowance counts (mutationCellIds). */
+export function mutationCellIds(data = gameData()) {
+  const items = data && data.items && typeof data.items === 'object' ? data.items : {};
+  const out = [];
+  for (const [id, rec] of Object.entries(items)) {
+    if (!rec || typeof rec !== 'object' || rec.effectRef != null) continue;
+    if (rec.effectId === MUTATION_CELL_EFFECT) out.push(id);
+  }
+  return out.length ? out : [MUTATION_CELL_ID];
+}
 export function isMutationCell(id, data = gameData()) {
-  if (!isVersionData(data)) return id === MUTATION_CELL_ID;
-  const rec = own(data.items, id);
-  return !!rec && rec.effectRef == null && isOfficialId('items', id) && rec.effectId === MUTATION_CELL_EFFECT;
+  if (id === MUTATION_CELL_ID) return true;
+  const rec = own(data && data.items, id);
+  return !!rec && rec.effectRef == null && rec.effectId === MUTATION_CELL_EFFECT;
 }
 
 /**
@@ -245,8 +186,6 @@ export const baseChessId = (u) => u?.def?.baseId ?? String(u?.defId ?? '').repla
 
 /** Equipment ids carried by a unit (golden ids when merged). */
 export const itemsOf = (u) => (u && Array.isArray(u.items) ? u.items : EMPTY);
-export const hasItemKey = (u, key) => itemsOf(u).some((id) => itemKeyOf(id) === key);
-export const goldenItemCount = (u) => itemsOf(u).filter(isGoldenId).length;
 
 const BONDS = new WeakMap();
 /**
@@ -312,8 +251,6 @@ export const N4 = Object.freeze([[1, 0], [-1, 0], [0, 1], [0, -1]]);
 export const N8 = Object.freeze([[1, -1], [1, 0], [1, 1], [0, -1], [0, 1], [-1, -1], [-1, 0], [-1, 1]]);
 /** Tile `k` steps in front of (k < 0: behind) a unit's tile, along its direction. */
 export const frontTile = (u, k = 1) => frontOf(u.tileR, u.tileC, u.dir, k);
-/** The two tiles beside a unit (perpendicular to its direction): [its left-hand tile, its right-hand tile]. */
-export const sideTiles = (u) => [offsetTile(u.tileR, u.tileC, 1, 0, u.dir), offsetTile(u.tileR, u.tileC, -1, 0, u.dir)];
 /** Deployed ally on (r, c) owned by `pid` (any owner when pid is null), else null. */
 export function allyAt(battle, r, c, pid = null) {
   if (!Number.isInteger(r) || !Number.isInteger(c)) return null;
@@ -411,6 +348,7 @@ export function gainLayers(battle, { playerId, bonds, n, requireActive = true, s
   const k0 = Math.floor(num(n, 0));
   if (!(k0 > 0)) return 0;
   const list = Array.isArray(bonds) ? bonds : [bonds];
+  cap=ownerLayerCap(battle,source,cap);
   const caps = capKey != null && Number.isFinite(cap) ? battleStore(battle, 'support:layerCaps', () => new Map()) : null;
   let total = 0;
   for (const b of list) {
@@ -433,7 +371,9 @@ export function gainLayers(battle, { playerId, bonds, n, requireActive = true, s
   return total;
 }
 
-/** Layers already added this battle under (capKey, bond) — for tests / UI. */
+
 export function layersUsed(battle, capKey, bondId) {
   return battleStore(battle, 'support:layerCaps', () => new Map()).get(`${capKey}|${bondId}`) ?? 0;
 }
+
+export const sideTiles = (u) => [offsetTile(u.tileR, u.tileC, 1, 0, u.dir), offsetTile(u.tileR, u.tileC, -1, 0, u.dir)];

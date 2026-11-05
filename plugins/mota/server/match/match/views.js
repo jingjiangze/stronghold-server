@@ -83,6 +83,9 @@ export class MatchViews {
       serverNow: this.sched.now(),
       modeId: this.modeId,
       difficulty: this.difficulty,
+      // 危机合约 (shared/contracts.js): the room's selection, so the settlement / the HUD can name it. Omitted while
+      // the room had none, so an ordinary match's m.public keeps its keys.
+      ...(this.contracts?.length ? { contracts: this.contracts.slice() } : {}),
       stageId: this.stageId,
       // 下一回合的战场 id（客户端据此在本回合空闲时预热场景包，换图时只重建一次）
       nextStageId: this.nextStageId || this.stageId,
@@ -99,6 +102,8 @@ export class MatchViews {
           emergency: typeof this.rogueEmergencyRound === 'function' ? this.rogueEmergencyRound(r) === true : false,
           nextEventRound: nextOf(this.rogueEventRound, 3),
           nextEmergencyRound: nextOf(this.rogueEmergencyRound, 5),
+          // P0 节点图（2026-11-03）：rogue-core 的 mixin 提供；未安装时为 null，客户端不渲染。
+          nodes: typeof this.rogueNodeState === 'function' ? this.rogueNodeState() : null,
         } };
       })() : {}),
       setupRevision: this.setupRevision,

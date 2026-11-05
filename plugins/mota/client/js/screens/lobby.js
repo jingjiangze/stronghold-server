@@ -25,7 +25,7 @@ import { useHubBackdrop, HubBackdrop, HubRadar, BackdropSettings, BackdropGlyph,
 import { TestMark } from '../ui/testConsole.js';
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, LEGACY_DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultiesFor, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
 import { RANDOM_MODE } from '../../../shared/randomMode.js';
 import { html, confirmDialog, Button, Icon, MicroLabel, Panel, TextField, PingPill, Tooltip, Spinner, DifficultyIcon } from '../ui/components.js';
 
@@ -170,7 +170,8 @@ export function lobbySimulationPreference() {
 function preferredDifficulty(simulation) {
   const key = simulation === 'firepower' ? 'lobby.firepowerDifficulty' : 'lobby.difficulty';
   const d = loadPref(key, 'FUNNY');
-  return DIFFICULTIES.includes(d) ? d : 'FUNNY';
+  // 2026-11-03：N1–N20 只属于肉鸽；切回标准/同盟/对抗/协同共竞时把 N 档收敛成 FUNNY。
+  return difficultiesFor(simulation).includes(d) ? d : 'FUNNY';
 }
 
 /** Keep the explanation tied to the shared balance configuration. */
@@ -596,7 +597,10 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
   }, []);
   const fx = `${leaving ? ' is-leaving' : ''}${chained ? ' is-chained' : ''}`;
   const search = purpose === 'search';
-  const info = difficultyInfo(roomMode, difficulty, { random, variant }, modeVariant);
+  // 2026-11-03：肉鸽（card.id === 'rogue'）用 N1–N20；其它模式用旧 4 档。
+  const effectiveMode = card?.id === 'rogue' ? 'rogue' : roomMode;
+  const cardModeVariant = effectiveMode === 'rogue' ? 'rogue' : modeVariant;
+  const info = difficultyInfo(effectiveMode, difficulty, { random, variant }, cardModeVariant);
   const label = maint?.active ? t('维护中 · 暂停开局') : search ? t('开始搜寻') : random ? t('创建无限火力') : roomMode === 'solo' ? t('开始模拟') : t('创建同盟');
   const hint = !online ? t('正在连接服务器…') : maint?.active ? t('服务器即将停机维护，暂时停止开启新的同盟')
     : search ? t('精确搜寻：只与选择相同难度的博士组成同盟，凑齐 4 人即开始')
@@ -681,8 +685,8 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
       </section>
       <section class="proto-side">
         <div class="proto-list" role="radiogroup" aria-label=${t('模拟难度')}>
-          ${DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
-            matchmaking=${matchmaking} random=${random} variant=${variant} modeVariant=${modeVariant} />`)}
+          ${difficultiesFor(effectiveMode).map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
+            matchmaking=${matchmaking} random=${random} variant=${variant} modeVariant=${cardModeVariant} />`)}
         </div>
         <div class="proto-foot">
           ${search ? html`<div class="proto-opts">

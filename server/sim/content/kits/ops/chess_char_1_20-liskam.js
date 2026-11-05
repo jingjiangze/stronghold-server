@@ -1,10 +1,7 @@
 // server/sim/content/kits/ops/chess_char_1_20-liskam.js — 雷蛇 (char_107_liskam) kit, tier 1.
 // Conventions of the tier-1 kits: ../shared/tier1.js; kit contract and rules: ../README.md.
 
-import {
-  num, talentBb, talentGrid, moduleOn, up, hurtSpDamage, giveSp, onDamagedOn, alliesInGridOf, statBuff, installReveal,
-  skillBbOf,
-} from '../shared/tier1.js';
+import { num, talentBb, talentGrid, moduleOn, up, hurtSpDamage, giveSp, onDamagedOn, alliesInGridOf, statBuff, installReveal, skillBbOf } from '../shared/tier1.js';
 
 export default {
   // ---------------------------------------------------------------------------------------------------------------
@@ -31,13 +28,7 @@ export default {
         [S1]: {
           kind: 'duration', duration: num(b1.duration, 8), mods: { defPct: num(b1.def) }, trigger: 'SP_FULL',
           onStart({ battle, unit, skill }) {
-            battle.addBuff(unit, { key: blockKey, duration: skill.duration + 0.05, tags: ['skill'], visible: true,
-              injury(c) {
-                if (!c.block()) return;
-                battle.removeBuff(unit, c.buff);
-                battle.fx('shield', { x: unit.x, y: unit.y, id: unit.id });
-              },
-            });
+            battle.addBuff(unit, { key: blockKey, duration: skill.duration + 0.05, tags: ['skill'], visible: true });
             battle.fx('shield', { x: unit.x, y: unit.y, id: unit.id });
           },
           onEnd({ battle, unit }) { battle.removeBuff(unit, blockKey); },
@@ -45,6 +36,13 @@ export default {
       },
       install(battle, unit) {
         if (moduleOn(chess) && chess.isGolden) installReveal(battle, unit);
+        if (unit.skill?.id !== S1) return;
+        battle.on('hit', (ctx) => {
+          if (ctx.target !== unit || ctx.dmg.cancel || !(ctx.dmg.amount > 0) || !unit.findBuff(blockKey)) return;
+          ctx.dmg.cancel = true;
+          battle.removeBuff(unit, blockKey);
+          battle.fx('shield', { x: unit.x, y: unit.y, id: unit.id });
+        }, { owner: unit, priority: 50 });
       },
       skill: {
         trigger: 'DEFAULT',

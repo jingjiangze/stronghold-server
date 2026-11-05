@@ -15,6 +15,10 @@
 //   opts.aiPicksLast boolean (optional)         the co-op room option 「AI 队友最后选择」 (room.setAiPicksLast, GitHub #338):
 //                                              the strategy and 机变 drafts put every human seat before every AI seat
 //                                              (MatchPhases.humansFirst); only `true` turns it on; ignored in solo
+//   opts.incompleteMaps boolean (optional)      the room option 「包含无场景地图」 (room.setIncompleteMaps; every mode, off by
+//                                              default): off, stage pools keep only the stages with an official scene
+//                                              package (server/match/sceneStages.js); on, every stage of the mode is drawn
+//                                              (a scene-less stage plays on the procedural board). Only `true` turns it on.
 //   opts.seats       Array<{ seat: 0..3, playerId: string, name: string, isBot: boolean, connected: boolean,
 //                            loadout?: { [baseChessId]: { skill: index, module: uniEquipId|'none'|null } } | null,
 //                            ops?: { [charId]: { potential: 1–6, cultivate: 0–3 } } | null,
@@ -211,6 +215,8 @@ import { mergeBehaviourDecls } from '../../shared/behaviour.js';
 import { morphPairingOf } from '../../shared/morph.js';
 import { formView, isEliteForm } from '../../shared/formProjection.js';
 import { layoutOf } from '../../shared/layout.js';
+// 分组牌库的人数规律只有根树一份 (plugins/mota/shared 没有 playerCapacity.js，与 results.js 引 crisisScore 同一条根路径)
+import { poolGroupSizes, poolCopyScale } from '../../../../shared/playerCapacity.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
@@ -251,6 +257,11 @@ import { MatchRevival } from './match/revival.js';
 import { installTestTrace } from './testTrace.js';
 import { MatchTestCommands } from './match/testCommands.js';
 import { MatchOffers } from './match/offers.js';
+import { contractEffects } from '../../shared/contractEffects.js';
+import { strategyBoostEnabled } from '../../shared/strategyBoost.js';
+// 「包含无场景地图」 (opts.incompleteMaps, server/match/sceneStages.js): the shared cache of stages with an official scene
+// package. The plugin reads the root module — one manifest parse for the vanilla engine and every plugin alike.
+import { stagesWithScene } from '../../../../server/match/sceneStages.js';
 
 export { FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS } from './match/common.js';
 
@@ -319,7 +330,10 @@ export class Match {
     /** 本回合的狩猎期（投放）是否已经结束：防止守方 PREP 结束后又跳回 CONFRONT。 */
     this._confrontDoneRound = 0;
     this.difficulty = opts.difficulty;
-    this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
+    // 肉鸽（独立模式 mode==='rogue'，或老写法 variant==='rogue'）的 mode 记录是 `mode_rogue_<难度>`：宿主通常直接给
+    // opts.modeId，这一路是没给时的兜底 —— 不带上 rogue，两参调用只会落到 `mode_multi_*`，读的是多人的表。
+    this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty,
+      this.mode === 'rogue' || this.roomVariant === 'rogue' ? 'rogue' : undefined);
     this.seed = (Number(opts.seed) >>> 0) || 1;
     // 房间旗子（海克斯 / 无尽 / 三海克斯局…）：默认 hexEnabled=true，协同共竞与常规房都吃这套默认值。
     this.flags = normalizeRoomFlags(opts.flags);
@@ -360,8 +374,32 @@ export class Match {
     // （2026-10-30 业主「肉鸽不作为新玩法了，还是加到协同里面」；见 gamedata.js 的 get teamEconomy）。
     // 没有 `economy.rogueTeam` 时仍返回 null，行为与改动前一致。
     try { this.gd.matchIsRogue = this.isRogue; } catch { /* frozen gd */ }
+    /**
+     * 「包含无场景地图」 (opts.incompleteMaps, room.setIncompleteMaps; off by default): off, every stage pool of this match
+     * (setup waves, the per-round draw, the rogue node tier) keeps only the stages with an official scene package; on, the
+     * mode's full pool comes back and a scene-less stage plays on the procedural board. The pools are drawn from the
+     * gd-facing helpers, so the flags ride on the gd (the same idiom as matchIsRogue above); a frozen gd keeps the
+     * unfiltered pools, i.e. the behaviour before this option.
+     */
+    this.incompleteMaps = opts.incompleteMaps === true;
+    /** the stages with an official scene package (server/match/sceneStages.js; a process-wide cached Set, read-only) */
+    this.sceneStages = stagesWithScene();
+    try {
+      this.gd.allowIncompleteMaps = this.incompleteMaps;
+      this.gd.sceneStages = this.sceneStages;
+    } catch { /* frozen gd: no narrowing */ }
     if (!this.difficulty) this.difficulty = this.gd.difficulty;
     this.isSolo = this.mode === 'solo' || this.gd.isSolo;
+    /**
+     * 危机合约 (shared/contracts.js; opts.contracts, the lobby's room.setContracts — already resolved there) 与它们
+     * 解算出来的修正表 (shared/contractEffects.js). 空列表 = 没有合约的一局: `fx` 全中性（opStatMul 1/1/1,
+     * healMul 1, bondLayerCap null），下面每个消费者都什么都不交给 sim（MatchCombat._contractOpts）。`fx` 是**整局
+     * 共享**的 —— 合约是**房间**的挑战，不是某个玩家的。
+     * @type {Readonly<string[]>}
+     */
+    this.contracts = Object.freeze(Array.isArray(opts.contracts) ? opts.contracts.filter((id) => typeof id === 'string') : []);
+    /** @type {ReturnType<typeof contractEffects>} */
+    this.fx = contractEffects(this.contracts);
     /** 「AI 队友最后选择」 (opts.aiPicksLast, GitHub #338): humans draft before AI seats (MatchPhases.humansFirst) */
     this.aiPicksLast = !this.isSolo && opts.aiPicksLast === true;
     /**
@@ -516,6 +554,12 @@ export class Match {
     if (!this.players.size) throw new TypeError('Match: seats required');
     this.order = [...this.players.values()].sort((a, b) => a.seat - b.seat);
     /**
+     * 危机合约的 strategy boost (shared/strategyBoost.js): 合约难度下总点数 ≥ STRATEGY_BOOST_SCORE 的选择会让每套策略的
+     * 数值升级（server/sim/content/bands 读 `gd.strategyBoost`）。开局固定一次，按**参战开局**的玩家数 —— 之后有人
+     * 离场不得把已经做出的判断砍半。没有合约时 `crisisActive` 为 false、开关是关的，与改动前的每一局一致。
+     */
+    this.gd.strategyBoost = strategyBoostEnabled(this.contracts, this.difficulty, this.order.filter((p) => p.alive).length);
+    /**
      * Spectator seats (opts.spectators / addSpectator): playerId → a stand-in every watch path treats like an eliminated
      * human (alive false; no PlayerState, never a field's player or authority).
      * @type {Map<string, { playerId: string, isBot: false, left: false, alive: false, connected: true, spectator: true }>}
@@ -528,6 +572,10 @@ export class Match {
      * (draft order and skip, 6 机变 cards, 联防 …) stay.
      */
     this.loneHuman = this.order.filter((p) => !p.isBot).length === 1;
+    // 单人肉鸽：肉鸽房的团队经济来自 `economy.rogueTeam`（见 gamedata.js 的 get teamEconomy），但房里只有自己一个
+    // 真人时没有队友可借、可存、可共买 —— 那套控件只会让人跟自己借钱。座位表在这里才定下来（loneHuman），所以
+    // `econSolo` 也在这一行之后写进 gd：`econInit()`（下面 :604 附近）是 teamEcon 的首次读取，晚于这里。
+    try { this.gd.econSolo = this.isRogue === true && this.loneHuman === true; } catch { /* frozen gd */ }
     /**
      * 超容变体的闸门 (业主裁令 2026-10-12)。**闸门读的是在场参与者数，不是房间容量 —— 容量 20 只坐 4 人走原路径。**
      *
@@ -601,7 +649,20 @@ export class Match {
       .sort();
     // 上游 0.2.4（DESIGN §31.8 共享库存）与我们的助战供给落在同一行，两者互不相干，故并存：
     // 助战多一份拷贝走 SharedPool 的 support 选项；共享装备库存是另一个池，由 SharedItemPool 表达。
-    this.pool = new SharedPool(this.gd, { banned: bans.banned, support: this.supportSupply });
+    // 分组牌库 (owner 2026-11-05「每四人一个分组牌库」): one SharedPool per ≤4-seat group, in seat order
+    // (root shared/playerCapacity.js poolGroupSizes / poolCopyScale); `this.pool` stays the first group, each seat's
+    // `poolId` picks its own group.
+    // 百卫 100 座 variant 保持原来的单池语义（poolGroupSizes 只接受 ≤MAX_SEATS）
+    const groupSizes = this.variant ? [this.order.length] : poolGroupSizes(this.order.length);
+    this.pools = groupSizes.map((size) => new SharedPool(this.gd, {
+      banned: bans.banned,
+      copyScale: poolCopyScale(size),
+      ...(this.supportSupply ? { support: this.supportSupply } : {}),
+    }));
+    this.pool = this.pools[0];
+    const groupOfSeat = [];
+    groupSizes.forEach((size, gi) => { for (let k = 0; k < size; k++) groupOfSeat.push(gi); });
+    this.order.forEach((ps, i) => { ps.poolId = groupOfSeat[i] ?? 0; });
     this.itemPool = new SharedItemPool(this.gd, () => this.order);
     // 自选编队 (0.2.0): each human's slotted DIY pieces get their own stock — none for one whose bonds are all off this
     // match (player/diy.js initDiyStock); no randomness is drawn here

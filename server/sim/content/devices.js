@@ -34,18 +34,16 @@
 // keeps those tiles NONE (grid.js DEPLOY_REFUSED_TILES), so automatic placements never use them [ASSUMED].
 
 import { COLS, ROWS } from '../constants.js';
+import { hypot } from '../detmath.js';
 import { performAttack, attackCountdown } from '../ai.js';
 import { sortEnemyTargets } from '../targeting.js';
 import { DIR_VEC, normDir, oppositeDir } from '../dir.js';
-import { hypot } from '../detmath.js';
-import { matchBands, bandRecord, buffsOf } from './support/index.js';
 
 const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : d));
 /** ASPD blackboard values: a fraction (|v| < 1, e.g. −0.6 / −0.05) is ×100 ASPD, otherwise flat (+20). */
 const aspdOf = (v) => (Math.abs(v) < 1 ? v * 100 : v);
 
 export const TERRAIN = Object.freeze({ mire: 1, smog: 2, deepsea: 3, infection: 4 });
-const TERRAIN_NAME = ['', 'mire', 'smog', 'deepsea', 'infection'];
 const BUFF = { 1: 'terrain:mire', 2: 'terrain:smog', 3: 'terrain:deepsea', 4: 'terrain:infection' };
 const AIRFLOW = 'terrain:airflow';
 const CRATE_KEY = 'trap_1105_accrate';
@@ -58,7 +56,6 @@ const RESEARCH = Object.freeze({
 });
 
 const STATE = new WeakMap();
-const stateOf = (battle) => STATE.get(battle) ?? null;
 
 // ---------------------------------------------------------------------------------------------------------------
 // device overrides
@@ -261,20 +258,6 @@ function tickTurret(battle, u, dt) {
   T.cd = u.s.interval;
 }
 
-/** Activate “双眼皮” turrets on this field (all known aliases by default; idempotent). Returns the turret units. */
-export function activateTurrets(battle, { aliases = null } = {}) {
-  const st = stateOf(battle);
-  if (!st) return [];
-  const out = [];
-  for (const d of battle.stage?.devices || []) {
-    if (d.key !== TURRET_KEY && d.role !== 'turret') continue;
-    if (aliases && !aliases.includes(aliasOf(d))) continue;
-    const u = spawnTurret(battle, st, d);
-    if (u) out.push(u);
-  }
-  ensureTick(battle, st);
-  return out;
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // terrain
@@ -504,12 +487,6 @@ function ensureTick(battle, st) {
   }, { priority: 90 });
 }
 
-/** Terrain name under (r, c) for other content ('mire' | 'smog' | 'deepsea' | 'infection' | null). */
-export function terrainAt(battle, r, c) {
-  const st = stateOf(battle);
-  const code = st && r >= 0 && r < ROWS && c >= 0 && c < COLS ? st.terrain[r * COLS + c] : 0;
-  return TERRAIN_NAME[code] || null;
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // install
@@ -527,13 +504,6 @@ export function install(battle) {
     crateOff: new Set(),
     ticking: false,
   };
-  // Historical 森蚺 grants a turret on every field, including a standalone BattleSpec with no prep dispatcher.
-  for (const ps of battle.players || []) for (const id of matchBands(battle, ps.playerId)) {
-    for (const b of buffsOf(bandRecord(id))) {
-      if (b.key !== 'auto_chess_change_map') continue;
-      for (const [alias, on] of Object.entries(b.p)) if (alias.startsWith('trap_') && alias.includes('#')) st.global.set(alias, truthy(on));
-    }
-  }
   STATE.set(battle, st);
   const devices = battle.stage?.devices || [];
   buildTerrain(battle, st); // grid, stage `special` and overrides are known at construction
@@ -591,3 +561,26 @@ export function install(battle) {
 }
 
 export function registerMeta(registry) {} // map cards / band 机械援助 reach the battle through deviceOverrides
+
+export function activateTurrets(battle, { aliases = null } = {}) {
+  const st = stateOf(battle);
+  if (!st) return [];
+  const out = [];
+  for (const d of battle.stage?.devices || []) {
+    if (d.key !== TURRET_KEY && d.role !== 'turret') continue;
+    if (aliases && !aliases.includes(aliasOf(d))) continue;
+    const u = spawnTurret(battle, st, d);
+    if (u) out.push(u);
+  }
+  ensureTick(battle, st);
+  return out;
+}
+
+export function terrainAt(battle, r, c) {
+  const st = stateOf(battle);
+  const code = st && r >= 0 && r < ROWS && c >= 0 && c < COLS ? st.terrain[r * COLS + c] : 0;
+  return TERRAIN_NAME[code] || null;
+}
+
+const stateOf = battle => STATE.get(battle);
+const TERRAIN_NAME = Object.fromEntries(Object.entries(TERRAIN).map(([name,id]) => [id,name]));

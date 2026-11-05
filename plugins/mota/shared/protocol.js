@@ -10,6 +10,10 @@ import { isPluginId } from './plugins/manifest.js';
 import { isTestCommand } from './testMode.js';
 import { PLUGIN_OFFER_SLOTS } from './plugins/limits.js';
 
+// 训练模式（入门协议）的难度名。本插件的数据里没有训练模式记录（它是核心的 solo 模式，见 shared/constants.js
+// TRAINING_DIFFICULTY），所以这份顶替拷贝直接写名字面量，与核心 shared/protocol.js 的放行口径保持同步。
+const TRAINING_DIFFICULTY = 'TRAINING';
+
 // ---- tiny validators -------------------------------------------------------
 const isInt = (v, lo = -Infinity, hi = Infinity) => Number.isInteger(v) && v >= lo && v <= hi;
 const isStr = (v, max = 64) => typeof v === 'string' && v.length <= max;
@@ -522,11 +526,11 @@ export const C2S = {
   // 2026-11-02：mode 放行独立肉鸽模式；难度接受 N1–N20 或旧 4 档名（**浏览器拿到的是这份顶替拷贝**，
   // 核心 shared/protocol.js 改了这里也要同步，否则 net.request 在本地就把请求拒了）
   'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus' || v === 'rogue',
-    difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v), private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
+    difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v) || v === TRAINING_DIFFICULTY, private: (v) => v === true || v === false, variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, randomStage: (v) => v == null || isBool(v), teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10), versusAlt: (v) => v == null || typeof v === 'boolean', version: isVersionId, soloUnlimited: isBool, versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2, $optional: ['versusSpeed', 'test', 'variant', 'private', 'randomStage', 'teamSize', 'version', 'soloUnlimited', 'versusAlt'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.ready': { ready: isBool },
-  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v) },
+  'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) || LEGACY_DIFFICULTIES.includes(v) || v === TRAINING_DIFFICULTY },
   // the co-op room option 「AI 队友最后选择」 (GitHub #338; host, before the match): the strategy and 机变 drafts order every
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
@@ -597,6 +601,9 @@ export const C2S = {
   // 「不限时」（§35.23.10）：只对 mode==='solo' 且该版本单人计时（config.version.rules.soloTimed）的房间生效；
   // 缺省关，room.state 只在开启时带 soloUnlimited: true
   'room.setSoloUnlimited': { on: isBool },
+  // 「包含无场景地图」（房主、非对局中；缺省关）。核心 shared/protocol.js 同名键同步新增：浏览器拿到的是这份顶替
+  // 拷贝，缺了就在本地 BAD_MSG，发不到服务端。false = 抽图池只留有官方 scene 包的 stage；true = 全部 stage。
+  'room.setIncompleteMaps': { on: isBool },
   // 对抗模式（2V2 / 4V4，2026-10-24）：狩猎期目标 / 布阵 / 悬赏提取、事件期选择
   'g.confrontTarget': { targetPlayerId: isId },
   'g.hex': { hexId: (v) => typeof v === 'string' && v.length > 0 && v.length <= 64 },
@@ -613,6 +620,8 @@ export const C2S = {
   'g.relicPick': { relicId: (v) => isId(v) },
   // 肉鸽随机事件（2026-10-27）：选一个选项
   'g.roguePick': { choiceId: (v) => typeof v === 'string' && v.length > 0 && v.length <= 32 },
+  // 肉鸽节点三选一（2026-11-04）：选中当前层/下一层的一个节点 id（rogue-core 的 mixin 处理）
+  'g.rogueNode': { nodeId: (v) => typeof v === 'string' && v.length > 0 && v.length <= 32 },
   'g.meltClose': {},
   'g.confront': { group: nullable((v) => isInt(v, 1, 16)), position: (v) => typeof v === 'string' && ['front', 'mid', 'back'].includes(v), picks: (v) => isList(v, 128, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower') && (p.routeIndex === undefined || isInt(p.routeIndex, 0, 63)) && (p.time === undefined || (typeof p.time === 'number' && Number.isFinite(p.time) && p.time >= 0 && p.time <= 1e6))), bosses: (v) => isList(v, 32, (p) => isPlain(p) && isId(p.enemyKey) && (p.gate === undefined || p.gate === 'upper' || p.gate === 'lower')), commit: isBool, $optional: ['bosses', 'commit'] },
   'g.confront.withdraw': { gold: (v) => isInt(v, 1, 100000) },
@@ -770,6 +779,30 @@ export const S2C = [
   // server-run combat streaming (legacy / SP_COMBAT=server only)
   'b.snap', 'b.ev',
 ];
+
+/**
+ * 头像 id 的**形状白名单**(`hello.avatar`)。
+ *
+ * 合法形状有两类 —— 这个函数是它们**唯一**的定义,业务层(`shared/avatars.js`)与协议层共用:
+ *
+ *   · 官方立绘 chessId: `char_1041_angel2` / `chess_char_6_13_a` → 纯字母数字下划线
+ *   · 自定义头像:       `custom:hat`、玩家上传的 `custom:u/<账号>`
+ *
+ * ⚠ 长度上限 48:`custom:` 7 字符 + 上传那条 `u/<账号≤32>` = 最多 41,
+ *   留一点余量。上限必须真的挡住超长输入(它会进档案 blob 并广播给同房间的人)。
+ *
+ * ⚠ `custom:` 后面**不做细粒度校验** —— 那是 `shared/avatars.js parseAvatarId` 的职责
+ *   (它还要判路径穿越、账号名字符集)。这里只管"形状像不像一个 id",
+ *   免得把两套规则写两遍又写漂(这正是原来那个 bug 的成因)。
+ *
+ * @param {unknown} v
+ */
+export function isAvatarIdStr(v) {
+  if (typeof v !== 'string' || v.length > 48) return false;
+  if (v === '') return true;                                   // 空串 = 用默认
+  if (/^custom:[A-Za-z0-9_/-]+$/.test(v)) return true;         // 自定义(含玩家上传)
+  return /^[A-Za-z0-9_]+$/.test(v);                            // 官方立绘 chessId
+}
 
 /**
  * Validate a decoded client message. Returns `null` when valid, otherwise a short reason string.

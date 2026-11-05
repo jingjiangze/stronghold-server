@@ -1,10 +1,8 @@
 // server/sim/content/kits/ops/chess_char_5_23-reckpr.js — 录武官 (char_4196_reckpr) kit, tier 5.
 // Conventions of the tier-5 kits: ../shared/tier5.js; kit contract and rules: ../README.md.
 
-import { isHpLoss } from '../../../attack.js';
-import {
-  num, on, inRange, talent, traitBb, mods, isOp, lazySkills, instantKind, lowHpHealUp,
-} from '../shared/tier5.js';
+import { isHpLoss } from '../../../damage.js';
+import { num, on, inRange, talent, traitBb, mods, isOp, lazySkills, instantKind, lowHpHealUp } from '../shared/tier5.js';
 
 export default {
   // ---------------------------------------------------------------------------------------------------------------
