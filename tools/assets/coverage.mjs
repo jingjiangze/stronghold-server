@@ -10,18 +10,6 @@ import { avatarUrl, portraitUrl, spineEntry, unitPictureUrl } from '../../public
 // See docs/ASSETS.md "Token models from the local client"; the audit still lists their pictures and fx.
 const EFFECT_TOKENS = new Set(['token_10039_ulpia_block', 'token_10058_sbell2_icetgt',
   'token_10055_phatm2_mndclv', 'token_10065_demetr_dmtpos', 'token_10071_aglna2_agairp']);
-// 2026-11-05：上游完全没有美术的 16 条怪（四方核实：三家图标镜像 —— yuanyan3060/ArknightsGameResource、
-// ArknightsAssets2、fexli —— 是同一套 1838 张、miss 集合完全一致；isHarryh/Ark-Models 的 models_data 条目存在但
-// assetList 为空且无 models_enemies 目录；PRTS 同名词条只挂「无图片占位符.png」；官方 CDN 无 enemy 路径）。
-// 它们只在 data/enemies.json 里存在，waves/stages/factions 引用次数为 0 ⇒ 任何关卡都不会出，只是怪物商店卡池
-// （= 全表）会把它们渲染成占位。豁免只按 id 白名单生效，其余缺美术照报 MISSING。
-const NO_ART_ENEMIES = new Set([
-  'enemy_2086_skzdwx', 'enemy_2087_skzdwy',
-  'enemy_2095_skzamf_04', 'enemy_2095_skzamf_13', 'enemy_2095_skzamf_16', 'enemy_2095_skzamf_17',
-  'enemy_2095_skzamf_18', 'enemy_2095_skzamf_19', 'enemy_2095_skzamf_20',
-  'enemy_2096_skzamj_01', 'enemy_2096_skzamj_02', 'enemy_2096_skzamj_03', 'enemy_2096_skzamj_04',
-  'enemy_2096_skzamj_05', 'enemy_2096_skzamj_06', 'enemy_2096_skzamj_07',
-]);
 const read = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const optionalLocal = (root) => existsSync(join(root, 'data/local-assets.json')) ? read(join(root, 'data/local-assets.json')) : { groups: {} };
 
@@ -87,10 +75,6 @@ export function assetCoverage({ root, sets = versionAssetData(root), assets = re
       const sp = spine(id);
       const checks = { icon: status(present(assets.enemies?.[id]?.icon)), model: status(model(sp)), clips: status(clips(sp)) };
       if (id === 'enemy_9016_acstmr') Object.assign(checks, { model: 'icon diamond (same as default)', clips: 'no Spine (same as default)' });
-      // 2026-11-05：这 16 条上游没有任何美术（三家图标镜像同一套 1838 张全缺 + Ark-Models 的 models_data
-      // 条目 assetList 为空且无 models_enemies 目录 + PRTS 只挂占位图 + 官方 CDN 无 enemy 路径）；
-      // 且它们在 waves/stages/factions 里引用次数为 0，任何关卡都不会出。名单见文件顶部的 NO_ART_ENEMIES。
-      if (NO_ART_ENEMIES.has(id)) Object.assign(checks, { icon: 'no art upstream (4-way verified 2026-11-05)', model: 'no art upstream (4-way verified 2026-11-05)', clips: 'no art upstream (4-way verified 2026-11-05)' });
       if (fx) checks.fx = status(!!fx.units?.[id]);
       add('enemy', id, rec.name, checks, assets.enemies?.[id]?.spineAliasOf ? `existing alias: ${assets.enemies[id].spineAliasOf}` : '');
     }

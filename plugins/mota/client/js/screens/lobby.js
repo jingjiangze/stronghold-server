@@ -25,7 +25,7 @@ import { useHubBackdrop, HubBackdrop, HubRadar, BackdropSettings, BackdropGlyph,
 import { TestMark } from '../ui/testConsole.js';
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, LEGACY_DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, difficultyOptionsFor, ERR, ERR_TEXT } from '../../../shared/constants.js';
 import { RANDOM_MODE } from '../../../shared/randomMode.js';
 import { html, confirmDialog, Button, Icon, MicroLabel, Panel, TextField, PingPill, Tooltip, Spinner, DifficultyIcon } from '../ui/components.js';
 
@@ -167,10 +167,17 @@ export function lobbySimulationPreference() {
   return loadPref('lobby.mode', 'coop') === 'solo' ? 'solo' : 'coop';
 }
 
+/**
+ * The remembered difficulty, brought into the list the coming screen will actually show (2026-11-05: 肉鸽 keeps the
+ * 20 tiers, every other mode the four legacy names) — otherwise a saved `N8` (picked in 肉鸽) would leave the four-card
+ * screen with nothing selected. `FUNNY` is the first legacy card, so the first visit still lands on a selected card.
+ */
 function preferredDifficulty(simulation) {
   const key = simulation === 'firepower' ? 'lobby.firepowerDifficulty' : 'lobby.difficulty';
   const d = loadPref(key, 'FUNNY');
-  return DIFFICULTIES.includes(d) ? d : 'FUNNY';
+  const options = difficultyOptionsFor(simulation === 'rogue' ? 'rogue' : 'coop');
+  if (options.includes(d)) return d;
+  return options.includes('FUNNY') ? 'FUNNY' : options[0];
 }
 
 /** Keep the explanation tied to the shared balance configuration. */
@@ -455,8 +462,9 @@ function HubTile({ icon, label, en, onClick, children }) {
 
 /** Shared frame of the hub's two dialogs (the start sheet, 密钥加入). */
 /**
- * 娱乐模式（业主 2026-10-31「其他模式聚合为大厅里的一个按钮」）：把协同共竞 / 赏金 / 对战(控怪) / 肉鸽
- * 收进一个入口；弹窗占视口 80%，2×2 网格，选哪格就走对应的建房弹窗。
+ * 娱乐模式（业主 2026-10-31「其他模式聚合为大厅里的一个按钮」）：把协同共竞 / 赏金·控怪 / 肉鸽
+ * 收进一个入口；弹窗占视口 80%，一行三格，选哪格就走对应的建房弹窗。
+ * 2026-11-05 业主裁决：赏金与控怪合成「赏金 · 控怪」一格（细分档位在进入后的「选择模拟协议」页上选），四格变三格。
  */
 function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null, onSpectateRoom = null }) {
   const [leaving, leave] = useLeave(onClose);
@@ -469,10 +477,8 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
   const cells = [
     { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', icon: 'joint', acc: 'var(--gold)',
       desc: t('两人共竞：团队储备、三项商店升级、借贷、救济与救援。') },
-    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', icon: 'bounty', acc: 'var(--ice)',
-      desc: t('2V2 攻防：官方出怪为主，你替换其中一部分，靠自家怪被击杀拿赏金；建房时可选倍速。') },
-    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', icon: 'confront', acc: 'var(--orange)',
-      desc: t('出怪、路线、时机全部由你决定；守方遇到的怪约为官方的 1.5 倍。') },
+    { id: 'versus', name: t('赏金 · 控怪'), en: 'BOUNTY / CONFRONT', icon: 'bounty', acc: 'var(--ice)',
+      desc: t('2V2 攻防两档：赏金＝替换部分官方出怪、攻守每回合轮换；控怪＝出怪 / 路线 / 时机全可控、阵营固定。进入后再选档。') },
     { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', icon: 'rogue', acc: 'var(--violet)',
       desc: t('开局与每 2 回合各抽一次藏品三选一，外加随机词缀、随机事件与每回合换图。') },
   ];
@@ -586,7 +592,9 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
   online, maint, busy, isSearching, onCreate, onQueue, purpose = 'create', onSearch, onCancel, mm, onBrowse, chained = false, modeVariant = null,
   testMode = false, asTest = false, onTest = null, versusTeam = 2, onVersusTeam = null,
   versusRule = 'bounty', onVersusRule = null,
-  versusSpeed = 1, onVersusSpeed = null, monsterMode = 'shared', onMonsterMode = null }) {
+  versusSpeed = 1, onVersusSpeed = null, monsterMode = 'shared', onMonsterMode = null,
+  // 2026-11-05：肉鸽走 coop 家族建房（roomMode 仍是 'coop'），所以档位列表另给一个模式键：肉鸽 → 20 档，其余 → 四档。
+  difficultyMode = null }) {
   const [leaving, leave] = useLeave(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal, .guide')) leave(); };
@@ -682,7 +690,7 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
       </section>
       <section class="proto-side">
         <div class="proto-list" role="radiogroup" aria-label=${t('模拟难度')}>
-          ${DIFFICULTIES.map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
+          ${difficultyOptionsFor(difficultyMode || roomMode).map((d) => html`<${ProtoCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${onDifficulty}
             matchmaking=${matchmaking} random=${random} variant=${variant} modeVariant=${modeVariant} />`)}
         </div>
         <div class="proto-foot">
@@ -1144,16 +1152,19 @@ export function LobbyScreen() {
     else { setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); }
   };
   const openSearch = () => { pickMode('coop'); setSheetChained(allyOpen); setAllyOpen(false); setSheetPurpose('search'); setSheetOpen(true); };
-  // 娱乐模式的四格 → 各自打开对应的建房流程
+  // 娱乐模式的三格 → 各自打开对应的建房流程（2026-11-05：赏金 / 控怪合成 versus 一格）
   const pickFun = (id) => {
     setFunOpen(false);
     if (id !== 'rogue') setRogueRules(false);
     if (id === 'xie') { pickMode('xie'); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
     // 肉鸽（2026-11-02 业主）：点了直接到难度选择，不再先过一遍「选择同盟方式」面板
     if (id === 'rogue') { pickMode('coop'); setRogueRules(true); pickDifficulty('N8'); setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return; }
-    pickMode('versus');
-    setVersusRule(id === 'confront' ? 'confront' : 'bounty');
-    setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true);
+    // 赏金 · 控怪（2026-11-05）：进对抗房建房页，档位重置成默认的赏金，细分档位在协议页的那对 radio 上选。
+    // 不发 variant —— wire 上的 variant 由 versusRule 决定（见 create()）。
+    if (id === 'versus') {
+      pickMode('versus'); setVersusRule('bounty');
+      setSheetPurpose('create'); setSheetChained(false); setSheetOpen(true); return;
+    }
   };
   const modeCard = MODE_CARDS.find((c) => c.id === simulation) || MODE_CARDS[0];
 
@@ -1234,6 +1245,7 @@ export function LobbyScreen() {
       versusRule=${versusRule} onVersusRule=${setVersusRule}
       versusSpeed=${versusSpeed} onVersusSpeed=${setVersusSpeed}
       monsterMode=${monsterMode} onMonsterMode=${setMonsterMode}
+      difficultyMode=${rogueRules ? 'rogue' : roomMode}
       onCreate=${create} onQueue=${async () => { await queueMatch(); setSheetOpen(false); }}
       purpose=${sheetPurpose} onSearch=${queueMatch} onCancel=${cancelMatch} mm=${mm} onBrowse=${() => setModalOpen(true)} chained=${sheetChained} />` : null}
 

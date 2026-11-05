@@ -231,7 +231,7 @@
 
 import { aiTakeover, aiTakeoverDirect, resetAiTakeover, reconcileAiTakeover, maybeRandomAiTakeover } from './aiTakeover.js';
 import { randomBytes, randomInt } from 'node:crypto';
-import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultyRank, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultyRank, difficultyOptionsFor, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { getData } from './data.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks, charPotentialChanges, checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
 import { encode, isErrCode, sendRaw, sendSession } from './net.js';
@@ -1552,7 +1552,8 @@ export class Lobby {
   }
 
   /**
-   * The difficulties a version offers a room mode (DIFFICULTIES for 第二期下半 / a server without versions).
+   * The difficulties a version offers a room mode (difficultyOptionsFor(mode) for 第二期下半 / a server without
+   * versions: the four normal ones, or the 20 tiers in a 肉鸽 room).
    * @param {string} v @param {string} mode @returns {readonly string[]}
    */
   /** lobby 级插件面（server/plugins/lobbyModules.js）：null 表示本进程没有插件声明 code.lobby。 */
@@ -1564,7 +1565,9 @@ export class Lobby {
   offered(v, mode) {
     // 插件房模式（versus / rogue）沿用 coop 的难度表：玩法本体在插件里，房间选项仍是同一套难度。
     const family = mode === 'versus' || mode === 'rogue' ? 'coop' : mode;
-    if (!this.versions || v === DEFAULT_VERSION) return DIFFICULTIES;
+    // 2026-11-05 业主裁决：默认版本除肉鸽外只向界面提供四个正常难度（客户端选择器同一份表：difficultyOptionsFor），
+    // 肉鸽仍给 20 档。DIFFICULTIES 本体不动 —— fallbackDifficulty / hasModeOfVersion 仍要能放行旧档与 N 档。
+    if (!this.versions || v === DEFAULT_VERSION) return difficultyOptionsFor(mode);
     return this.versions.offered(v, /** @type {'solo' | 'coop'} */ (family));
   }
 

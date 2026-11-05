@@ -1612,7 +1612,7 @@ const STATIC_BODIES = Object.freeze(new Set([
   'enemy_1336_bldbat',                                               // 伏翼兽 (2026-11-05)
   'enemy_1355_mrfly', 'enemy_1355_mrfly_2', 'enemy_1407_hummbd',     // 护障 / 护障·P / 远眺
   'enemy_1430_lrrook', 'enemy_1430_lrrook_2', 'enemy_1521_dslily',    // 愧悔魂灵圣杯 / 殉亡魂灵圣杯 / 盐风主教昆图斯 (WALK)
-  'enemy_2086_skzdwx', 'enemy_2087_skzdwy', 'enemy_2090_skzjbc',     // 年代印痕 / 年代印痕 / 托生莲座 (2026-11-05)
+  'enemy_2090_skzjbc',                                               // 托生莲座 (2026-11-05)
   'enemy_9009_acfort', 'enemy_9014_acstma', 'enemy_9015_acstmb', 'enemy_9016_acstmr', // 假想敌：黑云 / “斩胄之剑” / “破胄之锤” / 刺胄之弹
   'enemy_10028_vtswd', 'enemy_10029_vtshld', 'enemy_10030_vtwand',   // 未装配刀片 / 防护背心 / 冲击式施术单元
   'enemy_10040_cnvbln',                                              // 节日气球
@@ -1728,6 +1728,21 @@ function bandSwapEnemyKeys(act) {
 }
 
 /**
+ * 2026-11-05 业主裁决：这 16 条上游完全没有美术（三家图标镜像同一套 1838 张全缺 + Ark-Models 的 models_data
+ * 条目 assetList 为空 + PRTS 只挂占位图 + 官方 CDN 无 enemy 路径），业主决定不要，不进怪物表。
+ * 放在生成器里而不是只删产物，否则下次 build-data 会把它们加回来。
+ * 只过滤 buildEnemies 的产物（collectEnemyKeys 本身不动），因此 waves / factions / bosses 若引用到它们只会
+ * 走各自的 `warn(... missing)` 路径，不会让整次构建判错。
+ */
+const ENEMY_NO_ART_EXCLUDED = new Set([
+  'enemy_2086_skzdwx', 'enemy_2087_skzdwy',
+  'enemy_2095_skzamf_04', 'enemy_2095_skzamf_13', 'enemy_2095_skzamf_16', 'enemy_2095_skzamf_17',
+  'enemy_2095_skzamf_18', 'enemy_2095_skzamf_19', 'enemy_2095_skzamf_20',
+  'enemy_2096_skzamj_01', 'enemy_2096_skzamj_02', 'enemy_2096_skzamj_03', 'enemy_2096_skzamj_04',
+  'enemy_2096_skzamj_05', 'enemy_2096_skzamj_06', 'enemy_2096_skzamj_07',
+]);
+
+/**
  * Build data/enemies.json: base stats at the season level (randomEnemyAttributeDict.level, 0 for
  * all), with the season-wide override level (level_autochess_enemy_data) applied.
  */
@@ -1752,7 +1767,10 @@ function buildEnemies(ctx) {
   }
   const out = {};
   const allKeys = collectEnemyKeys(ctx);
+  const skipped = allKeys.filter((key) => ENEMY_NO_ART_EXCLUDED.has(key)).length;
+  if (skipped) log(`enemies: skipped ${skipped} key(s) — ENEMY_NO_ART_EXCLUDED (no upstream art, 2026-11-05)`);
   for (const key of allKeys) {
+    if (ENEMY_NO_ART_EXCLUDED.has(key)) continue;
     const levels = ctx.enemyDb.get(key);
     if (!levels || !levels.length) { warn(`enemy ${key} missing from enemy_database`); continue; }
     const rand = ac.randomEnemyAttributeDict?.[key] || null;

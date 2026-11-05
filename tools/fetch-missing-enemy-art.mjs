@@ -33,8 +33,9 @@
 // tools/assets/skel.mjs, animation roles resolved with tools/assets/anim-roles.mjs and the
 // PREFAB_SPINE_ROLES fixes applied — the entry is the shape processModels writes otherwise.
 //
-// The 16 ids of SKIP_NO_UPSTREAM_ART have no icon or model upstream (checked: absent from both
-// dumps and from Ark-Models' models_data.json); they are listed and skipped, never attempted.
+// The 16 no-art ids (no icon, no model upstream: absent from both dumps and from Ark-Models'
+// models_data.json) were removed from the monster table on 2026-11-05 (owner decision); they are
+// only recorded as a comment now, nothing is skipped.
 //
 // stats: the derived counts are countStats()' (tools/fetch-assets.mjs:332) recomputed from the
 // manifest; files/bytes are that function's two *inputs* — the file set resolveTemplate resolved
@@ -109,19 +110,16 @@ export const CDN_IDS = Object.freeze([
   'enemy_1047_sagent_2', 'enemy_1049_eagent_2', 'enemy_1249_lysdb', 'enemy_1275_dwlock',
 ]);
 
-/**
- * Ids with no icon and no model upstream (absent from both dumps and from Ark-Models'
- * models_data.json): never attempted, only listed. The 16 are every data/enemies.json key whose
- * id starts with one of the four bases (2 + 7 + 7).
- */
-export const SKIP_NO_UPSTREAM_ART = Object.freeze([
-  'enemy_2086_skzdwx',
-  'enemy_2087_skzdwy',
-  'enemy_2095_skzamf_04', 'enemy_2095_skzamf_13', 'enemy_2095_skzamf_16', 'enemy_2095_skzamf_17',
-  'enemy_2095_skzamf_18', 'enemy_2095_skzamf_19', 'enemy_2095_skzamf_20',
-  'enemy_2096_skzamj_01', 'enemy_2096_skzamj_02', 'enemy_2096_skzamj_03', 'enemy_2096_skzamj_04',
-  'enemy_2096_skzamj_05', 'enemy_2096_skzamj_06', 'enemy_2096_skzamj_07',
-]);
+// No-art ids, removed 2026-11-05 (owner decision): these 16 keys have no icon and no model upstream
+// (absent from both dumps and from Ark-Models' models_data.json), so this tool never attempted them
+// and only listed them. They are now removed from the monster table (data/enemies.json and every
+// roster / faction list): nothing is left to skip, and they must not be re-added to the data.
+// Kept as a record of the fact only — no constant, no skip set.
+//   enemy_2086_skzdwx, enemy_2087_skzdwy,
+//   enemy_2095_skzamf_04, enemy_2095_skzamf_13, enemy_2095_skzamf_16, enemy_2095_skzamf_17,
+//   enemy_2095_skzamf_18, enemy_2095_skzamf_19, enemy_2095_skzamf_20,
+//   enemy_2096_skzamj_01, enemy_2096_skzamj_02, enemy_2096_skzamj_03, enemy_2096_skzamj_04,
+//   enemy_2096_skzamj_05, enemy_2096_skzamj_06, enemy_2096_skzamj_07
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (m) => console.log(m);
@@ -372,7 +370,6 @@ async function main() {
   const doFetch = guardDefaultFetch(globalThis.fetch);
   const t0 = Date.now();
   log(`[art] root ${ROOT}`);
-  log(`[art] skip (no upstream art, ${SKIP_NO_UPSTREAM_ART.length}): ${SKIP_NO_UPSTREAM_ART.join(', ')}`);
 
   const raw = await readFile(MANIFEST, 'utf8');
   const manifest = JSON.parse(raw);

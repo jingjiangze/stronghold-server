@@ -76,6 +76,17 @@ export const DIFFICULTY_NAMES = {
 };
 export const DIFFICULTY_COLORS = { ...LEGACY_COLORS, ...TIER_DIFFICULTY_COLORS };
 
+/**
+ * 2026-11-05 业主裁决：除肉鸽外，难度一律走「四个正常难度」（标准 / 险境 / 绝境 / 终极模拟）。
+ * 肉鸽保留 20 档（它的关卡与名称是按 N 档铺的）。
+ * 注意：DIFFICULTIES 本身不动 —— 那是数据侧 20 档的完整清单，服务端校验与版本回退仍要用它。
+ * @param {string} roomMode 房间模式（'solo' | 'coop' | 'versus' | 'rogue' | 'xie' …）
+ * @returns {readonly string[]}
+ */
+export function difficultyOptionsFor(roomMode) {
+  return roomMode === 'rogue' ? DIFFICULTIES : LEGACY_DIFFICULTIES;
+}
+
 // modeId in data/config.json = `mode_${type}_${difficulty.toLowerCase()}` with type single|multi
 // `variant`（'xie' 协同共竞 / 'rogue' 肉鸽）会让 modeId 变成 `mode_<variant>_<难度>`（2026-11-02 起核心也支持，
 // 之前只有插件那份有三参）。

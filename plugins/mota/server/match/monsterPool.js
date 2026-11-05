@@ -9,10 +9,8 @@
 // 第一位存活攻方持有投放权，见 monsterShop.js 的 monsterPoolFor）。
 //
 // 卡池来源（业主 2026-11-05 裁决「放宽卡池来源，但相关规则参考官方卫戍，如怪物星级商店概率等，等比换算」）：
-//   · **池 = data/enemies.json 的全部条目**（491 条；排除 `tokenOnly: true` 的 8 条 ⇒ 483 只），不筛阵营、不筛官方波次。
+//   · **池 = data/enemies.json 的全部条目**（475 条；排除 `tokenOnly: true` 的 8 条 ⇒ 467 只），不筛阵营、不筛官方波次。
 //     旧口径（2026-11-04）= 本回合官方出怪 / 面板并集，实测让 7 个阵营在池里 0 只（池层面）。
-//   · **2026-11-05 追加美术过滤**：资产清单（m.data.assets）里既无 icon 也无 Spine 的 16 条怪不进发牌卡池
-//     （上游完全没有美术，进池只会渲染成占位；它们在 waves/stages/factions 引用次数为 0）。见 monsterHasArt。
 //   · 「本回合官方出怪优先」的语义保留为**成员保证**：官方波次的 key 一定在池里（本回合快照来自同一份 data）；
 //     快照里有、data 里没有的 key 也补进池（防御：宁可多一只，不丢官方可投放怪）。
 //   · **合法性（能不能提交）仍按规则档分流，与池来源解耦**：`legalKeys` 保持不变 —— 对抗档 = 本回合官方出怪、
@@ -22,12 +20,14 @@
 // 阶位口径（2026-11-04 并入 242 条肉鸽怪后重切，6 档；切点本身沿用，未重算）：
 //   · 切点 MONSTER_TIER_BANDS 是 2026-11-04 在**基线池子集**（confrontPool(data/factions.json) ∩ data/enemies.json
 //     = 120 只）上按 attrPower 六等分位定出来的（全表有 boss 的 attrPower 离群 2.5M，会把分位拉坏）；
-//     2026-11-05 池放宽到 483 只后业主口径是「按现有的 6 档切点分档」，所以**切点不动**。
+//     2026-11-05 池放宽到全表后业主口径是「按现有的 6 档切点分档」，所以**切点不动**。
 //   · 分位口径用 attrPower（官方强度式：atk×5 + maxHp + def×3 + res×3，见 data/enemies.json 的 attrPower）；
 //     confrontValue = round(stat / 120)，两者只差 ÷120 与取整，所以切点按 attrPower 算完后 ÷120 存**基础价量纲**。
 //     实测切点 [39, 57, 87, 134, 176]（≈ 每 1/6 一档）；旧基线池每档 20/20/21/20/19/20 只。
-//   · 放宽到 483 只后**实测每档 58 / 60 / 69 / 74 / 49 / 173 只**（高阶偏多：491 条含 BOSS / 肉鸽精英的 attrPower
-//     离群值）。阶位只用于展示与「发牌阶位上限 = 商店等级」，偏斜不影响可玩性。
+//   · 放宽到全表后**实测每档 58 / 60 / 69 / 74 / 47 / 159 只**（475 条 − tokenOnly 8 条 = 467 只；
+//     2026-11-05 删掉的 16 条无美术怪落在 tier5 2 只 + tier6 14 只，所以比原来 483 只口径的
+//     58 / 60 / 69 / 74 / 49 / 173 正好少这 16 只）。高阶偏多：全表含 BOSS / 肉鸽精英的 attrPower
+//     离群值。阶位只用于展示与「发牌阶位上限 = 商店等级」，偏斜不影响可玩性。
 //   · 旧切点 [25, 50, 100, 200]（2026-11-03）在同一个池子集上实测 5 / 26 / 34 / 40 / 15 —— 严重偏斜，已废弃。
 //   · 定阶只看**基础价**，不看本回合价：本回合价随 gd.enemyScale 的 hp/atk 倍率整体上浮，同一只怪会在后期
 //     跳档；阶位是怪物的固有稀有度（与「这一回合卖多少钱」分开）。
@@ -55,18 +55,20 @@ export const MONSTER_OFFICIAL_COPIES_BY_TIER = Object.freeze({ 1: 12, 2: 14, 3: 
 
 /** 干员池 key 数（`data/chess.json` 的条数，实测 266 —— 等比换算的分母）。 */
 export const MONSTER_CHESS_POOL_SIZE = 266;
-/** 怪物池 key 数（`data/enemies.json` 的条数，实测 491 —— 业主裁决的等比换算是以 491 为基数）。 */
-export const MONSTER_ENEMY_POOL_SIZE = 491;
+/** 怪物池 key 数（`data/enemies.json` 的条数，实测 475 —— 等比换算以这个数为基数）。 */
+export const MONSTER_ENEMY_POOL_SIZE = 475;
 /**
- * 怪物份数的**等比缩放系数** = 怪物池 key 数 ÷ 干员池 key 数 = 491 / 266 = 1.845865…，保留 3 位 → **1.846**。
+ * 怪物份数的**等比缩放系数** = 怪物池 key 数 ÷ 干员池 key 数 = 475 / 266（`MONSTER_CHESS_POOL_SIZE`）
+ * = 1.785714…，保留 3 位 → **1.786**。
  * 推导：`Math.round((MONSTER_ENEMY_POOL_SIZE / MONSTER_CHESS_POOL_SIZE) * 1000) / 1000`。
  */
-export const MONSTER_COPY_SCALE = 1.846;
+export const MONSTER_COPY_SCALE = 1.786;
 
 /**
  * 每阶的份数（**库存 cap 的唯一公式**，业主 2026-11-05）：
  * `MONSTER_COPIES_BY_TIER[t] = max(1, round(MONSTER_OFFICIAL_COPIES_BY_TIER[t] × MONSTER_COPY_SCALE))`。
- * 实测（scale 1.846）：tier1→22、2→26、3→33、4→30、5→15、6→9（6 档全覆盖）。
+ * 实测（scale 1.786）：tier1→21、2→25、3→32、4→29、5→14、6→9（6 档全覆盖；原 scale 1.846 时是
+ * 22/26/33/30/15/9）。
  * **旧口径「份数 = 官方该回合只数 × 1.5」已废弃**（它只对官方波次成立，池放宽到全表后失效）；
  * 1.5 倍出怪量改由**军费**保证：每名攻方每回合拿到「官方波次价值 × 1.5 ÷ 攻方人数」
  * （match/match/confront.js 的 grantMonsterFunds / CONFRONT_VOLUME_SHARE），库存不再是它的约束。
@@ -303,7 +305,7 @@ export function legalKeys(m) {
  * （confrontGroups 的行 key 并集，同一套分流见 officialForRule）；两者都取不到才退回官方全池。
  * ⚠ **它不是卡池来源**（卡池见 `monsterPoolKeys`，2026-11-05 已放宽到 data/enemies.json 全表）。
  * 保留它是因为 monsterBonds.js 拿它做**盟约阈值的分母**（`factionPoolCounts`：「本回合可投放池里该阵营的只数」）——
- * 阈值因此仍是**按回合 / 按面板**的小分母（[1,2,3] 量级），不随全表 483 只膨胀（那会把大阵营的 1 阶推到
+ * 阈值因此仍是**按回合 / 按面板**的小分母（[1,2,3] 量级），不随全表 467 只膨胀（那会把大阵营的 1 阶推到
  * 16~18 层、实际永远打不到）。改这里会一并改盟约数值，属于独立裁决，不在本次放宽池子的范围内。
  * @param {object} m
  * @returns {string[]} 排序后的 key（顺序稳定，便于复现）
@@ -322,33 +324,11 @@ export function monsterCardKeys(m) {
 }
 
 /**
- * 这只怪在资产清单里**有没有任何美术**（icon 或 Spine：`spine` / `spineLocal`）。
- * 2026-11-05：有 16 条怪上游完全没有美术（三家图标镜像 yuanyan3060/ArknightsGameResource、ArknightsAssets2、fexli
- * 是同一套 1838 张、miss 集合一致；isHarryh/Ark-Models 的 models_data 条目 assetList 为空且无 models_enemies 目录；
- * PRTS 只挂「无图片占位符.png」；官方 CDN 无 enemy 路径），且它们在 waves/stages/factions 里引用次数为 0
- * （任何关卡都不会出）—— 进发牌卡池只会在货架上渲染成占位骷髅，所以排除。
- * **拿不到资产清单时一律当作「有美术」**（不过滤，保持现状，零回归）。
- * @param {object|null|undefined} assets data/assets.json 的 bundle（= m.data.assets）
- * @param {string} key enemy key
- * @returns {boolean} 有美术 / 无法判断 → true；确认没美术 → false
- */
-function monsterHasArt(assets, key) {
-  if (!assets || typeof assets !== 'object' || !assets.enemies || typeof assets.enemies !== 'object') return true;
-  const rec = assets.enemies[key];
-  if (!rec || typeof rec !== 'object') return false;
-  const icon = typeof rec.icon === 'string' && rec.icon;
-  const spine = rec.spine || rec.spineLocal;
-  return !!(icon || spine);
-}
-
-/**
  * **卡池的 key 全集**（`buildMonsterPool` 的遍历源）。业主 2026-11-05「放宽卡池来源」：
- *   · 主来源 = **`data/enemies.json` 的全部条目**（491 条；排除 `tokenOnly: true` 的 8 条 ⇒ 483 只），
+ *   · 主来源 = **`data/enemies.json` 的全部条目**（475 条；排除 `tokenOnly: true` 的 8 条 ⇒ 467 只），
  *     不筛阵营、不筛官方波次 —— 旧口径只取「本回合官方出怪 / 面板并集」，实测 7 个阵营在池里 0 只。
- *   · 再过一道**美术过滤**（monsterHasArt，2026-11-05）：资产清单里既无 icon 也无 Spine 的怪不进发牌卡池
- *     （当前实测命中 16 条，见 monsterHasArt 的注释）。资产清单不可用时不过滤 —— 只影响发牌，不影响关卡出怪。
  *   · 「本回合官方出怪优先」保留为**成员保证**：`_roundOfficialSpawns` 的 key **一定**在池里
- *     （本回合快照来自同一份 data；若某 key 被 tokenOnly / 美术过滤掉或 data 里没有，也补进来 —— 官方怪不能买不到）。
+ *     （本回合快照来自同一份 data；若某 key 被 tokenOnly 过滤掉或 data 里没有，也补进来 —— 官方怪不能买不到）。
  *   · data 不可用（直测 / 精简 stub）时回落旧路径：面板并集 → `confrontPool(data/factions.json)`，绝不返回空池。
  * ⚠ 本函数只管**池 / 库存**；能不能提交仍看 `legalKeys`（业主裁决：不改提交合法性）。
  * ⚠ 不要用它替换 `monsterCardKeys`：后者是盟约阈值的分母（见那里的注释），两者的分母口径必须分开。
@@ -357,13 +337,11 @@ function monsterHasArt(assets, key) {
  */
 export function monsterPoolKeys(m) {
   const keys = new Set();
-  // 1) data/enemies.json 全表（tokenOnly 的召唤物 / 部件不单独建条目；上游无美术的不进发牌卡池）
+  // 1) data/enemies.json 全表（tokenOnly 的召唤物 / 部件不单独建条目）
   const enemies = (m && m.data && m.data.enemies) || {};
-  const assets = (m && m.data && m.data.assets) || null;
   for (const key of Object.keys(enemies)) {
     const rec = enemies[key];
     if (!rec || rec.tokenOnly === true) continue;
-    if (!monsterHasArt(assets, key)) continue;
     keys.add(key);
   }
   // 2) 本回合官方出怪的 key 必须有（官方优先 = 成员保证；也覆盖 tokenOnly / data 缺条目的边角）
@@ -405,7 +383,7 @@ export function teamAttackerCount(m) {
  * finishConfrontTargets 与 monsterShop.js 的 monsterPoolFor）。
  * 份数口径（业主 2026-11-05 裁决「参考官方卫戍，等比换算」）：`cap = MONSTER_COPIES_BY_TIER[阶位]`
  *   （= `max(1, round(官方 poolCopies[阶位] × MONSTER_COPY_SCALE))`，见常量处的推导与实测值）。
- *   · **旧口径「份数 = 官方该回合只数 × 1.5」已替换**（它只对官方波次成立，池放宽到 483 只后失效）；
+ *   · **旧口径「份数 = 官方该回合只数 × 1.5」已替换**（它只对官方波次成立，池放宽到 467 只后失效）；
  *   · **1.5 × 出怪量改由军费保证**：每名攻方每回合拿到「官方波次价值 × 1.5 ÷ 攻方人数」
  *     （match/match/confront.js 的 grantMonsterFunds / CONFRONT_VOLUME_SHARE），库存不再是它的约束；
  *   · **按队算**：shared 模式下同队攻方共用这一个池，份数不乘攻方人数（队友看到的是同一份库存，买走就少）；
