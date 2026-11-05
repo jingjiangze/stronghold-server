@@ -9,7 +9,7 @@ import { TEST_PUBLIC_LOG } from '../../../shared/testMode.js';
 import { boardOrder, pieceDir } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
 import { cardView } from '../choices.js';
-import { bountySpawns, previewOf, gateOf } from '../waves.js';
+import { bountySpawns, previewOf, gateOf, isFlyKey } from '../waves.js';
 import { timelineAt } from '../fields.js';
 import { bossFieldPlacement } from '../finalAssault.js';
 import { battleProgress } from '../../sim/spec.js';
@@ -40,6 +40,38 @@ function cultivationInfo(lo) {
   const out = {};
   if (lo && Number.isInteger(lo.potential) && lo.potential < 6) out.potential = lo.potential;
   if (lo && Number.isInteger(lo.cultivate)) out.cultivate = lo.cultivate;
+  return out;
+}
+
+/**
+ * 攻方投放草稿（`ps.monsterDraft.picks`，monsterShop.js 的 buyMonster / placeMonster 写）→ `previewOf` 的 spawn-like 列表。
+ * 攻方本回合没有棋盘，`nextEnemiesFor` 既有的几条分支给不出内容（它们都是守方的波次 / 首领组），预备区因而是空的；
+ * 业主 2026-11-05：攻方投放期的预备区要显示「我投放的怪」（数量 / 类型 / 门），所以由草稿自己造预览。
+ * 每条 pick = 1 只（`count: 1`）—— 同 key 连投 3 只就是 3 条，客户端 `layoutPen` 按条摆、`count` 只参与稀疏化，
+ * 条数即只数。`fly` / `elite` 取官方口径（waves.js 的 isFlyKey / previewInfo）：怪表里查不到就 `false`，绝不抛。
+ * @param {object} gd @param {object} ps
+ * @returns {Array<{ enemyKey: string, count: number, time: number, preview: object }>}
+ */
+function monsterDraftSpawns(gd, ps) {
+  const picks = ps && ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [];
+  const out = [];
+  for (const p of picks) {
+    const key = p && typeof p.enemyKey === 'string' && p.enemyKey ? p.enemyKey : null;
+    if (!key) continue;
+    let fly = false;
+    let rank = null;
+    try {
+      fly = isFlyKey(gd, key);
+      const e = gd && typeof gd.enemy === 'function' ? gd.enemy(key) : null;
+      rank = e && typeof e.rank === 'string' ? e.rank : null;
+    } catch { fly = false; rank = null; }
+    out.push({
+      enemyKey: key,
+      count: 1,
+      time: 0,
+      preview: { gate: p.gate === 'upper' ? 'upper' : 'lower', fly, elite: rank === 'ELITE', boss: false },
+    });
+  }
   return out;
 }
 
@@ -387,6 +419,16 @@ export class MatchViews {
   /** nextEnemies preview for m.private. */
   nextEnemiesFor(ps) {
     if (!ps.alive) return [];
+    // 攻方投放期（业主 2026-11-05）：攻方本回合没有棋盘，下面的分支给的全是**守方**的波次（`this.wave` / 首领组），
+    // 预备区因此是空的。攻方要看见「我投放的怪」——草稿里的每一条 pick 就是一只，按门 / 飞行 / 精英摆进预备区。
+    // 闸门严格四重：PREP + 商店开着（对抗局，`opts.monsterShop !== false`）+ 本席是攻方 + 本席的商店真的开张
+    // （`ps.monsterShop`，monsterShop.js 的 openMonsterShop 只给有投放权的攻方建）—— 守方 / 协同 / 单人 /
+    // 目标选择期（CONFRONT）/ R14·R15（`attackingTeam == null` ⇒ isAttacker false）与投放结束后的收尾帧一律走原路径。
+    // 草稿为空 ⇒ `[]`（攻方看自己的投放，不回落守方波次）。
+    if (this.phase === PHASE.PREP && this.monsterShopOn === true && ps.monsterShop
+      && typeof this.isAttacker === 'function' && this.isAttacker(ps)) {
+      return previewOf(monsterDraftSpawns(this.gd, ps));
+    }
     if (this.bossWaves) {
       const g = this.bossGroupOf(ps);
       if (!g) return [];

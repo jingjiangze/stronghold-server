@@ -135,6 +135,11 @@ export class MatchIntents {
     // 共享池同步（2026-11-04 第二轮复审修复 1）：这些意图会改共享池 / 队友也要看到的草稿态，
     // 同队其他人类必须收到新帧（自己上面已经推过，排除掉 —— 不重复推同一席）。
     try { pushMonsterShops(this, { except: ps }); } catch (e) { this.reportError('monster shop push', e); }
+    // 预备区即时刷新（业主 2026-11-05）：投放 / 撤回改的是 `ps.monsterDraft.picks`，而预备区画的是
+    // `m.private.nextEnemies`（views.js 的 nextEnemiesFor 攻方分支）—— 只推商店帧 pen 不会重画。
+    // 标一次 private 即可：handle() 末尾的 flush() 逐席构建 privateView 并按 JSON 去重（内容没变不重发，
+    // 买卡 / 刷新 / 冻结 / 升级这类不改草稿的意图因此不会多出帧），所以这一行是顺手且幂等的。
+    try { this.markPrivate(ps); } catch (e) { this.reportError('monster shop private', e); }
     return OK;
   }
 
