@@ -9,11 +9,13 @@ const REVIVAL_WINDOW_MS = 30_000; // 救援窗口（业主 2026-10-17：固定 3
 /**
  * 怪物资金的**奖励常量**（业主 2026-11-04 裁决；可调）：攻方自己投放的怪每被击杀一只 +A，每漏过一只 +B。
  * 漏过给得比击杀多：漏怪对攻方是「达成本回合目的」（守方掉血），击杀是「被防住」但仍然是消耗。
- * 改这两个数字不影响价格 / 军费（那两个在 monsterShop.js 的 MONSTER_PRICE_FACTOR 与 confront.js 的
- * CONFRONT_VOLUME_SHARE）。
+ * 2026-11-05 随「怪物价值改成阶位阶梯价（1/2/4/8/16/32）」等比下调：击杀 2 → 1、漏过 4 → 2
+ * （与 monsterBonds.js 的 MONSTER_LEAK_REWARD_BASE 同步，两处要一起改）。
+ * 改这两个数字不影响价格 / 军费（价格在 monsterShop.js 的 monsterPriceOf / MONSTER_PRICE_BY_TIER，军费在
+ * confront.js 的 CONFRONT_VOLUME_SHARE）。
  */
-export const MONSTER_KILL_REWARD = 2;
-export const MONSTER_LEAK_REWARD = 4;
+export const MONSTER_KILL_REWARD = 1;
+export const MONSTER_LEAK_REWARD = 2;
 
 /**
  * 一个战场结果里「投放怪战果」的来源（settle 与战役结算读同一份）：优先 `f.result`，没有就问 battle.result()。

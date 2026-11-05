@@ -1,7 +1,9 @@
 // plugins/mota/server/match/monsterPool.js — 怪物卡池：把「对抗可投放的敌人」做成干员卡池形态。
-// 价格 = confrontValueOf(enemyKey)（与波次价值同一量纲）；阶位按**基础价 confrontValue** 六等分位分档
-// （展示 / 发牌阶位上限 / 提交合法性）；份数按官方卫戍干员商店的 poolCopies 等比换算（业主 2026-11-05，
-// 见 MONSTER_COPIES_BY_TIER）。单位是「一只怪」（spawn count:1），不是整波。
+// 价格 = **阶位阶梯价** MONSTER_PRICE_BY_TIER（1 / 2 / 4 / 8 / 16 / 32，业主 2026-11-05：「最低 1，等比换算价值，
+// 别整这么多数字」）：属性只负责**定档**（阶位按基础价 confrontValue 六等分位分档），档位负责**定价**；
+// 波次价值 / 预算也按同一张阶梯求和（match/confront.js 的 confrontValueOf / confrontWaveValue），两端同源。
+// 份数按官方卫戍干员商店的 poolCopies 等比换算（业主 2026-11-05，见 MONSTER_COPIES_BY_TIER）。
+// 单位是「一只怪」（spawn count:1），不是整波。
 //
 // 与 pool.js 的 SharedPool 同构（cap / left / take / give / snapshot / totalLeft / 份数加权 roll）：
 // 买走一份就少一份。池的归属随 `m.monsterMode`：shared（默认）= 同队攻方共用一个池（见
@@ -32,7 +34,8 @@
 //     两个口径的数字都打在 `node tools/tier-bands.mjs` 的输出里（--base all / noToken / shop）。
 //   · 定阶只看**基础价**，不看本回合价：本回合价随 gd.enemyScale 的 hp/atk 倍率整体上浮，同一只怪会在后期
 //     跳档；阶位是怪物的固有稀有度（与「这一回合卖多少钱」分开）。
-//   · 卡面价格仍由 m.confrontValueOf(key) 取（本回合量纲，含特性档位分）—— 预算判据因此与既有逻辑同尺度。
+//   · 卡面价格 = 阶梯价（MONSTER_PRICE_BY_TIER），与波次价值 / 预算同源：m.confrontValueOf(key) 现在就是阶梯价
+//     —— 2026-11-05 业主裁决「单价只由阶位决定」，价格不再吃回合倍率，也不再叠加特性档位分（见 match/confront.js）。
 //   · 旧切点 [25, 50, 100, 200]（2026-11-03）在旧基线池上实测 5 / 26 / 34 / 40 / 15 —— 严重偏斜，早已废弃。
 //
 // 依赖方向：本文件 import 了 match/match/confront.js 的两个**纯函数**（confrontPool / confrontValue）；
@@ -100,6 +103,39 @@ export const MONSTER_POOL_COPIES_SHARE = 1.5;
 export const MONSTER_MAX_TIER = MONSTER_TIER_BANDS.length + 1;
 
 /**
+ * **单价阶梯**（业主 2026-11-05：「怪物价值最低为 1，等比换算价值，别整这么多数字」）。
+ * 下标 = 阶位 − 1：`tier 1..6 → 1 / 2 / 4 / 8 / 16 / 32`（首项 1 = 下限，公比 2）。
+ * 单价**只由阶位决定**，与回合倍率 / 规则档（对抗 / 赏金同价）/ 攻方人数都无关；属性只负责定档
+ * （`monsterTierOf(confrontValue(rec))`，切点 MONSTER_TIER_BANDS 不动）⇒ 全表只有这 6 个价格
+ * （旧口径 = 218 个不同价格、1 ~ 20 887；赏金档另走 legacy 公式，中位 12 460 / 最大 3 756 540）。
+ * 波次价值 / 军费 / 预算按同一张阶梯求和（match/confront.js 的 confrontValueOf）—— 「预算 = Σ阶梯价」同源。
+ * @type {readonly number[]}
+ */
+export const MONSTER_PRICE_BY_TIER = Object.freeze([1, 2, 4, 8, 16, 32]);
+
+/**
+ * 阶位 → 单价（`MONSTER_PRICE_BY_TIER` 的唯一查表口；夹到 [1, MONSTER_MAX_TIER]，非法 / 缺失 → 最低价 1）。
+ * @param {number} tier 1..MONSTER_MAX_TIER
+ * @returns {number} 1 / 2 / 4 / 8 / 16 / 32
+ */
+export function monsterPriceAtTier(tier) {
+  const t = Math.max(1, Math.min(MONSTER_MAX_TIER, Math.trunc(Number(tier)) || 1));
+  const price = MONSTER_PRICE_BY_TIER[t - 1];
+  return Number.isFinite(price) && price > 0 ? price : MONSTER_PRICE_BY_TIER[0];
+}
+
+/**
+ * 一只怪（`data/enemies.json` 的记录）的**单价**：先定档、再查阶梯。
+ * 阶位 = `monsterTierOf(confrontValue(rec))` —— 基础属性口径，**不吃**本回合倍率（见文件头的「定阶只看基础价」）。
+ * @param {any} rec data/enemies.json 的记录
+ * @returns {number} 0 = 记录缺失（调用方按非法 / 不在池里处理）；否则 1 / 2 / 4 / 8 / 16 / 32
+ */
+export function monsterPriceOfRecord(rec) {
+  if (!rec) return 0;
+  return monsterPriceAtTier(monsterTierOf(confrontValue(rec)));
+}
+
+/**
  * 价格 → 阶位（1..MONSTER_MAX_TIER）。非有限 / 非正数一律按 tier1 处理（与 confrontValue 的下限 1 一致）。
  * @param {number} cost 基础价（confrontValue 口径；不是混了本回合倍率的价格）
  * @returns {number} 1..6
@@ -114,7 +150,8 @@ export function monsterTierOf(cost) {
 
 /**
  * 一只怪的卡池条目：`{ key, cost, tier, cap }`。
- * `cost` 是**价格**（本回合 confrontValueOf 量纲），`tier` 由基础价定（见文件头），`cap` = 该阶份数。
+ * `cost` 是**价格**（= 阶梯价 `MONSTER_PRICE_BY_TIER[tier]`，与波次价值 / 预算同一量纲），`tier` 由基础价定
+ * （见文件头），`cap` = 该阶份数。
  * @typedef {{ key: string, cost: number, tier: number, cap: number }} MonsterPoolEntry
  */
 export class MonsterPool {
@@ -276,11 +313,12 @@ function officialForRule(m) {
 }
 
 /**
- * 本回合「官方出怪 / 面板」口径的 key 集合 —— **2026-11-05 起不再是提交闸门**（业主当天第二次裁决：去掉它）。
+ * 本回合「官方出怪 / 面板」口径的 key 集合（2026-11-04 的旧口径，**已不再用于盟约分母**）。
  * 现在的提交 / 购买 / 投放判据是「在卡池里 + 阶位 ≤ 商店等级」（见 `monsterPoolKeys` 与 buildMonsterPool 的 tier；
  * confront.js 的 `_confrontMember` 与 monsterShop.js 的 buyMonster / placeMonster / rollCard 都改用它）。
  * 之所以撤掉这道闸门：R1–R3 的官方波次只有 2–3 个 key，商店 / bot 全被它滤成空货架，池放宽到全表等于白放宽。
- * 保留导出只为兼容仍按「本回合官方 / 面板」问话的调用方（盟约口径用 `monsterCardKeys`，不是它）。
+ * 保留导出只为兼容仍按「本回合官方 / 面板」问话的老调用方 —— **盟约阈值分母已改成 `monsterPoolKeys`**
+ * （业主 2026-11-05：旧分母在对抗档只有 7 个 key / 3 个阵营，19 个阵营恒 0）。
  *
  * 按规则档分流（officialForRule）：
  *   · 对抗档 = 本回合官方出怪（`m._roundOfficialSpawns`，业主 2026-11-04 口径）；
@@ -308,12 +346,12 @@ export function legalKeys(m) {
 }
 
 /**
- * 本回合「可投放的怪物」全集（**2026-11-04 口径，保持不变**）：对抗档 = 本回合官方出怪；赏金档 = 面板并集
+ * 本回合「可投放的怪物」全集（**2026-11-04 口径，保留导出**）：对抗档 = 本回合官方出怪；赏金档 = 面板并集
  * （confrontGroups 的行 key 并集，同一套分流见 officialForRule）；两者都取不到才退回官方全池。
  * ⚠ **它不是卡池来源**（卡池见 `monsterPoolKeys`，2026-11-05 已放宽到 data/enemies.json 全表）。
- * 保留它是因为 monsterBonds.js 拿它做**盟约阈值的分母**（`factionPoolCounts`：「本回合可投放池里该阵营的只数」）——
- * 阈值因此仍是**按回合 / 按面板**的小分母（[1,2,3] 量级），不随全表 467 只膨胀（那会把大阵营的 1 阶推到
- * 16~18 层、实际永远打不到）。改这里会一并改盟约数值，属于独立裁决，不在本次放宽池子的范围内。
+ * ⚠ **已不再用于盟约分母**（业主 2026-11-05）：它的分母在对抗档只等于「本回合官方出怪」（实测 R1–R13 只有
+ * 7 个 key / 3 个阵营），让其余 19 个阵营的分母恒 0、阈值退化常量 [1,2,3]；盟约阈值的分母已统一改成
+ * `monsterPoolKeys`（商店池 408 只口径），见 monsterBonds.js 的 factionPoolCounts。
  * @param {object} m
  * @returns {string[]} 排序后的 key（顺序稳定，便于复现）
  */
@@ -340,7 +378,7 @@ export function monsterCardKeys(m) {
  *     （第 2 步；官方波次真出 BOSS 时它照样进池 —— 这条保证**不**受「BOSS 不进商店」影响）。
  *   · data 不可用（直测 / 精简 stub）时回落旧路径：面板并集 → `confrontPool(data/factions.json)`，绝不返回空池。
  * ⚠ 本函数只管**池 / 库存**；「能不能提交 / 买 / 投」= 在池里 + 阶位 ≤ 商店等级（2026-11-05 起不再看 legalKeys）。
- * ⚠ 不要用它替换 `monsterCardKeys`：后者是盟约阈值的分母（见那里的注释），两者的分母口径必须分开。
+ * 它**同时是盟约阈值分母的来源**（monsterBonds.js 的 factionPoolCounts，业主 2026-11-05：分母统一用商店池）。
  * @param {object} m
  * @returns {string[]} 排序后的 key（顺序稳定，便于复现）
  */
@@ -409,13 +447,13 @@ export function buildMonsterPool(m) {
   if (!m) return new MonsterPool(entries);
   const enemies = (m.data && m.data.enemies) || {};
   for (const key of monsterPoolKeys(m)) {
-    // 价格（本回合量纲）：与预算 / 波次价值 / 提交校验同一个函数
-    const price = typeof m.confrontValueOf === 'function' ? Number(m.confrontValueOf(key)) : 0;
-    if (!Number.isFinite(price) || price <= 0) continue;
-    // 阶位（无倍率量纲）：怪物的固有稀有度，不随回合倍率跳档 —— 展示 + 发牌阶位上限
     const rec = enemies[key] || null;
-    const base = rec ? confrontValue(rec) : price;
-    const tier = monsterTierOf(base);
+    // 价格只由 data 属性定档 ⇒ data 缺条目就没有价格（与 monsterShop.js 的 monsterPriceOf 同口径）。
+    if (!rec) continue;
+    // 阶位（无倍率量纲）：怪物的固有稀有度，不随回合倍率跳档 —— 展示 + 发牌阶位上限
+    const tier = monsterTierOf(confrontValue(rec));
+    // 单价（业主 2026-11-05）：只由阶位决定，查同一张阶梯（`confrontValueOf` 也返回这个数）
+    const price = monsterPriceAtTier(tier);
     // 份数（业主 2026-11-05）：官方干员商店 poolCopies 的等比换算值；与官方只数 / 攻方人数无关。
     // 缺表项（未来加档）兜底 1 份，绝不出现 0 份的卡。
     const cap = MONSTER_COPIES_BY_TIER[tier] || 1;

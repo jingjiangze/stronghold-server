@@ -20,11 +20,14 @@
 // 之后 map 已覆盖 enemies.json 的 491/491（0.4.3 的 297 条 + 规则补全的 194 条，规则顺序见该文件的 `rules` 段）；
 // 「没有阵营的怪不进任何阵营条、只在 3 条通用条里计数」这条分支保留作**防御性兜底**（老数据 / 新增怪 / 数据缺文件时）。
 //
-// 【阈值（2026-11-04 重定）】阵营条不再用绝对 [2,4,6]：按该阵营在**本回合可投放池**（monsterPool.js 的
-// monsterCardKeys，对抗档 = 本回合官方出怪 / 赏金档 = 面板并集）里的**只数** n 取比例：
+// 【阈值（2026-11-05 改分母）】阵营条不再用绝对 [2,4,6]：按该阵营在**商店卡池**（monsterPool.js 的
+// monsterPoolKeys：`data/enemies.json` 全表 − tokenOnly − BOSS，实测 408 只）里的**只数** n 取比例：
 //   t1 = max(1, ceil(n × 0.15))，t2 = max(t1+1, ceil(n × 0.30))，t3 = max(t2+1, ceil(n × 0.45))
-// 池子小的阵营阈值低（3 只就能吃到一阶，补偿可选卡少），池子大的阵营阈值高。n = 0（本回合这只阵营没牌）时
-// 回落到 [1,2,3]（此时也投不出这只阵营，阈值只是形态占位）。3 条通用条仍是绝对阈值（见各自的常量）。
+// 池子小的阵营阈值低（补偿可选卡少），池子大的阵营阈值高。n = 0（该阵营在全表里一只都没有）时才回落到 [1,2,3]。
+// **旧分母（2026-11-04）** = 本回合可投放池（monsterCardKeys：对抗档 = 本回合官方出怪）：实测 R1–R13 只有
+// 7 个 key / 3 个阵营 ⇒ 其余 19 个阵营的分母恒 0、阈值退化成常量 [1,2,3]，而它们的卡在 408 只商店池里能买；
+// REUNION / SARKAZ 反被推到 6 / 12 / 18 只才 1/2/3 阶。业主 2026-11-05：分母统一改成商店池（与「能不能买」
+// 同一张表）。3 条通用条仍是绝对阈值（见各自的常量）。
 //
 // 【aspdMul（攻速乘区）】2026-11-04 起两棵 sim 树的 `spawns.js`（`server/sim/battle/spawns.js` 与
 // `plugins/mota/server/sim/battle/spawns.js`）的 enemy mods 都认 `aspdMul`：`aspd = def.aspd * (m.aspdMul ?? 1)`，
@@ -33,7 +36,8 @@
 // 守卫：`m.monsterShopOn === false`（opts.monsterShop === false / 非对抗局）时**整段不跑** —— 不建状态、不发帧、
 // 不发放资金，旧对局的行为与字节完全不变。
 
-import { monsterCardKeys, officialSpawnCounts } from './monsterPool.js';
+// 盟约阈值分母 = 商店卡池（`monsterPoolKeys`，业主 2026-11-05 改口径）；官方只数只给「增援」当 1.5 倍基准用。
+import { monsterPoolKeys, officialSpawnCounts } from './monsterPool.js';
 // 怪物资金账户的唯一入口（业主 2026-11-04 裁决 2）：shared 落队级账户、solo 落个人账户。
 // 与 monsterShop.js 互为 import（它 import 本文件的 addMonsterBonds / monsterBondView）：两边都只在函数体内取用，
 // 模块顶层不互相求值（与 monsterPool ↔ match/confront 的循环同一口径），因此安全。
@@ -51,8 +55,9 @@ export const MONSTER_BOND_SURPLUS_SHARE = 1.5;
 /** 增援：超出部分按**单价 × 20%** 返还怪物资金。 */
 export const MONSTER_BOND_SURPLUS_REFUND = 0.2;
 /** 回收：漏过的投放怪每只的**既有奖励**（与 match/match/settle.js 的 MONSTER_LEAK_REWARD 同值，两处要一起改）。
- *  settle 已经在发这一笔，所以本盟约只发「额外 +50%」（下面那个系数），不重复发全额。 */
-export const MONSTER_LEAK_REWARD_BASE = 4;
+ *  settle 已经在发这一笔，所以本盟约只发「额外 +50%」（下面那个系数），不重复发全额。
+ *  2026-11-05 随阶梯价等比下调：4 → 2（settle 的 MONSTER_LEAK_REWARD 同步 4 → 2）。 */
+export const MONSTER_LEAK_REWARD_BASE = 2;
 /** 回收：在 settle 既有发奖之上再 +50%。 */
 export const MONSTER_BOND_LEAK_EXTRA = 0.5;
 /** 资金类盟约的层数档倍率（下标 = tier，0 = 未达一阶 = 不发钱）。 */
@@ -239,27 +244,30 @@ export function factionThresholdsOf(poolCount) {
 }
 
 /**
- * 本回合可投放池里**每个阵营的只数**（阈值分母）。来源与怪物池同口径：`monsterCardKeys(m)` 的合法集合；
- * 有官方快照（对抗档）时按该 key 的官方合计只数计，赏金档 / 无快照按每 key 1 只计。
- * 缓存挂在 match 上：官方快照数组 / 面板 groups 数组的**引用**或回合号一变就失效（与 monsterPool.js legalKeys 同法）。
+ * 每个阵营在**商店卡池**里的只数（阈值分母）。来源与建池同口径：`monsterPoolKeys(m)`
+ * （`data/enemies.json` 全表 − tokenOnly − BOSS + 本回合官方成员保证，实测 408 只），每 key 记 1 只。
+ *
+ * 业主 2026-11-05 改分母：旧口径用 `monsterCardKeys(m)`（对抗档 = 本回合官方出怪），实测 R1–R13 只有 7 个 key /
+ * 3 个阵营 ⇒ 19 个阵营分母恒 0（阈值退化常量 [1,2,3]）而它们的卡在商店池里能买；REUNION / SARKAZ 反被推到
+ * 6 / 12 / 18 只才 1/2/3 阶。现在分母 = 玩家真能买到的那张表（池 + 阶位），与「能不能投放」同源。
+ * 缓存挂在 match 上：官方快照（成员保证会往里补 key）的**引用**或回合号一变就失效。
  * @param {object} m
  * @returns {Map<string, number>} 阵营 id → 只数（无阵营的 key 不计）
  */
 function factionPoolCounts(m) {
   if (!m) return new Map();
   const official = Array.isArray(m._roundOfficialSpawns) && m._roundOfficialSpawns.length ? m._roundOfficialSpawns : null;
-  const stamp = official || (m._monsterLegalKeys && m._monsterLegalKeys.groups) || null;
+  const stamp = official || null;
   const cache = m._bondFactionPool;
   if (cache && cache.stamp === stamp && cache.round === m.round) return cache.counts;
   let keys = [];
-  try { keys = monsterCardKeys(m) || []; } catch { keys = []; }
-  const spawnCounts = officialSpawnCounts(m);
+  try { keys = monsterPoolKeys(m) || []; } catch { keys = []; }
   const counts = new Map();
   for (const key of keys) {
     const ids = monsterFactionIds(m.gd, key);
     if (!ids.length) continue;
-    const n = Math.max(1, Number(spawnCounts && spawnCounts.get(key)) || 1);
-    for (const id of ids) counts.set(id, (counts.get(id) || 0) + n);
+    // 分母是「池里有多少只**可买的卡**」：每 key 1 只（不再乘官方合计只数 —— 那是旧口径的加权）。
+    for (const id of ids) counts.set(id, (counts.get(id) || 0) + 1);
   }
   m._bondFactionPool = { stamp, round: m.round, counts };
   return counts;

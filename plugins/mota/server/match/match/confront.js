@@ -35,8 +35,9 @@
 // VERSUS_CONFRONT.budgetMul, per PLAYER (each counts on its own) — both teams face the same (synced) wave, so both get
 // the same number. The groups are the OFFICIAL 特训敌人 types (特异 / 飞行 / 频次 / 元素 / 持续 / 隐匿 / 折射), NOT equal
 // value buckets: the player picks a flavour (user decision 2026-10-17). A monster's cost and the wave's value are one
-// unit: the formula carries the round's hp/atk scaling (confrontValue) AND the monster's graded 特性 score
-// (confrontTraits.js, 30 % of the whole table — confrontValueOf / confrontTraitStep).
+// unit — **the 阶位 ladder price** (MONSTER_PRICE_BY_TIER = 1 / 2 / 4 / 8 / 16 / 32, 业主 2026-11-05): a monster's tier
+// comes from its base stats (monsterPool.monsterTierOf(confrontValue(rec)), the trait grades no longer price anything),
+// so 「单价 = 阶梯价；波次价值 / 预算 = Σ阶梯价」 by construction (confrontValueOf).
 //
 // Applying: the placed monsters of an intervention land on ITS TARGET's wave only (confrontFor), replacing originals
 // worth `share × the wave value` picked at random (as close to that value as whole monsters allow, priced with
@@ -78,9 +79,9 @@ function callStrategyHook(m, strat, hook, ps) {
  * them, so they are worth an extra block. `scale` is the round's hp/atk multiplier (gd.enemyScale), which makes a card's
  * value and the round's wave value comparable.
  *
- * This is the STAT half only. The 特性 (trait) half is an absolute addend added by Match.confrontValueOf from the graded
- * table (confrontTraits.js) — so a pure stat stick keeps exactly this number, and the graded part takes
- * VERSUS_CONFRONT.traitShare (30 %) of the whole value table.
+ * This is the STAT half only — 2026-11-05 起它**只用来定档**（`monsterPool.js` 的 `monsterTierOf(confrontValue(rec))`
+ * ⇒ 单价 = MONSTER_PRICE_BY_TIER[阶位]），不再直接出现在任何金额里（特性档位分 / 回合倍率都不再叠加，
+ * 见 `confrontValueOf`）。
  * @param {any} e data/enemies.json record
  * @param {{ hpMul?: number, atkMul?: number }|null} scale
  */
@@ -112,7 +113,8 @@ export function confrontValue(e, scale = null) {
 
 /**
  * 「赏金」档沿用的**旧**价值公式（2026-10-26 之前线上那套，一字未改）：业主口径「当前线上的旧构建独立为一个赏金模式」。
- * 与 confrontValue（新定义）唯一的区别就是这套手工系数。
+ * ⚠ 2026-11-05 起**两个规则档统一按阶位阶梯价**（见 confrontValueOf），本函数不再参与单价 / 波次价值；
+ * 保留导出只为旧口径对照（`confrontTraitStep` 的统计仍按档取口径）与老调用方兼容。
  * @param {any} e data/enemies.json record
  * @param {{ hpMul?: number, atkMul?: number }|null} scale
  */
@@ -316,7 +318,8 @@ export class MatchConfront {
   /** Whether THIS round is the 最终狩猎 (R13) — the one with the flat, much larger share and the fixed 25 bounty. */
   confrontHunt() { return this.round === this.huntCfg().huntRound; }
 
-  /** The round's hp/atk scaling: card costs and the wave value are both in its unit. */
+  /** The round's hp/atk scaling: spawn mods / replacement value stay in its unit (NOT the card price any more —
+   *  2026-11-05 起单价只由阶位决定，见 confrontValueOf). */
   confrontScale() { return this.gd.enemyScale(this.round); }
 
   /**
@@ -324,6 +327,9 @@ export class MatchConfront {
    * `step × (grade − 1)`, and `step` is calibrated so the graded part is exactly `VERSUS_CONFRONT.traitShare`
    * (30 %) of the whole value table — Σ(step·(g−1)) = share/(1−share) · Σ(stat value) over the confront pool
    * (confrontTraits.js holds the grades). Recomputed when the round's scaling moves the stat values.
+   *
+   * ⚠ 2026-11-05 起**不再参与定价**：`confrontValueOf` / 波次价值 / 预算全部改成阶位阶梯价（MONSTER_PRICE_BY_TIER），
+   * 特性档位分不再叠加进任何金额。保留这个方法只为旧的统计口径与对照（没有调用方，别在新代码里用）。
    */
   confrontTraitStep() {
     const scale = this.confrontScale();
@@ -350,27 +356,24 @@ export class MatchConfront {
   }
 
   /**
-   * The value of ONE enemy in this match's currency: its stats at `scale` (default: this round's) plus its graded 特性
-   * score. Every value the 狩猎期 uses — the group rows, the wave total, a submission's cost and a kill's bounty — goes
-   * through here, so the traits are priced exactly once.
+   * The price of ONE enemy in this match's currency: **its 阶位 ladder price** (`MONSTER_PRICE_BY_TIER`:
+   * 1 / 2 / 4 / 8 / 16 / 32, via monsterShop.monsterPriceOf). Every money value the 狩猎期 uses — the group rows,
+   * the wave total (`confrontWaveValue`), a submission's cost and the replacement share (`applyConfront`) — goes
+   * through here, so 「单价 = 阶梯价 / 波次价值 = Σ阶梯价」 are one number.
+   *
+   * 业主 2026-11-05：「怪物价值最低为 1，等比换算价值，别整这么多数字（包括赏金模式）」——
+   * 单价**只由阶位决定**（阶位 = `monsterTierOf(confrontValue(rec))`，基础属性口径，见 monsterPool.js），
+   * 所以这里既**不吃**回合倍率 `scale`，也**不再**叠加特性档位分 / 旧价值（赏金档与对抗档同价）。
+   * `scale` 参数保留只为调用方的老签名（波次 spawn 的 mods 仍会传进来），已不影响结果。
    * @param {string} enemyKey
-   * @param {{ hpMul?: number, atkMul?: number }|null} scale
+   * @param {{ hpMul?: number, atkMul?: number }|null} _scale 已忽略（保留签名兼容）
    */
-  confrontValueOf(enemyKey, scale = null) {
-    const en = (this.data && this.data.enemies) || {};
-    const e = en[enemyKey];
-    if (!e) return 0;
-    const step = this.huntCfg().traitStepScores[confrontTraitGrade(enemyKey) - 1] || 0;
-    const sc = scale || this.confrontScale();
-    // 「赏金」档沿用线上旧价值（含频次 ×1.5）；「对抗」档用新定义（官方权重、无手工加成）
-    if (!this.isConfrontRule()) {
-      const times = this.confrontTimesKeys().has(enemyKey) ? 1.5 : 1;
-      return Math.round(confrontValueLegacy(e, sc) * times) + this.confrontTraitStep() * step;
-    }
-    return Math.round(confrontValue(e, sc)) + this.confrontTraitStep() * step;
+  confrontValueOf(enemyKey, _scale = null) {
+    return monsterPriceOf(this, enemyKey);
   }
 
-  /** The 频次怪 (TIMES) type's monster keys (pool + entries), cached — confrontValueOf prices them 1.5× (user 2026-10-21). */
+  /** The 频次怪 (TIMES) type's monster keys (pool + entries), cached — 旧价值公式（赏金档 ×1.5）与
+   *  `confrontTraitStep` 的统计口径仍按它取；2026-11-05 起**不参与**单价（单价只由阶位决定）。 */
   confrontTimesKeys() {
     if (!this._confrontTimesKeys) {
       const types = (this.data && this.data.factions && this.data.factions.types) || {};
@@ -634,7 +637,8 @@ export class MatchConfront {
     return Math.round(median * need);
   }
 
-  /** 本回合可选池（第 1..N 回合出过的怪）的价值中位数 —— 预算下限的基准，按回合缓存。 */
+  /** 本回合可选池（第 1..N 回合出过的怪）的**单价中位数**（= 阶梯价中位；业主 2026-11-05 起与卡价同源）——
+   *  预算下限的基准，按回合缓存。 */
   confrontPoolMedianValue() {    if (this._confrontPoolMedian != null && this._confrontPoolMedianRound === this.round) return this._confrontPoolMedian;
     const en = (this.data && this.data.enemies) || {};
     const vals = [...this.confrontSeenKeys()].filter((k) => en[k]).map((k) => this.confrontValueOf(k)).sort((a, b) => a - b);
@@ -643,7 +647,11 @@ export class MatchConfront {
     return this._confrontPoolMedian;
   }
 
-  /** The value of the round's original wave, at this round's scaling. */
+  /**
+   * The value of the round's original wave = **Σ 阶位阶梯价 × 只数**（业主 2026-11-05：波次价值与单价同源）。
+   * 单价走 `confrontValueOf`（= monsterShop.monsterPriceOf，只由阶位决定），所以这里的 `s.mods` 本回合倍率
+   * **不再影响**金额（传进去只为签名一致，见 confrontValueOf）。
+   */
   confrontWaveValue() {
     const scale = this.confrontScale();
     let v = 0;
@@ -1535,8 +1543,8 @@ export class MatchConfront {
       });
     }
     if (out.length > VERSUS_CONFRONT.maxPicks) return { error: ERR.CONFRONT_COUNT };
-    // 路线越长，占用预算越多（长度 ×2），让「绕远路」不能白嫖
-    const routeCost = out.reduce((n, p) => n + (Number(p.routeLen) || 0) * 2, 0);
+    // 路线越长，占用预算越多（长度 ×1：随阶梯价整体下调 2 → 1，业主 2026-11-05），让「绕远路」不能白嫖
+    const routeCost = out.reduce((n, p) => n + (Number(p.routeLen) || 0) * 1, 0);
     // 预算判据（2026-11-04 复验修复 1：`g.confront` 曾经是免费投放通道）：
     //   商店开着 → 只判**尚未付款**的部分（草稿里的同 key 卡在 buyMonster / placeMonster 时已扣过款、也 take 过库存），
     //     上限 = 怪物资金账户余额（confrontPurchaseLimit，见那里的注释）；
@@ -2066,11 +2074,9 @@ export class MatchConfront {
     // 同上：pure 下「只交了 boss」不该把官方波次也一起清掉。
     if (!picks.length) return this._confrontBossSpawns((pure ? spawns : base).map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined })), sub, ps);
     const scale = this.confrontScale();
-    // price the originals EXACTLY like confrontWaveValue prices the wave (confrontValueOf = stats + the graded 特性
-    // score at this round's scale), so the value actually dropped / the wave value is the nominal share (5→15 %, 50 %
-    // on R13) — a stat-only price would under-replace by the trait share (30 % of the table). The event card / 强力属性
-    // multipliers are deliberately NOT part of this price: confrontWaveValue and the budget use the base wave, and a
-    // replacement share must stay comparable with them.
+    // price the originals EXACTLY like confrontWaveValue prices the wave (both = 阶位阶梯价 via confrontValueOf),
+    // so the value actually dropped / the wave value is the nominal share (5→15 %, 50 % on R13).
+    // 2026-11-05：单价与波次价值同源（MONSTER_PRICE_BY_TIER），回合倍率 / 特性档位分都不再进金额。
     const valueOf = (key) => this.confrontValueOf(key, scale);
     const out = base.map((s) => ({ ...s, mods: s.mods ? { ...s.mods } : undefined }));
     // The round's replacement share belongs to the RECEIVER, not to each attacker: when several placements land on the
