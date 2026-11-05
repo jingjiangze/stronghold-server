@@ -26,9 +26,9 @@
 // finishConfrontTargets），库存每回合回到满值。
 // 发牌照官方干员商店的机制（业主 2026-11-05）：阶位上限 = 商店等级（`tiers: [1..level]`）、**不排重**（每格独立抽）、
 // 权重 = 剩余份数本身（没有另造各阶概率表）。
-// 2026-11-05 业主报障「低等级的时候货架也不能空啊，用同等低的填充」：等级上限与「本回合合法集」叠加时
-// （低等级只出 T1，而本回合官方出怪可能全是 T3/T4）会整排空格。现在 `rollCard` 加**逐级降级**兜底链
-// （[1] → [1,2] → … → [1..6]，第一个非空结果就用它），只要合法集里有货就一定发得出卡，且永远优先低阶。
+// 2026-11-05 业主终审（撤销同日「用同等低的填充」）：等级上限与「本回合合法集」叠加时（低等级只出 T1，而本回合
+// 官方出怪可能全是 T3/T4）会出现空位 —— **空位就空着**：`rollCard` 只按「阶位 ≤ 商店等级」抽一次，**不许跨阶**
+// 用更高阶位的怪顶上（跨阶填充会让低等级商店直接发出高星卡，破坏星级 / 概率换算）。
 // 合法性仍按规则档分流（`legalKeys`，与 `_confrontMember` 同源）—— 业主裁决「只放宽池/库存，不改提交合法性」：
 // 商店只把**本回合合法集合里**的 key 摆上货架（illegalExcludes），所以「买得到 / 点得动」的卡一定交得上。
 // 进出草稿后仍可能因为口径变动变成死卡，`dropMonster` 提供撤回入口（库存退回本队的池）。
@@ -650,7 +650,7 @@ function illegalExcludes(pool, legal) {
   return ex;
 }
 
-/** 发牌兜底链的告警去重表：同一条只打一次（多格 / 多回合重复刷屏没有信息量）。 */
+/** 发牌「发不出卡」告警的去重表：同一条只打一次（多格 / 多回合重复刷屏没有信息量）。 */
 const shopWarned = new Set();
 function warnShopOnce(line) {
   if (shopWarned.has(line)) return;
@@ -659,7 +659,7 @@ function warnShopOnce(line) {
 }
 
 /**
- * 兜底链全空时「为什么发不出卡」—— 只用于日志文案（不影响发牌结果）。
+ * 抽不到卡时「为什么发不出来」—— 只用于日志文案（不影响发牌结果）。
  * @param {object} pool @param {Set<string>|null} legal
  * @returns {string}
  */
@@ -672,16 +672,11 @@ function emptyShopReason(pool, legal) {
 /**
  * 抽一张**本回合合法**的卡 —— 发牌（dealSlots）与补位（refillSlot）的**唯一抽卡入口**（不要两处各写一遍）。
  *
- * 业主 2026-11-05 报障「低等级的时候货架也不能空啊，用同等低的填充」：
- * 旧实现只调一次 `pool.roll(rng, { tiers: [1..level], exclude: illegal })`。等级上限与合法集叠加时
- * （一级商店只出 T1，而本回合官方出怪可能全是 T3/T4；或该等级档里没有合法怪）会直接抽到 null ⇒ 整排空格。
- * 现在按三条走：
- *   ① 先按商店等级的上限抽（官方口径，`tier ≤ level`）——正常局仍然**只抽一次**，rng 消耗与改造前逐字节一致；
- *   ② 抽不到 → **逐级降级**：`[1]` → `[1,2]` → … → `[1..MONSTER_MAX_TIER]`，**第一个非空结果就用它**。
- *      因为是从 1 档往上放，拿到的永远是「当前能抽到的最低阶」= 业主的「用同等低的填充」。
- *      1..level 那几步是 ① 的子集（必然已空），直接跳过 —— 少扫几遍池子，且**不消耗 rng**
- *      （`pool.roll` 无候选时不会调 rng），回放序列不受影响。
- *   ③ 六档全空（合法集为空 / 库存全空）→ 返回 null 并记一条 warnOnce，说清是哪种情况（便于排查）。
+ * 业主 2026-11-05 终审「空的时候不能跨阶」：**只有一次抽取** —— `pool.roll(rng, { tiers: [1..商店等级], exclude: illegal })`。
+ * 阶位上限就是商店等级（官方干员商店口径 `tier ≤ level`：一级只出 T1、三级出 T1–T3、六级六档都出）。
+ * 抽不到就**留空**：不许拿更高阶位的怪顶上。等级上限与合法集叠加时（一级商店只出 T1，而本回合官方出怪全是
+ * T3/T4）会出现空位 —— 这是**预期行为**：跨阶填充会让低等级商店直接发出高星卡，破坏星级 / 概率换算。
+ * （同日早些时候的「逐级降级填满」兜底链已被该裁决**撤销**，不要再加回来。）
  *
  * 每次抽都带 `exclude: illegal`：交不上的死卡不上货架（业主 2026-11-05「不改提交合法性」）。
  * @param {object} m @param {object} ps @param {() => number} rng @param {object} pool @param {Set<string>|null} legal
@@ -691,15 +686,11 @@ function rollCard(m, ps, rng, pool, legal) {
   const level = monsterShopLevelOf(m, ps);
   // 池里不在本回合合法集合内的 key 一律排除（pool.roll 只认 exclude，不认 allow —— 这里换算成 exclude）
   const illegal = illegalExcludes(pool, legal);
-  // ① 按商店等级的上限抽（照官方干员商店：tier ≤ level）
+  // 按商店等级的上限抽（照官方干员商店：tier ≤ level）—— 这是**唯一**一次抽取
   const capped = pool.roll(rng, { tiers: monsterTiersUpTo(level), exclude: illegal });
   if (capped != null) return capped;
-  // ② 逐级降级兜底（低阶优先）：[1..level+1] → … → [1..MAX]，第一个非空结果就用它
-  for (let limit = level + 1; limit <= MONSTER_MAX_TIER; limit++) {
-    const key = pool.roll(rng, { tiers: monsterTiersUpTo(limit), exclude: illegal });
-    if (key != null) return key;
-  }
-  // ③ 全阶都抽不到：留空 + 记一次日志（合法集为空 / 没有库存）
+  // 2026-11-05 业主裁决：货架空的时候**不能跨阶**填充 —— 低等级抽不到就是空位，
+  // 不许用更高阶位的怪顶上（那会让低等级商店直接发出高星卡，破坏星级/概率换算）。
   warnShopOnce(`no card can be dealt (shop level ${level}): ${emptyShopReason(pool, legal)}`);
   return null;
 }
@@ -707,7 +698,7 @@ function rollCard(m, ps, rng, pool, legal) {
 /**
  * 发牌阶位数组 `[1..limit]`（`pool.roll` 的 `tiers` 的唯一构造处）。
  * 首抽用 `limit = 商店等级`（照官方干员商店的 `maxTier = shop.level`：等级 1 只出 T1、等级 3 出 T1–T3、
- * 等级 6 六档都出；权重仍是各 key 的剩余份数，**没有各阶概率表**）；兜底链则逐级抬高 limit。
+ * 等级 6 六档都出；权重仍是各 key 的剩余份数，**没有各阶概率表**）。
  * `limit` 夹到 [1, MONSTER_MAX_TIER]（非法 / 缺失 → 1，与 clampLevel 同口径）。
  * @param {number} limit 阶位上限
  * @returns {number[]} 1..limit
@@ -723,8 +714,8 @@ function monsterTiersUpTo(limit) {
  * 发一手牌：冻结格保留，其余**每格独立重抽**（业主 2026-11-05：发牌照官方干员商店，不排重）。
  *   · 旧实现是「第一轮尽量不重复、第二轮才允许重复」两轮 —— 那是 2026-11-04 为「合法集合只有 2~3 个 key」
  *     打的补丁；官方干员商店本来就允许同一次发牌出现重复 key（每个槽独立抽），现在按官方机制去掉排重。
- *   · 每格调用一次 `rollCard`：先按 `tiers: [1..商店等级]` 抽（阶位上限 = 商店等级），抽不到才逐级降级到
- *     `[1..6]`（低阶优先，见 rollCard）；权重 = 该 key 的剩余份数（`left`），没有另行构造概率表。
+ *   · 每格调用一次 `rollCard`：按 `tiers: [1..商店等级]` 抽（阶位上限 = 商店等级），抽不到就**留空**（不跨阶，
+ *     见 rollCard）；权重 = 该 key 的剩余份数（`left`），没有另行构造概率表。
  *   · 发牌**不扣库存**（扣库存在 buy / place），所以重复发同一张卡不会多扣份数。
  * 只从「本回合合法集合 ∩ 池里有货」抽：卡池来源放宽后（491 全表）也不能把交不上的死卡发到货架上
  * （复验修复 1.3 的判据保留）。冻结格同样要过闸门 —— 不合法的冻结格按未冻结处理、直接重抽。
@@ -740,7 +731,7 @@ function dealSlots(m, ps) {
   for (let i = 0; i < slots.length; i++) {
     if (keep(slots[i])) continue;
     // 每格独立抽（不排重）：与官方干员商店同构，同一次发牌允许出现重复 key。
-    // 抽卡走 rollCard：等级上限抽不到时逐级降级兜底（低阶优先），见那里的注释
+    // 抽卡走 rollCard：等级上限抽不到就留空（**不跨阶填充**），见那里的注释
     const key = rollCard(m, ps, rng, pool, legal);
     slots[i] = key == null ? null : slotCardOf(m, pool, key);
   }
@@ -749,12 +740,12 @@ function dealSlots(m, ps) {
 
 /**
  * 单格补位（业主 2026-11-04「点卡即投放，用掉后该格自动补位」）：把 `idx` 这一格重抽一张新卡。
- * 规则与 dealSlots 同一套（2026-11-05 起**单抽**，且**同一个 rollCard**）：先按商店等级上限抽、抽不到逐级降级
- * （低阶优先）、权重 = 剩余份数、**不排重** —— 别的格已占的 key 与本格刚用掉的那张**都可以再次抽到**
+ * 规则与 dealSlots 同一套（2026-11-05 起**单抽**，且**同一个 rollCard**）：按商店等级上限抽、抽不到**留空**
+ * （不跨阶）、权重 = 剩余份数、**不排重** —— 别的格已占的 key 与本格刚用掉的那张**都可以再次抽到**
  * （官方干员商店每个槽独立抽，重复是正常结果）。
  * 仍在「本回合合法集合 ∩ 池里有货」里抽（交不上的死卡不发）。
  * 冻结是「这一格这张卡」的属性：新卡不继承冻结（与 dealSlots 的 keep 判据一致 —— 冻结只对未售出且仍合法的那张卡生效）。
- * 抽不到（合法集为空 / 池里没货，六档兜完仍空）→ 该格置 null。
+ * 抽不到（合法集为空 / 该等级档里没有合法怪 / 池里没货）→ 该格置 null，**不跨阶补**。
  * @param {object} m @param {object} ps @param {number} idx
  * @param {string|null} [_usedKey] 仅保留调用签名：2026-11-05 起不再拿它排重
  * @returns {{ key: string, tier: number, price: number, frozen: boolean, sold: boolean }|null}
@@ -765,7 +756,7 @@ function refillSlot(m, ps, idx, _usedKey = null) {
   const pool = monsterPoolFor(m, ps);
   const rng = monsterShopRng(m);
   const legal = legalKeys(m);
-  // 与 dealSlots 同源：同一套「等级上限 → 逐级降级」兜底链（rollCard），只是抽一格
+  // 与 dealSlots 同源：同一个 rollCard（阶位 ≤ 商店等级、抽不到留空），只是抽一格
   const key = rollCard(m, ps, rng, pool, legal);
   if (key == null) { shop.slots[idx] = null; return null; }
   shop.slots[idx] = slotCardOf(m, pool, key);
