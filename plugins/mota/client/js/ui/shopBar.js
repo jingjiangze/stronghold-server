@@ -578,8 +578,12 @@ export function EconStrip({ econ, editable, onRefuse = null, onOpenShop = null }
  * 怪物盟约条（2026-11-04 业主口径：**攻方只有怪物方的独立盟约**，没有干员盟约）。
  *
  * 数据 = 私有帧 `m.monsterShop.bonds`（server/match/monsterBonds.js monsterBondView）：`[{ id, name, layers, tier,
- * active }]`，空时服务端整个键都不发。观感复用干员盟约条的 `.bstrip` / `.bslot`（screens/game.css），这里只补
- * `.mbond*` 的怪物侧配色与层数角标 —— 所以老的网格 / 折叠 / 指针规则一行都不用改。
+ * active, icon?|glyph? }]`，空时服务端整个键都不发。观感复用干员盟约条的 `.bstrip` / `.bslot`（screens/game.css），
+ * 这里只补 `.mbond*` 的怪物侧配色与层数角标 —— 所以老的网格 / 折叠 / 指针规则一行都不用改。
+ *
+ * 图标（2026-11-05，此前每条都画同一个骷髅）：`b.icon`（14 个有官方 campLogo 的阵营，绝对 URL）→ 画
+ * `<img class="mbond__img">`，加载失败由 Img 的 fallback 回落到内联字形；否则画 `b.glyph`（8 个无素材的阵营 + 3 条
+ * 通用，名字来自 GLYPHS 的 `mb-*`）。两个键都缺（老帧 / 新阵营没配图）才回落到原来的 `skull`。
  *
  * `bonds` 为空（还没投放 / 商店没开 / 旧对局）时画一行空态「本回合尚未投放」，**不**退回干员盟约。
  * @param {{ bonds?: any[]|null }} props
@@ -590,11 +594,16 @@ export function MonsterBondStrip({ bonds = null }) {
     return html`<div class="bstrip bstrip--empty mbonds" data-monster-bonds="1">
       <${MicroLabel}>MONSTER BONDS</${MicroLabel}><span>${t('本回合尚未投放')}</span></div>`;
   }
+  // 有 icon → <img>（失败回落同一枚字形）；没有 → 直接画字形。
+  const discOf = (b) => {
+    const glyph = html`<${GIcon} name=${b.glyph || 'skull'} />`;
+    return b.icon ? html`<${Img} src=${b.icon} class="mbond__img" alt="" fallback=${glyph} />` : glyph;
+  };
   return html`<div class="bstrip mbonds" role="list" aria-label=${t('怪物盟约')} data-monster-bonds="1">
     ${rows.map((b) => html`<div key=${b.id} role="listitem" data-bond=${b.id} data-tier=${b.tier || 0}
         class=${cx('bslot', 'mbond', b.active && 'is-active')}
         title=${t('{name}：{layers} 层 · {tier} 阶', { name: b.name, layers: b.layers, tier: Number(b.tier) || 0 })}>
-      <span class="mbond__disc" aria-hidden="true"><${GIcon} name="skull" /></span>
+      <span class="mbond__disc" aria-hidden="true">${discOf(b)}</span>
       <span class="mbond__body">
         <span class="mbond__name">${b.name}</span>
         <span class="mbond__layers num">${b.layers}<small>${Number(b.tier) > 0 ? ` · ${b.tier}阶` : ''}</small></span>

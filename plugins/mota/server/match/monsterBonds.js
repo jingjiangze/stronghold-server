@@ -224,6 +224,67 @@ export const MONSTER_BOND_MODS = {
 
 const defById = new Map(MONSTER_BOND_DEFS.map((d) => [d.id, d]));
 
+/**
+ * 盟约图标（2026-11-05：25 条盟约各自一个图标 —— 此前每条都画同一个骷髅）。
+ * 这张表只收**有官方素材**的 14 个阵营：键 = `data/assets.json` 的 `ui` 键（`campLogo/logo_*`，值是 site-absolute
+ * URL），运行时从 `m.data.assets.ui` 现取，代码里不写死路径。
+ * 映射按「同名阵营」逐一对照，**不做就近硬套** —— `logo_egir`（阿戈尔）**不**给 SEA_BORN（海嗣）；`logo_lungmen`
+ * （龙门）/ `logo_minos`（米诺斯）/ `logo_rhodes`（罗德岛）/ `logo_rim`（雷姆必拓）在本模式没有对应阵营，一律不取用。
+ */
+export const MONSTER_BOND_ICON = Object.freeze({
+  URSUS: 'campLogo/logo_ursus',
+  VICTORIA: 'campLogo/logo_victoria',
+  LEITHANIEN: 'campLogo/logo_leithanien',
+  YAN: 'campLogo/logo_yan',
+  KAZIMIERZ: 'campLogo/logo_kazimierz',
+  KJERAG: 'campLogo/logo_kjerag',
+  SIRACUSA: 'campLogo/logo_siracusa',
+  LATERANO: 'campLogo/logo_laterano',
+  IBERIA: 'campLogo/logo_iberia',
+  SARGON: 'campLogo/logo_sargon',
+  BOLIVAR: 'campLogo/logo_bolivar',
+  HIGASHI: 'campLogo/logo_higashi',
+  SAMI: 'campLogo/logo_sami',
+  COLUMBIA: 'campLogo/logo_columbia',
+});
+
+/**
+ * 没有官方素材的 8 个阵营 + 3 条通用 → 客户端内联 SVG 字形（`client/js/ui/gameComponents.js` 的 GLYPHS 里那 11 条
+ * `mb-*`，原创形状，不抄官方 logo）。服务端只下发名字，画法在客户端。
+ */
+export const MONSTER_BOND_GLYPH = Object.freeze({
+  REUNION: 'mb-reunion',
+  DEEP_POOL: 'mb-deeppool',
+  SARKAZ: 'mb-sarkaz',
+  SEA_BORN: 'mb-seaborn',
+  SIESTA: 'mb-siesta',
+  DURIN: 'mb-durin',
+  ORIGINIUM: 'mb-originium',
+  IMAGINARY: 'mb-imaginary',
+  reinforce: 'mb-reinforce',
+  concert: 'mb-concert',
+  recover: 'mb-recover',
+});
+
+/** 两张表都漏掉的 id（将来新增阵营没配图标）回落老图标，帧形状不变。 */
+const MONSTER_BOND_GLYPH_FALLBACK = 'skull';
+
+/**
+ * 某条盟约的官方素材 URL（`data/assets.json` 的 `ui` 块里现取；没有 = null）。
+ * 资产清单优先 `m.data.assets`（Match 的 `this.data` = getData() 的产物，`assets` 是 server/data.js DATA_FILES 之一）；
+ * 直测 / stub 只给了 `m.gd` 时退回 `m.gd.raw.assets`（与上面 monsterFactionData 的懒取口径一致，不另造读数层）。
+ * @param {object} m @param {string} id
+ * @returns {string|null}
+ */
+function bondIconUrlOf(m, id) {
+  const key = MONSTER_BOND_ICON[id];
+  if (!key) return null;
+  const assets = (m && m.data && m.data.assets) || (m && m.gd && m.gd.raw && m.gd.raw.assets) || null;
+  const ui = assets && typeof assets === 'object' ? assets.ui : null;
+  const url = ui && typeof ui === 'object' ? ui[key] : null;
+  return typeof url === 'string' && url ? url : null;
+}
+
 /** 阵营条的三阶阈值比例（层数 = 本回合投放只数 n；见 factionThresholdsOf）。 */
 export const MONSTER_BOND_FACTION_THRESHOLD_SHARES = Object.freeze([0.15, 0.3, 0.45]);
 
@@ -590,8 +651,13 @@ export function mergeMonsterBondMods(mods, bondMods) {
 }
 
 /**
- * 私有帧 `m.monsterShop.bonds` 的载荷：`[{ id, name, layers, tier, active }]`，空则返回 null（帧里省略该字段，
- * 保持老帧形状）。层数语义见 monsterBondLayers（含三条通用）。
+ * 私有帧 `m.monsterShop.bonds` 的载荷：`[{ id, name, layers, tier, active, icon?|glyph? }]`，空则返回 null（帧里省略
+ * 该字段，保持老帧形状）。层数语义见 monsterBondLayers（含三条通用）。
+ *
+ * 图标（2026-11-05）：14 个有官方素材的阵营多下 `icon`（`/assets/ui/campLogo/logo_*.png`，从 `m.data.assets` 现取）；
+ * 其余 8 个阵营 + 3 条通用下 `glyph`（客户端 GLYPHS 的 `mb-*` 名，见 MONSTER_BOND_GLYPH）。两组**互斥**：
+ * 有 icon 就不发 glyph，客户端按 `b.icon` 优先渲染（老客户端忽略这两个新键，照旧画骷髅）。
+ * 素材清单整个拿不到时 icon 变 null（该条退回 glyph 路径）—— 拿不到清单只会丢图，不会丢整行。
  */
 export function monsterBondView(m, ps) {
   if (!m || m.monsterShopOn !== true) return null;
@@ -601,7 +667,11 @@ export function monsterBondView(m, ps) {
     const n = Math.max(0, Number(layers[def.id]) || 0);
     if (!(n > 0)) continue;
     const tier = monsterBondTier(n, thresholdsOf(m, def.id));
-    rows.push({ id: def.id, name: def.name, layers: n, tier, active: tier > 0 });
+    const row = { id: def.id, name: def.name, layers: n, tier, active: tier > 0 };
+    const icon = bondIconUrlOf(m, def.id);
+    if (icon) row.icon = icon;
+    else row.glyph = MONSTER_BOND_GLYPH[def.id] || MONSTER_BOND_GLYPH_FALLBACK;
+    rows.push(row);
   }
   return rows.length ? rows : null;
 }

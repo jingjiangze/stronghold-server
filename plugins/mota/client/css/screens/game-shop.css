@@ -564,6 +564,11 @@
   background: rgba(246, 163, 41, .1); border: 1px solid rgba(246, 163, 41, .35);
 }
 .mbond__disc .icon { width: .22rem; height: .22rem; color: rgba(255, 255, 255, .55); }
+/* 有官方 campLogo 的 14 个阵营：`<img class="mbond__img">`（server/match/monsterBonds.js 的 icon）。
+   尺寸与上面的 `.icon` 一致，object-fit 保证各阵营 logo 的宽高比不被压扁；透明度对齐字形的 .55 灰，
+   激活态（一阶以上）同样提亮到 1。**不动** `.mbond__disc` 的既有尺寸 / 配色。 */
+.mbond__img { width: .22rem; height: .22rem; object-fit: contain; display: block; opacity: .55; }
+.mbonds .bslot.mbond.is-active .mbond__img { opacity: 1; }
 .mbonds .bslot.mbond.is-active .mbond__disc { background: rgba(246, 163, 41, .22); }
 .mbonds .bslot.mbond.is-active .mbond__disc .icon { color: #fff; }
 .mbond__body { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
