@@ -11,6 +11,8 @@
 // 卡池来源（业主 2026-11-05 裁决「放宽卡池来源，但相关规则参考官方卫戍，如怪物星级商店概率等，等比换算」）：
 //   · **池 = data/enemies.json 的全部条目**（491 条；排除 `tokenOnly: true` 的 8 条 ⇒ 483 只），不筛阵营、不筛官方波次。
 //     旧口径（2026-11-04）= 本回合官方出怪 / 面板并集，实测让 7 个阵营在池里 0 只（池层面）。
+//   · **2026-11-05 追加美术过滤**：资产清单（m.data.assets）里既无 icon 也无 Spine 的 16 条怪不进发牌卡池
+//     （上游完全没有美术，进池只会渲染成占位；它们在 waves/stages/factions 引用次数为 0）。见 monsterHasArt。
 //   · 「本回合官方出怪优先」的语义保留为**成员保证**：官方波次的 key 一定在池里（本回合快照来自同一份 data）；
 //     快照里有、data 里没有的 key 也补进池（防御：宁可多一只，不丢官方可投放怪）。
 //   · **合法性（能不能提交）仍按规则档分流，与池来源解耦**：`legalKeys` 保持不变 —— 对抗档 = 本回合官方出怪、
@@ -320,11 +322,33 @@ export function monsterCardKeys(m) {
 }
 
 /**
+ * 这只怪在资产清单里**有没有任何美术**（icon 或 Spine：`spine` / `spineLocal`）。
+ * 2026-11-05：有 16 条怪上游完全没有美术（三家图标镜像 yuanyan3060/ArknightsGameResource、ArknightsAssets2、fexli
+ * 是同一套 1838 张、miss 集合一致；isHarryh/Ark-Models 的 models_data 条目 assetList 为空且无 models_enemies 目录；
+ * PRTS 只挂「无图片占位符.png」；官方 CDN 无 enemy 路径），且它们在 waves/stages/factions 里引用次数为 0
+ * （任何关卡都不会出）—— 进发牌卡池只会在货架上渲染成占位骷髅，所以排除。
+ * **拿不到资产清单时一律当作「有美术」**（不过滤，保持现状，零回归）。
+ * @param {object|null|undefined} assets data/assets.json 的 bundle（= m.data.assets）
+ * @param {string} key enemy key
+ * @returns {boolean} 有美术 / 无法判断 → true；确认没美术 → false
+ */
+function monsterHasArt(assets, key) {
+  if (!assets || typeof assets !== 'object' || !assets.enemies || typeof assets.enemies !== 'object') return true;
+  const rec = assets.enemies[key];
+  if (!rec || typeof rec !== 'object') return false;
+  const icon = typeof rec.icon === 'string' && rec.icon;
+  const spine = rec.spine || rec.spineLocal;
+  return !!(icon || spine);
+}
+
+/**
  * **卡池的 key 全集**（`buildMonsterPool` 的遍历源）。业主 2026-11-05「放宽卡池来源」：
  *   · 主来源 = **`data/enemies.json` 的全部条目**（491 条；排除 `tokenOnly: true` 的 8 条 ⇒ 483 只），
  *     不筛阵营、不筛官方波次 —— 旧口径只取「本回合官方出怪 / 面板并集」，实测 7 个阵营在池里 0 只。
+ *   · 再过一道**美术过滤**（monsterHasArt，2026-11-05）：资产清单里既无 icon 也无 Spine 的怪不进发牌卡池
+ *     （当前实测命中 16 条，见 monsterHasArt 的注释）。资产清单不可用时不过滤 —— 只影响发牌，不影响关卡出怪。
  *   · 「本回合官方出怪优先」保留为**成员保证**：`_roundOfficialSpawns` 的 key **一定**在池里
- *     （本回合快照来自同一份 data；若某 key 被 tokenOnly 过滤掉或 data 里没有，也补进来 —— 官方怪不能买不到）。
+ *     （本回合快照来自同一份 data；若某 key 被 tokenOnly / 美术过滤掉或 data 里没有，也补进来 —— 官方怪不能买不到）。
  *   · data 不可用（直测 / 精简 stub）时回落旧路径：面板并集 → `confrontPool(data/factions.json)`，绝不返回空池。
  * ⚠ 本函数只管**池 / 库存**；能不能提交仍看 `legalKeys`（业主裁决：不改提交合法性）。
  * ⚠ 不要用它替换 `monsterCardKeys`：后者是盟约阈值的分母（见那里的注释），两者的分母口径必须分开。
@@ -333,11 +357,13 @@ export function monsterCardKeys(m) {
  */
 export function monsterPoolKeys(m) {
   const keys = new Set();
-  // 1) data/enemies.json 全表（tokenOnly 的召唤物 / 部件不单独建条目）
+  // 1) data/enemies.json 全表（tokenOnly 的召唤物 / 部件不单独建条目；上游无美术的不进发牌卡池）
   const enemies = (m && m.data && m.data.enemies) || {};
+  const assets = (m && m.data && m.data.assets) || null;
   for (const key of Object.keys(enemies)) {
     const rec = enemies[key];
     if (!rec || rec.tokenOnly === true) continue;
+    if (!monsterHasArt(assets, key)) continue;
     keys.add(key);
   }
   // 2) 本回合官方出怪的 key 必须有（官方优先 = 成员保证；也覆盖 tokenOnly / data 缺条目的边角）
