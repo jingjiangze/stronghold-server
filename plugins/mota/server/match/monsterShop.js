@@ -672,11 +672,15 @@ function emptyShopReason(pool, legal) {
 /**
  * 抽一张**本回合合法**的卡 —— 发牌（dealSlots）与补位（refillSlot）的**唯一抽卡入口**（不要两处各写一遍）。
  *
- * 业主 2026-11-05 终审「空的时候不能跨阶」：**只有一次抽取** —— `pool.roll(rng, { tiers: [1..商店等级], exclude: illegal })`。
- * 阶位上限就是商店等级（官方干员商店口径 `tier ≤ level`：一级只出 T1、三级出 T1–T3、六级六档都出）。
- * 抽不到就**留空**：不许拿更高阶位的怪顶上。等级上限与合法集叠加时（一级商店只出 T1，而本回合官方出怪全是
- * T3/T4）会出现空位 —— 这是**预期行为**：跨阶填充会让低等级商店直接发出高星卡，破坏星级 / 概率换算。
- * （同日早些时候的「逐级降级填满」兜底链已被该裁决**撤销**，不要再加回来。）
+ * 业主 2026-11-05 终审「空的时候不能跨阶」：**只有一次抽取** —— `pool.roll(rng, { tiers: [1..topTier], exclude: illegal })`。
+ * 阶位上限 = `max(商店等级, 本回合可发卡池里的最低阶位)`：商店等级只定**上限**（官方干员商店口径 `tier ≤ level`：
+ * 一级只出 T1、三级出 T1–T3、六级六档都出），**下限由本回合卡池自己兜底**。
+ * 为什么要有这个下限：卡池 = 本回合官方出怪，而 `data/waves.json` 里 16 个波次（act1autochess_h07_01/_02/_04/_06
+ * 及其 `_s` 变体）的官方出怪最低就是 T3 —— 按 `tier ≤ 商店等级` 过滤，等级 1/2 在这些回合必然发空。
+ * 业主原话「官方卫戍没出现过抽不到的情况」。卡池最低是 T3 时发 T3 **不算跨阶**：那些卡本来就是本回合的官方出怪，
+ * 不是从全表拉来的高星卡；卡池里有 T1 时等级 1 仍只发 T1（行为不变）。
+ * 抽不到（卡池没货）才**留空**：不许拿更高阶位的怪顶上 —— 跨阶填充会让低等级商店直接发出全表高星卡，
+ * 破坏星级 / 概率换算。（同日早些时候的「逐阶上探到 6 阶」兜底链已被该裁决**撤销**，不要再加回来。）
  *
  * 每次抽都带 `exclude: illegal`：交不上的死卡不上货架（业主 2026-11-05「不改提交合法性」）。
  * @param {object} m @param {object} ps @param {() => number} rng @param {object} pool @param {Set<string>|null} legal
@@ -686,8 +690,9 @@ function rollCard(m, ps, rng, pool, legal) {
   const level = monsterShopLevelOf(m, ps);
   // 池里不在本回合合法集合内的 key 一律排除（pool.roll 只认 exclude，不认 allow —— 这里换算成 exclude）
   const illegal = illegalExcludes(pool, legal);
-  // 按商店等级的上限抽（照官方干员商店：tier ≤ level）—— 这是**唯一**一次抽取
-  const capped = pool.roll(rng, { tiers: monsterTiersUpTo(level), exclude: illegal });
+  // 阶位上限 = max(商店等级, 本回合可发卡池的最低阶位) —— 这是**唯一**一次抽取（不跨阶、不逐级上探）
+  const topTier = Math.max(level, legalFloorTier(pool, illegal));
+  const capped = pool.roll(rng, { tiers: monsterTiersUpTo(topTier), exclude: illegal });
   if (capped != null) return capped;
   // 2026-11-05 业主裁决：货架空的时候**不能跨阶**填充 —— 低等级抽不到就是空位，
   // 不许用更高阶位的怪顶上（那会让低等级商店直接发出高星卡，破坏星级/概率换算）。
@@ -696,9 +701,30 @@ function rollCard(m, ps, rng, pool, legal) {
 }
 
 /**
+ * 本回合可发卡池里的最低阶位（发牌下限的兜底来源）。
+ * 2026-11-05 业主：「官方卫戍没出现过抽不到的情况」—— 卡池 = 本回合官方出怪，而 h07 那批波次的官方出怪
+ * 最低就是 T3，按 `tier ≤ 商店等级` 过滤必然发空。现在等级只定「上限」，下限由卡池自己的最低阶位兜底：
+ * 卡池里有 T1 就只发 T1（不跨阶）；卡池里最低是 T3 就发 T3（它们本来就是本回合的官方出怪）。
+ * @param {object} pool MonsterPool（`entries` = Map<key, { cap, left, tier, cost }>）
+ * @param {Set<string>|null} [exclude] 要排除的 key（`illegalExcludes` 的返回值）
+ * @returns {number} 1..MONSTER_MAX_TIER；卡池为空（没有任何剩余份数）→ 1
+ */
+function legalFloorTier(pool, exclude) {
+  let floor = 0;
+  for (const [key, e] of pool && pool.entries ? pool.entries : []) {
+    if (!(e.left > 0)) continue;
+    if (exclude && exclude.has(key)) continue;
+    const tier = Math.max(1, Math.min(MONSTER_MAX_TIER, Math.floor(Number(e.tier)) || 1));
+    if (!floor || tier < floor) floor = tier;
+  }
+  return floor || 1;
+}
+
+/**
  * 发牌阶位数组 `[1..limit]`（`pool.roll` 的 `tiers` 的唯一构造处）。
- * 首抽用 `limit = 商店等级`（照官方干员商店的 `maxTier = shop.level`：等级 1 只出 T1、等级 3 出 T1–T3、
- * 等级 6 六档都出；权重仍是各 key 的剩余份数，**没有各阶概率表**）。
+ * 传入的 `limit` = `max(商店等级, 本回合可发卡池的最低阶位)`（见 rollCard / legalFloorTier）：商店等级定上限
+ * （照官方干员商店的 `maxTier = shop.level`：等级 1 只出 T1、等级 3 出 T1–T3、等级 6 六档都出），
+ * 卡池最低阶位兜底下限；权重仍是各 key 的剩余份数，**没有各阶概率表**。
  * `limit` 夹到 [1, MONSTER_MAX_TIER]（非法 / 缺失 → 1，与 clampLevel 同口径）。
  * @param {number} limit 阶位上限
  * @returns {number[]} 1..limit
@@ -714,7 +740,7 @@ function monsterTiersUpTo(limit) {
  * 发一手牌：冻结格保留，其余**每格独立重抽**（业主 2026-11-05：发牌照官方干员商店，不排重）。
  *   · 旧实现是「第一轮尽量不重复、第二轮才允许重复」两轮 —— 那是 2026-11-04 为「合法集合只有 2~3 个 key」
  *     打的补丁；官方干员商店本来就允许同一次发牌出现重复 key（每个槽独立抽），现在按官方机制去掉排重。
- *   · 每格调用一次 `rollCard`：按 `tiers: [1..商店等级]` 抽（阶位上限 = 商店等级），抽不到就**留空**（不跨阶，
+ *   · 每格调用一次 `rollCard`：按 `tiers: [1..max(商店等级, 卡池最低阶位)]` 抽，卡池没货才**留空**（不跨阶，
  *     见 rollCard）；权重 = 该 key 的剩余份数（`left`），没有另行构造概率表。
  *   · 发牌**不扣库存**（扣库存在 buy / place），所以重复发同一张卡不会多扣份数。
  * 只从「本回合合法集合 ∩ 池里有货」抽：卡池来源放宽后（491 全表）也不能把交不上的死卡发到货架上
@@ -740,8 +766,8 @@ function dealSlots(m, ps) {
 
 /**
  * 单格补位（业主 2026-11-04「点卡即投放，用掉后该格自动补位」）：把 `idx` 这一格重抽一张新卡。
- * 规则与 dealSlots 同一套（2026-11-05 起**单抽**，且**同一个 rollCard**）：按商店等级上限抽、抽不到**留空**
- * （不跨阶）、权重 = 剩余份数、**不排重** —— 别的格已占的 key 与本格刚用掉的那张**都可以再次抽到**
+ * 规则与 dealSlots 同一套（2026-11-05 起**单抽**，且**同一个 rollCard**）：按阶位上限 `max(商店等级, 卡池最低阶位)`
+ * 抽、卡池没货才**留空**（不跨阶）、权重 = 剩余份数、**不排重** —— 别的格已占的 key 与本格刚用掉的那张**都可以再次抽到**
  * （官方干员商店每个槽独立抽，重复是正常结果）。
  * 仍在「本回合合法集合 ∩ 池里有货」里抽（交不上的死卡不发）。
  * 冻结是「这一格这张卡」的属性：新卡不继承冻结（与 dealSlots 的 keep 判据一致 —— 冻结只对未售出且仍合法的那张卡生效）。
@@ -756,7 +782,7 @@ function refillSlot(m, ps, idx, _usedKey = null) {
   const pool = monsterPoolFor(m, ps);
   const rng = monsterShopRng(m);
   const legal = legalKeys(m);
-  // 与 dealSlots 同源：同一个 rollCard（阶位 ≤ 商店等级、抽不到留空），只是抽一格
+  // 与 dealSlots 同源：同一个 rollCard（阶位上限 = max(商店等级, 卡池最低阶位)、卡池没货才留空），只是抽一格
   const key = rollCard(m, ps, rng, pool, legal);
   if (key == null) { shop.slots[idx] = null; return null; }
   shop.slots[idx] = slotCardOf(m, pool, key);
