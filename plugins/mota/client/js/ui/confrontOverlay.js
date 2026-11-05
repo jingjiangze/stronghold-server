@@ -345,17 +345,55 @@ export function ConfrontDoneCard({ pub, shop = null }) {
   </div>`;
 }
 
+/** 「本局」的身份：房间码 + 模式 + 战场 + 参战名单 —— 换房间 / 换模式 / 换图 / 换人 ⇒ 换局（public 上没有 matchId）。 */
+const clashMatchKey = (pub, roomCode) => {
+  const ids = (Array.isArray(pub?.players) ? pub.players : []).map((p) => (p && p.playerId) || '').join(',');
+  return `${roomCode == null ? '' : roomCode}|${pub?.modeId || ''}|${pub?.stageId || ''}|${ids}`;
+};
+
+/**
+ * 「本局已弹过一次」的记位（模块级：ConfrontClash 每个回合的 COMBAT 都重新挂载，组件里的 ref / state 活不过一次挂载
+ * —— `applied` 只在 COMBAT / SETTLE 为真，PREP 里整块不渲染 ⇒ 改造前每个回合都重新弹一次，一局弹 13 次）。
+ * 同款范式：ui/stats.js 的 liveMatch（模块常量 + 每次观察改写）。
+ * @type {{ key: string, round: number } | null}
+ */
+let clashSeen = null;
+
+/**
+ * 投放名单整屏卡的「本局只弹一次」判据（业主 2026-11-05 第 3 条）。纯函数，便于自检：
+ *   · 同局（key 相同）且回合没有回落 ⇒ 不再弹（第一次之后的每一次 COMBAT 都走这里）；
+ *   · 换局（key 变了：房间 / 模式 / 战场 / 参战名单），或回合数回落（同一房间同一批人重开一局，round 从 1 重新数）
+ *     ⇒ 重置并弹出。
+ * @param {{ key: string, round: number }|null} seen 上一次弹过的那一局（调用方持有）
+ * @param {{ key: string, round: number }|null} cur 本帧的对局身份与回合，null = 不在对局里
+ * @returns {{ show: boolean, seen: { key: string, round: number }|null }} show = 这一帧要不要弹；seen = 写回的新记位
+ */
+export function clashFirstOfMatch(seen, cur) {
+  if (!cur) return { show: false, seen: null };
+  const round = Number(cur.round) || 0;
+  const prev = seen && seen.key === cur.key ? seen : null;
+  const prevRound = prev ? (Number(prev.round) || 0) : 0;
+  // 同一局：身份相同，且回合没有回落（回落 = 重开一局）
+  if (prev && round >= prevRound) return { show: false, seen: { key: cur.key, round: Math.max(round, prevRound) } };
+  return { show: true, seen: { key: cur.key, round } };
+}
+
 /**
  * The 悬赏名单 AFTER the phase: once the battles start, the applied submissions stay on the public view for a moment —
  * both teams' boards are revealed (who sent what at whom, and what killing it pays). Display only: it fades out by
  * itself. The roster hold itself is rendered by this file's ConfrontOverlay (stage 'roster').
+ * 本局只弹一次（业主 2026-11-05 第 3 条）：判据见 clashFirstOfMatch，记位是模块级的 clashSeen。
  * @param {{ pub:any }} props
  */
 export function ConfrontClash({ pub }) {
   const gd = useGameData();
   const myId = useStore((s) => s.me.playerId);
+  // 房间码只参与「本局」身份（上面的 clashMatchKey）；拿不到（旧帧 / 不在房间）就是 null
+  const roomCode = useStore((s) => (s.room && typeof s.room.code === 'string' ? s.room.code : null));
   const conf = pub && pub.confront;
   const [shown, setShown] = useState(true);
+  // 本次挂载的裁决：null = 还没判，true = 本局第一次（画），false = 本局已弹过（不画）
+  const firstOfMatch = useRef(null);
   const round = conf && conf.round;
   useEffect(() => {
     setShown(true);
@@ -368,6 +406,16 @@ export function ConfrontClash({ pub }) {
   const myTeam = me ? me.team : null;
   const rows = clashRows(gd, pub, conf, myTeam);
   if (!rows.length) return null;
+  // 「本局已弹」只在**真的画出来**时占用：上面任何一条短路（不在 COMBAT / 名单为空 / 已经淡出）都没显示过名单，
+  // 不该吃掉这一局的这一次。
+  if (firstOfMatch.current == null) {
+    const d = clashFirstOfMatch(clashSeen, { key: clashMatchKey(pub, roomCode), round: Number(round) || 0 });
+    firstOfMatch.current = d.show;
+    // 记位每次都跟着回合前进（不只是弹的那一次）：换局判据要读「本局记录到的最大回合数」，不然一局打到第 9 回合，
+    // 下一局从 1 重新数时比的是第一次弹的回合数（例如 1），回落判据就失效了。
+    if (d.seen) clashSeen = d.seen;
+  }
+  if (!firstOfMatch.current) return null;
   return html`<${RosterPanel} title=${t('投放名单')} micro=${'SORTIE LIST // ' + t('投放名单')} tone="gold"
     className="rospov--clash" testid="confront-clash" rows=${rows} note=${t('对面投放的怪物，清掉它们')} />`;
 }

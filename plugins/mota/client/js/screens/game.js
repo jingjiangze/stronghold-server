@@ -200,9 +200,12 @@ export function GameScreen() {
 const inBattleCard = (d) => d?.kind === 'unit' || (d?.kind === 'device' && d.device?.unitId != null);
 
 /**
- * 拖拽投放的取景（2026-11-04）：攻方在上门 (12,10) / 下门 (9,10) 里挑一个，所以拖住怪物卡期间换成**整块战场**的矩形
- * （rows 9–12 是战场、cols 2–10 把两扇门与场上站位都收进来），与守方看到的 normal 战场同一个范围，只是走拟合路径
- * (`fit: true`) 好让两个门在商店条折叠后都留在视野内。
+ * 攻方战场取景（2026-11-04 拖拽投放时启用；2026-11-05 业主第 1 条起是**投放期的常态取景**）：攻方在上门 (12,10) /
+ * 下门 (9,10) 里挑一个，所以整块战场都要在画面里 —— rows 9–12 是战场、cols 2–10 把两扇门与场上站位都收进来，与守方
+ * 看到的 normal 战场同一个范围，只是走拟合路径 (`fit: true`)。实测 prep 那套取景（`GEO.NORMAL_RECT` + prep 预设）
+ * 只占屏 46.6%，这一套占 70%。
+ * `hud` 走不通：render/app.js 的 hudBands 对 `normal` 返回 null，presetCamera 也只在官方预设（`!fit`）路径上用 hud，
+ * 所以这里没有 hud 键 —— 底栏与战场的间距来自 fitCamera 的 padding（defaultPadding('normal')）。
  */
 const DROP_CAM = { kind: 'normal', opts: { rect: { r0: 9, r1: 12, c0: 2, c1: 10 }, side: 'L', fit: true } };
 
@@ -450,14 +453,20 @@ function MatchScreen() {
   live.current = { pub, priv, field, view, editable, hasPersonalChoice, placeCtx, watching, watchWho, watchingOther, home, myId, alive, spectator, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused, monsterShopOpen };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
-  // 攻方（攻防回合的进攻方）没有自己的棋盘，但取景与「观战该 field」完全一致：投放窗口落回自己的 prep 请求分支，
-  // COMBAT 观战落回 field.kind 的那一支 —— 不再有攻方专属的相机覆盖（2026-11-04 业主改判：要守方战场全景）。
+  // 攻方（攻防回合的进攻方）没有自己的棋盘：投放窗口走 prepCamRequest 里 **攻方专属的 DROP_CAM 那支**（2026-11-05 业主第 1 条
+  // 「投放期要守方战场占满画面」，此前只在拖拽时临时换过）；COMBAT 观战落回 field.kind 的那一支（与「观战该 field」一致）。
   // the own prep board: the normal board, or — in the prep of a boss round — the player's half of the boss field
   // (research 09 §1.2: the right-hand player's board mirrored; gameLogic prepCamera). The DOM fallback view keeps the
   // own board's layout there (every coordinate the UI handles is a board coordinate either way) and draws the tiles of
   // that half (ui/fallbackField.js: the legal fence tiles are floor, not the normal field's walls; user playtest #5 item 7).
   const prepCam = prepCamera(pub, myId, stageLayout);
   const prepCamKey = `${prepCam.kind}:${prepCam.opts.side}`;
+  // 攻方投放期的常态取景（2026-11-05 业主第 1 条）：攻方没有自己的棋盘，投放窗口从进 PREP 起就按「守方战场占满画面」
+  // 取景 —— 直接用拖拽投放那套 DROP_CAM（normal + rows 9–12 / cols 2–10 + fit:true），不再回落到 prep 的窄矩形
+  // （实测 prep 46.6% / DROP_CAM 70%）。`myRole` 只在攻防回合为 'attack'；boss 轮的准备期仍是 bossPrep 取景
+  // （prepCam.kind === 'bossPrep'）⇒ 这一支只接管**普通作战场**的攻方准备期。守方 / 协同 / 单人 / 其它阶段：
+  // attackCam 为 null ⇒ 全部原样走 prepCameraFor，逐字节不变。
+  const attackCam = myRole === 'attack' && prepCam.kind === 'prep' ? DROP_CAM : null;
   const prepCamSeen = useRef(prepCamKey);                // the prep camera last requested
   const camRef = useRef({ kind: 'prep', opts: { rect: mapRectOf(stageLayout, 'prep'), side: 'L' } });
   // the previous frame applied the deploy zoom, so turning 设置「部署时收起商店」 off mid-drag can give it back.
@@ -488,10 +497,13 @@ function MatchScreen() {
     view?.setCamera(kind, opts);
   }, [view]);
   // 拖拽投放的取景（2026-11-04）：攻方在上门 (12,10) / 下门 (9,10) 里挑一个，拖住怪物卡期间换成 DROP_CAM（整块战场，
-  // 两扇门都在视野里），商店条由 ShopBar 自己走 onCollapse → setCollapsed 折叠。松手把**拖之前的**取景原样还回去。
+  // 两扇门都在视野里），商店条由 ShopBar 自己走 onCollapse → setCollapsed 折叠。
+  // 2026-11-05 业主第 1 条：攻方投放期的**常态**取景已经是 DROP_CAM（上面 attackCam）⇒ 这里对攻方变成 no-op ——
+  // 否则拖拽开始换同一组参数、松手再「还原」成 prep 窄矩形，下一帧又被 prepCamRequest 拉回 DROP_CAM，肉眼就是抖动。
   // 只有攻方商店会调它（ui/shopBar.js 的 monsterOn 分支）⇒ 守方 / coop 的相机请求与改造前逐字节一致。
   const dropCamPrev = useRef(null);
   const setDropCam = useCallback((on) => {
+    if (attackCam) return;                               // 攻方：常态就是 DROP_CAM，拖拽期间无需切换
     if (on) {
       if (!dropCamPrev.current) dropCamPrev.current = camRef.current;
       setCam(DROP_CAM.kind, DROP_CAM.opts);
@@ -501,7 +513,7 @@ function MatchScreen() {
     if (!back) return;
     dropCamPrev.current = null;
     setCam(back.kind, back.opts);
-  }, [setCam]);
+  }, [setCam, attackCam]);
   // 休整期 only; never while a piece is being placed (the wheel sits on a tile of the board camera)
   const penAvail = phase === PHASE.PREP && !!view && viewKind !== 'loading';
   /** Pan to the enemy preview pen (on) or back to the camera in use before (off). */
@@ -576,6 +588,11 @@ function MatchScreen() {
   // the own prep board then takes the official shop-collapsed camera (public issue #5, gameLogic prepCameraFor);
   // a deploy interaction folds it for the interaction's duration (public issue #602).
   const shopFolded = showShop && (pen ? penRef.current.collapsed : (collapsed || deployFold));
+  // 本帧的准备期相机请求（2026-11-05 业主第 1 条）：攻方投放期固定 DROP_CAM（上面的 attackCam），其余原样走
+  // prepCameraFor（商店收起与否的 shop 标志也在里面）。两处 prep 请求（进入准备期 / 准备期换板）都走这一条。
+  const prepCamRequest = () => (attackCam
+    ? { kind: attackCam.kind, opts: attackCam.opts }
+    : prepCameraFor(pub, myId, shopFolded, stageLayout));
   // the shop bar / board layout's displayed fold: the player's 收起 state, temporarily folded while deploying.
   const barCollapsed = collapsed || deployFold;
 
@@ -639,8 +656,9 @@ function MatchScreen() {
         // the battle we just left (or whatever was stored before mount) must not be re-entered next combat;
         // an m.field that arrives during prep (the upcoming battle) is a new object and will be entered
         staleFieldRef.current = field;
-        // 攻方（进攻方）没有自己的棋盘，投放窗口与观战该 field 取同一套景：走下面原样的 prep 请求分支
-        const pc = prepCameraFor(pub, myId, shopFolded, stageLayout);
+        // 攻方（进攻方）没有自己的棋盘：投放期走 prepCamRequest 的 DROP_CAM 分支（守方战场占满画面），其余仍是
+        // 原样的 prepCameraFor 请求
+        const pc = prepCamRequest();
         setCam(pc.kind, pc.opts);
         prepCamSeen.current = prepCamKey;
         viewModeRef.current = 'prep';
@@ -831,8 +849,8 @@ function MatchScreen() {
     if (!view || viewModeRef.current !== 'prep' || !showPrep) return;
     if (live.current.facing) cancelFacingRef.current();
     setSel(null);
-    // 攻方没有自己的棋盘，投放窗口与观战该 field 取同一套景（下面原样的 prep 请求）
-    const pc = prepCameraFor(pub, myId, shopFolded, stageLayout);
+    // 攻方没有自己的棋盘：投放期仍是 DROP_CAM（prepCamRequest），其余原样 prep 请求
+    const pc = prepCamRequest();
     setCam(pc.kind, pc.opts);
   }, [view, prepCamKey, showPrep]);
 
@@ -849,6 +867,10 @@ function MatchScreen() {
   // during the held drag makes that release frame return null; the zoom stays owed until the pen closes
   // (deployZoomRemember). [ASSUMED] no official source settles that order.
   useEffect(() => {
+    // 攻方投放期（2026-11-05 业主第 1 条）：常态取景固定是 DROP_CAM，收起 / 展开商店（拖拽开始也会折叠一次）都不该
+    // 再请求 prep 取景 —— 两套参数交替就是抖动。攻方不可摆干员（editable 对 attack 恒假）⇒ deployFold 恒假、
+    // 这里跳过不会留下一个欠着的部署缩放（deployZoomedRef 也就一直是 false）。
+    if (attackCam) return;
     const step = deployZoomStep(deployZoomedRef.current, deployFold);
     const next = prepDeployCamera({
       pub, myId, deployFold, releaseDeploy: step.release, folded: shopFolded,
@@ -860,7 +882,7 @@ function MatchScreen() {
     deployZoomedRef.current = deployZoomRemember(step, { next, pen });
     // the fold zoom and the restore fly with the short FOLD_CAMERA_MS, not a generic camera flight
     if (next) setCam(next.kind, { ...next.opts, ms: FOLD_CAMERA_MS });
-  }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);
+  }, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey, attackCam]);
 
   // 联防 / 最终攻势: the ‹ › pill moves the camera between the field's halves and 全景 (research 09 §3.1)
   useEffect(() => {
@@ -1925,7 +1947,10 @@ function MatchScreen() {
       ${pub?.confront && ((myRole === 'attack' && confBounty && pub.confront.active === true && confStage === 'target') || confStage === 'roster')
         ? html`<${ConfrontOverlay} pub=${pub} busy=${confBusy}
         onTarget=${async (targetPlayerId) => { setConfBusy(true); try { await actions.confrontTarget(targetPlayerId); } finally { setConfBusy(false); } }} />` : null}
-      ${pub?.confront && pub.confront.applied ? html`<${ConfrontClash} pub=${pub} />` : null}
+      ${/* 投放名单整屏卡（2026-11-05 业主第 4 条）：悬赏档（versusRule === 'bounty'）**不画** —— 只留右下角那块
+           （ui/confrontOverlay.js 的 RosterPanel className="rospov--conf"，投放公示那 5 秒）。控怪档保持现状：
+           仍弹整屏，但本局只弹一次（ui/confrontOverlay.js 的 clashFirstOfMatch）。 */ null}
+      ${pub?.confront && pub.confront.applied && !confBounty ? html`<${ConfrontClash} pub=${pub} />` : null}
       ${myRole === 'attack' && (phase === PHASE.ROUND_START || phase === PHASE.PREP || phase === PHASE.COMBAT || phase === PHASE.SETTLE) ? html`<div class="gm__attackwait" role="status" data-testid="attack-wait">
         <div class="gm__attackwait__in">
           <span class="gm__attackwait__micro">${'HUNTING PHASE // ' + t('进攻')}</span>

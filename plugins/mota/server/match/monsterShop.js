@@ -22,16 +22,17 @@
 // deadline），不再有 PHASE.CONFRONT + confrontStage === 'monster' 的独立窗口。
 //
 // 卡池来源（业主 2026-11-05「放宽卡池来源，但相关规则参考官方卫戍」）：池 = `data/enemies.json` 全表
-// （排除 tokenOnly；见 monsterPool.js 的 monsterPoolKeys），**每回合重建**（match/match/confront.js 的
-// finishConfrontTargets），库存每回合回到满值。
+// （排除 tokenOnly 的召唤物 + 排除 BOSS；见 monsterPool.js 的 monsterPoolKeys，商店池 408 只），
+// **每回合重建**（match/match/confront.js 的 finishConfrontTargets），库存每回合回到满值。
 // 发牌照官方干员商店的机制（业主 2026-11-05）：阶位上限 = 商店等级（`tiers: [1..level]`）、**不排重**（每格独立抽）、
 // 权重 = 剩余份数本身（没有另造各阶概率表）。
-// 2026-11-05 业主终审（撤销同日「用同等低的填充」）：等级上限与「本回合合法集」叠加时（低等级只出 T1，而本回合
-// 官方出怪可能全是 T3/T4）会出现空位 —— **空位就空着**：`rollCard` 只按「阶位 ≤ 商店等级」抽一次，**不许跨阶**
-// 用更高阶位的怪顶上（跨阶填充会让低等级商店直接发出高星卡，破坏星级 / 概率换算）。
-// 合法性仍按规则档分流（`legalKeys`，与 `_confrontMember` 同源）—— 业主裁决「只放宽池/库存，不改提交合法性」：
-// 商店只把**本回合合法集合里**的 key 摆上货架（illegalExcludes），所以「买得到 / 点得动」的卡一定交得上。
-// 进出草稿后仍可能因为口径变动变成死卡，`dropMonster` 提供撤回入口（库存退回本队的池）。
+// 2026-11-05 业主终审（同日第二次裁决，取代「只摆本回合官方出怪」）：**去掉 legalKeys 闸门** ——
+// 发牌 / 买卡 / 点卡投放 / 提交 / bot 六处统一改成「**卡池 = 全表按阶级，发牌上限 = 商店等级**」：
+//   · 能不能买 / 投 / 交 = `key 在池里` 且 `池里的 tier ≤ 商店等级`（`cardBlocked`，与 `_confrontMember` 同一判据）；
+//   · 发牌只按 `tier ≤ 商店等级` 抽 —— 卡池里最低阶位就是 1（全表有 T1），所以「下限兜底」自然退化，
+//     货架不会再因为「本回合官方出怪只有 T3/T4」而整片发空；
+//   · 空位就空着：`rollCard` 只抽一次、**不许跨阶**（跨阶填充会让低等级商店直接发出高星卡，破坏星级 / 概率换算）。
+// 出草稿后仍可能因为口径变动变成死卡（例如池子重建），`dropMonster` 提供撤回入口（库存退回本队的池）。
 //
 // 怪物模式（业主 2026-11-04，`m.monsterMode`，由房间选项 `opts.monsterMode` 透传）：
 //   · shared（缺省）= 共有出怪：池按队共享、同队攻方共用同一个 target；
@@ -53,14 +54,15 @@
 import { PHASE, ERR } from '../../shared/constants.js';
 import { OK, fail } from './match/common.js';
 import { createRng, deriveSeed } from '../sim/rng.js';
-import { buildMonsterPool, legalKeys, MONSTER_MAX_TIER } from './monsterPool.js';
+import { buildMonsterPool, MONSTER_MAX_TIER } from './monsterPool.js';
 // 怪物盟约（2026-11-04 业主口径：攻方只有怪物方的独立盟约）：投放 / 购买涨层，撤回退层，帧里带一份视图。
 // `monsterBondIdForEnemy` / `monsterBondName` 只给卡面徽标用（业主 2026-11-04 报障：卡片要显示该怪的怪物盟约）。
 import { addMonsterBonds, dropMonsterBonds, monsterBondView, captureMonsterBondLeaks, monsterBondIdForEnemy, monsterBondName } from './monsterBonds.js';
 
-// 合法集合的唯一判据在 monsterPool.js（legalKeys）：这里只转出，避免两份实现漂移。
-// 注意它与**池来源**是两件事（池 2026-11-05 已放宽到 data/enemies.json 全表，合法集仍按规则档）。
-export { legalKeys };
+// 「一张卡能不能买 / 投 / 交」的唯一判据 = **卡池 + 阶位**（2026-11-05）：
+//   `monsterPoolFor(m, ps)` 的 entries 里带 tier ⇒ `cardBlocked` 判「在池里 且 tier ≤ 商店等级」。
+// 旧口径（2026-11-04）是 monsterPool.js 的 `legalKeys`（对抗档 = 本回合官方出怪），已按业主裁决撤掉 ——
+// 它把 R1–R3 的货架卡成 2–3 个 key，池放宽到全表等于没用。`legalKeys` 仍留在 monsterPool.js 里给别的口径用。
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // 商店等级（业主 2026-11-04 口径：「怪物商店参考卫戍协议的干员商店」）—— 照干员商店的**形态**，不照抄数值：
@@ -72,8 +74,9 @@ export { legalKeys };
 //   挂那里等于每回合掉回 1 级。照资金账户的范式挂 **Match 级 Map** `m.monsterShopLevels`（key 与池同口径：
 //   `monsterMode === 'solo' ? playerId : teamId`），懒建、首次 seed 1（与 `m.teamMonsterFunds` 同一个范式）。
 // 槽位只决定「一次摆几张可选卡」，**不影响**库存 cap —— cap 按官方 poolCopies 等比换算（见 monsterPool.js 的
-// MONSTER_COPIES_BY_TIER），与商店等级 / 官方只数都无关。等级只限制**发牌阶位上限**（tier ≤ level，照干员商店
-// 的 `maxTier = shop.level`）。
+// MONSTER_COPIES_BY_TIER），与商店等级 / 官方只数都无关。等级限制**发牌阶位上限**（tier ≤ level，照干员商店
+// 的 `maxTier = shop.level`），2026-11-05 起**同一个上限也是提交 / 购买 / 投放的判据**（`cardBlocked`）——
+// 撤掉 legalKeys 之后，阶位上限是唯一一道「卡能在哪一级出现」的闸门。
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** 等级 → 一次摆几张可选卡（照干员商店 shopSlots.chess 的 3/4/4/5/5/5）。下标 = level − 1。 */
@@ -143,6 +146,25 @@ export function monsterPoolFor(m, ps) {
   if (!m.monsterPools) m.monsterPools = new Map();
   if (!m.monsterPools.has(key)) m.monsterPools.set(key, buildMonsterPool(m));
   return m.monsterPools.get(key);
+}
+
+/**
+ * 一张卡此刻能不能买 / 投 / 交 —— **发牌 / 买卡 / 点卡投放 / 提交 / bot 五处共用的唯一判据**（2026-11-05）：
+ *   · `key` 必须在**卡池**里（`monsterPoolFor` 的 entries，池 = data/enemies.json 全表 − tokenOnly − BOSS）；
+ *   · 池里的 `tier` 必须 ≤ **商店等级**（发牌上限同一个数；与干员商店 `maxTier = shop.level` 同构）。
+ * 商店关着（`m.monsterShopOn === false`，旧平铺面板）时没有等级概念 ⇒ 上限取 `MONSTER_MAX_TIER`
+ * （不设阶位闸门，行为回到「池里有的都能交」，与撤掉 legalKeys 之前的老路径无关）。
+ * @param {object} m @param {object} ps @param {string} key
+ * @returns {string|null} null = 可以；否则是给 fail() 的 detail 文案
+ */
+export function cardBlocked(m, ps, key) {
+  if (typeof key !== 'string' || !key) return 'unknown monster'; // i18n-ignore: 服务端内部 detail
+  const pool = monsterPoolFor(m, ps);
+  const tier = pool.tier(key);
+  if (tier <= 0) return 'this monster is not in the pool'; // i18n-ignore
+  const cap = m && m.monsterShopOn === true ? monsterShopLevelOf(m, ps) : MONSTER_MAX_TIER;
+  if (tier > cap) return 'this monster is above the shop level'; // i18n-ignore
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -518,10 +540,9 @@ export function monsterShopRng(m) {
   return m.rngMonsterShop;
 }
 
-// 合法 key 集合的**唯一判据** = monsterPool.js 的 `legalKeys`（2026-11-04 起从本文件移出，见文件头 import）：
-// 优先级 = 本回合官方出怪（`m._roundOfficialSpawns` 只读快照）→ confrontGroups 并集 → null（不闸门）。
-// 它管的是**提交 / 购买合法性**，不是池来源（池 2026-11-05 已放宽到 data/enemies.json 全表）：
-// `submitConfront` 的 `_confrontMember` 也调同一个函数，保证「买得到 / 点得动」的卡一定交得上。
+// 「一张卡能不能买 / 投 / 交」的唯一判据 = `cardBlocked`（本文件上方，2026-11-05）：
+// `key 在池里` + `池里的 tier ≤ 商店等级`。旧口径 `legalKeys`（按回合圈官方出怪）已按业主裁决撤掉，
+// `submitConfront` 的 `_confrontMember` 现在也走同一条判据，所以「买得到 / 点得动」的卡一定交得上。
 
 /**
  * 一只怪在本回合的价格（confrontValue 量纲 × MONSTER_PRICE_FACTOR；取不到 → 0）。
@@ -635,21 +656,6 @@ function slotCardOf(m, pool, key) {
   };
 }
 
-/**
- * 「池里有、但不在本回合合法集合里」的 key（`pool.roll` 只认 exclude、不认 allow，所以换算成 exclude）。
- * 池来源 2026-11-05 放宽到 data/enemies.json 全表后，货架仍只摆**本回合合法集合**里的怪：
- * 业主裁决「只放宽池/库存，不改提交合法性」—— 一张交不上的卡摆上货架没有意义（提交时 `_confrontMember`
- * 会把整单拒掉），所以发牌这一层继续把非法 key 排掉。
- * @param {object} pool @param {Set<string>|null} legal
- * @returns {Set<string>}
- */
-function illegalExcludes(pool, legal) {
-  const ex = new Set();
-  if (!legal) return ex;
-  for (const key of Object.keys(pool.snapshot())) if (!legal.has(key)) ex.add(key);
-  return ex;
-}
-
 /** 发牌「发不出卡」告警的去重表：同一条只打一次（多格 / 多回合重复刷屏没有信息量）。 */
 const shopWarned = new Set();
 function warnShopOnce(line) {
@@ -660,60 +666,52 @@ function warnShopOnce(line) {
 
 /**
  * 抽不到卡时「为什么发不出来」—— 只用于日志文案（不影响发牌结果）。
- * @param {object} pool @param {Set<string>|null} legal
+ * @param {object} pool
  * @returns {string}
  */
-function emptyShopReason(pool, legal) {
-  if (legal && legal.size === 0) return 'the legal set is empty this round'; // i18n-ignore
+function emptyShopReason(pool) {
   if (!(pool.totalLeft() > 0)) return 'the pool has no stock left'; // i18n-ignore
-  return 'no legal monster in the pool has stock left'; // i18n-ignore
+  return 'no monster of a low enough tier has stock left'; // i18n-ignore
 }
 
 /**
- * 抽一张**本回合合法**的卡 —— 发牌（dealSlots）与补位（refillSlot）的**唯一抽卡入口**（不要两处各写一遍）。
+ * 抽一张卡 —— 发牌（dealSlots）与补位（refillSlot）的**唯一抽卡入口**（不要两处各写一遍）。
  *
- * 业主 2026-11-05 终审「空的时候不能跨阶」：**只有一次抽取** —— `pool.roll(rng, { tiers: [1..topTier], exclude: illegal })`。
- * 阶位上限 = `max(商店等级, 本回合可发卡池里的最低阶位)`：商店等级只定**上限**（官方干员商店口径 `tier ≤ level`：
- * 一级只出 T1、三级出 T1–T3、六级六档都出），**下限由本回合卡池自己兜底**。
- * 为什么要有这个下限：卡池 = 本回合官方出怪，而 `data/waves.json` 里 16 个波次（act1autochess_h07_01/_02/_04/_06
- * 及其 `_s` 变体）的官方出怪最低就是 T3 —— 按 `tier ≤ 商店等级` 过滤，等级 1/2 在这些回合必然发空。
- * 业主原话「官方卫戍没出现过抽不到的情况」。卡池最低是 T3 时发 T3 **不算跨阶**：那些卡本来就是本回合的官方出怪，
- * 不是从全表拉来的高星卡；卡池里有 T1 时等级 1 仍只发 T1（行为不变）。
- * 抽不到（卡池没货）才**留空**：不许拿更高阶位的怪顶上 —— 跨阶填充会让低等级商店直接发出全表高星卡，
+ * 2026-11-05 业主终审（同日第二次裁决，撤掉 legalKeys 闸门后简化成一条）：
+ * **只有一次抽取** —— `pool.roll(rng, { tiers: [1..topTier] })`，`topTier = 商店等级`
+ * （官方干员商店口径 `tier ≤ level`：一级只出 T1、三级出 T1–T3、六级六档都出）。
+ * 卡池 = 全表（− tokenOnly − BOSS），里面恒有 T1 ⇒ `legalFloorTier` 的「卡池最低阶位」恒为 1，
+ * 所以那道下限兜底**自然退化**成 `topTier = 商店等级`（保留调用只为池子整体上移时不至于瞬间发空，
+ * 不再是「官方出怪最低是 T3」那个补丁）。
+ * 抽不到（池里没货）才**留空**：不许拿更高阶位的怪顶上 —— 跨阶填充会让低等级商店直接发出全表高星卡，
  * 破坏星级 / 概率换算。（同日早些时候的「逐阶上探到 6 阶」兜底链已被该裁决**撤销**，不要再加回来。）
- *
- * 每次抽都带 `exclude: illegal`：交不上的死卡不上货架（业主 2026-11-05「不改提交合法性」）。
- * @param {object} m @param {object} ps @param {() => number} rng @param {object} pool @param {Set<string>|null} legal
+ * @param {object} m @param {object} ps @param {() => number} rng @param {object} pool
  * @returns {string|null} 抽到的 key；一个都抽不到 → null
  */
-function rollCard(m, ps, rng, pool, legal) {
+function rollCard(m, ps, rng, pool) {
   const level = monsterShopLevelOf(m, ps);
-  // 池里不在本回合合法集合内的 key 一律排除（pool.roll 只认 exclude，不认 allow —— 这里换算成 exclude）
-  const illegal = illegalExcludes(pool, legal);
-  // 阶位上限 = max(商店等级, 本回合可发卡池的最低阶位) —— 这是**唯一**一次抽取（不跨阶、不逐级上探）
-  const topTier = Math.max(level, legalFloorTier(pool, illegal));
-  const capped = pool.roll(rng, { tiers: monsterTiersUpTo(topTier), exclude: illegal });
+  // 阶位上限 = max(商店等级, 池里最低阶位) —— 全表池的 min tier 恒为 1，所以实际就是商店等级；
+  // 这是**唯一**一次抽取（不跨阶、不逐级上探）。
+  const topTier = Math.max(level, legalFloorTier(pool));
+  const capped = pool.roll(rng, { tiers: monsterTiersUpTo(topTier) });
   if (capped != null) return capped;
   // 2026-11-05 业主裁决：货架空的时候**不能跨阶**填充 —— 低等级抽不到就是空位，
   // 不许用更高阶位的怪顶上（那会让低等级商店直接发出高星卡，破坏星级/概率换算）。
-  warnShopOnce(`no card can be dealt (shop level ${level}): ${emptyShopReason(pool, legal)}`);
+  warnShopOnce(`no card can be dealt (shop level ${level}): ${emptyShopReason(pool)}`);
   return null;
 }
 
 /**
- * 本回合可发卡池里的最低阶位（发牌下限的兜底来源）。
- * 2026-11-05 业主：「官方卫戍没出现过抽不到的情况」—— 卡池 = 本回合官方出怪，而 h07 那批波次的官方出怪
- * 最低就是 T3，按 `tier ≤ 商店等级` 过滤必然发空。现在等级只定「上限」，下限由卡池自己的最低阶位兜底：
- * 卡池里有 T1 就只发 T1（不跨阶）；卡池里最低是 T3 就发 T3（它们本来就是本回合的官方出怪）。
+ * 可发卡池里的最低阶位（发牌下限的兜底来源）。
+ * 2026-11-05 的池 = 全表（− tokenOnly − BOSS），**恒有 T1** ⇒ 这里恒返回 1，`topTier` 就退化成商店等级。
+ * 保留函数是为了池子哪天整体上移（例如只卖高阶怪的模式）时 `rollCard` 不会瞬间整片发空 —— 那时它才重新有意义。
  * @param {object} pool MonsterPool（`entries` = Map<key, { cap, left, tier, cost }>）
- * @param {Set<string>|null} [exclude] 要排除的 key（`illegalExcludes` 的返回值）
  * @returns {number} 1..MONSTER_MAX_TIER；卡池为空（没有任何剩余份数）→ 1
  */
-function legalFloorTier(pool, exclude) {
+function legalFloorTier(pool) {
   let floor = 0;
-  for (const [key, e] of pool && pool.entries ? pool.entries : []) {
+  for (const e of pool && pool.entries ? pool.entries.values() : []) {
     if (!(e.left > 0)) continue;
-    if (exclude && exclude.has(key)) continue;
     const tier = Math.max(1, Math.min(MONSTER_MAX_TIER, Math.floor(Number(e.tier)) || 1));
     if (!floor || tier < floor) floor = tier;
   }
@@ -722,9 +720,9 @@ function legalFloorTier(pool, exclude) {
 
 /**
  * 发牌阶位数组 `[1..limit]`（`pool.roll` 的 `tiers` 的唯一构造处）。
- * 传入的 `limit` = `max(商店等级, 本回合可发卡池的最低阶位)`（见 rollCard / legalFloorTier）：商店等级定上限
- * （照官方干员商店的 `maxTier = shop.level`：等级 1 只出 T1、等级 3 出 T1–T3、等级 6 六档都出），
- * 卡池最低阶位兜底下限；权重仍是各 key 的剩余份数，**没有各阶概率表**。
+ * 传入的 `limit` = `max(商店等级, 卡池最低阶位)`（见 rollCard / legalFloorTier）：商店等级定上限
+ * （照官方干员商店的 `maxTier = shop.level`：等级 1 只出 T1、等级 3 出 T1–T3、等级 6 六档都出）；
+ * 权重仍是各 key 的剩余份数，**没有各阶概率表**。
  * `limit` 夹到 [1, MONSTER_MAX_TIER]（非法 / 缺失 → 1，与 clampLevel 同口径）。
  * @param {number} limit 阶位上限
  * @returns {number[]} 1..limit
@@ -743,22 +741,21 @@ function monsterTiersUpTo(limit) {
  *   · 每格调用一次 `rollCard`：按 `tiers: [1..max(商店等级, 卡池最低阶位)]` 抽，卡池没货才**留空**（不跨阶，
  *     见 rollCard）；权重 = 该 key 的剩余份数（`left`），没有另行构造概率表。
  *   · 发牌**不扣库存**（扣库存在 buy / place），所以重复发同一张卡不会多扣份数。
- * 只从「本回合合法集合 ∩ 池里有货」抽：卡池来源放宽后（491 全表）也不能把交不上的死卡发到货架上
- * （复验修复 1.3 的判据保留）。冻结格同样要过闸门 —— 不合法的冻结格按未冻结处理、直接重抽。
+ * 2026-11-05：**不再按 legalKeys 过滤货架**（卡池 = 全表；一张卡能不能买 / 交由 `cardBlocked` 判，
+ * 与发牌同一套「阶位 ≤ 商店等级」，所以发出来的卡一定买得到、交得上）。冻结格只看「冻结且未售出」。
  * 不检查阶段、不扣钱 —— 只给 openMonsterShop 与 rollMonsterShop 用。
  */
 function dealSlots(m, ps) {
   const pool = monsterPoolFor(m, ps);
   const rng = monsterShopRng(m);
   const slots = ps.monsterShop.slots;
-  const legal = legalKeys(m);
-  /** 冻结且未售出、且（若本回合有闸门）仍合法的格 = 保留；其余重抽。 */
-  const keep = (s) => !!s && s.frozen === true && s.sold !== true && (!legal || legal.has(s.key));
+  /** 冻结且未售出的格 = 保留；其余重抽（2026-11-05：不再按 legalKeys 过闸门 —— 卡池就是合法来源）。 */
+  const keep = (s) => !!s && s.frozen === true && s.sold !== true;
   for (let i = 0; i < slots.length; i++) {
     if (keep(slots[i])) continue;
     // 每格独立抽（不排重）：与官方干员商店同构，同一次发牌允许出现重复 key。
     // 抽卡走 rollCard：等级上限抽不到就留空（**不跨阶填充**），见那里的注释
-    const key = rollCard(m, ps, rng, pool, legal);
+    const key = rollCard(m, ps, rng, pool);
     slots[i] = key == null ? null : slotCardOf(m, pool, key);
   }
   return slots;
@@ -769,9 +766,9 @@ function dealSlots(m, ps) {
  * 规则与 dealSlots 同一套（2026-11-05 起**单抽**，且**同一个 rollCard**）：按阶位上限 `max(商店等级, 卡池最低阶位)`
  * 抽、卡池没货才**留空**（不跨阶）、权重 = 剩余份数、**不排重** —— 别的格已占的 key 与本格刚用掉的那张**都可以再次抽到**
  * （官方干员商店每个槽独立抽，重复是正常结果）。
- * 仍在「本回合合法集合 ∩ 池里有货」里抽（交不上的死卡不发）。
- * 冻结是「这一格这张卡」的属性：新卡不继承冻结（与 dealSlots 的 keep 判据一致 —— 冻结只对未售出且仍合法的那张卡生效）。
- * 抽不到（合法集为空 / 该等级档里没有合法怪 / 池里没货）→ 该格置 null，**不跨阶补**。
+ * 抽的是**卡池**（全表 − tokenOnly − BOSS），2026-11-05 起不再按 legalKeys 过滤。
+ * 冻结是「这一格这张卡」的属性：新卡不继承冻结（与 dealSlots 的 keep 判据一致 —— 冻结只对未售出的那张卡生效）。
+ * 抽不到（该等级档里没有卡 / 池里没货）→ 该格置 null，**不跨阶补**。
  * @param {object} m @param {object} ps @param {number} idx
  * @param {string|null} [_usedKey] 仅保留调用签名：2026-11-05 起不再拿它排重
  * @returns {{ key: string, tier: number, price: number, frozen: boolean, sold: boolean }|null}
@@ -781,9 +778,8 @@ function refillSlot(m, ps, idx, _usedKey = null) {
   if (!shop || !Array.isArray(shop.slots) || !Number.isInteger(idx) || idx < 0 || idx >= shop.slots.length) return null;
   const pool = monsterPoolFor(m, ps);
   const rng = monsterShopRng(m);
-  const legal = legalKeys(m);
   // 与 dealSlots 同源：同一个 rollCard（阶位上限 = max(商店等级, 卡池最低阶位)、卡池没货才留空），只是抽一格
-  const key = rollCard(m, ps, rng, pool, legal);
+  const key = rollCard(m, ps, rng, pool);
   if (key == null) { shop.slots[idx] = null; return null; }
   shop.slots[idx] = slotCardOf(m, pool, key);
   return shop.slots[idx];
@@ -901,9 +897,9 @@ export function rollMonsterShop(m, ps, { free = false } = {}) {
 
 /**
  * 买一格：从本队的池里取走 1 份库存，把卡放进投放草稿（不直接投放 —— 仍由 g.confront 提交）。
- * 判据顺序与 PlayerState.buy 一致：阶段/身份 → 索引 → 该格 → **本回合合法性** → 售出 → 库存 → 预算。
- * 复验修复 1.2：不在本回合合法集合里的卡一律 BAD_TARGET 且不扣库存（否则买到手也提交不了，
- * 提交时只会得到 `illegal 对抗期 pick`）。
+ * 判据顺序与 PlayerState.buy 一致：阶段/身份 → 索引 → 该格 → **卡池 / 阶位**（`cardBlocked`）→ 售出 → 库存 → 预算。
+ * 2026-11-05：不再看 legalKeys（按回合圈官方出怪）；判据改成「卡池里有 且 tier ≤ 商店等级」。
+ * 货架上的卡本来就是按同一个上限发出来的，所以这一步正常情况下恒过 —— 它挡的是伪造的槽位与降级后的老对局。
  * 共享池留份（2026-11-04 真机）：bot 的库存上限是 `monsterStockLeft`（= 剩余 − 同队人类攻方人数），
  * 留不出来就 SOLD_OUT；人类的上限仍是真实剩余。
  * @param {object} m @param {object} ps @param {number} idx
@@ -921,8 +917,8 @@ export function buyMonster(m, ps, idx) {
   if (!Number.isInteger(idx) || idx < 0 || idx >= shop.slots.length) return fail(ERR.BAD_TARGET);
   const slot = shop.slots[idx];
   if (!slot) return fail(ERR.BAD_TARGET);
-  const legal = legalKeys(m);
-  if (legal && !legal.has(slot.key)) return fail(ERR.BAD_TARGET, 'this monster is not open this round'); // i18n-ignore
+  const blocked = cardBlocked(m, ps, slot.key);
+  if (blocked) return fail(ERR.BAD_TARGET, blocked);
   if (slot.sold === true) return fail(ERR.SOLD_OUT);
   const pool = monsterPoolFor(m, ps);
   if (pool.left(slot.key) <= 0) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
@@ -952,7 +948,8 @@ export function buyMonster(m, ps, idx) {
 /**
  * 点卡即投放（业主 2026-11-04）：`g.monsterPlace { index, gate, count? }` —— 把第 index 格的卡**直接**
  * 投到上/下出怪口，可选数量（缺省 1）。与 buyMonster 的区别只在「门」与「一次几只」；
- * 判据（商店开着 / 投放窗口 / 攻方 / 合法集合 / 预算 / 库存）与 buyMonster 完全同一套。
+ * 判据（商店开着 / 投放窗口 / 攻方 / 卡池 + 阶位 `cardBlocked` / 预算 / 库存）与 buyMonster 完全同一套。
+ * 2026-11-05：不再看 legalKeys —— 「在池里 + tier ≤ 商店等级」就是全部合法性判据（与提交同源）。
  *
  * count 的夹紧：`[1, min(20, 可用库存, 本格剩余预算能买的只数)]`，可用库存 = `monsterStockLeft`
  * （bot 在 shared 模式里要扣掉同队人类攻方的份数）；夹到 0（连一只都买不起）→ CONFRONT_BUDGET，
@@ -975,8 +972,8 @@ export function placeMonster(m, ps, index, gate, count = 1) {
   const slot = shop.slots[index];
   if (!slot) return fail(ERR.BAD_TARGET);
   if (slot.sold === true) return fail(ERR.SOLD_OUT);
-  const legal = legalKeys(m);
-  if (legal && !legal.has(slot.key)) return fail(ERR.BAD_TARGET, 'this monster is not open this round'); // i18n-ignore
+  const blocked = cardBlocked(m, ps, slot.key);
+  if (blocked) return fail(ERR.BAD_TARGET, blocked);
   const pool = monsterPoolFor(m, ps);
   if (pool.left(slot.key) <= 0) return fail(ERR.SOLD_OUT, 'stock empty'); // i18n-ignore
   // 共享池留份（2026-11-04 真机 2V2）：一次投放的只数上限也要先扣掉给人类队友留的份数。

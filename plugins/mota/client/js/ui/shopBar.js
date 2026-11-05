@@ -194,11 +194,13 @@ export function monsterPlaceCap(slot, budget) {
 }
 
 /**
- * 门的行判据（审计口径）：落点只能取战场门 —— `GEO.FIELD` = rows 9–12 / cols 2–10（shared/constants.js:128），路线的起点
- * 是 (12,10)=上、(9,10)=下（waves.js gateOf：起点行 ≥12 为上）。**上半区判据用行：row ≥ 11 → upper，否则 lower**；
+ * 门的行判据（审计口径，2026-11-05 与服务端对齐）：落点只能取战场门 —— `GEO.FIELD` = rows 9–12 / cols 2–10
+ * （shared/constants.js:128），路线的起点是 (12,10)=上、(9,10)=下。**上半区判据用行：row ≥ 12 → upper，否则 lower**
+ * —— 与服务端 `waves.js` 的 gateOf 口径一致（target = 起点行 + 6 ≥ 18 ⇔ 起点行 ≥ 12 ⇒ 普通场起点行 ≥12 = 上门，
+ * rows 9–11 = 下门）。旧实现用 `GEO.FIELD.r1 - 1`（=11）把 row 11 误判成上门，差一行。
  * row 落在 9–12 以外不是门 ⇒ 返回 null（取消投放）。
  */
-const GATE_SPLIT = GEO.FIELD.r1 - 1;
+const GATE_SPLIT = GEO.FIELD.r1;
 /** 拖拽的位移阈值（px）：超过它就从「按下」变成「拖」。与 longPress 的默认 cancelPx 同值 —— 拖拽和长按互斥。 */
 const MON_DRAG_PX = 8;
 
@@ -235,7 +237,8 @@ function tileUnderPoint(view, clientX, clientY) {
 /**
  * 半区高亮的四角（客户端 px）：从门格 `useTileScreen` 的四角外推整个半区。tileScreen 的 poly 是
  * `[(row+½,col−½), (row+½,col+½), (row−½,col+½), (row−½,col−½)]` ⇒ 「向 −row 一格」= p2−p1、「向 −col 一格」= p0−p1。
- * 上门 = rows 11–12（门格 (12,10) 是它的右下角），下门 = rows 9–10（门格 (9,10) 是它的右上角）；列一律 2–10。
+ * 上门 = row 12（门格 (12,10) 是它的右下角），下门 = rows 9–11（门格 (9,10) 是它的右上角）；列一律 2–10。
+ * 分界与判门同一个常量 GATE_SPLIT（= 12，与服务端 gateOf 对齐）⇒ 高亮哪一半与拖上去判成哪个门永远一致。
  * @param {Array<[number,number]>|null} poly the gate tile's poly
  * @param {'upper'|'lower'} gate
  * @returns {Array<[number,number]>|null} 4 points, or null without geometry
@@ -678,7 +681,9 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   useEffect(() => { onArm?.(armedSlot ? { kind: armedSlot.kind === 'item' ? 'item' : 'chess', id: armedSlot.id } : null); }, [armedSig]);
   useEffect(() => () => onArm?.(null), []);
   // ---- 怪物卡池：点一下 = 投 1 只 / 长按 = 多选 / 拖到上门·下门 = 选门投放（业主裁决 2026-11-04）-------------------
-  // hook 必须排在 collapsed 的提前 return 之前。`mGate` = 点一下投放的默认门：**上一次成功投放的门**，默认下门。
+  // hook 必须排在 collapsed 的提前 return 之前。`mGate` = **点一下投放的门**：由工具行的「上门 / 下门」二选一写入
+  // （2026-11-05 业主第 2 条，之前只有「上一次成功投放的门」、初值恒 lower ⇒ 不拖拽就永远投下门），默认下门；
+  // placeMonster 成功后仍把它对齐成实际投出的门。
   // `mPick`（旧的「选门 + 选数量」浮层状态）与 openMonsterPick / setMCount 已随浮层一起删除。
   const [mGate, setMGate] = useState('lower');
   const [mMulti, setMMulti] = useState(null);         // 多选态：null / { index }（长按的那一格）
@@ -844,8 +849,8 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
     endDrop();
   };
   /**
-   * 单击怪物卡：多选态里 = 选中 / 取消；否则 = 投 1 只到上一次成功投放的门。
-   * 拖拽松手后浏览器补的那一下 click 不算（400ms 内的 click 丢弃）。
+   * 单击怪物卡：多选态里 = 选中 / 取消；否则 = 投 1 只到**工具行选中的门**（`mGate`，2026-11-05 业主第 2 条：
+   * 改造前这里读的是「上一次成功投放的门」，不拖拽就永远投下门）。拖拽松手后浏览器补的那一下 click 不算（400ms 内丢弃）。
    */
   const tapMonster = (slot) => {
     if (!slot) return;
@@ -953,6 +958,16 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
       ${monsterOn && mMulti
         ? html`<span class="shopbar__remain mshop-multi" data-testid="monster-multi">${t('已选 {n} 只 · 拖到上门或下门投放', { n: mPicked.length })}</span>`
         : null}
+      ${/* 投放门二选一（2026-11-05 业主第 2 条）：点卡 = 投到**选中的**门。改造前 tapMonster 读的 mGate 只在成功拖拽后
+           才被改写（初值恒 'lower'）⇒ 不拖拽就永远投下门。这里与同一个 mGate 绑定，点了立刻切换并高亮；拖拽仍按落点
+           判门（endPress → monsterGateOf），两条路的 gate 都进 placeMonster。 */ null}
+      ${monsterOn ? html`<span class="mshop-gate" role="group" aria-label=${t('投放门')}>
+        <span class="mshop-gate__label">${t('投放门')}</span>
+        <button type="button" class=${cx('mshop-gate__btn', mGate === 'upper' && 'is-on')} aria-pressed=${String(mGate === 'upper')}
+          data-testid="monster-gate-upper" title=${t('点卡投放时投到上门（起点 (12,10)）')} onClick=${() => setMGate('upper')}>${t('上门')}</button>
+        <button type="button" class=${cx('mshop-gate__btn', mGate === 'lower' && 'is-on')} aria-pressed=${String(mGate === 'lower')}
+          data-testid="monster-gate-lower" title=${t('点卡投放时投到下门（起点 (9,10)）')} onClick=${() => setMGate('lower')}>${t('下门')}</button>
+      </span>` : null}
       ${/* 怪物卡池开着时：商店级「冻结」不适用（冻结是按格子的，见卡面右键）⇒ 不画；刷新改发 g.monsterRefresh */ null}
       ${monsterOn ? null : html`<button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
         title=${frzReason || (frozen ? t('解冻商店 · {key}', { key: hk.freeze }) : t('冻结商店（下回合保留） · {key}', { key: hk.freeze }))}>

@@ -54,8 +54,9 @@ import { compileRoute } from '../../sim/ai.js';
 import { MOVE_SCALE } from '../../sim/constants.js';
 import { OK, fail } from './common.js';
 // 怪物卡池（2026-11-03）：卡池 / 商店 / 怪物方 AI 契约。只在 `monsterShopOn` 为真时用；为假时一行都不跑。
-import { buildMonsterPool, legalKeys } from '../monsterPool.js';
-import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom, spendableMonsterFunds, monsterShopLevelOf } from '../monsterShop.js';
+// 2026-11-05：合法性判据从 `legalKeys`（按回合圈官方出怪）换成「卡池 + 阶位 ≤ 商店等级」（monsterShop 的 `cardBlocked`）。
+import { buildMonsterPool } from '../monsterPool.js';
+import { openMonsterShop, closeMonsterShop, monsterShopFrame, monsterStockLeft, pushMonsterShops, monsterPriceOf, monsterFundsOf, addMonsterFundsTo, monsterPoolFor, spendMonsterFundsFrom, spendableMonsterFunds, monsterShopLevelOf, cardBlocked } from '../monsterShop.js';
 // 怪物盟约（2026-11-04 业主口径）：攻方投放的怪吃自己这一回合攒出来的乘区，与 roundMods 相乘（只乘不覆盖）。
 import { monsterBondMods, mergeMonsterBondMods, captureMonsterBondLeaks } from '../monsterBonds.js';
 import { monsterStrategyFor } from '../monsterStrategies.js';
@@ -1143,15 +1144,19 @@ export class MatchConfront {
     const { routes, leader } = this._confrontRoutes();
     const out = spawns.slice();
     plan.picks.forEach((p, i) => {
-      const routeIndex = this.confrontRouteFor(p.enemyKey, p.gate);
+      // 2026-11-05：同门路线不存在时 `confrontRoutePlanFor` 会合成一条（route 非 null）—— 挂到 spawn 上让 sim 用它
+      const routing = this.confrontRoutePlanFor(p.enemyKey, p.gate);
+      const routeIndex = routing.routeIndex;
+      const route = routing.route || routes[routeIndex];
       out.push({
         time: start + i, enemyKey: p.enemyKey, count: 1, interval: 0,
         routeIndex,
+        ...(routing.route ? { route: routing.route } : {}),
         mods: { ...mods }, ownerPlayerId: ps.playerId,
         // the prep preview must show the REAL gate / movement class of an appended prey (previewOf otherwise defaults
         // to lower / ground); `prey` marks it display-only: it is not one of the stage's scheduled enemies, so it is
         // excluded from the HUD capsule's denominator (`countInTotal: false`).
-        preview: previewInfo(this.gd, p.enemyKey, routes[routeIndex], false, leader),
+        preview: previewInfo(this.gd, p.enemyKey, route, false, leader),
         prey: true,
         countInTotal: false,
         bounty: { coins: (plan.coins[i] || 0) + scent, ownerPlayerId: ps.playerId, total: plan.count, index: i, bank: true },
@@ -1390,11 +1395,11 @@ export class MatchConfront {
     // 投放窗 = 本回合的 PREP：stage 先清掉（PREP 里的冻结收尾与商店闸门都以「stage == null」判定目标选择已结束）。
     this.confrontStage = null;
     // 怪物卡池（2026-11-03）：攻方每人一张商店，同队共用一个池（按队建，Match.js 的构造函数不改）。
-    // 池来源（业主 2026-11-05）：`data/enemies.json` 全表（排除 tokenOnly），不再只取本回合官方出怪 ——
-    // 见 monsterPool.js 的 monsterPoolKeys；合法性（能不能提交）仍按回合走 `legalKeys`，与池来源解耦。
+    // 池来源（业主 2026-11-05）：`data/enemies.json` 全表 − tokenOnly − BOSS（商店不卖领袖），不再只取本回合官方出怪
+    // —— 见 monsterPool.js 的 monsterPoolKeys。合法性（能不能提交 / 买 / 投）= 「在池里 + tier ≤ 商店等级」，
+    // 与池来源是同一张表（`cardBlocked`），2026-11-05 起不再按回合走 `legalKeys`。
     // 每回合**重建**（2026-11-04 复验修复 1，仍保留）：① 卡价是**本回合量纲**（confrontValueOf 含回合倍率与特性档位分），
-    // 复用旧池会把上一回合的价格一路卖到后面几回合；② 合法集合按回合变（confrontGroups 的回合闸门 + 每回合 4 类型组
-    // 重抽），货架只摆合法集（monsterShop 的 illegalExcludes），旧池混进不在本回合 groups 里的怪也会变成死卡。
+    // 复用旧池会把上一回合的价格一路卖到后面几回合；② 商店池按回合变（官方成员保证随 `_roundOfficialSpawns` 变）。
     // 重建的代价是「上回合被买走的份数」被清空，这是**预期**的补货语义（每回合满库存），不是 bug。
     // 开张时机（2026-11-04）：目标选择结束这一刻，且**在进 PREP 之前**就位 —— 同步调度下 PREP 可能立刻结束，
     // 那时 finishConfront 的收尾（关店 / 补 bot 投放）必须已经能看到商店。
@@ -1473,13 +1478,15 @@ export class MatchConfront {
   }
 
   /**
-   * Check a submission: every enemyKey is offered by SOME 特训敌人 type (the legal set follows the rule: 对抗 = 官方波次 /
-   * 赏金 = 面板并集, see monsterPool.js legalKeys), a legal gate and position, at most VERSUS_CONFRONT.maxPicks monsters,
-   * and — 2026-11-04 复验修复 1 — the money still OWED for it (the picks already paid through the 怪物商店 draft / an
-   * earlier submission of the same round are credited) within the monster-funds balance. The player MAY MIX TYPES (user
-   * decision 2026-10-17: step into one type, spend part of the budget, step into another and add more), so `group` is
-   * display-only and only the union is checked. The AUTHORITATIVE cap (the client greys out what does not fit, this
-   * refuses it): over the balance ⇒ ERR.CONFRONT_BUDGET, out of stock ⇒ ERR.SOLD_OUT, over the count ⇒ ERR.CONFRONT_COUNT.
+   * Check a submission: every enemyKey is in the ROUND'S MONSTER POOL at a tier ≤ the shop level (2026-11-05 —
+   * 「卡池 = 全表按阶级，发牌上限 = 商店等级」；the old 特训敌人 / 官方波次 gate `legalKeys` is gone: it locked R1–R3's
+   * shelf to the 2–3 keys of the round's own wave), a legal gate and position, at most VERSUS_CONFRONT.maxPicks
+   * monsters, and — 2026-11-04 复验修复 1 — the money still OWED for it (the picks already paid through the 怪物商店
+   * draft / an earlier submission of the same round are credited) within the monster-funds balance. The player MAY MIX
+   * TYPES (user decision 2026-10-17: step into one type, spend part of the budget, step into another and add more), so
+   * `group` is display-only and only the union is checked. The AUTHORITATIVE cap (the client greys out what does not
+   * fit, this refuses it): over the balance ⇒ ERR.CONFRONT_BUDGET, out of stock ⇒ ERR.SOLD_OUT, over the count ⇒
+   * ERR.CONFRONT_COUNT.
    *
    * `bosses` (the 事件期 boss 格, user 2026-10-21) is checked on its own: every enemyKey must be in the 机变悬赏 pool
    * (confrontBossPool — and the round must be an event round at all), an enemyKey may appear at most ONCE per submission
@@ -1490,19 +1497,21 @@ export class MatchConfront {
    */
   _confrontMember(ps, group, position, picks, bosses = []) {
     const list = this.confrontGroups();
-    // 合法集合是**提交合法性**的唯一判据（monsterPool.js 导出，monsterShop 的购买 / 投放 / 发牌也调它）——
-    // 优先本回合官方出怪（`_roundOfficialSpawns`），没有快照才回落 groups 并集。业主 2026-11-05「只放宽池/库存，
-    // 不改提交合法性」：池来源已放宽到 data/enemies.json 全表，但货架只摆合法集里的怪，所以「买得到 / 点得动」
-    // 的卡仍然一定交得上（复验踩过的坑：两份实现各算一套 ⇒ 卡进得了草稿但提交必被拒）。
-    const allowed = legalKeys(this)
-      || new Set(list.flatMap((g) => ((g && g.rows) || []).map((r) => r && r.key)).filter(Boolean));
+    // 合法性（2026-11-05 业主裁决，与 monsterShop 的 buyMonster / placeMonster / rollCard **同一个判据**）：
+    // 「key 在卡池里」且「池里的 tier ≤ 商店等级」。卡池 = data/enemies.json 全表 − tokenOnly − BOSS
+    // （monsterPool.js 的 monsterPoolKeys，entries 里带 tier），不新造表；商店关着时没有等级概念 ⇒ 不设阶位上限。
+    // 之所以不再用 legalKeys：它把 R1–R3 的货架 / 提交卡成「本回合官方出怪」（2–3 个 key），池放宽到全表等于白放宽；
+    // 而且两份实现各算一套曾导致「卡进得了草稿但提交必被拒」。
+    const pool = monsterPoolFor(this, ps);
+    const levelCap = this.monsterShopOn ? monsterShopLevelOf(this, ps) : Number.MAX_SAFE_INTEGER;
+    const allowed = (key) => { const tier = pool.tier(key); return tier > 0 && tier <= levelCap; };
     const arr = Array.isArray(picks) ? picks : [];
     const pos = VERSUS_CONFRONT.positions.includes(position) ? position : null;
     if (!pos) return null;
     const out = [];
     const timeLimit = Math.max(1, Number(this.wave && this.wave.timeLimit) || 60);
     for (const p of arr) {
-      if (!p || typeof p.enemyKey !== 'string' || !allowed.has(p.enemyKey)) return null;
+      if (!p || typeof p.enemyKey !== 'string' || !allowed(p.enemyKey)) return null;
       // 预设路线 + 投放时刻（可选）：**与 bot 走同一套清洗**（业主 2026-10-27：玩家手动提交不该因为路线/时刻被硬拒，
       // 线上表现是「服务器内部错误」——拒绝码在响应层的表里不存在，被兜底成 INTERNAL 了）。
       // 非法就就地退化：路线不可用 / 超长 → 回落默认路线；时刻夹进 [0, 时限-行程-2]，否则这只怪会晚于时限出场、
@@ -1590,12 +1599,14 @@ export class MatchConfront {
     // 商店关着 = 旧的回合预算，行为逐字节不变。
     const budget = this.confrontBotBudget(ps);
     const cap = this.confrontPlaceCap();
-    // 合法集合（2026-11-04 第二轮复审修复 5 + 复验修复 2）：候选必须落在 `legalKeys` 里 —— 按规则档分流，
-    // 对抗档 = 本回合官方出怪、赏金档 = 面板并集（赏金档实测官方 key ∩ 面板 = 0，用官方集合会把子单整单滤空）。
-    // 商店开着时**先**把候选限定在合法集：赏金档的旧贪心（下面的 `ordered`）与对抗档的 `fillConfrontPicks`
-    // 共用这一条判据 —— 否则「便宜优先」会先被非法怪吃光预算，投完再过滤就成了空单。
-    const legal = legalKeys(this);
-    const rowAllowed = (r) => !(this.monsterShopOn && legal && r && !legal.has(r.key));
+    // 卡池闸门（2026-11-05，取代 2026-11-04 的 `legalKeys` 闸门）：候选必须是**卡池里 + 阶位 ≤ 商店等级**的怪
+    // （与 `_confrontMember` / 商店的 buyMonster / placeMonster **同一个判据** `cardBlocked`，不另算一套）。
+    // 商店开着时**先**把候选限定在卡池：赏金档的旧贪心（下面的 `ordered`）与对抗档的 `fillConfrontPicks`
+    // 共用这一条判据 —— 否则「便宜优先」会先被买不到 / 交不上的怪吃光预算，投完再过滤就成了空单。
+    // 商店关着（旧平铺面板）= 不做这道闸门，行为与改造前一致。
+    const deck = this.monsterShopOn ? monsterPoolFor(this, ps) : null;
+    const deckOk = (key) => !deck || cardBlocked(this, ps, key) == null;
+    const rowAllowed = (r) => !deck || !!(r && deckOk(r.key));
     const rows = [];
     groups.forEach((g, gi) => (g.rows || []).forEach((r) => {
       if (!rowAllowed(r)) return;
@@ -1617,7 +1628,7 @@ export class MatchConfront {
       filled.forEach((f, i) => picks.push({ enemyKey: f.enemyKey, gate: i % 2 ? 'upper' : 'lower' }));
     } else {
       // 赏金档：旧实现原样保留（便宜优先 + 反复扫到没有进展为止，去掉「每种怪最多一只」）；
-      // 商店开着时先过 `rowAllowed`（本回合合法集），不再「投完再被滤掉」。
+      // 商店开着时先过 `rowAllowed`（卡池 + 阶位 ≤ 商店等级），不再「投完再被滤掉」。
       const ordered = groups.map((g, i) => ({ i, rows: (g.rows || []).filter(rowAllowed).slice().sort((a, b) => a.value - b.value || String(a.key).localeCompare(String(b.key))) }));
       let left = budget;
       const take = (list) => {
@@ -1636,15 +1647,15 @@ export class MatchConfront {
       if (ordered.length) take(ordered[0].rows);
       if (picks.length < cap) for (let i = 1; i < ordered.length; i++) take(ordered[i].rows);
     }
-    // 合法集闸门（2026-11-04 复验修复 2）：`_sanitizeBotPicks`（pureShares.sanitizeBotPickList）只校验字段形态与
-    // 预算，**不判** enemyKey 是否在本回合合法集合里；赏金档的 `confrontGroups` 又没有回合闸门（isConfrontRule 为假
-    // 时只按「本局见过」筛），于是 bot 的贪心会从全类型池里挑 —— 实测本回合官方只出 2 个 key，冻结进 this.confront
-    // 的 12 条里有 10 条是别的怪（apply 时多半被当成非法出怪丢掉）。
+    // 卡池闸门（2026-11-05，取代 2026-11-04 的 legalKeys 闸门）：`_sanitizeBotPicks`（pureShares.sanitizeBotPickList）
+    // 只校验字段形态与预算，**不判** enemyKey 在不在卡池里；赏金档的 `confrontGroups` 又没有回合闸门
+    // （isConfrontRule 为假时只按「本局见过」筛），于是 bot 的贪心会从全类型池里挑 —— 实测本回合官方只出 2 个 key，
+    // 冻结进 this.confront 的 12 条里有 10 条是别的怪（apply 时多半被当成非法出怪丢掉）。
     // 三条产出路径（策略 deployPlan / 对抗档 fillConfrontPicks / 赏金档贪心）都汇到这一个 picks 数组，所以在这里
-    // 过一道 `legalKeys`（与 `_confrontMember` / 怪物商店**同源**）就覆盖全部 return 路径，且先于 firstKey 与清洗。
-    // `legalKeys` 返回 null（取不到合法集）= 不闸门，保持旧行为。`legal` 已在上面（rows 的候选集）算过，这里复用。
-    if (legal) {
-      const kept = picks.filter((p) => p && legal.has(p.enemyKey));
+    // 过一道「卡池 + 阶位」（与 `_confrontMember` / 商店**同源**）就覆盖全部 return 路径，且先于 firstKey 与清洗。
+    // 商店关着 = 不闸门，保持旧行为。`deck` 已在上面（rows 的候选集）算过，这里复用。
+    if (deck) {
+      const kept = picks.filter((p) => p && deckOk(p.enemyKey));
       if (kept.length !== picks.length) {
         picks.length = 0;
         for (const p of kept) picks.push(p);
@@ -1654,22 +1665,26 @@ export class MatchConfront {
     // 逐 key 限量（每条 pick 消耗 1，超出的那一条单独丢弃，**不清空整单**），额度 = 本席**可用**份数
     // （池里剩下的份数 − 给同队人类留的份数，见 monsterShop.js 的 `monsterStockLeft`）+ 本席草稿里
     // 已经买下的份数（cardpool 策略买卡时已经从同一个池 `take` 过，只看 `left` 会把它自己买的卡全部丢掉）。
-    // 没有商店 / 没有合法集（取不到）= 不做闸门，保持旧行为。
-    if (this.monsterShopOn && legal) {
+    // 没有商店（`deck == null`）= 不做闸门，保持旧行为。
+    if (deck) {
       // 共享池留份（2026-11-04 真机 2V2）：bot 的逐 key 额度必须与 monsterShop.js 的 buyMonster / placeMonster
       // 走**同一个上限**（`monsterStockLeft` = 池里剩余 − 给同队人类攻方留的份数），否则 bot 的投放计划会绕过
       // 商店把留给人类的那几份也占掉。扣的只是池里的剩余值，**不扣**本席草稿里已经买下的份数
       // （那些已经从池里 take 走了，held 就是把它们加回来的额度）。
+      // 2026-11-05：额度改成**按需现算**（不再预铺一遍 legal 全集 —— 那个集合已经没有语义了）。
       const held = new Map();
       for (const d of (ps.monsterDraft && Array.isArray(ps.monsterDraft.picks) ? ps.monsterDraft.picks : [])) {
         if (d && typeof d.enemyKey === 'string') held.set(d.enemyKey, (held.get(d.enemyKey) || 0) + 1);
       }
       const budgetLeft = new Map();
-      for (const key of legal) budgetLeft.set(key, monsterStockLeft(this, ps, key) + (held.get(key) || 0));
+      const leftOf = (key) => {
+        if (!budgetLeft.has(key)) budgetLeft.set(key, monsterStockLeft(this, ps, key) + (held.get(key) || 0));
+        return budgetLeft.get(key);
+      };
       const keptPicks = [];
       for (const p of picks) {
         if (!p) continue;
-        const left = budgetLeft.get(p.enemyKey) || 0;
+        const left = leftOf(p.enemyKey);
         if (left <= 0) continue;
         budgetLeft.set(p.enemyKey, left - 1);
         keptPicks.push(p);
@@ -1857,17 +1872,105 @@ export class MatchConfront {
     return { routes, leader };
   }
 
-  /** The route index a placed monster uses: the template route matching its gate AND movement, else any of its class. */
-  confrontRouteFor(enemyKey, gate) {
+  /**
+   * 一条投放路线：**同门 + 同移动方式**的模板路线，没有就**合成一条从目标门出发的路线**（2026-11-05 修 bug）：
+   *
+   * 旧实现找不到同门路线时静默回落到「任意同移动方式的路线」（`routes.findIndex(motionOk)`），而 `data/waves.json`
+   * 里 R1–R3 的模板 `act1autochess_01/02/03` **根本没有上门路线**（routes 的 start 全是 (9,10)），
+   * 于是「投到上门」= 静默变成下门（业主 2026-11-05 报障）。现在改成合成路线：
+   *
+   *   · 形态与模板 routes 的元素同构（`{ motion, start, end, checkpoints }`），以**同 motion 的第一条模板路线**为模板，
+   *     只把 `start` 换成目标门的门格；同 motion 一条都没有才用任意路线的 `end` / `checkpoints`（motion 仍按怪物自己的
+   *     移动方式写死成 WALK / FLY，免得拿 FLY 的骨架给走地怪）。
+   *   · 门格坐标**不硬编码**，三级推导（见 `_confrontGateStart`）：① 模板里别的路线已经有这个门的起点 → 借用它的坐标
+   *     （escaped 场是 18 列，普通场是 10 列）；② 舞台 `data/stages.json` 的 `S`（tile_start）格子里 gateOf === 目标门的那个，
+   *     优先与参照起点同列；③ 用 gateOf 反推 pen 分界行（最小 r 使 gateOf([r, col]) === gate）。
+   *
+   * **门的分界到底是多少**（对齐说明，客户端不在本次改动范围）：
+   *   `waves.js:279` 的 `gateOf` 是**客户端 preview 栏的 pen 口径** —— target = 起点行 + 6（领袖场 +13），
+   *   再与 `PEN_UPPER_ROW = 18` 比 ⇒ 起点行 ≥ 12 才算上门（行 9–11 全是下门）。普通场（19×21，`S` 在 (9,10) /
+   *   (12,10)）就是这个分界；客户端 `ui/shopBar.js:201` 用 `GEO.FIELD.r1 - 1 = 11` 当分界，比服务端**早一行**，
+   *   那是客户端自己的近似（本文件不改客户端，只记下正确分界 = 起点行 ≥ 12 = 上门）。
+   *
+   * 返回值是**索引 + 可选路线**：调用了 `confrontRouteFor`（只回索引）的老调用方行为不变，
+   * 需要「真的从上门出来」的调用方（applyConfront / _confrontBossSpawns / applyCoopHunt）把 `route` 挂到 spawn 上
+   * —— sim 的 `spawns.js` 用 `opts.route ?? routes[routeIndex]`，所以合成路线能生效，且**不污染** `this.wave.routes`
+   * （那是 `gd.wave()` 的共享数据数组，push 进去会串到同模板的所有对局）。
+   * @param {string} enemyKey @param {'upper'|'lower'} gate
+   * @returns {{ routeIndex: number, route: object|null }} route = null ⇒ 用模板路线，无需覆盖
+   */
+  confrontRoutePlanFor(enemyKey, gate) {
     const en = (this.data && this.data.enemies) || {};
     const fly = !!(en[enemyKey] && en[enemyKey].isFlyEnemy);
     const { routes, leader } = this._confrontRoutes();
-    if (!routes.length) return 0;
+    if (!routes.length) return { routeIndex: 0, route: null };
     const motionOk = (r) => (fly ? r.motion === 'FLY' : r.motion !== 'FLY' && r.motion !== 'E_NUM');
     const j = routes.findIndex((r) => motionOk(r) && gateOf(r.start, leader) === gate);
-    if (j >= 0) return j;
-    const i = routes.findIndex(motionOk);
-    return i >= 0 ? i : 0;
+    if (j >= 0) return { routeIndex: j, route: null };
+    // 同门路线不存在 ⇒ 合成：以同 motion 的第一条为骨架，把 start 换到目标门的门格
+    const ref = routes.findIndex(motionOk);
+    const skeleton = routes[ref >= 0 ? ref : 0] || {};
+    const start = this._confrontGateStart(gate, skeleton.start, leader);
+    const copyPair = (v) => (Array.isArray(v) ? v.slice(0, 2) : null);
+    const end = copyPair(skeleton.end) || copyPair(start) || [0, 0];
+    const checkpoints = Array.isArray(skeleton.checkpoints)
+      ? skeleton.checkpoints.map((cp) => (Array.isArray(cp) ? cp.slice() : cp))
+      : [];
+    return {
+      // routeIndex 仍指向同 motion 的骨架：老调用方（只认索引）拿到的是一条「门不对但走得通」的路线，不会崩；
+      // 新调用方再加 route 覆盖，真正从上/下门出来。
+      routeIndex: ref >= 0 ? ref : 0,
+      route: { motion: fly ? 'FLY' : 'WALK', start, end, checkpoints },
+    };
+  }
+
+  /**
+   * 目标门的**门格**坐标（`confrontRoutePlanFor` 的合成起点）。三级推导，全部走现成的 `gateOf` 判据，不硬编码坐标：
+   *   ① 模板里别的路线已经有这个门的起点 → 直接借用（含列号；escaped 场是 18 列，普通场是 10 列）；
+   *   ② 舞台 `data/stages.json` 的 `S` 字形门格（`tile_start`）里 gateOf === 目标门的：优先与参照起点同列的那个。
+   *      普通场实测 `S` 在 (9,10) / (12,10) / (18 列) / (15,7)，同列筛完只剩 (9,10) 下门 / (12,10) 上门；
+   *   ③ 反推 pen 分界行：最小的 r 使 `gateOf([r, 参照列]) === gate`（普通场上门 = 12，领袖场 = 5），
+   *      与 `waves.js` 的 `PEN_UPPER_ROW = 18` − 行偏移（6 / 13）同一个结论。
+   * 全部落空 → 原样返回参照起点（最后兜底，至少不产生非法坐标）。
+   * @param {'upper'|'lower'} gate @param {number[]|null} refStart 参照起点 @param {boolean} leader
+   * @returns {number[]} [row, col]
+   */
+  _confrontGateStart(gate, refStart, leader) {
+    const { routes } = this._confrontRoutes();
+    const ref = Array.isArray(refStart) ? refStart.slice(0, 2) : null;
+    // ① 模板里已有的同门起点
+    for (const r of routes) {
+      if (Array.isArray(r && r.start) && gateOf(r.start, leader) === gate) return r.start.slice(0, 2);
+    }
+    const colHint = ref && Number.isFinite(ref[1]) ? ref[1] : null;
+    // ② 舞台的 S 字形门格（同列优先）
+    const rows = Array.isArray(this.stage && this.stage.rows) ? this.stage.rows : [];
+    let fallback = null;
+    for (let r = 0; r < rows.length; r++) {
+      const line = typeof rows[r] === 'string' ? rows[r] : Array.isArray(rows[r]) ? rows[r].join('') : '';
+      for (let c = 0; c < line.length; c++) {
+        if (line[c] !== 'S') continue;
+        if (gateOf([r, c], leader) !== gate) continue;
+        if (colHint != null && c === colHint) return [r, c];
+        if (!fallback) fallback = [r, c];
+      }
+    }
+    if (fallback) return fallback;
+    // ③ 反推 pen 分界行（普通场上门 = 12 行）
+    const c = colHint ?? 10;
+    for (let r = 0; r < GEO.ROWS; r++) if (gateOf([r, c], leader) === gate) return [r, c];
+    return ref || [GEO.ROWS - 1, c];
+  }
+
+  /**
+   * 一条投放路线的**索引**（兼容入口，老调用方只认整数）。
+   * 需要「真的从目标门出来」的调用方请用 `confrontRoutePlanFor` 并把它的 `route` 挂到 spawn 上
+   * （sim 的 `spawns.js` 用 `opts.route ?? routes[routeIndex]`）；这里只回索引 = 合成路线的骨架索引。
+   * @param {string} enemyKey @param {'upper'|'lower'} gate
+   * @returns {number} 模板 routes 的下标（永远可索引）
+   */
+  confrontRouteFor(enemyKey, gate) {
+    return this.confrontRoutePlanFor(enemyKey, gate).routeIndex;
   }
 
   /**
@@ -2079,10 +2182,15 @@ export class MatchConfront {
     // the RECEIVER of the placement, so it is added here once per placed monster.
     const scent = typeof this.eventBountyBonusOf === 'function' ? this.eventBountyBonusOf(ps) : 0;
     sub.picks.forEach((p, i) => {
+      // 路线（2026-11-05）：玩家显式给的 routeIndex 优先；否则按门择路，**没有同门路线就合成一条**
+      // （`confrontRoutePlanFor.route`，由 sim 的 `spawns.js` 用 `opts.route ?? routes[routeIndex]` 生效）。
+      const preset = Number.isInteger(p.routeIndex) ? p.routeIndex : null;
+      const routing = preset == null ? this.confrontRoutePlanFor(p.enemyKey, p.gate) : null;
       kept.push({
         time: Number.isFinite(p.time) ? p.time : start + i * 1,
         enemyKey: p.enemyKey, count: 1, interval: 0,
-        routeIndex: Number.isInteger(p.routeIndex) ? p.routeIndex : this.confrontRouteFor(p.enemyKey, p.gate),
+        routeIndex: preset == null ? routing.routeIndex : preset,
+        ...(routing && routing.route ? { route: routing.route } : {}),
         mods: { ...spawnMods }, ownerPlayerId: ps.playerId, confrontSeat: sentBy, confrontPlaced: true,
         // 狩猎模拟: a placed monster leaks FOR FREE — `countInTotal: false` is exactly that (the flag drives both the
         // LP charge and the 完美作战 counter), so only killing it matters: the bounty below pays the killer.
@@ -2118,9 +2226,12 @@ export class MatchConfront {
     const sentBy = Number.isInteger(sub.seat) ? sub.seat : null;
     let time = list.reduce((n, s) => Math.max(n, Number(s && s.time) || 0), 0) + 10;
     for (const p of bosses) {
+      // 2026-11-05：与投放怪同一条择路规则（没有同门路线就合成一条，挂在 spawn.route 上让 sim 用）
+      const routing = this.confrontRoutePlanFor(p.enemyKey, p.gate);
       list.push({
         time: time++, enemyKey: p.enemyKey, count: 1, interval: 0,
-        routeIndex: this.confrontRouteFor(p.enemyKey, p.gate),
+        routeIndex: routing.routeIndex,
+        ...(routing.route ? { route: routing.route } : {}),
         mods: { ...spawnMods }, ownerPlayerId: ps.playerId, confrontSeat: sentBy, confrontPlaced: true,
         countInTotal: false,
         bounty: { coins: this.confrontBossCoin(p.enemyKey), ownerPlayerId: ps.playerId, bank: false },

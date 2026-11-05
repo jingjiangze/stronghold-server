@@ -1060,3 +1060,17 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .gm__incoming__t .num { color: #0c0d0a; background: #f0c23a; padding: 0 .08rem; }
 .gm__incoming ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .06rem; }
 .gm__incoming li { display: flex; justify-content: space-between; gap: .22rem; white-space: nowrap; font-size: calc(.13 * var(--t)); color: #e3e7e5; }
+
+/* ---- 攻方投放门二选一（2026-11-05 业主第 2 条，ui/shopBar.js 的 .mshop-gate）---- */
+/* 点卡投放的门要能选：商店条工具行里的「上门 / 下门」二选一。样式写在 game-panels.css（本次改动只允许动这一份 CSS）,
+   观感照商店条的深色卡片 + 薄荷高亮，尺寸比 .toolbtn 小一档，与「剩余投放预算」那一行同高等宽即可。 */
+/* .gm__hud > .shopbar 把整条设成 pointer-events: none，只有 .shopbar__row 与 .shopbar__tools > button 拿回指针,
+   所以这一组要自己声明 auto（同 .shopbar__econ 的写法）。 */
+.mshop-gate { display: inline-flex; align-items: center; gap: .02rem; pointer-events: auto; }
+.mshop-gate__label { padding: 0 .08rem 0 .12rem; font-size: .13rem; letter-spacing: .08em; color: var(--text-lo); }
+.mshop-gate__btn { height: .34rem; padding: 0 .14rem; font-size: .15rem; font-weight: 700; letter-spacing: .08em;
+  background: rgba(8, 11, 10, .9); border: 1px solid var(--line-2); color: var(--text-md);
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast); }
+.mshop-gate__btn + .mshop-gate__btn { border-left: 0; }
+.mshop-gate__btn:hover:not(.is-on) { color: #fff; border-color: var(--line-3); }
+.mshop-gate__btn.is-on { background: var(--mint-400); border-color: var(--mint-400); color: #06210f; }
