@@ -465,7 +465,6 @@ function MatchScreen() {
   // own board's layout there (every coordinate the UI handles is a board coordinate either way) and draws the tiles of
   // that half (ui/fallbackField.js: the legal fence tiles are floor, not the normal field's walls; user playtest #5 item 7).
   const prepCam = prepCamera(pub, myId, stageLayout);
-  const prepCamKey = `${prepCam.kind}:${prepCam.opts.side}`;
   // 攻方投放期的两个取景（2026-11-05 业主第 2 条）：
   //   attackPenCam —— 常态（初始 / 松手之后）= pen 视图，与 🔍▶▶ 一模一样；
   //   attackCam    —— 战场那一套（DROP_CAM）：拖拽期间用它（两扇门要同时在画面里才判得了门），也是 🔍「返回战场」
@@ -474,6 +473,9 @@ function MatchScreen() {
   // **普通作战场**的攻方准备期。守方 / 协同 / 单人 / 其它阶段：两者都是 null ⇒ 全部原样走 prepCameraFor，逐字节不变。
   const attackCam = myRole === 'attack' && prepCam.kind === 'prep' ? DROP_CAM : null;
   const attackPenCam = attackCam ? { kind: 'pen', opts: { side: prepCam.opts.side || 'L' } } : null;
+  // 2026-11-05 真机：攻方进入投放期的首帧 myRole 还没到，先按 prep 请求了一次；角色到达后 prepCamKey
+  // （kind:side）没变 ⇒ effect 早退 ⇒ 相机永远停在 prep。把「攻方 pen」这一位并进 key，角色到达时触发重请求。
+  const prepCamKey = `${prepCam.kind}:${prepCam.opts.side}:${attackPenCam ? 'pen' : '-'}`;
   const prepCamSeen = useRef(prepCamKey);                // the prep camera last requested
   const camRef = useRef({ kind: 'prep', opts: { rect: mapRectOf(stageLayout, 'prep'), side: 'L' } });
   // the previous frame applied the deploy zoom, so turning 设置「部署时收起商店」 off mid-drag can give it back.
