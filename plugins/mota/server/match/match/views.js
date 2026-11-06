@@ -174,7 +174,11 @@ export class MatchViews {
             roster: this.phase === PHASE.CONFRONT && this.confrontStage === 'roster' ? { until: this.deadline, ms: VERSUS_CONFRONT.rosterMs } : null,
             round: this.round,
             ratio: this.confrontRatio ? this.confrontRatio() : null,
+            // 2026-11-06 价值同源：面板预算 = **怪物资金账户余额**（confrontBudget 现在读 monsterFundsOf，与
+            // monsterShopFrame 的 `budget` 是同一个口径；商店关着才回落到旧的回合预算公式）。
             budget: this.confrontBudget ? this.confrontBudget() : null,
+            // 怪物模式（2026-11-06）：shared / solo / master —— 客户端据此在攻方只读时显示「队长操作中」。
+            monsterMode: this.monsterMode || null,
             // 2026-11-01 P1（审计 D12/D13/死 UI）：规则档与同盟狩猎标记下发（客户端 conf.hunt 以前读不到）；
             // 事件期 boss 格下发（池 + 上限），客户端据此渲染选择区 —— boss 不占预算、不计只数上限
             versusRule: this.versusRule || null,
@@ -186,7 +190,9 @@ export class MatchViews {
                 ? (this.confrontBossPool ? this.confrontBossPool() : []).map((r) => ({ key: r.key, name: r.name, coin: r.coin }))
                 : [],
             },
-            // 本回合一次最多放几只：协议硬上限 maxPicks（防一次误提交塞爆消息），真正的约束是 Σ价值 ≤ 预算
+            // 本回合一次最多放几只：协议硬上限 maxPicks（防一次误提交塞爆消息）。注释 2026-11-06 纠偏 ——
+            // 真正的约束**不是**「Σ价值 ≤ 预算」：商店开着时判据是「尚未付款的 Σ单价 ≤ 怪物资金账户余额」
+            // （confrontPurchaseLimit），另有一道「池里 tier ≤ 商店等级」的卡池闸门；`maxPicks` 只管条数上限。
             maxPicks: this.confrontPlaceCap ? this.confrontPlaceCap() : VERSUS_CONFRONT.maxPicks,
             targets: this.confrontTargets ? Object.fromEntries(this.confrontTargets) : {},
             groups: (this.confrontGroups ? this.confrontGroups() : []).map((g) => ({ id: g.id, name: g.name, icon: g.icon, desc: g.desc, rows: (g.rows || []).map((r) => ({ key: r.key, name: r.name, value: r.value })) })),
@@ -376,19 +382,52 @@ export class MatchViews {
    */
   _pendingLpView(ps) {
     if (!ps || !ps.alive || (this.phase !== PHASE.COMBAT && this.phase !== PHASE.UNITE)) return {};
-    const counted = (r) => (r && Array.isArray(r.leaked) ? r.leaked.filter((l) => l && l.counted !== false).length : 0);
+    // 2026-11-06 与 settle() 对齐（业主报障「扣血逻辑完全混乱」的显示侧那一半）：
+    //   ① 官方「不计数」怪（unharmful / part）也扣 1 点 —— 旧码只数 `counted`，显示上永远少报；
+    //   ② 带 `confrontSeat` 的条目属于「投放怪」那一笔（按阶位阶梯价、记到队上），这里不重复计。
+    const lossUnits = (r) => (r && Array.isArray(r.leaked)
+      ? r.leaked.filter((l) => l && l.confrontSeat == null && l.uniteRuntime !== true).length : 0);
     // 联防: a leaker's enemies still standing on the 联防 field (uncapped), the loss capped like settle()
     const left = this._uniteLeft(ps);
     if (left != null) {
       const loss = Math.min(this.gd.lpCapPerRound, left);
       return loss > 0 ? { uniteLeft: left, pendingLp: loss } : { uniteLeft: left };
     }
-    let n = 0;
-    if (this.lastResults.has(ps.playerId)) n = counted(this.lastResults.get(ps.playerId));
-    else if (this.phase === PHASE.COMBAT) {
-      const f = this.fields.find((x) => x && x.kind === 'normal' && Array.isArray(x.players) && x.players.includes(ps.playerId));
-      if (f && f.cc) n = f.done && f.result ? counted(f.result.perPlayer && f.result.perPlayer[ps.playerId]) : Number(f.progress && f.progress.leaks) || 0;
-      else if (f && f.battle) { try { n = battleProgress(f.battle).leaks; } catch { n = 0; } }
+    const ownLossOf = (pid) => {
+      if (this.lastResults.has(pid)) return lossUnits(this.lastResults.get(pid));
+      if (this.phase !== PHASE.COMBAT) return 0;
+      const f = this.fields.find((x) => x && x.kind === 'normal' && Array.isArray(x.players) && x.players.includes(pid));
+      if (!f) return 0;
+      if (f.cc) return f.done && f.result ? lossUnits(f.result.perPlayer && f.result.perPlayer[pid]) : Number(f.progress && f.progress.leaks) || 0;
+      if (f.battle) { try { return battleProgress(f.battle).leaks; } catch { return 0; } }
+      return 0;
+    };
+    let n = ownLossOf(ps.playerId);
+    // 对抗：settle 是**逐队**一次 min(cap, Σ) —— 这里同样按队聚合，否则 2V2 会低报队友那份。
+    if (this.isVersus && this.teamLps) {
+      const myTeam = this.teamIdOf(ps);
+      for (const o of this.alivePlayers()) {
+        if (!o || o.playerId === ps.playerId || this.teamIdOf(o) !== myTeam) continue;
+        n += ownLossOf(o.playerId);
+      }
+      // 投放怪漏过（按价值）也记在队上；未出结果的场在 settle 时才计，这里只看已出结果的
+      for (const f of this.fields || []) {
+        if (!f || !f.done) continue;
+        const fr = f.result && typeof f.result === 'object' ? f.result : null;
+        if (!fr || !fr.confrontLeaks) continue;
+        const teams = new Set();
+        for (const pid of new Set(f.players || [])) {
+          const o = this.order.find((x) => x && x.playerId === pid);
+          if (o) teams.add(this.teamIdOf(o));
+        }
+        if (!teams.has(myTeam)) continue;
+        let c = 0, v = 0;
+        for (const [seat, cnt] of Object.entries(fr.confrontLeaks || {})) {
+          c += Math.max(0, Number(cnt) || 0);
+          v += Math.max(0, Number(fr.confrontLeakValue && fr.confrontLeakValue[seat]) || 0);
+        }
+        n += Math.max(c, v);
+      }
     }
     const loss = Math.min(this.gd.lpCapPerRound, Math.max(0, Math.trunc(Number(n) || 0)));
     return loss > 0 ? { pendingLp: loss } : {};

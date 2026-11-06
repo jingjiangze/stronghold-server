@@ -6,9 +6,9 @@
 // 单位是「一只怪」（spawn count:1），不是整波。
 //
 // 与 pool.js 的 SharedPool 同构（cap / left / take / give / snapshot / totalLeft / 份数加权 roll）：
-// 买走一份就少一份。池的归属随 `m.monsterMode`：shared（默认）= 同队攻方共用一个池（见
-// match/match/confront.js 的 finishConfrontTargets / this.monsterPools）；solo = 每人一个池（只有该队
-// 第一位存活攻方持有投放权，见 monsterShop.js 的 monsterPoolFor）。
+// 买走一份就少一份。池的归属随 `m.monsterMode`：shared（默认）/ master = 同队攻方共用一个池（见
+// match/match/confront.js 的 finishConfrontTargets / this.monsterPools；master 只是投放权单人，池仍队级）；
+// solo = 每人一个池（只有该队第一位存活攻方持有投放权，见 monsterShop.js 的 monsterPoolFor）。
 //
 // 卡池来源（业主 2026-11-05 裁决「放宽卡池来源，但相关规则参考官方卫戍，如怪物星级商店概率等，等比换算」）：
 //   · **池 = data/enemies.json 的全部条目**（475 条；排除 `tokenOnly: true` 的 8 条 ⇒ 467 只），不筛阵营、不筛官方波次。

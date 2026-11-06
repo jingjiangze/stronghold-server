@@ -9,6 +9,8 @@
 // （本文件的 ConfrontDoneCard，每一行可撤回 → g.monsterDrop）。服务端 submitConfront 仍在（bot 与旧客户端会用），
 // 客户端不再调用。
 // 所以这里也**不再**有型号组 / 卡池 / 已放置 / 出怪位置 / boss 格 / 商店这一整套投放 UI。
+// 2026-11-06：攻方游戏页的「当前投放」搬到本文件末尾的 MonsterDropFloat（盟约条那一行右端的小悬浮窗，非模态）；
+// 原中央「本回合你是进攻方」绿块（.gm__attackwait）连同它的撤回按钮一起删掉。
 // Texts go through t() (docs/I18N.md).
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, MicroLabel, Countdown } from '../ui/components.js';
@@ -342,6 +344,53 @@ export function ConfrontDoneCard({ pub, shop = null }) {
         </ul>`
       : html`<p class="confdone__empty t-dim">${t('还没有投放怪物：在下方商店条点卡投放')}</p>`}
     ${picks.length ? html`<p class="confdone__sum t-dim">${t('上路 {u} 只 · 下路 {l} 只', { u: upper, l: picks.length - upper })}</p>` : null}
+  </div>`;
+}
+
+/**
+ * 攻方「当前投放」小悬浮窗（2026-11-06 业主：中央那块「✓ 本回合你是进攻方 / 怪物已投放，等待守方布阵与作战…」
+ * 太挡棋盘，去掉；改在盟约条那一行的右端挂一个小窗看当前投放）。由游戏页的 HUD 渲染（screens/game.js 的
+ * `.gm__hud`，与 `.gm__bonds` 并列），**不是**整屏名单：`pointer-events` 只在自己这块小窗里，战场照常可点。
+ *
+ * 数据源两态（与 ConfrontDoneCard 同一口径）：
+ *   · 投放窗口 —— 游戏页传实时草稿 `m.monsterShop.draft.picks`（点卡即投放），`live` 为真 ⇒ 每一行可「撤回」；
+ *   · 公示 / COMBAT / SETTLE —— 回落 `pub.confront.subs[myId].picks` 的冻结值，`live` 为假 ⇒ 不画撤回按钮
+ *     （那是提交后的只读名单，服务端没有可撤的草稿）。
+ * 撤回只转发 `onUndo(index, id)`（游戏页 → `g.monsterDrop { index, id? }`，服务端 monsterShop.js dropMonster 退款 /
+ * 退库存）；成功后服务端推帧 ⇒ picks 变短，这里跟着重画，不本地删行。
+ * 渲染闸门（角色 / 阶段 / 有没有对抗档）在调用方 screens/game.js 里，本组件只管画。
+ * @param {{ picks?: any[], live?: boolean, busy?: boolean, onUndo?: (index:number, id:any)=>void }} props
+ *   picks: `{ id, enemyKey, gate }[]`（草稿或提交后名单）；live: 这一份是不是可撤回的草稿；busy: 撤回飞行中；
+ */
+export function MonsterDropFloat({ picks = [], live = false, busy = false, onUndo = null }) {
+  const gd = useGameData();
+  const rows = Array.isArray(picks) ? picks : [];
+  const upper = rows.filter((p) => p && p.gate === 'upper').length;
+  return html`<div class="mdropfloat" data-testid="monster-drop-float">
+    <div class="mdropfloat__head">
+      <b class="mdropfloat__t">${t('本回合已投放')}</b>
+      <span class="mdropfloat__n num" data-testid="monster-drop-count">${t('已投 {n} 只', { n: rows.length })}</span>
+    </div>
+    ${rows.length
+      ? html`<ul class="mdropfloat__list">
+          ${rows.map((p, i) => {
+            // 最后一条就是「撤回上一只」那一只（原中央状态条的按钮，2026-11-06 搬进来）；其余行按稳定 id 撤自己那一条
+            const last = i === rows.length - 1;
+            return html`<li key=${`${p && p.enemyKey}:${i}`} class="mdropfloat__row" data-testid="monster-drop-row">
+              <span class="mdropfloat__icon"><${Img} src=${enemyIconUrl(gd.m, p && p.enemyKey)} fallback=${html`<${GIcon} name="skull" />`} /></span>
+              <span class="mdropfloat__name">${pickName(gd, p && p.enemyKey)}</span>
+              <span class=${cx('mdropfloat__gate', p && p.gate === 'upper' && 'is-upper')}>${t(p && p.gate === 'upper' ? '上路' : '下路')}</span>
+              ${live
+                ? html`<button type="button" class="mdropfloat__undo" data-testid=${last ? 'monster-undo-last' : 'monster-undo'}
+                    disabled=${busy} onClick=${() => onUndo && onUndo(i, p && p.id)}
+                    title=${t(last ? '撤回最后投放的那一只：库存与投放资金退回' : '撤回这一只：库存与投放资金退回')}
+                    aria-label=${t('撤回这一只')}>${t('撤回')}</button>`
+                : null}
+            </li>`;
+          })}
+        </ul>`
+      : html`<p class="mdropfloat__empty t-dim">${t('还没有投放怪物：在下方商店条点卡投放')}</p>`}
+    <p class="mdropfloat__sum t-dim">${t('上路 {u} 只 · 下路 {l} 只', { u: upper, l: rows.length - upper })}</p>
   </div>`;
 }
 

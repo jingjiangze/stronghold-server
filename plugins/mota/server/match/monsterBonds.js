@@ -37,11 +37,13 @@
 // 不发放资金，旧对局的行为与字节完全不变。
 
 // 盟约阈值分母 = 商店卡池（`monsterPoolKeys`，业主 2026-11-05 改口径）；官方只数只给「增援」当 1.5 倍基准用。
-import { monsterPoolKeys, officialSpawnCounts } from './monsterPool.js';
+// 阶梯价给「回收」当漏过奖励的基准价（2026-11-06 价值同源）。
+import { monsterPoolKeys, officialSpawnCounts, MONSTER_PRICE_BY_TIER } from './monsterPool.js';
 // 怪物资金账户的唯一入口（业主 2026-11-04 裁决 2）：shared 落队级账户、solo 落个人账户。
 // 与 monsterShop.js 互为 import（它 import 本文件的 addMonsterBonds / monsterBondView）：两边都只在函数体内取用，
 // 模块顶层不互相求值（与 monsterPool ↔ match/confront 的循环同一口径），因此安全。
-import { addMonsterFundsTo } from './monsterShop.js';
+// `monsterLeakReward` 也一样：**只在函数体内调**（closeMonsterBondRound），顶层不跨 import 求值。
+import { addMonsterFundsTo, monsterLeakReward } from './monsterShop.js';
 // data/*.json 的进程级单例（server/data.js 的再导出）；只在拿不到 gd.raw 的直测 / stub 路径上懒取一次。
 import { getData } from '../data.js';
 
@@ -54,10 +56,15 @@ export const MONSTER_BOND_CONCERT_THRESHOLDS = [2, 3, 4];
 export const MONSTER_BOND_SURPLUS_SHARE = 1.5;
 /** 增援：超出部分按**单价 × 20%** 返还怪物资金。 */
 export const MONSTER_BOND_SURPLUS_REFUND = 0.2;
-/** 回收：漏过的投放怪每只的**既有奖励**（与 match/match/settle.js 的 MONSTER_LEAK_REWARD 同值，两处要一起改）。
- *  settle 已经在发这一笔，所以本盟约只发「额外 +50%」（下面那个系数），不重复发全额。
- *  2026-11-05 随阶梯价等比下调：4 → 2（settle 的 MONSTER_LEAK_REWARD 同步 4 → 2）。 */
-export const MONSTER_LEAK_REWARD_BASE = 2;
+/** 回收：漏过的投放怪每只的**既有奖励基准**（2026-11-06 与卡价同源）。
+ *  真源 = `monsterShop.js` 的 `monsterLeakReward(price)`（= max(1, round(price × 0.5))），结算时按下面这个基准价
+ *  现算（见 closeMonsterBondRound）；这里另给一个常量是为了让本模块**顶层**不跨 import 求值（循环 import，见上方
+ *  的 import 说明），它的值与 `monsterLeakReward(MONSTER_LEAK_REWARD_REF_PRICE)` 恒等。
+ *  基准价取 3 阶卡（阶梯价 4）⇒ 2，与旧硬编码 2 同值。settle 已经在发这一笔，所以本盟约只发「额外 +50%」，
+ *  不重复发全额。 */
+export const MONSTER_LEAK_REWARD_REF_PRICE = MONSTER_PRICE_BY_TIER[2];
+/** = monsterLeakReward(MONSTER_LEAK_REWARD_REF_PRICE)（同一式子；保留导出给老调用方 / 诊断）。 */
+export const MONSTER_LEAK_REWARD_BASE = Math.max(1, Math.round(MONSTER_LEAK_REWARD_REF_PRICE * 0.5));
 /** 回收：在 settle 既有发奖之上再 +50%。 */
 export const MONSTER_BOND_LEAK_EXTRA = 0.5;
 /** 资金类盟约的层数档倍率（下标 = tier，0 = 未达一阶 = 不发钱）。 */
@@ -391,7 +398,8 @@ export function isAttackerRound(m, ps) {
 
 /**
  * 盟约状态的归属键：与怪物池（monsterPool.js monsterPoolFor）**同口径** ——
- * solo 按人（playerId）、shared 按队（teamId）。取不到时回落 0（与池的 `: 0` 一致）。
+ * solo 按人（playerId）、shared / master 按队（teamId；master 只是投放权单人，资源仍是队级）。
+ * 取不到时回落 0（与池的 `: 0` 一致）。
  */
 export function monsterBondKey(m, ps) {
   if (!m || !ps) return null;
@@ -730,11 +738,13 @@ export function closeMonsterBondRound(m) {
       const amount = surplus * avg * MONSTER_BOND_SURPLUS_REFUND * (MONSTER_BOND_TIER_MUL[tierR] || 1);
       for (const ps of mine) pay(ps, amount * shareOf(ps));
     }
-    // 回收：settle 已经按 MONSTER_LEAK_REWARD 发过全额，这里只发「额外 +50%」
+    // 回收：settle 已经按 monsterLeakReward(单价) 发过全额，这里只发「额外 +50%」
+    // （2026-11-06 价值同源：基准奖励改从 monsterShop.monsterLeakReward 现算，不再读全局常数）。
     const leaked = leaksForKey(m, key);
     const tierV = monsterBondTier(leaked, thresholdsOf(m, 'recover'));
     if (leaked > 0 && tierV > 0) {
-      const amount = leaked * MONSTER_LEAK_REWARD_BASE * MONSTER_BOND_LEAK_EXTRA * (MONSTER_BOND_TIER_MUL[tierV] || 1);
+      const perLeak = monsterLeakReward(MONSTER_LEAK_REWARD_REF_PRICE);
+      const amount = leaked * perLeak * MONSTER_BOND_LEAK_EXTRA * (MONSTER_BOND_TIER_MUL[tierV] || 1);
       for (const ps of mine) pay(ps, amount * shareOf(ps));
     }
   }

@@ -674,13 +674,18 @@ function ProtocolSelect({ card, roomMode, random, variant, difficulty, onDifficu
                   onChange=${(e) => onVersusSpeed && onVersusSpeed(Number(e.currentTarget.value))}>
                   ${[1, 1.5, 2].map((m) => html`<option key=${m} value=${String(m)}>${t('{m}× 出怪', { m })}</option>`)}
                 </select></label>` : null}
-              ${/* 怪物形态（业主 2026-11-04）：两档都能选 —— 怪物卡池在赏金 / 控怪两档都开着（confront.monsterShopOn） */ null}
-              <label class="proto-team" title=${t('怪物形态：共有出怪 = 同队攻方共用一个出怪池、一起出怪；单人怪物 = 每人一个池，只有每队第一位存活攻方持有投放权（其余攻方的商店不开）')}>
+              ${/* 怪物形态（业主 2026-11-04 / 2026-11-06）：三档 —— 共有 / 单人怪物 / 单人掌握；怪物卡池在赏金 / 控怪两档都开着（confront.monsterShopOn） */ null}
+              <label class="proto-team" title=${t('怪物形态：共有出怪 = 同队攻方共用一个出怪池、一起出怪；单人怪物 = 每人一个池，只有每队第一位存活攻方持有投放权（其余攻方的商店不开）；单人掌握 = 资源仍是全队共用，但只有每队第一位存活攻方操作怪物，其余攻方只读')}>
                 <span>${t('怪物形态')}</span>
                 <select value=${monsterMode} disabled=${!!busy}
-                  onChange=${(e) => onMonsterMode && onMonsterMode(e.currentTarget.value === 'solo' ? 'solo' : 'shared')}>
+                  onChange=${(e) => {
+                    // 三值归一化（2026-11-06）：master 是新档，别让它被旧的二值判断吞成 shared
+                    const v = e.currentTarget.value;
+                    onMonsterMode && onMonsterMode(v === 'solo' || v === 'master' ? v : 'shared');
+                  }}>
                   <option value="shared">${t('共有出怪')}</option>
                   <option value="solo">${t('单人怪物')}</option>
+                  <option value="master">${t('单人掌握')}</option>
                 </select></label>
             </div>
           </div>` : null}
@@ -946,7 +951,8 @@ export function LobbyScreen() {
   const [versusRule, setVersusRule] = useState('bounty');
   // 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，控怪档不吃这一项
   const [versusSpeed, setVersusSpeed] = useState(1);
-  // 怪物形态（业主 2026-11-04）：'shared' 共有出怪（默认）/ 'solo' 单人怪物；只对抗房的 room.create 带这个字段
+  // 怪物形态（业主 2026-11-04 / 2026-11-06）：'shared' 共有出怪（默认）/ 'solo' 单人怪物 / 'master' 单人掌握；
+  // 只有对抗房的 room.create 带这个字段
   const [monsterMode, setMonsterMode] = useState('shared');
   const [difficulty, setDifficulty] = useState(() => preferredDifficulty(lobbySimulationPreference()));
   const [fpVariant, setFpVariant] = useState(firepowerVariantPreference);
@@ -1069,7 +1075,8 @@ export function LobbyScreen() {
         // 攻守是否轮换由服务端按档强制（赏金轮换 / 控怪固定），这里只把 wire 发干净，值本身不会被采信。
         versusAlt: versusRule === 'bounty',
         versusSpeed: versusRule === 'bounty' ? versusSpeed : 1,
-        // 怪物形态（业主 2026-11-04）：服务端只认 'solo'，其余回落 'shared'（server/lobby.js create）
+        // 怪物形态（业主 2026-11-04 / 2026-11-06）：服务端只认 'solo' / 'master'，其余回落 'shared'
+        // （server/lobby.js create；versus-room 的 matchOptions 同一口径）
         monsterMode } : {}),
       ...(testMode && asTest ? { test: true } : {}),
     });

@@ -777,7 +777,10 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   // **不复用 `editable`**：game.js:384 的 editable 带 `myRole !== 'attack'` ⇒ 攻方恒 false；它管棋盘 / 干员卡 /
   // 干员商店共 11 处，为了一张等级卡放开它会连带放开干员的逻辑。monsterOn 为假（守方 / 商店没开 / 旧对局）⇒
   // 这里恒 false，下面所有怪物分支都不进 —— 守方行为与改造前逐字节相同。
-  const monsterEditable = monsterOn && monsterDropWindow === true && !priv?.ready;
+  // 只读帧（`master` 单人掌握模式里非队长的攻方）：open:true + readOnly:true + slots:[]，资金/等级照发。
+  // 他们能看见队友的进度，但一下都不能点 —— 点了服务端也回 WRONG_PHASE，不如在这里就灰掉并说明原因。
+  const monsterReadOnly = monsterOn && monsterShop.readOnly === true;
+  const monsterEditable = monsterOn && monsterDropWindow === true && !priv?.ready && !monsterReadOnly;
   const monsterSlots = monsterOn && Array.isArray(monsterShop.slots) ? monsterShop.slots : [];
   const monsterLeft = monsterOn ? Math.max(0, Number(monsterShop.left) || 0) : 0;
   const mRefPrice = monsterOn ? Math.max(0, Number(monsterShop.refreshPrice) || 0) : 0;
@@ -800,8 +803,9 @@ export function ShopBar({ priv, editable, collapsed, refreshBusy = false, onColl
   const mLevelKey = `mlv:${mLevel}`;
   const mLevelReason = monsterOn
     ? (mLevel >= mMaxLevel ? t('怪物卡池已达最高等级')
-      : (!monsterEditable ? (priv?.ready ? t('已准备就绪，取消准备后才能操作') : t('当前阶段无法进行该操作'))
-        : (mUpgradePrice > monsterFunds ? t('怪物资金不足，升级需要 {price}', { price: mUpgradePrice }) : null)))
+      : (monsterReadOnly ? t('队长操作中')
+        : (!monsterEditable ? (priv?.ready ? t('已准备就绪，取消准备后才能操作') : t('当前阶段无法进行该操作'))
+          : (mUpgradePrice > monsterFunds ? t('怪物资金不足，升级需要 {price}', { price: mUpgradePrice }) : null))))
     : null;
 
   // A completed upgrade changes the level, so its confirmation cannot carry into the next upgrade.

@@ -39,9 +39,10 @@ export function setup(api) {
       versusAlt: rule === 'bounty',
       // 赏金档倍速（业主 2026-10-31）：1 / 1.5 / 2，只在赏金档透传；对抗档恒 1。
       versusSpeed: rule === 'bounty' && (room.versusSpeed === 1.5 || room.versusSpeed === 2) ? room.versusSpeed : 1,
-      // 怪物形态（业主 2026-11-04）：「共有出怪」= 'shared'（默认）/「单人怪物」= 'solo'。房间没声明就按 shared，
+      // 怪物形态（业主 2026-11-04 / 2026-11-06）：「共有出怪」= 'shared'（默认）/「单人怪物」= 'solo' /
+      // 「单人掌握」= 'master'（资源仍是队级，只有每队第一位存活攻方操作怪物）。房间没声明就按 shared，
       // 与 confront.js 的 monsterMode 判定同口径；经 MatchProxy 的 wireOptions 白名单下发给子进程。
-      monsterMode: room.monsterMode === 'solo' ? 'solo' : 'shared' };
+      monsterMode: room.monsterMode === 'solo' || room.monsterMode === 'master' ? room.monsterMode : 'shared' };
   });
 
   api.beforeStart((room, session, lobby) => {

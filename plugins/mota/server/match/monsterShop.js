@@ -37,7 +37,11 @@
 //
 // 怪物模式（业主 2026-11-04，`m.monsterMode`，由房间选项 `opts.monsterMode` 透传）：
 //   · shared（缺省）= 共有出怪：池按队共享、同队攻方共用同一个 target；
-//   · solo = 单人怪物模式：池按人（playerId），只有该队第一位存活攻方开店 / 能买能投，其余攻方一律 WRONG_PHASE。
+//   · solo = 单人怪物模式：池按人（playerId），只有该队第一位存活攻方开店 / 能买能投，其余攻方一律 WRONG_PHASE；
+//   · master（2026-11-06 业主「做一个只有一个人掌握怪物的模式」）= 整队仍是攻方、**资源全部队级**（池 / 资金 /
+//     商店等级 / 盟约与 shared 同一个口径，判据都是 `monsterMode !== 'solo'`），但**只有每队第一位存活攻方**
+//     能开店 / 买 / 投（投放权与 solo 同一条 `monsterPlaceActor` 判据），其余攻方收到一帧只读商店
+//     （`monsterShopReadOnlyFrame`：open:true、slots:[]、readOnly:true），客户端只显示「队长操作中」。
 //
 // 共享池留份（2026-11-04 真机 2V2 控怪档）：同队 1 人类 + 1 AI 攻方共用一池，AI 开窗瞬间把池买空，人类两张卡
 // 都是 `0/N` 且 `is-disabled`。现在 shared 模式下 **bot 的购买 / 投放上限 = 池里剩余 − 同队人类攻方人数**
@@ -71,8 +75,9 @@ import { addMonsterBonds, dropMonsterBonds, monsterBondView, captureMonsterBondL
 // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // 商店等级（业主 2026-11-04 口径：「怪物商店参考卫戍协议的干员商店」）—— 照干员商店的**形态**，不照抄数值：
 //   · 等级 1..6，**槽位恒定 6 格**（业主 2026-11-05：「商店恒定 6 个候选」）—— 等级不再改槽位数；
-//   · 升级价 = 本回合「全队军费总额 G」× MONSTER_UPGRADE_SHARES（G = confrontWaveValue × CONFRONT_VOLUME_SHARE，
-//     见 match/confront.js 的 monsterUpgradeFundsG —— 与军费同源，不按「一整回合军费」定价，否则那一回合出怪量塌到 0）；
+//   · 升级价 = **卡价阶梯价**（2026-11-06 价值同源）：升到 L+1 级 = 一张 L+1 阶怪的价钱（MONSTER_UPGRADE_PRICE_BY_LEVEL
+//     = MONSTER_PRICE_BY_TIER[1..5] = 2/4/8/16/32，再乘 MONSTER_UPGRADE_PRICE_FACTOR 作整体调价旋钮）。
+//     旧口径「本回合全队军费总额 G × 比例」与卡价 / 刷新价差两个数量级（后期回合升一次上百、卡价只有 1..32），已撤。
 //   · 刷新价恒 1 个 MONSTER_REFRESH_PRICE、**不随等级**（照干员商店的刷新价恒 1）；满级 6。
 // ⚠ 等级**不能**挂在 `ps.monsterShop` 上：它每回合被 openMonsterShop 整块重建、回合末被 closeMonsterShop delete ⇒
 //   挂那里等于每回合掉回 1 级。照资金账户的范式挂 **Match 级 Map** `m.monsterShopLevels`（key 与池同口径：
@@ -92,10 +97,15 @@ export const MONSTER_SHOP_SLOTS_BY_LEVEL = [6, 6, 6, 6, 6, 6];
 /** 商店满级（照干员商店 maxShopLevel = 6）。 */
 export const MONSTER_MAX_LEVEL = 6;
 /**
- * 升级价占「全队军费总额 G」的比例：level 1→2 用 [0]，2→3 用 [1] … 5→6 用 [4]。
- * 合计 2.70G（约等于全程收入的 39%，与干员商店 37% 同量级），按比例定价才不会把某一回合的军费一口吃掉。
+ * 升级价（**按卡价阶梯定价**，2026-11-06 业主「怪物价值完全混乱」）：level L → L+1 的价钱 = 一张 L+1 阶怪的价钱，
+ * 也就是 `MONSTER_PRICE_BY_TIER[L]`（升到 2 级 = 2、3 级 = 4、4 级 = 8、5 级 = 16、6 级 = 32；合计 62）。
+ * 下标 = level − 1（1→2 用 [0] … 5→6 用 [4]）。旧口径 `MONSTER_UPGRADE_SHARES`（G 的百分比）已删 —— 它与卡价 /
+ * 刷新价差两个数量级（后期回合升一次上百，而卡价只有 1..32）。
+ * 只保留**系数**作整体调价旋钮（默认 1 = 阶梯原值）。
  */
-export const MONSTER_UPGRADE_SHARES = [0.30, 0.45, 0.60, 0.65, 0.70];
+export const MONSTER_UPGRADE_PRICE_BY_LEVEL = Object.freeze([2, 4, 8, 16, 32]);
+/** 升级价的全局系数（默认 1 = 阶梯原值；调价只改这一个数，别在各处另算）。 */
+export const MONSTER_UPGRADE_PRICE_FACTOR = 1;
 /**
  * 老宽度（无等级时的回落）：`monsterShopSlotCount` 取不到合法等级（老对局 / 非法值）时用它。
  * 槽位恒定 6（业主 2026-11-05）⇒ 它与 `MONSTER_SHOP_SLOTS_BY_LEVEL` 的每一项同值；保留导出是为了老调用方。
@@ -423,8 +433,9 @@ export function monsterShopSlotCount(level) {
 }
 
 /**
- * 本回合的「全队军费总额 G」—— 升级价的基准。真源在 match/confront.js 的 `monsterUpgradeFundsG`
- * （= `confrontWaveValue() × CONFRONT_VOLUME_SHARE`，与 grantMonsterFunds 同源，不在这里另算一遍公式）。
+ * 本回合的「全队军费总额 G」—— 旧升级价的基准。**2026-11-06 起升级价不再读它**（改成卡价阶梯，见
+ * monsterUpgradePriceOf）；保留导出只为老调用方 / 诊断对照，别在新代码里用。
+ * 真源在 match/confront.js 的 `monsterUpgradeFundsG`（= `confrontWaveValue() × CONFRONT_VOLUME_SHARE`）。
  * 取不到（没有这道方法的老对局 / 没有波次）→ 0。
  * @param {object} m
  * @returns {number} >= 0
@@ -437,17 +448,18 @@ export function monsterUpgradeFundsG(m) {
 }
 
 /**
- * 从当前等级升到下一级的价钱 = `round(G × MONSTER_UPGRADE_SHARES[level − 1])`。
- * 满级 → 0（调用方先判 MAX_LEVEL）；取不到 G → 0（不开店的阶段本来也升不了级）。
+ * 从当前等级升到下一级的价钱 = `round(MONSTER_UPGRADE_PRICE_BY_LEVEL[level − 1] × MONSTER_UPGRADE_PRICE_FACTOR)`。
+ * 2026-11-06 起**与卡价同源**（阶梯价），不再读「全队军费总额 G」—— 升级因此与买卡 / 刷新是同一个量纲。
+ * 满级 → 0（调用方先判 MAX_LEVEL）。
  * @param {object} m @param {object} ps
  * @returns {number} >= 0
  */
 export function monsterUpgradePriceOf(m, ps) {
   const level = monsterShopLevelOf(m, ps);
   if (level >= MONSTER_MAX_LEVEL) return 0;
-  const share = MONSTER_UPGRADE_SHARES[level - 1] || 0;
-  const g = monsterUpgradeFundsG(m);
-  return g > 0 ? Math.max(0, Math.round(g * share)) : 0;
+  const base = MONSTER_UPGRADE_PRICE_BY_LEVEL[level - 1] || 0;
+  const factor = Number.isFinite(MONSTER_UPGRADE_PRICE_FACTOR) ? MONSTER_UPGRADE_PRICE_FACTOR : 1;
+  return Math.max(0, Math.round(base * factor));
 }
 
 /**
@@ -510,13 +522,16 @@ export function humanAttackers(m) {
 
 /**
  * 本席购买 / 投放时**要给同队人类攻方留的份数**：只有「bot 买、shared 模式」才留。
- * 人类永远不停手（可以买到最后一份）；solo 每人一个池，也不留。
+ * 人类永远不停手（可以买到最后一份）；solo 每人一个池，不留。
+ * master（2026-11-06）：只有一个操作者，其余攻方**根本买不了**（没有投放权），留份只会把库存烂在池里 ——
+ * 因此与 solo 同口径（不留），bot 操作者可以花完整队余额。
  * @param {object} m @param {object} ps
  * @returns {number} >= 0
  */
 export function monsterReserve(m, ps) {
   if (!ps || !ps.botControlled) return 0;
-  if (m && m.monsterMode === 'solo') return 0;
+  // 没声明模式（老对局 / stub）按 shared（`!== 'solo'` 的老口径）处理，行为不变。
+  if (m && m.monsterMode && m.monsterMode !== 'shared') return 0;
   return humanAttackers(m);
 }
 
@@ -536,12 +551,14 @@ export function monsterStockLeft(m, ps, key) {
 
 /**
  * 投放权闸门（业主 2026-11-04 的「单人怪物模式」）：shared 模式下全体攻方都能投放；
- * solo 模式只有该队**第一位存活攻方**能投放（判定收在 match/match/confront.js 的 monsterPlaceActor，
- * 那里才有座位顺序）。match 没提供该判定时按「无权」处理 —— 宁可关店，也不让队友偷投。
+ * solo / master 模式只有该队**第一位存活攻方**能投放（判定收在 match/match/confront.js 的 monsterPlaceActor，
+ * 那里才有座位顺序）。两者的差别只在资源归属：solo 按人、master 按队（见 fundsShared / monsterPoolFor /
+ * monsterShopLevelKey / monsterBonds.monsterBondKey，判据都是 `!== 'solo'`）。
+ * match 没提供该判定时按「无权」处理 —— 宁可关店，也不让队友偷投。
  */
 function placeActorOk(m, ps) {
   if (!ps) return false;
-  if (!m || m.monsterMode !== 'solo') return true;
+  if (!m || (m.monsterMode !== 'solo' && m.monsterMode !== 'master')) return true;
   return typeof m.monsterPlaceActor === 'function' && m.monsterPlaceActor(ps) === true;
 }
 
@@ -574,6 +591,29 @@ export function monsterPriceOf(m, key) {
   const ladder = monsterPriceAtTier(monsterTierOf(confrontValue(rec)));
   const v = ladder * (Number.isFinite(MONSTER_PRICE_FACTOR) ? MONSTER_PRICE_FACTOR : 1);
   return Number.isFinite(v) && v > 0 ? Math.max(1, Math.round(v)) : 0;
+}
+
+/**
+ * 击杀 / 漏过奖励的**唯一函数**（2026-11-06「价值同源」）：奖励与这只怪的**阶梯价**挂钩，不再是全局常数。
+ *   击杀 = max(1, round(price × 0.25))；漏过 = max(1, round(price × 0.5))。
+ * `match/match/settle.js`（击杀 / 漏过发奖）与 `monsterBonds.js`（回收盟约的额外 +50%）都从这里取 ——
+ * 别在别处写常数：旧口径 `MONSTER_KILL_REWARD = 1` / `MONSTER_LEAK_REWARD = 2` 让「买 32 价怪击杀只回 1」。
+ * 用函数声明（不是 const 箭头）是有意的：monsterShop ↔ monsterBonds 是循环 import，函数声明在模块实例化期
+ * 就可用，另一侧在顶层求值也不会踩 TDZ。
+ * @param {number} price 该怪此刻的单价（monsterPriceOf）
+ * @returns {number} >= 1
+ */
+export function monsterKillReward(price) {
+  const v = Number(price);
+  if (!Number.isFinite(v) || v <= 0) return 1;
+  return Math.max(1, Math.round(v * 0.25));
+}
+
+/** 漏过奖励 = max(1, round(price × 0.5))；口径与 monsterKillReward 同源（见上）。 */
+export function monsterLeakReward(price) {
+  const v = Number(price);
+  if (!Number.isFinite(v) || v <= 0) return 1;
+  return Math.max(1, Math.round(v * 0.5));
 }
 
 /**
@@ -657,6 +697,45 @@ export function monsterShopFrame(m, ps) {
       position: (ps.monsterDraft && ps.monsterDraft.position) || 'mid',
     },
     // 怪物盟约条（客户端 `.gm__bonds` 在攻方回合改读这一份）；空则整个键不出现
+    ...(bonds ? { bonds } : {}),
+  };
+}
+
+/**
+ * `master` 模式里**非操作者**收到的那一帧只读商店（业主 2026-11-06「只有一个人掌握怪物」）。
+ * 形状与 monsterShopFrame 同前缀，但刻意是空的：`open:true`（客户端因此知道队列在投放窗口里）、
+ * `slots: []`（没有货架可点 —— 不能买也不能投）、`readOnly: true`（客户端据此显示「队长操作中」）。
+ * 资金 / 等级 / 盟约照发：这些是**队级**数据，只读展示不会泄露对手信息（同队攻方本来就共享）。
+ * 不做成 `open:false`：那样客户端连「本回合有怪物阶段」都看不出来，会误以为这一回合不能投放。
+ * @param {object} m @param {object} ps
+ * @returns {object} m.monsterShop 形状的只读帧
+ */
+export function monsterShopReadOnlyFrame(m, ps) {
+  const funds = monsterFundsOf(m, ps);
+  const left = monsterBudgetLeft(m, ps);
+  const bonds = shopEnabled(m) ? monsterBondView(m, ps) : null;
+  return {
+    t: 'm.monsterShop',
+    open: true,
+    readOnly: true,
+    round: m ? m.round : null,
+    refreshPrice: MONSTER_REFRESH_PRICE,
+    freeRefreshes: 0,
+    refreshes: 0,
+    level: monsterShopLevelOf(m, ps),
+    maxLevel: MONSTER_MAX_LEVEL,
+    upgradePrice: monsterUpgradePriceOf(m, ps),
+    slotsPerLevel: MONSTER_SHOP_SLOTS_BY_LEVEL,
+    budget: left.budget,
+    spent: 0,
+    left: left.left,
+    ...(shopEnabled(m) ? {
+      funds,
+      grant: Math.max(0, Number(ps && ps.monsterGrant) || 0),
+      earned: Math.max(0, Number(ps && ps.monsterEarned) || 0),
+    } : {}),
+    slots: [],
+    draft: { picks: [], position: 'mid' },
     ...(bonds ? { bonds } : {}),
   };
 }
@@ -813,6 +892,8 @@ function refillSlot(m, ps, idx, _usedKey = null) {
  * 所有能看到这块池的席位收到新帧。
  *
  * 只推「商店开着」的席位（`ps.monsterShop` 存在：solo 模式里没投放权 / 已收尾的队友不该收到货架）；
+ * master 模式（2026-11-06）的**非操作者**没有 `ps.monsterShop`，但也要保持队级资金 / 等级的最新读数 ——
+ * 给他们推一帧只读帧（monsterShopReadOnlyFrame）。solo 的非操作者仍然什么都不推（与改造前一致）。
  * bot 席位一律不推（`sendTo` 对 bot 本来就返回 false，但不依赖那一条）。推送失败不影响已经成功的操作。
  * @param {object} m
  * @param {{ except?: object|null }} [opts] except: 调用方自己已经单独推过的席位（避免同一帧发两遍）
@@ -820,12 +901,17 @@ function refillSlot(m, ps, idx, _usedKey = null) {
  */
 export function pushMonsterShops(m, { except = null } = {}) {
   if (!shopEnabled(m) || typeof m.sendTo !== 'function' || typeof m.confrontActors !== 'function') return 0;
+  const master = m.monsterMode === 'master';
   let sent = 0;
   for (const ps of m.confrontActors()) {
     if (!ps || ps === except) continue;
     if (ps.botControlled || ps.isBot) continue;
-    if (!ps.monsterShop || !ps.playerId) continue;
-    try { m.sendTo(ps.playerId, monsterShopFrame(m, ps)); sent += 1; } catch (e) {
+    if (!ps.playerId) continue;
+    if (!ps.monsterShop && !master) continue;
+    try {
+      m.sendTo(ps.playerId, ps.monsterShop ? monsterShopFrame(m, ps) : monsterShopReadOnlyFrame(m, ps));
+      sent += 1;
+    } catch (e) {
       if (typeof m.reportError === 'function') m.reportError('monster shop push', e);
     }
   }
@@ -850,7 +936,8 @@ function nextMonsterPickId(ps) {
  * 开（或重置）本回合的商店，并把投放草稿清空。
  * 只要求商店开着（阶段由调用方保证：match/match/confront.js 的 finishConfrontTargets 在目标选择结束时开，
  * 让攻方在整个 PREP 里都有商店可用）。
- * solo 怪物模式：非「第一位存活攻方」不开店（返回 WRONG_PHASE）—— bot 策略自己开店的路径也走这道闸门。
+ * solo / master 怪物模式：非「第一位存活攻方」不开店（返回 WRONG_PHASE）—— bot 策略自己开店的路径也走这道闸门。
+ * master 的资源仍是队级（池 / 资金 / 等级 / 盟约），只有投放权单人；其余攻方由调用方推一帧只读帧。
  * @param {object} m @param {object} ps
  * @returns {{ ok: true, shop: object } | { error: string, detail?: string }}
  */

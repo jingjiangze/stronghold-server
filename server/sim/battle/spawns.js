@@ -29,7 +29,9 @@ export class BattleSpawns {
       const p = {
         time: Math.max(0, fin(s.time, 0)) + i * interval, enemyKey: s.enemyKey, routeIndex: s.routeIndex ?? 0, route: s.route ?? null,
         mods: s.mods ?? null, sourcePlayerId: s.sourcePlayerId ?? null, bounty: s.bounty ?? null, tag: s.tag ?? null,
-        ownerPlayerId: s.ownerPlayerId ?? null, pos: s.pos ?? null, seq: ++this._spawnSeq, countInTotal: s.countInTotal,
+        ownerPlayerId: s.ownerPlayerId ?? null, confrontSeat: Number.isInteger(s.confrontSeat) ? s.confrontSeat : null,
+        confrontPrice: s.confrontPrice,
+        pos: s.pos ?? null, seq: ++this._spawnSeq, countInTotal: s.countInTotal,
       };
       p.counted = p.countInTotal ?? (!(def && def.notCountInTotal) && p.tag !== 'boss' && p.tag !== 'part');
       // inTotal: the enemies THIS STAGE scheduled that count — the HUD capsule's own set (DESIGN §14 "顶栏胶囊"). A
@@ -79,7 +81,7 @@ export class BattleSpawns {
 
   /**
    * Spawn an enemy now. opts: { routeIndex, route, pos:[r,c], mods:{hpMul,atkMul,defMul,resMul,speedMul,aspdMul}, tag,
-   * sourcePlayerId, ownerPlayerId, bounty:{coins,ownerPlayerId}, countInTotal, inTotal }
+   * sourcePlayerId, ownerPlayerId, bounty:{coins,ownerPlayerId}, countInTotal, inTotal, confrontSeat, confrontPrice }
    */
   spawnEnemy(enemyKey, opts = {}) {
     if (this.enemies.length >= MAX_ALIVE_ENEMIES && this.aliveEnemies().length >= MAX_ALIVE_ENEMIES) {
@@ -131,6 +133,10 @@ export class BattleSpawns {
     e.bounty = opts.bounty ?? null;
     e.sourcePlayerId = opts.sourcePlayerId ?? null;
     e.ownerId = opts.ownerPlayerId ?? this._ownerForTile(start);
+    // 对抗投放归属：confrontSeat = 投放者席位，confrontPrice = 该怪的阶位阶梯价（confront.js applyConfront 写入）。
+    // 只用于「投放怪被击杀 / 漏过」的汇总（deploy.js），不参与 counted / inTotal 的官方计数。
+    e.confrontSeat = Number.isInteger(opts.confrontSeat) ? opts.confrontSeat : null;
+    e.confrontPrice = Number.isFinite(opts.confrontPrice) && opts.confrontPrice > 0 ? opts.confrontPrice : null;
     this._applyEnemyRelicMods(e, def);
     e.spawnX = e.x; e.spawnY = e.y;
     e.spawnSeq = ++this._spawnSeq;

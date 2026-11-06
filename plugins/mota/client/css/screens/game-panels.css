@@ -816,13 +816,9 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 .confpair { display: flex; align-items: center; gap: .06rem; font-size: calc(.14 * var(--t)); color: var(--text-md); }
 .confpair.is-self b { color: var(--mint-400); }
 
-/* 攻方「查看投放 / 继续投放」（2026-11-04）—— 入口按钮在攻方状态条 gm__attackwait 里（那条状态条本身
-   pointer-events: none，按钮要把点击收回来），点开的已投清单是右下角一张非模态卡片（.confdone），只展示
+/* 攻方「查看投放 / 继续投放」（2026-11-04）—— 起点按钮原在攻方状态条 gm__attackwait 里（.confbtn，2026-11-06 随那条
+   状态条一起删；撤回入口现在在 .mdropfloat 的每一行），点开的已投清单是右下角一张非模态卡片（.confdone），只展示
    js/ui/confrontOverlay.js 的 ConfrontDoneCard：已投放的怪 + 剩余价值预算，不再是投放 UI。 */
-.confbtn { pointer-events: auto; margin-top: .04rem; padding: .05rem .22rem; font-size: calc(.13 * var(--t)); font-weight: 800;
-  letter-spacing: .06em; color: #06210f; background: var(--mint-400); border: none; cursor: pointer;
-  clip-path: polygon(.06rem 0, 100% 0, 100% calc(100% - .06rem), calc(100% - .06rem) 100%, 0 100%, 0 .06rem); }
-.confbtn:hover { background: #48ffc9; }
 .confdone { position: absolute; right: .3rem; top: 3rem; z-index: 12; width: min(5.4rem, 44vw);
   display: flex; flex-direction: column; gap: .06rem; padding: .1rem .14rem .12rem;
   border: 1px solid var(--line-2); background: rgba(10, 15, 13, .94);
@@ -1025,28 +1021,48 @@ button.bpop__harmony:hover { border-style: solid; color: #fff; }
 /* the hunt overlays keep their phase kicker inside the name column (the grid has no own slot for it) */
 .spov__name .micro { display: block; margin-bottom: .06rem; }
 
-/* 对抗期局内提示（js/screens/game.js）：攻方等待条与守方来袭清单。
+/* 对抗期局内提示（js/screens/game.js）：攻方「当前投放」小窗与守方来袭清单。
    注意：这些类原本写在 plugins/mota/client/css/screens/game.css，但该文件不在 plugin.json 的 code.client 清单里，
    服务端根本不会下发 —— 必须放这里才生效。 */
 .gtop__vrole { padding: 0 .06rem; border-radius: 2px; background: rgba(110, 231, 183, .18); color: #8ff0d2; }
 .gtop__vrole.is-defend { background: rgba(77, 140, 232, .2); color: #a8c8f5; }
-/* 对抗期横幅：照游戏内斜切面板的写法（双层裁剪 = 1px 描边 + 填充，两处切角），不再用大圆角/整块半透明。
-   位置贴在顶栏之下居中（实测顶栏底边 114px ≈ 1.7rem）。 */
-.gm__attackwait { position: absolute; left: 50%; top: 1.72rem; transform: translateX(-50%); z-index: 6; padding: 1px; pointer-events: none;
-  background: rgba(23, 249, 183, .42);
-  clip-path: polygon(.2rem 0, 100% 0, 100% calc(100% - .2rem), calc(100% - .2rem) 100%, 0 100%, 0 .2rem);
-  filter: drop-shadow(0 .08rem .28rem rgba(0, 0, 0, .55)); }
-.gm__attackwait__in { display: flex; flex-direction: column; align-items: center; gap: .05rem; padding: .1rem .36rem .12rem;
-  text-align: center; clip-path: inherit;
-  background: linear-gradient(180deg, rgba(10, 15, 13, .94), rgba(10, 15, 13, .85)); }
-.gm__attackwait__micro { font-size: calc(.1 * var(--t)); font-weight: 700; letter-spacing: .2em; color: rgba(23, 249, 183, .78); }
-.gm__attackwait__t { display: inline-flex; align-items: center; gap: .07rem; font-size: calc(.21 * var(--t)); font-weight: 800;
-  letter-spacing: .08em; color: var(--mint-400); text-shadow: 0 0 .18rem rgba(23, 249, 183, .38); }
-.gm__attackwait__t .icon { width: .21rem; height: .21rem; }
-.gm__attackwait p { margin: 0; font-size: calc(.14 * var(--t)); line-height: 1.5; color: #cfe9df; letter-spacing: .02em; }
-.gm__attackwait .num { margin-top: .03rem; padding: .02rem .14rem; font-size: calc(.13 * var(--t)); font-weight: 800; color: #06210f;
-  background: var(--mint-400);
-  clip-path: polygon(.06rem 0, 100% 0, 100% calc(100% - .06rem), calc(100% - .06rem) 100%, 0 100%, 0 .06rem); }
+/* 攻方「当前投放」小悬浮窗（2026-11-06 业主：中央那块「✓ 本回合你是进攻方 / 怪物已投放，等待守方布阵与作战…」
+   太挡棋盘 —— 去掉；改在盟约条那一行的右端挂一个小窗，js/ui/confrontOverlay.js 的 MonsterDropFloat（只读展示 +
+   每行一个「撤回」，非模态，不是第三块整屏名单）。
+   位置：`.gm__bonds` 的盒子是 left 1.56rem / top 1.36rem / right 5.2rem（screens/game.css），这里挂在**同一行的右端**
+   （right 再让 .2rem，仍在盟约条带的右边界内）。为什么不是盟约条「左边」/ 下方：左列 `.team` 从 left .22rem /
+   top 2.36rem 起、名字宽到 ~1.5rem（行宽 ≈ 1.9rem），挂在 1.56rem 起的左下方会压住队伍列表；而 top 1.36rem 这条带
+   里盟约条是左对齐的（怪物盟约通常 1–3 枚），右端是空的。也不去右下角：那里是商店条与 .confdone / .rospov--conf。
+   造型沿用 .gm__incoming 的 1px 描边 + 斜切角 + 深色底（金色描边 = 攻方投放侧），宽度随视口收窄，超出滚动。 */
+.mdropfloat { position: absolute; left: auto; right: 5.4rem; top: 1.36rem; z-index: 7;
+  display: flex; flex-direction: column; gap: .04rem; width: min(3.2rem, 26vw); max-height: 36vh;
+  padding: .08rem .12rem .1rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  border: 1px solid rgba(240, 194, 58, .55); background: rgba(10, 15, 13, .94);
+  box-shadow: 0 .06rem .24rem rgba(0, 0, 0, .5);
+  clip-path: polygon(.12rem 0, 100% 0, 100% calc(100% - .12rem), calc(100% - .12rem) 100%, 0 100%, 0 .12rem); }
+.mdropfloat__head { display: flex; align-items: baseline; justify-content: space-between; gap: .08rem; flex-wrap: wrap; }
+.mdropfloat__t { font-size: calc(.13 * var(--t)); font-weight: 800; letter-spacing: .06em; color: #f0c23a; }
+.mdropfloat__n { padding: 0 .08rem; font-size: calc(.11 * var(--t)); font-weight: 800; color: #0c0d0a; background: #f0c23a;
+  clip-path: polygon(.05rem 0, 100% 0, 100% calc(100% - .05rem), calc(100% - .05rem) 100%, 0 100%, 0 .05rem); }
+.mdropfloat__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .04rem; }
+.mdropfloat__row { display: flex; align-items: center; gap: .05rem; }
+.mdropfloat__icon { width: .26rem; height: .26rem; flex: none; display: grid; place-items: center; }
+.mdropfloat__icon img { width: 100%; height: 100%; object-fit: contain; }
+.mdropfloat__icon .icon { width: .22rem; height: .22rem; color: var(--text-lo); }
+.mdropfloat__name { flex: 1 1 auto; min-width: 0; font-size: calc(.12 * var(--t)); color: #eafff8; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.mdropfloat__gate { flex: none; padding: 0 .05rem; font-size: calc(.1 * var(--t)); font-weight: 700;
+  border: 1px solid #c4583d; color: #ffab97; background: rgba(196, 88, 61, .12); }
+.mdropfloat__gate.is-upper { border-color: #3d78c4; color: #8cc6ff; background: rgba(61, 120, 196, .12); }
+/* 撤回：只有投放窗口里的草稿态才画这颗按钮（提交后的 subs 是只读名单，见 MonsterDropFloat 的 `live`）；
+   飞行中 disabled —— 服务端推帧后 picks 变短，整行跟着消失，不需要本地删行。 */
+.mdropfloat__undo { flex: none; padding: 0 .08rem; font: inherit; font-size: calc(.1 * var(--t)); font-weight: 700;
+  letter-spacing: .04em; color: #ffab97; background: rgba(196, 88, 61, .14); border: 1px solid rgba(196, 88, 61, .75);
+  cursor: pointer; }
+.mdropfloat__undo:hover:not(:disabled) { color: #1a0d0a; background: #ff8f74; border-color: #ff8f74; }
+.mdropfloat__undo:disabled { opacity: .45; cursor: default; }
+.mdropfloat__empty { margin: 0; font-size: calc(.11 * var(--t)); line-height: 1.45; }
+.mdropfloat__sum { margin: 0; font-size: calc(.1 * var(--t)); }
 /* 来袭清单：同一套斜切面板（金色描边区分「敌方投放」） */
 .gm__incoming { position: absolute; right: .3rem; top: 2.5rem; z-index: 6; padding: 1px;
   background: rgba(240, 194, 58, .5);

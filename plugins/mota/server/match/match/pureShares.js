@@ -83,17 +83,9 @@ export function sanitizeBotPickList(picks, { timeLimit = 60, cap = 64, metricsOf
   }
   const lim = Number(budget) || 0;
   if (!(lim > 0)) return [];
-  // 路线越长，占用预算越多（长度 ×1）。**与服务端同源**：match/confront.js 的 `_confrontMember` 也是 `routeLen * 1`
-  // （随阶梯价整体下调 2 → 1，业主 2026-11-05）—— 两侧系数必须一起改，否则 bot 的报价与服务器的预算判据会漂。
-  const routeCost = () => out.reduce((n, x) => n + (Number(x.routeLen) || 0) * 1, 0);
-  const total = () => Number(spentOf(out)) + routeCost();
-  while (total() > lim && out.some((x) => (Number(x.routeLen) || 0) > 0)) {
-    let worst = -1;
-    let worstLen = 0;
-    out.forEach((x, i) => { const L = Number(x.routeLen) || 0; if (L > worstLen) { worstLen = L; worst = i; } });
-    if (worst < 0) break;
-    delete out[worst].routeIndex; delete out[worst].routeLen; delete out[worst].time;
-  }
+  // 路线不计费（2026-11-06 与服务端同源）：match/confront.js 的提交 / 投放判据只看 settle.cost —— 旧码这里
+  // 还按 `routeLen × 1` 额外扣 bot 预算，bot 因此比人类少投几只（只影响 bot 报价，不影响任何一方实际扣款）。
+  const total = () => Number(spentOf(out));
   while (out.length && total() > lim) out.pop();
   return out;
 }

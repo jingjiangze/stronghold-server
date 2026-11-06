@@ -99,7 +99,7 @@ import { ChoiceOverlay, spMarks } from '../ui/choiceOverlay.js';
 import { EnemyDrawer } from '../ui/enemyDrawer.js';
 import { Ticker } from '../ui/ticker.js';
 import { EmoteWheel } from '../ui/emotes.js';
-import { ConfrontOverlay, ConfrontClash } from '../ui/confrontOverlay.js';
+import { ConfrontOverlay, ConfrontClash, MonsterDropFloat } from '../ui/confrontOverlay.js';
 import { HexOverlay, normalizeHexOffer } from '../ui/hexOverlay.js';
 import { RelicOverlay, normalizeRelicOffer } from '../ui/relicOverlay.js';
 import { RogueHud } from '../ui/rogueHud.js';
@@ -255,8 +255,9 @@ function MatchScreen() {
   const [watching, setWatching] = useState(null);
   // 对抗模式（2V2 / 4V4）的面板忙态
   const [confBusy, setConfBusy] = useState(false);
-  // 攻方投放状态条的「撤回上一只」（业主 2026-11-04：投放方**不看**已投名单，但必须保留撤销能力）——
-  // 一次只撤最后一条草稿，飞行中禁用（服务端 dropMonster 会退款 / 退库存，成功后推帧 ⇒ 只数自己变回来）
+  // 攻方投放的「撤回」（业主 2026-11-04：投放方**不看**已投名单，但必须保留撤销能力）—— 一次一条草稿，飞行中
+  // 其余行一起禁用（服务端 dropMonster 会退款 / 退库存，成功后推帧 ⇒ 只数自己变回来）。2026-11-06 起入口在
+  // 盟约条那一行右端的小窗（ui/confrontOverlay.js 的 MonsterDropFloat），原中央绿块的按钮已删。
   const [dropUndoBusy, setDropUndoBusy] = useState(false);
   const [eventBusy, setEventBusy] = useState(false);        // fieldId the player chose to watch (null = home)
   const [watchWho, setWatchWho] = useState(null);        // { fieldId, playerId }: the teammate picked with 前往查看
@@ -333,27 +334,36 @@ function MatchScreen() {
   const confStage = pub?.confront ? (pub.confront.stage != null ? pub.confront.stage : null) : null;
   // 规则档（2026-11-04 业主裁决）：目标选择遮罩**只在赏金档出**；对抗档（'confront'）服务端跳过目标选择，客户端不弹模态。
   const confBounty = pub?.confront?.versusRule === 'bounty';
-  // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条；状态条上只留「已投 N 只」与「撤回上一只」
-  // 两个东西 —— 已投**名单**只给对面（守方的 conf.roster 公示 / priv.incoming 预览），投放方自己不看清单
-  // （业主 2026-11-04：投放方不显示投放名单）。
+  // 投放窗口（只有攻方有入口）：面板整块不渲染，投放走下方商店条；盟约条那一行右端的小悬浮窗（2026-11-06）
+  // 显示「本回合已投放 · N 只」与每一条的「撤回」—— 已投**名单**仍然只给对面（守方的 conf.roster 公示 /
+  // priv.incoming 预览），投放方自己只看这一个小窗（业主 2026-11-04：投放方不显示投放名单）。
   // 这个值同时作为 `monsterEditable` 传给 ShopBar（2026-11-06）：攻方的 `editable` 恒 false（下面 384 行的
   // `myRole !== 'attack'`），怪物卡池的等级卡只能靠它判定「可操作」；口径与服务端 inMonsterStage 一致。
   const confDropWindow = !!pub?.confront && pub.confront.active === true && confStage === null && myRole === 'attack';
   // 投放窗口里「已投 N 只」读的是**本回合草稿**（m.monsterShop.draft.picks，点卡投放每投一只加一条）——
   // 这时还没有提交，m.confront.subs[myId] 不存在，旧文案只能画「等待投放结算」（2026-11-04 视觉验收第 3 条）。
-  // 投放结束后（stage 进入 roster、active 变 false、或进 COMBAT / SETTLE）仍走下面的 mySub.total。
+  // 投放结束后（stage 进入 roster、active 变 false、或进 COMBAT / SETTLE）仍走下面的 mySub.picks。
   const dropPicks = monsterShopOpen && Array.isArray(monsterShop.draft?.picks) ? monsterShop.draft.picks : [];
   const dropPlaced = dropPicks.length;
-  // 「撤回上一只」撤的就是草稿的**最后一条**（带它的稳定 id：多端并发撤回不会撤错行，服务端优先按 id 定位）
-  const lastDropPick = dropPlaced ? dropPicks[dropPlaced - 1] : null;
+  // 「当前投放」小悬浮窗（2026-11-06 业主：中央绿块去掉，改挂盟约条那一行的右端）：数据源两态 —— 投放窗口读实时
+  // 草稿（可撤回），公示 / COMBAT / SETTLE 回落提交后的 mySub.picks（冻结值，不可撤回）。闸门 = 攻方 + 对抗/赏金档
+  // （pub.confront）+ 投放相关阶段；守方（myRole === 'defend'）/ 协同 / 单人没有这一块。
+  const dropFloatOn = myRole === 'attack' && !!pub?.confront
+    && (phase === PHASE.PREP || phase === PHASE.COMBAT || phase === PHASE.SETTLE);
+  const dropFloatPicks = dropPlaced ? dropPicks : (Array.isArray(mySub?.picks) ? mySub.picks : []);
+  // 只有草稿能撤（`g.monsterDrop` 摘的是 ps.monsterDraft）；提交后的 subs 是只读名单。再按投放窗口收一道：
+  // 公示 / COMBAT 里服务端不再收 g.monsterDrop，按钮不该亮着。
+  const dropFloatLive = dropPlaced > 0 && confDropWindow;
   /**
-   * 撤回最后投放的那一只：`g.monsterDrop { index, id? }` → 服务端摘掉那一条、把库存与投放资金退回
-   * （server/match/monsterShop.js dropMonster）。成功后服务端推帧 ⇒ 草稿变短、只数自己变回来（不本地删）。
+   * 撤回草稿里的第 `index` 条：`g.monsterDrop { index, id? }` → 服务端摘掉那一条、把库存与投放资金退回
+   * （server/match/monsterShop.js dropMonster）。定位优先用**稳定 id**（`draft.picks[i].id`，服务端的 seq）：
+   * 多端同时撤回时下标会整体前移，用 id 才撤得对那一条；老帧 / 老存档没有 id 就回落到下标（服务端两种都认）。
+   * 成功后服务端推帧 ⇒ 草稿变短、只数自己变回来（不本地删）。原「撤回上一只」= 这里传最后一条的下标
+   * （ui/confrontOverlay.js 的 MonsterDropFloat 把那一行的 data-testid 留在 monster-undo-last 上）。
    */
-  const undoLastDrop = () => {
-    if (!lastDropPick || dropUndoBusy) return;
-    const index = dropPlaced - 1;
-    const payload = Number.isInteger(lastDropPick.id) ? { index, id: lastDropPick.id } : { index };
+  const undoDropAt = (index, id) => {
+    if (!Number.isInteger(index) || index < 0 || index >= dropPlaced || dropUndoBusy) return;
+    const payload = Number.isInteger(id) ? { index, id } : { index };
     setDropUndoBusy(true);
     void act('g.monsterDrop', payload, { sfx: 'back' }).finally(() => setDropUndoBusy(false));
   };
@@ -1885,6 +1895,12 @@ function MatchScreen() {
         speed=${playRate} onSpeed=${battleRunner ? (n) => setPlayRate(battleRunner.setRate(n)) : null}
         spectators=${specFacts.list} myId=${myId} isHost=${specFacts.isHost} onRemoveSpectator=${removeSpectator} room=${modRoom} />
 
+      ${/* 攻方「当前投放」小悬浮窗（2026-11-06 业主：中央「本回合你是进攻方」绿块太挡棋盘，去掉；改在盟约条那一行的
+           右端挂一个小窗）。投放窗口读实时草稿（每条可撤回），公示 / COMBAT / SETTLE 回落到 mySub.picks 的冻结值；
+           守方 / 协同 / 单人（没有 pub.confront 或角色不是 attack）整块不渲染。非模态，不弹名单。 */ null}
+      ${dropFloatOn ? html`<${MonsterDropFloat} picks=${dropFloatPicks} live=${dropFloatLive}
+        busy=${dropUndoBusy} onUndo=${undoDropAt} />` : null}
+
       <div class="gm__bonds">
         <button type="button" class="bonds-toggle" aria-expanded=${!bondsCollapsed} aria-controls="match-bond-strip"
           aria-label=${bondsCollapsed ? t('展开盟约') : t('收起盟约')} title=${bondsCollapsed ? t('展开盟约') : t('收起盟约')}
@@ -1924,6 +1940,11 @@ function MatchScreen() {
 
       <${RevivePlate} revival=${pub?.revival} myId=${myId}
         onRevive=${(playerId) => actions.revive(playerId, pub?.revival?.round)} />
+
+      ${/* 单人掌握怪物（2026-11-06 业主）：master 模式下只有每队第一位存活攻方能操作怪物商店，
+           其余攻方收到的是只读帧（open:true / readOnly:true / slots:[]）—— 这里只加一行提示，不动别的 UI。 */ null}
+      ${myRole === 'attack' && pub?.confront?.monsterMode === 'master' && monsterShop && monsterShop.open === true && monsterShop.readOnly === true
+        ? html`<div class="gm__watching" role="status"><${GIcon} name="eye" /><span>${t('队长操作中')}</span></div>` : null}
 
       ${showShop ? html`<${ShopBar} priv=${priv} editable=${editable} collapsed=${barCollapsed} refreshBusy=${refreshBusy} onCollapse=${setCollapsed}
         barRef=${barRef} offBonds=${offBonds} econ=${econ}
@@ -1982,24 +2003,8 @@ function MatchScreen() {
            （ui/confrontOverlay.js 的 RosterPanel className="rospov--conf"，投放公示那 5 秒）。控怪档保持现状：
            仍弹整屏，但本局只弹一次（ui/confrontOverlay.js 的 clashFirstOfMatch）。 */ null}
       ${pub?.confront && pub.confront.applied && !confBounty ? html`<${ConfrontClash} pub=${pub} />` : null}
-      ${myRole === 'attack' && (phase === PHASE.ROUND_START || phase === PHASE.PREP || phase === PHASE.COMBAT || phase === PHASE.SETTLE) ? html`<div class="gm__attackwait" role="status" data-testid="attack-wait">
-        <div class="gm__attackwait__in">
-          <span class="gm__attackwait__micro">${'HUNTING PHASE // ' + t('进攻')}</span>
-          ${/* 投放窗口开着（active && stage === null）时这一回合还没结束：文案说「正在投放」+ 已投只数（草稿），
-               不能再说「怪物已投放，等待…」—— 那时玩家一只都还没投（2026-11-04 视觉验收第 3 条） */ null}
-          <div class="gm__attackwait__t"><${Icon} name="sword" />${t('本回合你是进攻方')}${confDropWindow ? html`<span class="t-dim">· ${t('正在投放')}</span>` : null}</div>
-          <p>${confDropWindow
-            ? t('点一下投 1 只 · 长按多选 · 拖到上门 / 下门')
-            : t('怪物已投放，等待守方布阵与作战。点击左侧头像可实时观战。')}</p>
-          ${/* 投放方**不看**已投名单（业主 2026-11-04：名单只给对面 / 守方），状态条上只留只数 + 一个撤回入口 */ null}
-          ${confDropWindow
-            ? html`<span class="num">${t('已投 {n} 只', { n: dropPlaced })}</span>
-              ${dropPlaced > 0 ? html`<button type="button" class="confbtn" data-testid="monster-undo-last"
-                disabled=${dropUndoBusy} onClick=${undoLastDrop}
-                title=${t('撤回最后投放的那一只：库存与投放资金退回')}>${t('撤回上一只')}</button>` : null}`
-            : mySub ? html`<span class="num">${t('本回合投放 {n} 只', { n: mySub.total })}</span>` : html`<span class="t-dim">${t('等待投放结算')}</span>`}
-        </div>
-      </div>` : null}
+      ${/* 原中央「本回合你是进攻方」绿块（.gm__attackwait，role="status"）2026-11-06 删：业主嫌它挡棋盘。
+           它的「已投 N 只」与「撤回上一只」搬进了上面的 MonsterDropFloat（那个小窗在 .gm__hud 顶部渲染）。 */ null}
       ${myRole === 'defend' && phase === PHASE.PREP && Array.isArray(priv?.incoming) && priv.incoming.length ? html`<div class="gm__incoming" data-testid="incoming">
         <div class="gm__incoming__in">
           <div class="gm__incoming__t"><${Icon} name="sword" />${t('来袭怪物')} <b class="num">${priv.incoming.length}</b></div>
