@@ -310,6 +310,26 @@ function bondIconUrlOf(m, id) {
 export const MONSTER_BOND_FACTION_THRESHOLD_SHARES = Object.freeze([0.15, 0.3, 0.45]);
 
 /**
+ * 本回合「买得下几只」= 一名攻方的军费 ÷ 池中位价（至少 1）。**盟约一阶的上界**。
+ *
+ * 业主 2026-11-06 裁决（审计 PENDING 第 4 条）：阵营条阈值按「该阵营在整张池里的只数」取比例，池是 408 只的
+ * 全表 ⇒ REUNION 一阶要 14 只，而 R1 每人军费只有 5 —— 一阶点不亮，等于这条盟约在前期**根本不存在**。
+ * 现在一阶被压到「本回合真能买下的只数」以内，二 / 三阶仍是长期目标（严格递增）。
+ *
+ * 商店关着 / 拿不到军费或中位价（旧对局、非对抗局）⇒ `Infinity` = 不设上界，行为与改造前逐字节一致。
+ * @param {object} m
+ * @returns {number}
+ */
+function roundAffordableUnits(m) {
+  try {
+    const share = typeof m?.monsterFundsSharePerAttacker === 'function' ? Number(m.monsterFundsSharePerAttacker()) : NaN;
+    const price = typeof m?.confrontPoolMedianValue === 'function' ? Number(m.confrontPoolMedianValue()) : NaN;
+    if (!Number.isFinite(share) || !Number.isFinite(price) || price <= 0) return Infinity;
+    return Math.max(1, Math.floor(share / price));
+  } catch { return Infinity; }
+}
+
+/**
  * 阵营条的阈值（按该阵营在本回合可投放池里的**只数** n 取比例）：纯函数。
  *   t1 = max(1, ceil(n × 0.15))，t2 = max(t1+1, ceil(n × 0.30))，t3 = max(t2+1, ceil(n × 0.45))
  * 严格递增（`max(t1+1, …)`）保证三阶不会塌成同一层；n = 0 → [1,2,3]（形态占位，该阵营本回合无牌）。
@@ -365,7 +385,13 @@ export function monsterBondThresholds(m, id) {
   if (!d) return MONSTER_BOND_THRESHOLDS;
   if (Array.isArray(d.thresholds) && d.thresholds.length) return d.thresholds;
   const counts = factionPoolCounts(m);
-  return factionThresholdsOf(counts.get(d.id) || 0);
+  const [t1, t2, t3] = factionThresholdsOf(counts.get(d.id) || 0);
+  // 一阶压进「本回合买得下」（业主 2026-11-06 第 4 条；见 roundAffordableUnits）。二 / 三阶保持严格递增的长期目标。
+  const cap = roundAffordableUnits(m);
+  if (!Number.isFinite(cap)) return [t1, t2, t3];
+  const c1 = Math.max(1, Math.min(t1, cap));
+  const c2 = Math.max(c1 + 1, t2);
+  return [c1, c2, Math.max(c2 + 1, t3)];
 }
 
 /** 内部别名（旧调用点少写一个参数名）。 */
