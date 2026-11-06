@@ -140,7 +140,7 @@ const opFixture = ({ mode = 'master', actors = null } = {}) => {
 };
 
 test('master：队长阵亡后，投放权与已投放的草稿一起交给下一位，旧队长关店', () => {
-  const { m, a, b } = opFixture();
+  const { m } = opFixture();
   const plan = Match.prototype.monsterOperatorPlan.call(m);
   assert.equal(plan.apply, true);
   assert.deepEqual(plan.open.map((x) => x.ps.playerId), ['b']);
@@ -156,7 +156,7 @@ test('master：已经开着店的那位不会被重复开一次（幂等）', ()
 });
 
 test('solo：按人的池，不做跨人草稿移交（只给新队长开一间干净的店）', () => {
-  const { m, a } = opFixture({ mode: 'solo' });
+  const { m } = opFixture({ mode: 'solo' });
   const plan = Match.prototype.monsterOperatorPlan.call(m);
   assert.equal(plan.open.length, 1);
   assert.equal(plan.open[0].from, null, 'solo 的池按 playerId，跨人移交会指向别人的卡');
