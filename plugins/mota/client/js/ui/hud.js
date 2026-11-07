@@ -479,7 +479,7 @@ export function PauseButton({ paused, busy = false, onToggle }) {
 export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyCount, playerCount, pen = false, penAvail = false, onPen = () => {},
   config = null, frozenAt = null, pause = null, live = null, spectator = false,
   spectators = null, myId = null, isHost = false, onRemoveSpectator = null, room = null,
-  bounty = null, onBounty = null }) {
+  bounty = null, onBounty = null, online = null }) {
   const phase = pub?.phase;
   const boss = isBossPhase(phase);
   // 对抗模式（2V2 / 4V4）：共享血池——顶栏显示本队池，并在难度旁列出两队剩余 + 狩猎期起始回合。
@@ -524,6 +524,10 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
         <div class="gtop__net">
           <${PingPill} ms=${conn?.ping} online=${conn?.status === 'online'} />
           <${SpectatorPill} spectators=${spectators} myId=${myId} isHost=${isHost} onRemove=${onRemoveSpectator} />
+          ${/* 在线数（业主 2026-11-07：大厅 / 房间 / 局内一致）：字色与字号借 .gtop__rules 那条小字规则 ——
+               `game.css` 有三份副本（core / mota / alliance-20），靠后者顶替，加个新类名不一定生效；`online` 由
+               screens/game.js 从 store.lobbyStats 传进来（与大厅同源），没有这个值就整块不画。 */ null}
+          ${Number.isFinite(online) ? html`<span class="gtop__online gtop__rules" data-testid="hud-online"><b class="num">${online}</b> ${t('名博士在线')}</span>` : null}
         </div>
         ${pub?.difficulty ? html`<${DifficultyTag} difficulty=${pub.difficulty} size="sm" />` : null}
         ${versus ? html`<span class="gtop__versus" data-testid="versus-info" title=${t('对抗模式：两队共享生命值，攻守每回合轮换')}>

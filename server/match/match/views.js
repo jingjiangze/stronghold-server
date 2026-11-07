@@ -112,6 +112,9 @@ export class MatchViews {
         playerId: ps.playerId,
         seat: ps.seat,
         name: ps.name,
+        // 名片代号 (name#tag): the seat's 4 digits, the same one the seat card and the hub chip show. Omitted when the
+        // player has none (bots, a page that never sent tag), so an ordinary players[] row keeps its keys.
+        ...(ps.tag ? { tag: ps.tag } : {}),
         isBot: ps.isBot,
         ...(Number.isInteger(ps.aiTakeoverRound) ? { aiTakeoverRound: ps.aiTakeoverRound } : {}),
         connected: ps.isBot || (ps.connected && !ps.left),

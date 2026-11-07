@@ -141,6 +141,7 @@ import { BandDraftScreen } from './bandDraft.js';
 import { ResultScreen } from './settle.js';
 import { ProtocolBoot, preloadBootArt, bootArtReady, BOOT_LEAVE_MS } from '../ui/protocolBoot.js';
 import { net } from '../net.js';
+import { C2S } from '../../../shared/protocol.js';
 import { store, useStore, shallowEqual, serverNow, isSpectating } from '../store.js';
 import { battleRunner } from '../battle/runner.js';
 import '../ui/pluginFrame.js';
@@ -284,6 +285,17 @@ function MatchScreen() {
     list: Array.isArray(s.room?.spectators) ? s.room.spectators : null,
     isHost: !!s.room && s.room.hostId === s.me.playerId,
   }), shallowEqual);
+  // 在线人数（业主 2026-11-07：大厅 / 房间 / 局内三处一致）：与大厅同源 —— `room.list` 回一条 `lobby.state`，
+  // main.js 写进 store.lobbyStats（顶栏 TopBar 的「N 名博士在线」）。局内也没人替我们问，照大厅的做法 10 秒一次。
+  const lobbyStats = useStore((s) => s.lobbyStats, shallowEqual);
+  useEffect(() => {
+    if (!C2S || !Object.hasOwn(C2S, 'room.list')) return undefined;
+    let live = true;
+    const ask = () => { if (live && !document.hidden) net.request('room.list').catch(() => {}); };
+    ask();
+    const id = setInterval(ask, 10000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
   const gd = useGameData();
 
   const hostRef = useRef(null);
@@ -2032,6 +2044,7 @@ function MatchScreen() {
         onExit=${() => setExitOpen(true)} onDrawer=${(t) => setDrawer((d) => (d ? null : t))} onReady=${toggleReady}
         readyBusy=${readyBusy} readyCount=${readyCount} playerCount=${solo ? 1 : aliveCount}
         pen=${pen} penAvail=${penAvail} onPen=${togglePen} config=${gd.config} frozenAt=${frozenAt}
+        online=${Number.isFinite(lobbyStats?.online) ? lobbyStats.online : null}
         pause=${canPause || paused ? { show: canPause, paused, busy: pauseBusy, onToggle: () => togglePause(!paused) } : null}
         bounty=${econ?.bounty || null}
         onBounty=${() => {

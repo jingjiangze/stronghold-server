@@ -138,7 +138,7 @@ import { PlayerDiy, DiyStock } from './player/diy.js';
 export class PlayerState {
   /**
    * @param {import('./Match.js').Match} m owning match
-   * @param {{ seat: number, playerId: string, name: string, isBot: boolean, connected: boolean, loadout?: any, notOwned?: any, diy?: any, skins?: any }} seat
+   * @param {{ seat: number, playerId: string, name: string, isBot: boolean, connected: boolean, loadout?: any, notOwned?: any, diy?: any, skins?: any, tag?: string | null }} seat
    */
   constructor(m, seat) {
     this.m = m;
@@ -148,6 +148,9 @@ export class PlayerState {
     /** 分组牌库的组号 (owner 2026-11-05「每四人一个分组牌库」): 0 until `Match` assigns it from poolGroupSizes. */
     this.poolId = 0;
     this.name = seat.name;
+    /** 名片代号 (name#tag): the seat's 4 digits at the match start, '' = none (bots, or a page that never sent one).
+     * Public on purpose (Match.publicView().players[].tag: the team panel shows 名字#代号 like the seat card does). */
+    this.tag = typeof seat.tag === 'string' ? seat.tag : '';
     this.isBot = !!seat.isBot;
     this.connected = this.isBot ? true : !!seat.connected;
     this.left = false;

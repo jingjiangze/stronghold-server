@@ -80,6 +80,9 @@ const DEFAULT_SEATS = Number(SEAT_CONST.DEFAULT_SEATS) || MAX_SEATS;
  */
 const MAX_RENDERED_SEATS = 256;
 
+/** 顶栏的「N 名博士在线」要 `room.list`（回复一条 `lobby.state`）：老宿主的协议表里没有这个键就不轮询。 */
+const CAN_LIST = !!C2S && Object.hasOwn(C2S, 'room.list');
+
 /**
  * Seats padded to the room's capacity (co-op 4, solo 1, or the room's own `seatCap`), each null or a seat record.
  *
@@ -636,6 +639,9 @@ export function RoomScreen() {
   const me = useStore((s) => s.me, shallowEqual);
   const conn = useStore((s) => s.connection, shallowEqual);
   const mm = useStore((s) => s.matchmaking, shallowEqual);
+  // 在线人数（业主 2026-11-07：大厅 / 房间 / 局内三处一致）：与大厅同源 —— `room.list` 回一条 `lobby.state`，
+  // main.js 写进 store.lobbyStats；大厅页自己的 chip 读的是同一个值。
+  const lobbyStats = useStore((s) => s.lobbyStats, shallowEqual);
   // official versions (DESIGN §35.23): the server's list (absent = the switch is off), this browser's lobby choice
   const versions = useStore((s) => s.versions);
   const myLobby = useStore(lobbyVersion);
@@ -689,6 +695,17 @@ export function RoomScreen() {
     if (myCard && !portraits.byChar.has(myCard)) return;
     net.request('room.card', { charId: myCard || '' }).catch(() => {});
   }, [room?.code, myCard, seatCard, conn.status]);
+
+  // 在线人数（顶栏「N 名博士在线」）：`lobby.state` 只在下发 `room.list` 时推来，房间里没人替我们问 ——
+  // 照大厅的做法 10 秒一次，后台不问（store.lobbyStats 由 main.js 的 lobby.state 处理函数写入）。
+  useEffect(() => {
+    if (!CAN_LIST) return undefined;
+    let live = true;
+    const ask = () => { if (live && !document.hidden) net.request('room.list').catch(() => {}); };
+    ask();
+    const id = setInterval(ask, 10000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
 
   // arrived through 搜寻队友 (match.found for this room): 搜寻成功 once
   useEffect(() => {
@@ -920,6 +937,9 @@ export function RoomScreen() {
             <${RandomStageToggle} room=${room} isHost=${facts.isHost} busy=${busy} onToggle=${setRandomStage} />
           </div>
           <span>${t('当前延迟')}<b class=${`num rs-ping rs-ping--${!online || !Number.isFinite(conn.ping) ? 'off' : conn.ping < 60 ? 'low' : conn.ping < 200 ? 'mid' : 'high'}`}>${online && Number.isFinite(conn.ping) ? Math.round(conn.ping) : '--'}</b>ms</span>
+          ${Number.isFinite(lobbyStats?.online)
+            ? html`<span class="rs-online" data-testid="room-online"><b class="num">${lobbyStats.online}</b> ${t('名博士在线')}</span>`
+            : null}
         </div>
         <div class="rs-tools">
           <${Button} variant="secondary" size="sm" square=${true} icon="chart" class="stats-entry" onClick=${openStats} title=${t('统计数据')} aria-label=${t('统计数据')} />

@@ -282,15 +282,13 @@ const env = (k) => (typeof process !== 'undefined' && process.env ? process.env[
 /** Default combat mode: client-side unless SP_COMBAT=server. */
 const envClientCombat = () => String(env('SP_COMBAT') || '').toLowerCase() !== 'server';
 /**
- * 战斗中实时部署 (方案 A, match/combat.js liveDeploy / spec.flags.liveDeploy)：**默认开启**（2026-11-06 业主裁决）。
- * 要回到旧行为（开局自动部署）设 `SP_LIVE_DEPLOY=0`；调用方也可用 `opts.liveDeploy` 覆盖。
- * 它是一条新玩法规则（棋盘在 COMBAT 期自己摆），会改变「同一 spec 的客户端/服务端结果一致」那组断言的前提 ——
- * 所以 `test/match/harness.js` 的夹具显式传 `liveDeploy:false`，那组一致性用例继续钉旧策略。
+ * 战斗中实时部署 (方案 A, match/combat.js liveDeploy / spec.flags.liveDeploy)：**默认关闭**（2026-11-07 真机回归后改回）。
+ *
+ * 原因（实测）：`lifecycle.js:41` 在该 flag 为真时**完全跳过开局自动部署**，干员只能靠战斗中 `g.deploy` 放。
+ * 而本作的对局是「PREP 期摆好阵容 → 战斗开始时自动上场」，跳过开局部署 ⇒ 回合 1 棋盘空的（肉鸽/协同都中招）。
+ * 所以它本质上换了一套摆放模型，不能当默认行为。要用设 `SP_LIVE_DEPLOY=1`（或调用方传 `opts.liveDeploy:true`）。
  */
-const envLiveDeploy = () => {
-  const v = String(env('SP_LIVE_DEPLOY') ?? '').trim().toLowerCase();
-  return !['0', 'false', 'off'].includes(v);
-};
+const envLiveDeploy = () => ['1', 'true', 'on'].includes(String(env('SP_LIVE_DEPLOY') ?? '').trim().toLowerCase());
 /** SP_VERIFY → 'off' | 'sample' | 'all'. */
 export function parseVerify(v) {
   const s = String(v ?? '').trim().toLowerCase();

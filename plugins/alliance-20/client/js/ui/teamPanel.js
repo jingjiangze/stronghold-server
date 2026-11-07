@@ -183,7 +183,9 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
             : spMarks?.get(p.playerId) === 'turn' ? html`<span class="team__spmark is-turn" title=${t('正在决策…')}><i></i><i></i><i></i></span>` : null}
         </button>
         <div class="team__info">
-          <span class="team__name">${p.team ? html`<i class=${`team__dot team__dot--${p.team}`} title=${t(TEAM_NAMES[p.team])}></i>` : null}${p.name || t('博士')}</span>
+          ${/* 名片代号 (name#tag)：m.public players[].tag —— 座位 / 大厅里那个 4 位代号，与首页账号同一个；
+               座位的 tag 只在房间还没开局时写进座位，所以对局里读的是开局那一刻的快照。机器人没有。 */ null}
+          <span class="team__name">${p.team ? html`<i class=${`team__dot team__dot--${p.team}`} title=${t(TEAM_NAMES[p.team])}></i>` : null}${p.name || t('博士')}${p.tag && !p.isBot ? html`<span class="acct-tag">#${p.tag}</span>` : null}</span>
           <div class="team__line">
             <${LpTower} value=${lp.lp} size="sm" tone=${Number.isFinite(lp.lp) && lp.lp - lp.pending <= 5 ? 'danger' : null} pending=${lp.pending}
               tip=${rowLpTip(lp, cap)} />

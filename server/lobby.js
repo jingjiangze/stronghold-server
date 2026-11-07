@@ -2436,6 +2436,10 @@ export class Lobby {
         diy: own ? own.diy : null,
         // 干员皮肤 (docs/SKINS.md): the appearances the human wears, keyed by operator charId (bots always default)
         skins: own ? own.skins : null,
+        // 名片代号 (name#tag): the seat's (the 4 digits the page sent in hello) — the match publishes it to the in-match
+        // team panel, so a name reads 名字#代号 there exactly as it does on the seat card and in the hub. Null when the
+        // seat has none; bots never do.
+        tag: s.isBot ? null : s.tag || null,
       };
     });
     // lastPublic / results: the latest m.public broadcast and the m.result frames (encoded), kept for the replay.

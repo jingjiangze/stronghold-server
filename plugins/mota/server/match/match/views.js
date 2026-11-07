@@ -298,6 +298,9 @@ export class MatchViews {
         role: (typeof this.isRoleRound === 'function' && this.isRoleRound()) ? (this.isAttacker(ps) ? 'attack' : 'defend') : null,
       } : {}),
       name: ps.name,
+      // 名片代号 (name#tag): the seat's 4 digits, the same one the seat card and the hub chip show. Omitted when the
+      // player has none (bots, a page that never sent tag), so an ordinary players[] row keeps its keys.
+      ...(ps.tag ? { tag: ps.tag } : {}),
       isBot: ps.isBot,
       connected: ps.isBot || (ps.connected && !ps.left),
       alive: ps.alive,
