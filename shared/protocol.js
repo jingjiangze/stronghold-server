@@ -1042,10 +1042,6 @@ export const S2C = [
   // 'notdeployed' | 'finished'). `dp` (a deploy) is the battle's DP left; `retreat: true` names a withdrawal, whose ok
   // removes the piece from the client's standing set.
   'm.deploy',
-  // m.monsterShop { open, round, slots, draft, budget, spent, left, refreshPrice, freeRefreshes, refreshes } — the
-  // 怪物卡池 shop of one 对抗 actor (server/match/monsterShop.js monsterShopFrame, the requester only), and the
-  // closing { open: false, round, slots: [], draft } frame that tells its client to put the panel away
-  'm.monsterShop',
   // client-side combat (DESIGN §14): b.start { battleId, fieldId, kind, spec, authoritative, startAt, serverNow, elapsed,
   // speed, watch?, bgmTheme? } — `bgmTheme` 是**自适应开战 BGM** 的主题名 (shared/bgmTheme.js):服务端在开战时算定
   // (关卡声明优先、敌人家族兜底),同一场战斗发给所有人都是同一个值,战斗中不变;null/缺失 = 走原来的回合曲子。
