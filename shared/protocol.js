@@ -723,10 +723,20 @@ export const C2S = {
   // 肉鸽是独立模式（2026-11-01，客户端发 `mode:'rogue'`）：它的难度表是 N1–N20（difficultiesFor('rogue')），
   // 与 solo/coop 的旧 4 档并列接受；同一个 N 档发在 coop/solo 上仍然是坏字段（行为不变，不做全局放宽）。
   // `variant` 是房间玩法变体（'rogue' / 'xie' / 对抗规则档），只校验形状，怎么解释由 lobby 与插件决定。
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'rogue', difficulty: (v, m) => DIFFICULTIES.includes(v) || v === TRAINING_DIFFICULTY || (m?.mode === 'rogue' && DIFFICULTY_TIERS.includes(v)), variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, capacity: (v) => ROOM_CAPACITIES.includes(v),
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'versus' || v === 'rogue', difficulty: (v, m) => DIFFICULTIES.includes(v) || v === TRAINING_DIFFICULTY || (m?.mode === 'rogue' && DIFFICULTY_TIERS.includes(v)), variant: (v) => v == null || (typeof v === 'string' && v.length > 0 && v.length <= 64 && /^[A-Za-z0-9_.:-]+$/.test(v)), test: (v) => v === true, capacity: (v) => ROOM_CAPACITIES.includes(v),
+    // 对抗房（versus-room 插件；2026-11-07 补）：服务端 lobby.create 早就认 teamSize / versusAlt / versusSpeed，
+    // 但**校验表漏了 mode:'versus' 与这几个键** ⇒ 客户端一发 room.create 就在 net.request 里 BAD_MSG「bad field mode」，
+    // 表现就是「对抗模式完全无效」（点创建同盟毫无反应）。浏览器拿到的是插件顶替拷贝 plugins/mota/shared/protocol.js，
+    // 那份一直是全的，所以只有服务端在拒 —— 两份必须同步，见本文件 :737 的同一条注释。
+    private: (v) => v === true || v === false, randomStage: (v) => v == null || isBool,
+    teamSize: (v) => v == null || (Number.isInteger(v) && v >= 1 && v <= 10),
+    versusAlt: (v) => v == null || typeof v === 'boolean',
+    versusSpeed: (v) => v == null || v === 1 || v === 1.5 || v === 2,
+    soloUnlimited: isBool,
+    version: (v) => typeof v === 'string' && v.length <= 40 && /^[a-z0-9]{1,32}(?:@[A-Za-z0-9_]{1,16})?$/.test(v),
     // 肉鸽「地图主题池」 (shared/rogueThemes.js): 'all' | 'ro1'…'ro6'。缺席 / null = 'all'（默认房一个键都不多）。
     mapPool: (v) => v == null || isPool(v),
-    $optional: ['test','capacity','variant','mapPool'] },
+    $optional: ['test','capacity','variant','mapPool','private','randomStage','teamSize','versusAlt','versusSpeed','soloUnlimited','version'] },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.music': { command: validRoomMusicCommand },

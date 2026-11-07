@@ -223,6 +223,10 @@ function checkData(data, { kitExists = null, vanilla = null, owners = null, vali
       || !(rec.stats.maxHp > 0) || !(rec.stats.bat > 0)) bad(at + '.stats', 'numeric core stats and positive maxHp/bat required');
     if (!matchesSchema(rec.rangeGrid, GRID_SCHEMA)) bad(at + '.rangeGrid', 'range grid required');
     if (!object(rec.trait) || !Array.isArray(rec.talents)) bad(at, 'trait and talents required');
+    // 无技能干员（chess.json 里 noSkill:true / skill:null，如虎狼丸 char_4220_kormr，姊妹站吸收进来的那两条）：
+    // skills 为空是这份数据本来的形态，运行时由 Skill 构造的 `this.noSkill = !spec` 接管（server/sim/skills.js:131）。
+    // 2026-11-07：以前这里一律判「skills required」，导致整个内容集 PLUGIN_BLOCKED（warm-up 起不来）。
+    if (rec.noSkill === true) return;
     if (!Array.isArray(rec.skills) || !rec.skills.length) { bad(at + '.skills', 'skills required'); return; }
     const seen = new Set();
     for (const s of rec.skills) {
