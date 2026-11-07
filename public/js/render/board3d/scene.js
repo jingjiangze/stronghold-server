@@ -105,10 +105,10 @@ export function clipSceneChunkToFrame(c, w, h, margin = ROGUE_SCENE_CLIP_MARGIN)
       if ((nearBand(a) || nearBand(b) || nearBand(d))
         && Math.max(pos[a + 2], pos[b + 2], pos[d + 2]) > ROGUE_SCENE_NEAR_OCCLUDER_Z) continue;
       // 顶棚 / 树海顶盖（如 ro5 z≈6.3、ro6 z≈12.3）x/y 裁不掉；高度阈值只管整个三角形都在画框外的，任一顶点超高就丢。
-      // 2026-11-06 收窄：只有 background 类 material 才走这条 —— 实测 highDrop 丢掉的上万个三角里 background 占比 0，
-      // 全是主场景 material 里的第三层装饰（树冠/瓦檐/plantMove），而它们都在画框远侧/左右、对遮挡零贡献
-      // （近侧高体早已被上面那条近侧规则清掉）。第三层装饰与地面共用同一个 material 名，只能按这条规则区分。
-      if (!inFrame(a) && !inFrame(b) && !inFrame(d) && isBgMaterial(c.material) && (high(a) || high(b) || high(d))) continue;
+      // 2026-11-07 回退：11-06 曾把这条收窄成「只对 background 生效」，结果把本该丢的**巨大顶棚/天幕平面**也放回来
+      // （线上出现横跨棋盘的粉白大平板，且三角数暴涨导致加载变慢）⇒ 恢复原规则。要恢复第三层装饰须另找判据
+      // （按单三角面积 / chunk 跨度区分大平板与小装饰），不能一刀放开。
+      if (!inFrame(a) && !inFrame(b) && !inFrame(d) && (high(a) || high(b) || high(d))) continue;
       keep.push(idx[i], idx[i + 1], idx[i + 2]);
     }
   }
