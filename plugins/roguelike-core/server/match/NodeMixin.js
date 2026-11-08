@@ -70,6 +70,9 @@ export class Mixin {
       if (!layer || !Array.isArray(layer.nodes)) continue;
       const lid = str(layer.id);
       const lname = str(layer.name);
+      // 区域（2026-11-09）：官方是「区域 → 多列图」，同一个 region 的若干层在 UI 上拼成一张图
+      const region = str(layer.region);
+      const regionName = str(layer.regionName);
       const nodes = [];
       for (const n of layer.nodes) {
         if (!n || !n.id) continue;
@@ -82,11 +85,13 @@ export class Mixin {
           tier: str(n.tier),
           layer: lid,
           layerName: lname,
+          region,
+          regionName,
           cost: Math.max(0, num(n.cost, num(t.cost, 1))),
           reward: n.reward && typeof n.reward === 'object' ? { ...n.reward } : {},
         });
       }
-      if (nodes.length) layers.push({ id: lid, name: lname, nodes });
+      if (nodes.length) layers.push({ id: lid, name: lname, region, regionName, nodes });
     }
     const startAp = Math.max(1, num(rules.startAp, 5));
     this._rogueNodes = {
@@ -371,7 +376,8 @@ export class Mixin {
       ended: st.ended,
       visited: st.visited.slice(),
       sequence: st.seq.map((n) => ({
-        id: n.id, type: n.type, name: n.name, tier: n.tier, layer: n.layer, layerName: n.layerName, cost: n.cost,
+        id: n.id, type: n.type, name: n.name, tier: n.tier, layer: n.layer, layerName: n.layerName,
+        region: n.region, regionName: n.regionName, cost: n.cost,
       })),
     };
   }

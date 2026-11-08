@@ -267,7 +267,9 @@ export function nodeGraph(nodes) {
     const key = String(n.layer || n.layerName || 'layer-1');
     let col = byKey.get(key);
     if (!col) {
-      col = { key, index: layers.length, name: String(n.layerName || n.layer || ''), state: 'future', nodes: [] };
+      // 区域（2026-11-09）：同 region 的若干列在聚焦视图里拼成「当前区域的一整张图」
+      col = { key, index: layers.length, name: String(n.layerName || n.layer || ''), state: 'future', nodes: [],
+        region: String(n.region || ''), regionName: String(n.regionName || '') };
       byKey.set(key, col);
       layers.push(col);
     }
@@ -691,29 +693,50 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       ${n.state === 'taken' ? html`<span class="rpn-graph__ok" aria-hidden="true">✓</span>` : null}
     </button>`;
 
-  // 聚焦视图（默认）：区域进度 + 「本层 → 下一层」两行。官方就是这个节奏，也不会一开局剧透 14 层。
-  const viewCurCol = graph.layers.find((c) => c.state === 'current') || null;
-  const viewNextCol = graph.layers.find((c) => c.state === 'next') || null;
+  // 聚焦视图（默认）：官方是「一个区域 = 一张多列图」。这里按 region 把列拼成当前区域的一整张图，
+  // 上方是区域进度（一个圆点一个区域），不会一开局就把全部区域剧透出来。
+  const regions = [];
+  for (const c of graph.layers) {
+    const key = c.region || c.key;
+    let r = regions.find((x) => x.id === key);
+    if (!r) { r = { id: key, name: c.regionName || c.name, cols: [] }; regions.push(r); }
+    r.cols.push(c);
+  }
+  const regionState = (r) => (r.cols.some((c) => c.state === 'current') ? 'current'
+    : r.cols.some((c) => c.state === 'next') ? 'next'
+      : r.cols.every((c) => c.state === 'done') ? 'done' : 'future');
+  const curRegion = regions.find((r) => regionState(r) === 'current')
+    || regions.find((r) => regionState(r) === 'next') || regions[0] || null;
+
+  // 一列（两种视图共用）：列头 + 该列节点 + 与下一列的连线（只连同区的一列，跨区不连）
+  const graphColumn = (col) => {
+    const link = graph.links.find((l) => l.gap === col.index) || null;
+    const next = link ? graph.layers[col.index + 1] : null;
+    const sameRegion = !!next && (next.region || next.key) === (col.region || col.key);
+    return html`<div key=${col.key} class=${cls('rpn-graph__col', `is-${col.state}`)}
+        data-layer=${col.key} data-layer-state=${col.state}>
+      <div class="rpn-graph__head">
+        <span class="rpn-graph__num">${col.index + 1}</span>
+        ${col.name ? html`<span class="rpn-graph__lv">${col.state === 'future' ? '· · ·' : (layerTitle(col.name) || col.name)}</span>` : null}
+      </div>
+      <div class="rpn-graph__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
+        ${link && next && sameRegion ? graphLink(link, col, next) : null}
+        ${col.nodes.map((n) => nodeBtn(n, col))}
+      </div>
+    </div>`;
+  };
+
   const focusView = html`<div class="rpn-focus" data-testid="rogue-nodes-focus">
     <ol class="rpn-focus__pips" aria-label=${t('区域进度')}>
-      ${graph.layers.map((c) => html`<li key=${c.key}
-        class=${cls('rpn-focus__pip', `is-${c.state}`)}
-        title=${c.state === 'future' ? t('第 {n} 层', { n: c.index + 1 }) : (layerTitle(c.name) || t('第 {n} 层', { n: c.index + 1 }))}>
-        ${c.state === 'future' ? '?' : c.index + 1}
+      ${regions.map((r, i) => html`<li key=${r.id}
+        class=${cls('rpn-focus__pip', `is-${regionState(r)}`)}
+        title=${regionState(r) === 'future' ? t('第 {n} 区', { n: i + 1 }) : r.name}>
+        ${regionState(r) === 'future' ? '?' : i + 1}
       </li>`)}
+      <li class="rpn-focus__note">${curRegion ? (layerTitle(curRegion.name) || curRegion.name) : ''}</li>
     </ol>
-    <div class="rpn-focus__row" data-row="current">
-      <span class="rpn-focus__label">${t('本层')}</span>
-      <span class="rpn-focus__nodes">
-        ${viewCurCol ? viewCurCol.nodes.map((n) => nodeBtn(n, viewCurCol)) : html`<em class="rpn-focus__none">${t('尚未开局')}</em>`}
-      </span>
-    </div>
-    <div class="rpn-focus__arrow" aria-hidden="true"></div>
-    <div class="rpn-focus__row" data-row="next">
-      <span class="rpn-focus__label">${t('下一层')}</span>
-      <span class="rpn-focus__nodes">
-        ${viewNextCol ? viewNextCol.nodes.map((n) => nodeBtn(n, viewNextCol)) : html`<em class="rpn-focus__none">${t('已是最终层')}</em>`}
-      </span>
+    <div class="rpn-focus__map" style=${`--cols:${Math.max(1, curRegion ? curRegion.cols.length : 1)}`}>
+      ${curRegion ? curRegion.cols.map((c) => graphColumn(c)) : html`<em class="rpn-focus__none">${t('尚未开局')}</em>`}
     </div>
   </div>`;
 

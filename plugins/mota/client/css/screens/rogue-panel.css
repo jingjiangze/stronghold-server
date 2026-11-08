@@ -684,3 +684,9 @@
   border: 1px solid rgba(0, 226, 228, .3); border-radius: 3px; cursor: pointer;
 }
 .rpn-graph__view:hover { border-color: rgba(0, 226, 228, .65); color: #dfe6e2; }
+
+/* ---- 区域图（2026-11-09）：当前区域的若干列拼成一张图（官方「区域 → 关卡图」口径）---- */
+.rpn-focus__map { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 5px; align-items: start; }
+.rpn-focus__map .rpn-graph__col { min-width: 0; }
+.rpn-focus__map .rpn-graph__node { width: 100%; max-width: none; }
+.rpn-focus__note { margin-left: 7px; align-self: center; list-style: none; font-size: 10px; letter-spacing: .04em; color: rgba(223, 230, 226, .58); }
