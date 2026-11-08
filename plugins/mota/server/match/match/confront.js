@@ -674,6 +674,41 @@ export class MatchConfront {
     }
   }
 
+  /**
+   * 兜底：进入 PREP 时确认攻方的怪物商店**真的开着**（幂等，已开着就只补推一帧）。
+   *
+   * 正常路径是 `enterConfront → finishConfrontTargets` 开店。一旦那条路因任何原因没跑到（目标分配被跳过，
+   * 或者首帧在客户端挂载前就发过），攻方整回合都没有商店 —— 界面还在提示「在下方商店条点卡投放」，
+   * 底下却一张卡都没有（2026-11-08 真机复现：全程 0 帧 m.monsterShop、`.scard` = 0）。
+   * 这里在 PREP 起点再确认一次：缺店补开，并把当前帧补推给每一席。
+   * @returns {number} 本次真正新开的商店数（0 = 本来就都开着，或本回合不该有商店）
+   */
+  ensureMonsterShops() {
+    if (!this.monsterShopOn) return 0;
+    if (this.phase !== PHASE.PREP) return 0;
+    if (typeof this.isRoleRound === 'function' && !this.isRoleRound()) return 0;
+    if (typeof this.confrontActors !== 'function') return 0;
+    const solo = this.monsterMode === 'solo';
+    const master = this.monsterMode === 'master';
+    const actors = this.confrontActors().filter((ps) => (!solo && !master) || this.monsterPlaceActor(ps));
+    if (!actors.length) return 0;
+    // 池按队（solo 按人）—— 缺的补建，与 finishConfrontTargets 同一口径
+    this.monsterPools ||= new Map();
+    const poolKeyOf = (ps) => (solo ? ps.playerId : (typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0));
+    for (const ps of actors) {
+      const k = poolKeyOf(ps);
+      if (!this.monsterPools.has(k)) this.monsterPools.set(k, buildMonsterPool(this));
+    }
+    let opened = 0;
+    for (const ps of actors) {
+      if (!ps.monsterShop) {
+        try { openMonsterShop(this, ps); opened += 1; } catch (e) { this.reportError('monster shop ensure', e); continue; }
+      }
+      try { if (ps.playerId) this.sendTo(ps.playerId, monsterShopFrame(this, ps)); } catch (e) { this.reportError('monster shop ensure', e); }
+    }
+    return opened;
+  }
+
   /** 攻方人数（纯玩家出怪时按人均分官方波次价值；取不到时按每队人数兜底）。 */
   attackingTeamSize() {
     if (this.attackingTeam == null || typeof this.teamIdOf !== 'function') return Math.max(1, Number(this.teamSize) || 1);

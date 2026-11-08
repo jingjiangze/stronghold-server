@@ -40,7 +40,7 @@ export const TEXT_SIZES = Object.freeze(['sm', 'md', 'lg', 'xl']);
  *  otherSkins: 设置「显示其他玩家的皮肤」 (docs/SKINS.md), ON by default — draw the appearance another player chose instead
  *  of the operator's own model. A pure client preference (never sent): off, only this player's own pieces wear a skin.
  */
-export const DEFAULT_SETTINGS = Object.freeze({ bgm: 0.6, sfx: 0.8, voice: 0.8, voiceLang: 'cn', voiceNative: false, voiceOverrides: Object.freeze({}), muted: false, damageNumbers: true, officialDamageNumbers: false, ammoEnergyCount: false, combatMetrics: false, prepDeployFold: true, quality: 'high', officialFx: 'auto', otherSkins: true, textSize: 'sm', keys: DEFAULT_HOTKEYS });
+export const DEFAULT_SETTINGS = Object.freeze({ bgm: 0.6, sfx: 0.8, voice: 0.8, voiceLang: 'cn', voiceNative: false, voiceOverrides: Object.freeze({}), muted: false, damageNumbers: true, officialDamageNumbers: false, ammoEnergyCount: false, combatMetrics: false, prepDeployFold: true, showRoutes: true, quality: 'high', officialFx: 'auto', otherSkins: true, textSize: 'sm', keys: DEFAULT_HOTKEYS });
 const QUALITIES = ['high', 'medium', 'low'];
 /** The values of 设置「官方特效」 (render/vfx/tier.js OFFICIAL_FX). Display order in the dialog is low / medium / high. */
 export const OFFICIAL_FX_MODES = Object.freeze(['auto', 'off', 'lite', 'full']);
@@ -78,6 +78,8 @@ export function sanitizeSettings(raw) {
     ammoEnergyCount: ammoEnergyCountOf(r),
     combatMetrics: typeof r.combatMetrics === 'boolean' ? r.combatMetrics : DEFAULT_SETTINGS.combatMetrics,
     prepDeployFold: typeof r.prepDeployFold === 'boolean' ? r.prepDeployFold : true,
+    // 设置「显示敌人路线与出怪点」(2026-11-08)：默认开。关掉时渲染层一条 route 都不画。
+    showRoutes: typeof r.showRoutes === 'boolean' ? r.showRoutes : true,
     quality: QUALITIES.includes(r.quality) ? r.quality : DEFAULT_SETTINGS.quality,
     officialFx: OFFICIAL_FX_MODES.includes(r.officialFx) ? r.officialFx : DEFAULT_SETTINGS.officialFx,
     otherSkins: r.otherSkins !== false,

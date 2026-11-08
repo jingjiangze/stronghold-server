@@ -198,7 +198,7 @@ export async function createFieldView(host, options = {}) {
   signal?.throwIfAborted();
   const assets = resolveAssets(opts.assets);
   const data = makeData(opts.data);
-  const settings = { damageNumbers: true, officialDamageNumbers: false, ammoEnergyCount: false, quality: 'high', officialFx: 'auto', ...(opts.settings || {}) };
+  const settings = { damageNumbers: true, officialDamageNumbers: false, ammoEnergyCount: false, showRoutes: true, quality: 'high', officialFx: 'auto', ...(opts.settings || {}) };
   // 设置「显示其他玩家的皮肤」 (docs/SKINS.md), on unless the caller said off: kept out of the literal above so the shape
   // the other settings the units read every frame are pinned by stays one line (test/ui/ammo-count.test.js)
   settings.otherSkins = settings.otherSkins !== false;
@@ -390,6 +390,10 @@ export async function createFieldView(host, options = {}) {
   try { ctx.audio?.warmLandings?.(); } catch { /* the sound is optional */ }
   const tiles = new TileField({ ground: layers.ground, overlay: layers.overlay, props: layers.units, anim: layers.anim });
   setupCleanup.push(() => tiles.destroy());
+  // 设置「显示敌人路线与出怪点」(2026-11-08): 最近一次要画的 routes，供开关切换时原样重画。
+  // 关掉时传 null 给 tiles（渲染层一条都不画），但记住 list 本身，重新打开能立刻回来。
+  let lastRoutes = null;
+  const applyRoutes = (list) => { lastRoutes = list || null; tiles.setRoutes(settings.showRoutes === false ? null : lastRoutes); };
   const fx = new FxSystem({
     P, layers, cam: () => cam, settings, assets, heightAt, redVignette: bg.red, surfaceLayer: ctx.surfaceLayer,
     timeScale: () => ctx.timeScale(),
@@ -832,7 +836,7 @@ export async function createFieldView(host, options = {}) {
     tiles.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null);
     // prep / scouting: the stage's static ground paths, so the spawn side and the lanes read before the battle (a
     // battle's own timed routes replace them in enterBattle, right after this)
-    if (mode !== 'battle') tiles.setRoutes(stageGroundRoutes(st));
+    if (mode !== 'battle') applyRoutes(stageGroundRoutes(st));
     if (board3d) { board3d.setStage(st); board3d.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null); useOfficialScene(st); }
     tiles.project(cam, true);
     // a pen laid out before the stage arrived (setPrep / a scouting board first) used the default zones and the old
@@ -1647,7 +1651,7 @@ export async function createFieldView(host, options = {}) {
     tiles.setBattleRect(rect);
     // this round's enemy lanes: server/sim/battle/events.js fieldMeta incomingRoutes ({ id, time, segments }); absent
     // for a scouting board or a field with no movable spawns
-    tiles.setRoutes(Array.isArray(meta.incomingRoutes) ? meta.incomingRoutes : null);
+    applyRoutes(Array.isArray(meta.incomingRoutes) ? meta.incomingRoutes : null);
     board3d?.setBattleRect(rect);
     for (const u of Array.isArray(meta.units) ? meta.units : []) applyInfo(u);
     // the official effects of this battle's units load now (the prep → battle switch), the board's heights for their
@@ -2322,7 +2326,7 @@ export async function createFieldView(host, options = {}) {
     /** Enemy routes / spawn points ({ segments: [[{x: col, y: row}, …]] }[]); null clears (tiles.js setRoutes). */
     setRoutes(list) {
       if (destroyed) return false;
-      tiles.setRoutes(list);
+      applyRoutes(list);
       return true;
     },
     on(name, fn) {
@@ -2422,6 +2426,11 @@ export async function createFieldView(host, options = {}) {
       if (typeof s.damageNumbers === 'boolean') settings.damageNumbers = s.damageNumbers;
       if (typeof s.officialDamageNumbers === 'boolean') settings.officialDamageNumbers = s.officialDamageNumbers;
       if (typeof s.ammoEnergyCount === 'boolean') settings.ammoEnergyCount = s.ammoEnergyCount; // the units read it every frame (ctx.settings)
+      // 设置「显示敌人路线与出怪点」: 只改画不画，不丢 list —— 关掉再打开能原样回来
+      if (typeof s.showRoutes === 'boolean' && s.showRoutes !== settings.showRoutes) {
+        settings.showRoutes = s.showRoutes;
+        applyRoutes(lastRoutes);
+      }
       // 设置「显示其他玩家的皮肤」 (docs/SKINS.md): the views already up keep the appearance they were built on, so the
       // ones the new choice changes are dropped and rebuilt from their own info on the next frame
       if (typeof s.otherSkins === 'boolean' && s.otherSkins !== settings.otherSkins) {

@@ -22,6 +22,9 @@ export class MatchPrep {
 
   enterPrep() {
     this.phase = PHASE.PREP;
+    // 攻方怪物商店兜底（幂等）：正常由 finishConfrontTargets 在目标选择结束时开，
+    // 那条路一旦漏跑，攻方整回合没有卡可投（只显示「在下方商店条点卡投放」的空提示）。
+    if (typeof this.ensureMonsterShops === 'function') this.ensureMonsterShops();
     this.sp = null;
     const prep = this.prepPlayers();
     for (const ps of prep) {

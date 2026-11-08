@@ -497,10 +497,10 @@ function FunSelect({ onClose, onPick, busy, lobbyStats = null, onJoinRoom = null
   const cells = [
     { id: 'xie', name: t('协同共竞'), en: 'JOINT OP', icon: 'joint', acc: 'var(--gold)',
       desc: t('两人共竞：团队储备、三项商店升级、借贷、救济与救援。') },
-    { id: 'bounty', name: t('赏金'), en: 'BOUNTY', icon: 'bounty', acc: 'var(--ice)',
-      desc: t('2V2 攻防：官方出怪为主，你替换其中一部分，靠自家怪被击杀拿赏金；建房时可选倍速。') },
-    { id: 'confront', name: t('对战 · 控怪'), en: 'CONFRONT', icon: 'confront', acc: 'var(--orange)',
-      desc: t('出怪、路线、时机全部由你决定；守方遇到的怪约为官方的 1.5 倍。') },
+    // 赏金 / 控怪 本来就是「对战」的两档（点进来后在建房面板里选），这里合并成一张卡，
+    // 不再让同一档规则出现两次（2026-11-08 业主：早就该是一个选项）。
+    { id: 'versus', name: t('对战'), en: 'VERSUS', icon: 'confront', acc: 'var(--orange)',
+      desc: t('2V2 攻防，赏金 / 控怪两档：赏金＝官方出怪为主、你替换其中一部分；控怪＝出怪、路线、时机全部由你决定。') },
     { id: 'rogue', name: t('肉鸽模式'), en: 'ROGUELIKE', icon: 'rogue', acc: 'var(--violet)',
       desc: t('藏品按节点给（得偿所愿/事件/商店），外加随机词缀、随机事件与每回合换图。') },
   ];

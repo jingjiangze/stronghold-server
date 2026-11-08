@@ -465,6 +465,8 @@ export function SettingsModal({ open, onClose }) {
       <p class="set-hint">${t('打开后，对局左下角可以查看自己干员的伤害、治疗和 DPS / HPS。官方界面没有这个窗口。改变玩法的插件对局在 Worker 里演算，统计不到，按钮不显示。')}</p>
       <${Toggle} label=${t('部署时收起商店')} micro="DEPLOY FOLD" value=${s.prepDeployFold} onChange=${(v) => updateSettings({ prepDeployFold: v })} />
       <p class="set-hint">${t('拖起干员、装备或召唤物，以及放下后选择朝向时，临时收起商店并放大棋盘。关闭后，拿起时既不改变商店的收起状态，也不缩放镜头。')}</p>
+      <${Toggle} label=${t('显示敌人路线与出怪点')} micro="ENEMY ROUTES" value=${s.showRoutes} onChange=${(v) => updateSettings({ showRoutes: v })} />
+      <p class="set-hint">${t('关闭后，棋盘上不再画出怪点与敌人行进路线，只留地形与部署格。')}</p>
       <div class="set-row">
         <span class="set-row__label">${t('画面质量')}<${MicroLabel}>QUALITY<//></span>
         <div class="set-seg" role="radiogroup">
