@@ -187,7 +187,6 @@ export class MatchViews {
             // 2026-11-01 P1（审计 D12/D13/死 UI）：规则档与同盟狩猎标记下发（客户端 conf.hunt 以前读不到）；
             // 事件期 boss 格下发（池 + 上限），客户端据此渲染选择区 —— boss 不占预算、不计只数上限
             versusRule: this.versusRule || null,
-            _diag: { shopOn: this.monsterShopOn === true, calls: this._ensureCalls || 0, why: this._ensureWhy || null },  // TEMP-DIAG 2026-11-08
             hunt: typeof this.coopHuntActive === 'function' ? this.coopHuntActive() : false,
             bosses: {
               open: this.confrontBossOpen ? this.confrontBossOpen() : false,

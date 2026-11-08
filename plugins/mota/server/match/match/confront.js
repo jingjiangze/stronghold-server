@@ -684,15 +684,14 @@ export class MatchConfront {
    * @returns {number} 本次真正新开的商店数（0 = 本来就都开着，或本回合不该有商店）
    */
   ensureMonsterShops() {
-    this._ensureCalls = (this._ensureCalls || 0) + 1;
-    if (!this.monsterShopOn) { this._ensureWhy = "shopOn=false"; return 0; }
-    if (this.phase !== PHASE.PREP) { this._ensureWhy = "phase=" + this.phase; return 0; }
-    if (typeof this.isRoleRound === 'function' && !this.isRoleRound()) { this._ensureWhy = "notRoleRound"; return 0; }
+    if (!this.monsterShopOn) return 0;
+    if (this.phase !== PHASE.PREP) return 0;
+    if (typeof this.isRoleRound === 'function' && !this.isRoleRound()) return 0;
     if (typeof this.confrontActors !== 'function') return 0;
     const solo = this.monsterMode === 'solo';
     const master = this.monsterMode === 'master';
     const actors = this.confrontActors().filter((ps) => (!solo && !master) || this.monsterPlaceActor(ps));
-    if (!actors.length) { this._ensureWhy = "noActors"; return 0; }
+    if (!actors.length) return 0;
     // 池按队（solo 按人）—— 缺的补建，与 finishConfrontTargets 同一口径
     this.monsterPools ||= new Map();
     const poolKeyOf = (ps) => (solo ? ps.playerId : (typeof this.teamIdOf === 'function' ? this.teamIdOf(ps) : 0));
@@ -701,7 +700,6 @@ export class MatchConfront {
       if (!this.monsterPools.has(k)) this.monsterPools.set(k, buildMonsterPool(this));
     }
     let opened = 0;
-    this._ensureWhy = "ok:" + actors.length;
     for (const ps of actors) {
       if (!ps.monsterShop) {
         try { openMonsterShop(this, ps); opened += 1; } catch (e) { this.reportError('monster shop ensure', e); continue; }
