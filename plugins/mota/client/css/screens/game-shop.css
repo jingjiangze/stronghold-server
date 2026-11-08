@@ -100,7 +100,8 @@
 .scard-wrap { display: flex; }
 .scard {
   --tc: var(--tier-1);
-  position: relative; width: 1.56rem; height: 2.24rem; padding: 0; overflow: hidden; text-align: left;
+  /* 卡宽与目标站对齐（2026-11-09）：目标 129×168 @75px 根字号 ⇒ 1.72rem（我们原来 1.56rem=117px） */
+  position: relative; width: 1.72rem; height: 2.24rem; padding: 0; overflow: hidden; text-align: left;
   display: flex; flex-direction: column; justify-content: flex-end;
   background: #151a18; border: 1px solid rgba(78, 216, 175, .35);
   transition: transform var(--t-fast) var(--ease-out), border-color var(--t-fast), box-shadow var(--t-fast);
