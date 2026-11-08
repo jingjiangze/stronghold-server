@@ -750,3 +750,12 @@
 .rpn-detail__h { font-size: 11px !important; letter-spacing: .1em; color: rgba(223, 230, 226, .5) !important; margin: 0 0 3px !important; }
 .rpn-detail__rows > div { border-bottom: 1px solid rgba(223, 230, 226, .1); padding: 3px 0; }
 .rpn-detail__focus { border: 0 !important; border-left: 2px solid var(--c, #4ed8af) !important; background: transparent !important; padding: 2px 0 2px 7px !important; }
+
+/* 节点面板收紧（2026-11-09 二版）：候选行别把名字挤掉，节点方块压成小图标格 */
+.rpn-row { grid-template-columns: 16px minmax(52px, 1fr) auto auto !important; gap: 6px !important; padding: 5px 6px !important; }
+.rpn-row__meta, .rpn-row__cost, .rpn-row__mark { font-size: 10px !important; }
+.rpn-row__reward { display: none; }         /* 奖励并到 title/详情里，行内只留类型·阶级与消耗 */
+.rpn-row__name { font-size: 12px; }
+.rpn-graph__node { min-height: 26px !important; padding: 2px 5px !important; font-size: 11px !important; }
+.rpn-graph__icon { width: 12px !important; height: 12px !important; }
+.rpn-graph__stack { gap: 4px !important; }
