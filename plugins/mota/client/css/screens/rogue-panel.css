@@ -624,37 +624,37 @@
 
 /* ---- 节点详情里的地图预览 + 确认前往（2026-11-08）----
    以前点节点就直接出发，选之前看不到这张图长什么样、怪从哪来。现在候选与详情分两步：
-   点 = 只看（图 + 出怪路线），「前往此节点」才提交。 */
+   点 = 只看（图 + 出怪路线），「前往此节点」才提交。
+   ⚠ 这里一律用 px：应用把根字号设到 75px，rem 在这块面板里会把按钮放大成方块。 */
 .rpn-detail__map {
-  margin: .45rem 0 .1rem;
-  padding: .35rem;
+  margin: 6px 0 2px;
+  padding: 5px;
   border: 1px solid rgba(0, 226, 228, .18);
-  border-radius: .35rem;
+  border-radius: 5px;
   background: rgba(6, 12, 20, .55);
 }
-.rpn-detail__map .rpn-map__svg { width: 100%; height: auto; max-height: 6.6rem; display: block; }
+.rpn-detail__map .rpn-map__svg { width: 100%; height: auto; max-height: 120px; display: block; }
 .rpn-detail__mapnote {
-  margin: .3rem 0 0;
-  font-size: .62rem;
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.25;
   letter-spacing: .02em;
   color: rgba(223, 230, 226, .58);
 }
-.rpn-detail__act { margin: .45rem 0 .1rem; display: flex; justify-content: flex-end; }
+.rpn-detail__act { margin: 6px 0 2px; display: flex; justify-content: flex-end; }
 .rpn-confirm {
-  padding: .38rem .9rem;
-  font: inherit;
-  font-size: .72rem;
+  padding: 5px 13px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.3;
   color: #06121a;
   background: linear-gradient(180deg, #6ff0d8, #2fbfa4);
   border: 0;
-  border-radius: .3rem;
+  border-radius: 4px;
   cursor: pointer;
   transition: filter .12s ease;
+  white-space: nowrap;
 }
 .rpn-confirm:hover:not(:disabled) { filter: brightness(1.08); }
 .rpn-confirm:disabled { opacity: .45; cursor: not-allowed; }
-.rpn-detail__actdone {
-  font-size: .68rem;
-  color: #ffc75a;
-  letter-spacing: .02em;
-}
+.rpn-detail__actdone { font-size: 11px; color: #ffc75a; letter-spacing: .02em; }
