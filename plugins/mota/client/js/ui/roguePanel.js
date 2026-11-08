@@ -251,6 +251,13 @@ export function nodeGraph(nodes) {
   const nextRound = Number(nodes && nodes.nextRound) || 0;
   const nextIndex = candIds.size && nextRound > 0 ? nextRound - 1 : -1;
   const nextPicked = nodes && nodes.nextPicked ? String(nodes.nextPicked) : '';
+  // 候选↔具体关卡（2026-11-08）：服务端只在 choices / nextChoices 上带 `stageId`（sequence 不带，省帧），
+  // 这里并成一张表，下面的节点对象照 id 取 —— 点候选时详情才能直接预览那张图和它的出怪路线。
+  const stageById = new Map();
+  for (const src of [nodes && nodes.choices, nextChoices, nodes && nodes.sequence]) {
+    if (!Array.isArray(src)) continue;
+    for (const n of src) if (n && n.id != null && n.stageId) stageById.set(String(n.id), String(n.stageId));
+  }
 
   // —— 分组：按 layer 首现顺序分列（一遍遍历，单层 1 个节点也不丢）——
   const layers = [];
@@ -271,7 +278,7 @@ export function nodeGraph(nodes) {
       tier: n.tier == null ? '' : String(n.tier),
       cost: Number(n.cost) || 0,
       // 候选绑定的具体关卡（服务端 2026-11-08 起下发）：节点图详情据此直接预览这张图与它的出怪路线
-      stageId: n.stageId ? String(n.stageId) : '',
+      stageId: n.stageId ? String(n.stageId) : (stageById.get(String(n.id)) || ''),
       state: 'future',
       picked: false,
     });
@@ -551,6 +558,8 @@ function graphLink(link, col, next) {
  */
 export function RoguePanel({ pub, relicCards = null, open = false, blocked = false, onClose, onPickNode }) {
   const stagesReady = useData('stages');
+  // 出怪路线要读 waves 表（rogue_* 关卡 id 就是 waves 的 key）：不订阅的话首次打开可能还没加载
+  const wavesReady = useData('waves');
   const [tab, setTab] = useState('nodes');
   const [busy, setBusy] = useState(null);
   // 节点图上「被点开看详情」的节点 id（只影响右下详情栏，不发送任何意图）
@@ -618,7 +627,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
 
   const stage = stagesReady && pub && pub.stageId ? data.lookup('stages', pub.stageId) : null;
   // 出怪路线（2026-11-08）：waves.json 的 routes[].steps 是真实折线，和缩略图一起画出来。
-  const stageWave = stagesReady && pub && pub.stageId ? data.lookup('waves', pub.stageId) : null;
+  const stageWave = wavesReady && pub && pub.stageId ? data.lookup('waves', pub.stageId) : null;
   const model = tab === 'map' ? buildMinimapModel(stage, stageWave) : null;
   const backdrop = tab === 'map' ? backdropPath(pub && pub.stageId) : null;
   const mapStats = tab === 'map' ? minimapStats(model) : null;
@@ -632,7 +641,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   // 焦点节点绑定的那张图（服务端下发 stageId）+ 它的出怪路线：详情栏直接预览，选之前就看得到。
   const focusStageId = focus && focus.node && focus.node.stageId ? focus.node.stageId : '';
   const focusStage = focusStageId && stagesReady ? data.lookup('stages', focusStageId) : null;
-  const focusWave = focusStageId && stagesReady ? data.lookup('waves', focusStageId) : null;
+  const focusWave = focusStageId && wavesReady ? data.lookup('waves', focusStageId) : null;
   const focusModel = focusStage ? buildMinimapModel(focusStage, focusWave) : null;
   const focusIsCandidate = !!(focus && focus.node && focus.node.state === 'candidate');
   const focusPicked = !!(focus && focus.node && focus.node.picked);
