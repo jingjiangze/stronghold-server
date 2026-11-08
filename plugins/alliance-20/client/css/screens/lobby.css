@@ -206,6 +206,10 @@
   border: 1px solid var(--line);
 }
 .tips__head { display: flex; align-items: center; gap: .1rem; font-size: calc(.16 * var(--t)); font-weight: 700; color: var(--text-md); }
+/* 2026-11-09：左栏只有 ~3rem 宽时标题会被逐字折行（竖排）—— 一律单行，EN 小标在挤不下时先让位 */
+.tips__head { flex-wrap: nowrap; }
+.tips__head > span, .tips__head > .tips__idx, .tips__head > button { white-space: nowrap; flex: 0 0 auto; }
+.tips__head > .micro { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tips__head > .icon { width: .2rem; height: .2rem; color: var(--mint-500); }
 .tips__idx { margin-left: auto; font-size: calc(.16 * var(--t)); color: var(--text-md); }
 .tips__nav {
@@ -748,7 +752,8 @@
 
 /* the centre spans the whole first row so the emblem sits in the middle of the screen; both columns lie above it */
 .hub-stage { flex: 1 1 auto; min-height: 0; display: grid; padding: .1rem .36rem .36rem;
-  grid-template-columns: minmax(2.6rem, 3.2rem) 1fr calc(var(--hub-entry-w) * 2 + var(--hub-gap));
+  /* 左栏宽度对齐目标站（2026-11-09）：2.6/3.2rem ≈ 195–240px 会把「作战提示」挤成竖排，目标站约 300px */
+  grid-template-columns: minmax(3.05rem, 3.55rem) 1fr calc(var(--hub-entry-w) * 2 + var(--hub-gap));
   grid-template-rows: minmax(0, 1fr) auto; gap: .2rem .4rem; }
 .hub-center { grid-column: 1 / -1; grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; pointer-events: none; }
