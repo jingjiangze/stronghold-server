@@ -564,6 +564,9 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const [busy, setBusy] = useState(null);
   // 节点图上「被点开看详情」的节点 id（只影响右下详情栏，不发送任何意图）
   const [focusId, setFocusId] = useState(null);
+  // 节点图视图（2026-11-08）：'focus' = 只画「本层 + 下一层」并配一条区域进度（官方就是这个节奏，
+  // 也避免一开局就把 14 层全剧透）；'all' = 原来的 14 层总览，随时可切回。
+  const [graphView, setGraphView] = useState('focus');
   // 关掉面板时清忙态与详情焦点：下一次打开不该继承上一张卡片的 spinner / 上一局的选中项
   useEffect(() => { if (!open) { setBusy(null); setFocusId(null); } }, [open]);
 
@@ -672,6 +675,48 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
 
   const pageProps = { role: 'tabpanel', id: `rpn-page-${tab}`, 'aria-labelledby': `rpn-tab-${tab}` };
 
+  // 一个图上的节点按钮（两种视图共用；点它只是切详情，发包在右下「前往此节点」）。
+  const nodeBtn = (n, col) => html`<button key=${n.id} type="button"
+      class=${cls('rpn-graph__node', `is-${n.state}`, n.picked && 'is-picked',
+        n.state === 'candidate' && !canSend && 'is-readonly')}
+      style=${`--c:${typeColor(n.type)}`}
+      data-node-id=${n.id} data-graph-node="1" data-type=${n.type} data-state=${n.state}
+      data-layer=${col.key}
+      aria-current=${n.state === 'taken' ? 'true' : null}
+      aria-label=${`${t('第 {n} 层', { n: col.index + 1 })} · ${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${n.cost ? ` · -${n.cost} AP` : ''}`}
+      title=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}`}
+      onClick=${() => selectNode(n)}>
+      <img class="rpn-graph__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
+      <span class="rpn-graph__name">${n.name || typeName(n.type)}</span>
+      ${n.state === 'taken' ? html`<span class="rpn-graph__ok" aria-hidden="true">✓</span>` : null}
+    </button>`;
+
+  // 聚焦视图（默认）：区域进度 + 「本层 → 下一层」两行。官方就是这个节奏，也不会一开局剧透 14 层。
+  const viewCurCol = graph.layers.find((c) => c.state === 'current') || null;
+  const viewNextCol = graph.layers.find((c) => c.state === 'next') || null;
+  const focusView = html`<div class="rpn-focus" data-testid="rogue-nodes-focus">
+    <ol class="rpn-focus__pips" aria-label=${t('区域进度')}>
+      ${graph.layers.map((c) => html`<li key=${c.key}
+        class=${cls('rpn-focus__pip', `is-${c.state}`)}
+        title=${c.state === 'future' ? t('第 {n} 层', { n: c.index + 1 }) : (layerTitle(c.name) || t('第 {n} 层', { n: c.index + 1 }))}>
+        ${c.state === 'future' ? '?' : c.index + 1}
+      </li>`)}
+    </ol>
+    <div class="rpn-focus__row" data-row="current">
+      <span class="rpn-focus__label">${t('本层')}</span>
+      <span class="rpn-focus__nodes">
+        ${viewCurCol ? viewCurCol.nodes.map((n) => nodeBtn(n, viewCurCol)) : html`<em class="rpn-focus__none">${t('尚未开局')}</em>`}
+      </span>
+    </div>
+    <div class="rpn-focus__arrow" aria-hidden="true"></div>
+    <div class="rpn-focus__row" data-row="next">
+      <span class="rpn-focus__label">${t('下一层')}</span>
+      <span class="rpn-focus__nodes">
+        ${viewNextCol ? viewNextCol.nodes.map((n) => nodeBtn(n, viewNextCol)) : html`<em class="rpn-focus__none">${t('已是最终层')}</em>`}
+      </span>
+    </div>
+  </div>`;
+
   const nodesPage = html`<div class="rpn-nodes" ...${pageProps}>
     <section class="rpn-graph" aria-label=${t('节点图')} data-testid="rogue-nodes"
       data-layers=${String(graph.layers.length)} data-graph-root="1">
@@ -680,7 +725,12 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
         <span class="rpn-graph__meta">${graph.layers.length
           ? t('{done}/{total} 层', { done: Math.max(0, Math.min(currentIndex + 1, graph.layers.length)), total: graph.layers.length })
           : '—'}</span>
-        <span class="rpn-graph__hint">${t('点节点看详情；青色的是下一层候选，点一下就选中')}</span>
+        <span class="rpn-graph__hint">${t('点节点看详情；青色的是下一层候选，确认后在右侧「前往此节点」出发')}</span>
+        <button type="button" class=${cls('rpn-graph__view', graphView === 'all' && 'is-on')}
+          data-testid="rogue-nodes-view" aria-pressed=${graphView === 'all' ? 'true' : 'false'}
+          onClick=${() => setGraphView(graphView === 'all' ? 'focus' : 'all')}>
+          ${graphView === 'all' ? t('本层视图') : t('全部层')}
+        </button>
         <ul class="rpn-graph__legend" aria-label=${t('节点图例')}>
           <li><i class="is-past" aria-hidden="true"></i>${t('已通过')}</li>
           <li><i class="is-now" aria-hidden="true"></i>${t('当前')}</li>
@@ -688,7 +738,9 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
           <li><i class="is-todo" aria-hidden="true"></i>${t('未到')}</li>
         </ul>
       </div>
-      ${graph.layers.length ? html`<div class="rpn-graph__cols" style=${`--cols:${graph.layers.length}`}>
+      ${!graph.layers.length ? html`<p class="rpn-empty">${t('本局没有节点数据：服务端未安装 roguelike-core。')}</p>`
+        : graphView === 'focus' ? focusView
+        : html`<div class="rpn-graph__cols" style=${`--cols:${graph.layers.length}`}>
         ${graph.layers.map((col) => {
           const link = graph.links.find((l) => l.gap === col.index) || null;
           const next = link ? graph.layers[col.index + 1] : null;
@@ -700,24 +752,11 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
             </div>
             <div class="rpn-graph__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
               ${link && next ? graphLink(link, col, next) : null}
-              ${col.nodes.map((n) => html`<button key=${n.id} type="button"
-                class=${cls('rpn-graph__node', `is-${n.state}`, n.picked && 'is-picked',
-                  n.state === 'candidate' && !canSend && 'is-readonly')}
-                style=${`--c:${typeColor(n.type)}`}
-                data-node-id=${n.id} data-graph-node="1" data-type=${n.type} data-state=${n.state}
-                data-layer=${col.key}
-                aria-current=${n.state === 'taken' ? 'true' : null}
-                aria-label=${`${t('第 {n} 层', { n: col.index + 1 })} · ${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${n.cost ? ` · -${n.cost} AP` : ''}`}
-                title=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}`}
-                onClick=${() => selectNode(n)}>
-                <img class="rpn-graph__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
-                <span class="rpn-graph__name">${n.name || typeName(n.type)}</span>
-                ${n.state === 'taken' ? html`<span class="rpn-graph__ok" aria-hidden="true">✓</span>` : null}
-              </button>`)}
+              ${col.nodes.map((n) => nodeBtn(n, col))}
             </div>
           </div>`;
         })}
-      </div>` : html`<p class="rpn-empty">${t('本局没有节点数据：服务端未安装 roguelike-core。')}</p>`}
+      </div>`}
     </section>
 
     <div class="rpn-nodes__foot">

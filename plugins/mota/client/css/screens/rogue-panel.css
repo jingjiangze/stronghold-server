@@ -658,3 +658,28 @@
 .rpn-confirm:hover:not(:disabled) { filter: brightness(1.08); }
 .rpn-confirm:disabled { opacity: .45; cursor: not-allowed; }
 .rpn-detail__actdone { font-size: 11px; color: #ffc75a; letter-spacing: .02em; }
+
+/* ---- 聚焦视图（2026-11-08）：区域进度 + 「本层 → 下一层」两行 ----
+   官方一局是「区域 → 关卡图」，不是一次摊开 14 层；这里默认聚焦，右上角可切「全部层」。
+   同样一律 px（根字号 75px，rem 会放大）。 */
+.rpn-focus { display: flex; flex-direction: column; gap: 9px; padding: 7px 3px; min-height: 0; overflow-y: auto; }
+.rpn-focus__pips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.rpn-focus__pip {
+  width: 19px; height: 19px; display: grid; place-items: center;
+  font-size: 10px; line-height: 1; font-family: var(--font-mono);
+  color: rgba(166, 188, 207, .72); border: 1px solid rgba(166, 188, 207, .35); border-radius: 50%;
+}
+.rpn-focus__pip.is-done { color: #06121a; background: #ffb80d; border-color: transparent; }
+.rpn-focus__pip.is-current { color: #ffd76a; border-color: #ffd76a; box-shadow: 0 0 0 2px rgba(255, 184, 13, .22); }
+.rpn-focus__pip.is-next { color: #7ff0ff; border-color: rgba(0, 226, 228, .7); }
+.rpn-focus__row { display: flex; align-items: center; gap: 9px; }
+.rpn-focus__label { flex: 0 0 auto; font-size: 10px; letter-spacing: .08em; color: rgba(223, 230, 226, .6); }
+.rpn-focus__nodes { display: flex; flex-wrap: wrap; gap: 6px; }
+.rpn-focus__none { font-size: 11px; font-style: normal; color: rgba(223, 230, 226, .45); }
+.rpn-focus__arrow { height: 11px; margin-left: 40px; border-left: 1px dashed rgba(0, 226, 228, .45); }
+.rpn-graph__view {
+  margin-left: auto; padding: 3px 9px; font: inherit; font-size: 10px;
+  color: rgba(223, 230, 226, .75); background: transparent;
+  border: 1px solid rgba(0, 226, 228, .3); border-radius: 3px; cursor: pointer;
+}
+.rpn-graph__view:hover { border-color: rgba(0, 226, 228, .65); color: #dfe6e2; }
