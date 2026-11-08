@@ -250,7 +250,17 @@ export function roundPick(gd, rng, factionsOrSetup, round) {
 }
 
 /** Enemy scale mods for round r (bosses excluded by the caller). */
+/**
+ * 本回合的敌人缩放（hpMul / atkMul / speedMul）。
+ *
+ * 肉鸽（2026-11-09 业主裁决 A 方案）：**难度只由「节点档位 → 关卡池」这一条曲线决定**，不再按回合累乘 enemyScale ——
+ * 那张表是 solo / coop / versus 共用的陡坡，和档位曲线相乘会把后半程顶穿（R14 3.34× × tier7）。
+ * 难度档 N1…N20 仍然有效：用**它自己的第 1 回合系数**当常数（n1 = 0.8/0.8、n10 = 0.9/0.93、n15/20 = 1.1/1.2），
+ * 不再随回合增长；不新造任何数值。其它模式行为逐字节不变。
+ */
 export function scaleFor(gd, r) {
+  const modeId = String((gd && gd.modeId) || '');
+  if (modeId.startsWith('mode_rogue_')) return gd.enemyScale(1);
   return gd.enemyScale(r);
 }
 
