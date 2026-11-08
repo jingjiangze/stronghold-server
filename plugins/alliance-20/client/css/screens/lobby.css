@@ -3084,7 +3084,7 @@ button.ally-card:disabled { filter: grayscale(.7) brightness(.7); cursor: defaul
 
 /* the centre spans the whole first row so the emblem sits in the middle of the screen; both columns lie above it */
 .hub-stage { flex: 1 1 auto; min-height: 0; display: grid; padding: .1rem .36rem .36rem;
-  grid-template-columns: minmax(2.6rem, 3.2rem) 1fr calc(var(--hub-entry-w) * 2 + var(--hub-gap));
+  grid-template-columns: minmax(6.2rem, 6.9rem) 1fr calc(var(--hub-entry-w) * 2 + var(--hub-gap));
   grid-template-rows: minmax(0, 1fr) auto; gap: .2rem .4rem; }
 .hub-center { grid-column: 1 / -1; grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; pointer-events: none; }
