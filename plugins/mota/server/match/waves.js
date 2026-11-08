@@ -260,7 +260,12 @@ export function roundPick(gd, rng, factionsOrSetup, round) {
  */
 export function scaleFor(gd, r) {
   const modeId = String((gd && gd.modeId) || '');
-  if (modeId.startsWith('mode_rogue_')) return gd.enemyScale(1);
+  if (modeId.startsWith('mode_rogue_')) {
+    // 取本局**中段**的那一档当常数：同一局内不再随回合增长，但 N1…N20 之间仍能拉开
+    // （n1 的第 1 回合和第 8 档的第 1 回合同为 0.8，只看首回合会把 N1–N8 抹平）。
+    const last = Math.max(1, Number(gd.lastRound) || 14);
+    return gd.enemyScale(Math.max(1, Math.ceil(last / 2)));
+  }
   return gd.enemyScale(r);
 }
 
