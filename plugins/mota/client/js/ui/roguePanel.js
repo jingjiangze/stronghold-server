@@ -773,15 +773,15 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
           </span>
           <span class="rpn-detail__fcost">${focus.node.cost ? `-${focus.node.cost} AP` : t('免费')}</span>
         </div>` : null}
-        ${focusModel ? html`<div class="rpn-detail__map" data-testid="rpn-focus-map">
-          ${minimap(focusModel)}
-          <p class="rpn-detail__mapnote">${mapLabel(focusStageId) || '—'}${focusModel.routes.length ? ` · ${t('出怪路线 {n} 条', { n: focusModel.routes.length })}` : ` · ${t('无出怪路线')}`}</p>
-        </div>` : null}
         ${focus && (focusIsCandidate || focusPicked) ? html`<div class="rpn-detail__act">
           ${focusPicked
             ? html`<span class="rpn-detail__actdone">${t('已选为下一层')}</span>`
             : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}
                 onClick=${() => pick(focus.node.id)}>${t('前往此节点')}${focus.node.cost ? `（-${focus.node.cost} AP）` : ''}</button>`}
+        </div>` : null}
+        ${focusModel ? html`<div class="rpn-detail__map" data-testid="rpn-focus-map">
+          ${minimap(focusModel)}
+          <p class="rpn-detail__mapnote">${mapLabel(focusStageId) || '—'}${focusModel.routes.length ? ` · ${t('出怪路线 {n} 条', { n: focusModel.routes.length })}` : ` · ${t('无出怪路线')}`}</p>
         </div>` : null}
         <dl class="rpn-detail__rows">
           <div><dt>${t('当前层')}</dt><dd>${currentIndex >= 0
