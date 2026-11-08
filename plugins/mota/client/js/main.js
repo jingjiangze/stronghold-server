@@ -296,7 +296,13 @@ function wireNet() {
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');
   });
   net.on('m.public', (msg) => { matchAt = Date.now(); store.patch('match', { public: payload(msg) }); maybeFinishRestore(); });
-  net.on('m.private', (msg) => { matchAt = Date.now(); store.patch('match', { private: payload(msg) }); });
+  net.on('m.private', (msg) => {
+    matchAt = Date.now();
+    const p = payload(msg);
+    // 私有帧里若带攻方商店（服务端 privateView 搭的），一并落到 store.match.monsterShop ——
+    // 独立 m.monsterShop 帧只在开店那一刻发一次，错过就整回合没有卡牌区。
+    store.patch('match', p && p.monsterShop ? { private: p, monsterShop: p.monsterShop } : { private: p });
+  });
   // 怪物卡池（2026-11-03）：攻方怪物商店的私有帧 —— 服务端每次成功买卡 / 刷新 / 冻结推一帧新的（公共帧刻意不带商店，
   // 见 server/match/monsterShop.js）。客户端只读这一帧，不本地维护 slots / 草稿。
   net.on('m.monsterShop', (msg) => { store.patch('match', { monsterShop: payload(msg) }); });

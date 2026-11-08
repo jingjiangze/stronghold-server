@@ -10,6 +10,9 @@ import { bountyText, bountyCard } from '../choices.js';
 import { relicEffectApplied } from '../match/meltdown.js';
 // 攻方回合（2026-11-04 业主口径）：干员盟约整条链关闭 —— 视图出口闸门用同一个角色判据。
 import { isAttackerRound } from '../monsterBonds.js';
+// 攻方怪物商店帧（2026-11-09）：独立 m.monsterShop 只在开店那一刻推一次，客户端接不住就整回合没有卡牌区，
+// 这里把它搭在私有视图上随每次推送重发。
+import { monsterShopFrame } from '../monsterShop.js';
 
 export class PlayerViews {
   pieceView(p, rc = null) {
@@ -75,10 +78,15 @@ export class PlayerViews {
     // same probe as the public side (views.js econPublicView): only while the rule set is on, so a plain match's
     // private frame is byte-identical to upstream's.
     const econ = this.m && this.m.teamEcon && typeof this.m.econPrivateFor === 'function' ? this.m.econPrivateFor(this) : null;
+    // 攻方商店（只有真开着店才有）：随私有视图重发，客户端不再依赖那一次性帧
+    const monsterShop = this.m && this.m.monsterShopOn === true && this.monsterShop
+      ? (() => { try { return monsterShopFrame(this.m, this); } catch { return null; } })()
+      : null;
     return {
       t: 'm.private',
       playerId: this.playerId,
       ...(econ ? { econ } : {}),
+      ...(monsterShop ? { monsterShop } : {}),
       seat: this.seat,
       alive: this.alive,
       lp: this.lp,
