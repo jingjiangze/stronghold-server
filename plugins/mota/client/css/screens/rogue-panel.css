@@ -672,9 +672,10 @@
 .rpn-focus__pip.is-done { color: #06121a; background: #ffb80d; border-color: transparent; }
 .rpn-focus__pip.is-current { color: #ffd76a; border-color: #ffd76a; box-shadow: 0 0 0 2px rgba(255, 184, 13, .22); }
 .rpn-focus__pip.is-next { color: #7ff0ff; border-color: rgba(0, 226, 228, .7); }
-.rpn-focus__row { display: flex; align-items: center; gap: 9px; }
+.rpn-focus__row { display: flex; align-items: flex-start; gap: 9px; }
+.rpn-focus__row .rpn-graph__node { width: 100%; max-width: none; }
 .rpn-focus__label { flex: 0 0 auto; font-size: 10px; letter-spacing: .08em; color: rgba(223, 230, 226, .6); }
-.rpn-focus__nodes { display: flex; flex-wrap: wrap; gap: 6px; }
+.rpn-focus__nodes { display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; }
 .rpn-focus__none { font-size: 11px; font-style: normal; color: rgba(223, 230, 226, .45); }
 .rpn-focus__arrow { height: 11px; margin-left: 40px; border-left: 1px dashed rgba(0, 226, 228, .45); }
 .rpn-graph__view {
