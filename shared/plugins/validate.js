@@ -26,10 +26,13 @@ export function validateReferences(f, { officialOwnedSkills = true } = {}) {
     for (const t of c.talents || []) if (t.tokenKey && !c.tokens.includes(t.tokenKey)) err(`chess ${c.chessId}: talent token ${t.tokenKey} not in tokens`);
     if (c.isDiy) continue;
     if (!c.stats) err(`chess ${c.chessId}: no stats`);
-    if (!c.skill) err(`chess ${c.chessId}: no resolvable skill`);
+    // 无技能干员（noSkill:true / skill:null，如虎狼丸 char_4220_kormr）：没有可解析技能是数据本来的形态，
+    // 运行时由 Skill 构造的 `this.noSkill = !spec` 接管（server/sim/skills.js:131）⇒ 不要求 skills[] 里有默认项。
+    const noSkill = c.noSkill === true && !c.skill;
+    if (!c.skill && !noSkill) err(`chess ${c.chessId}: no resolvable skill`);
     if (!Array.isArray(c.rangeGrid)) err(`chess ${c.chessId}: no range grid`);
     // DESIGN §16 loadout choices
-    if (!Array.isArray(c.skills) || c.skills.filter((s) => s.isDefault).length !== 1 || c.skills.find((s) => s.isDefault)?.skillId !== c.skill?.skillId) err(`chess ${c.chessId}: skills[] without exactly one default = skill`);
+    if (!noSkill && (!Array.isArray(c.skills) || c.skills.filter((s) => s.isDefault).length !== 1 || c.skills.find((s) => s.isDefault)?.skillId !== c.skill?.skillId)) err(`chess ${c.chessId}: skills[] without exactly one default = skill`);
     if (c.modules && (c.modules.filter((m) => m.isDefault).length !== (c.module?.active ? 1 : 0) || !c.statsBase || !c.traitBase || !c.talentsBase)) err(`chess ${c.chessId}: inconsistent module choices`);
     // The old `placement` string is not a field. 高台 is the boolean `placeOnRanged` (build-data, from the Chinese
     // trait), read by shared/highGround.js, which still matches the Simplified line when the flag is absent.
@@ -49,11 +52,20 @@ export function validateReferences(f, { officialOwnedSkills = true } = {}) {
       const r = standInRecord(c, backups);
       // 0.4.3 compatibility: chess_owner_* records are base-data ownership rows with no backup.charId
       // (nothing to compose), so a missing stand-in is expected; only report a claimed stand-in miss.
-      if (!r) { if (b?.charId) err(`chess ${c.chessId}: no stand-in ${b.charId}@${statusKey(c.status)} in backups.json`); continue; }
+      // b.charId === c.charId：补位指向自己（这些兼容行本来就没有可比对的替身），与上面的 chess_owner_* 同理，
+      // 不报「缺替身」——standInRecord 在 b.charId === chess.charId 时会主动返回 null。
+      if (!r) { if (b?.charId && b.charId !== c.charId) err(`chess ${c.chessId}: no stand-in ${b.charId}@${statusKey(c.status)} in backups.json`); continue; }
       if (!r.stats || !Array.isArray(r.rangeGrid) || !r.trait) err(`chess ${c.chessId}: stand-in ${b.charId} without stats / range / trait`);
       if (r.skill?.index !== b.skillIndex || r.skills.filter((s) => s.isDefault).length !== 1) err(`chess ${c.chessId}: stand-in skill ${b.skillIndex} is not unlocked at ${statusKey(c.status)}`);
       if (b.uniEquipId && c.status.equipLevel > 0 && !r.module?.active) err(`chess ${c.chessId}: stand-in module ${b.uniEquipId} has no level ${c.status.equipLevel}`);
-      if (r.tokens.length) err(`chess ${c.chessId}: stand-in ${b.charId} summons ${r.tokens.join(', ')} (no tokens.json variant)`);
+      // stand-in 的召唤物：0.3.3 禁止替身带 token；0.4.3 起 backups.tokens 有按「替身@形态」的 variants，
+      // 只要该形态下有变体就是合法的（与下面 DIY pick 的同一条判据一致）。缺变体才报。
+      if (r.tokens.length) {
+        const form = `${b.charId}@${statusKey(c.status)}`;
+        for (const t of r.tokens) {
+          if (!backups.tokens?.[t]?.variants?.[form]) err(`chess ${c.chessId}: stand-in ${b.charId} summons ${t} with no variant at ${form}`);
+        }
+      }
     }
     for (const [id, s] of Object.entries(backups.diy.slots)) {
       const slot = chess[id], golden = chess[s.goldenId];
@@ -92,7 +104,9 @@ export function validateReferences(f, { officialOwnedSkills = true } = {}) {
   for (const b of Object.values(bonds)) {
     for (const m of b.members) if (!chess[m]) err(`bond ${b.bondId}: member ${m} missing`);
     if (!b.thresholds.length) err(`bond ${b.bondId}: no thresholds`);
-    if (!effects[b.effectId]) err(`bond ${b.bondId}: effect ${b.effectId} missing`);
+    // effectId 是描述记录（引擎实际取数值走 bond 自己的 bb/buffs/baseParams，见 server/sim/content/bonds/core.js
+    // buffParams）：纯计数型盟约没有 effectId 是合法的，只有「写了 id 却找不到记录」才是数据错误。
+    if (b.effectId != null && !effects[b.effectId]) err(`bond ${b.bondId}: effect ${b.effectId} missing`);
   }
   for (const it of Object.values(items)) {
     if (!effects[it.effectId]) err(`item ${it.id}: effect missing`);
