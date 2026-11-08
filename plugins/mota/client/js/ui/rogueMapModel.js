@@ -19,12 +19,14 @@ export function terrainKind(tile) {
 
 /**
  * 把一份 stage 数据规约成缩略图模型（纯函数，便于单测）：
- * `{ width, height, floor: [[bool]], kinds: [[TERRAIN]], marks: [{ r, c, kind: 'melee'|'ranged' }] }`。
+ * `{ width, height, floor: [[bool]], kinds: [[TERRAIN]], marks: [{ r, c, kind }], routes: [segs] }`。
+ * `routes`（2026-11-08）：传了 `wave` 时从 `waves.json` 的 `routes[].steps` 还原出**真实出怪折线**
+ * —— `{t:'move',p:[r,c]}` 落点，`{t:'disappear'}` 断段、`{t:'appear',p}` 开新段（传送），`wait`/其它忽略。
  * 坐标已翻成「最上行在上」的屏幕方向（引擎 `rows[0]` 是最下行）。
  * 肉鸽官方小图嵌在 19×21 画框里：有 `stage.rogueFrame` 时只取 frame 内的 tiles（clamp 到画框），
  * `width/height` 是裁剪后的尺寸；没有 frame 保持整张 rows 原样。
  */
-export function buildMinimapModel(stage) {
+export function buildMinimapModel(stage, wave = null) {
   if (!stage || !Array.isArray(stage.rows) || !stage.rows.length) return null;
   const rows = stage.rows;
   const fullH = rows.length;
@@ -64,6 +66,28 @@ export function buildMinimapModel(stage) {
     for (const [r, c] of (Array.isArray(dep.melee) ? dep.melee : [])) if (inside(r, c)) marks.push({ r: r - r0, c: c - c0, kind: 'melee' });
     for (const [r, c] of (Array.isArray(dep.rangedOnly) ? dep.rangedOnly : [])) if (inside(r, c)) marks.push({ r: r - r0, c: c - c0, kind: 'ranged' });
   }
-  return { width, height, floor, kinds, marks };
+  // 出怪路线（2026-11-08）：真实折线，帧内平移 + 裁剪
+  const routes = [];
+  const rawRoutes = wave && Array.isArray(wave.routes) ? wave.routes : [];
+  for (const rt of rawRoutes) {
+    const steps = rt && Array.isArray(rt.steps) ? rt.steps : null;
+    if (!steps) continue;
+    const segs = [];
+    let cur = [];
+    const flush = () => { if (cur.length > 1) segs.push(cur); cur = []; };
+    for (const st of steps) {
+      if (!st || typeof st !== 'object') continue;
+      if (st.t === 'disappear') { flush(); continue; }
+      const p = Array.isArray(st.p) ? st.p : null;
+      if (!p || !Number.isFinite(Number(p[0])) || !Number.isFinite(Number(p[1]))) continue;
+      const r = Number(p[0]) - r0;
+      const c = Number(p[1]) - c0;
+      if (r < 0 || r >= height || c < 0 || c >= width) { flush(); continue; }
+      cur.push({ r, c });
+    }
+    flush();
+    if (segs.length) routes.push({ motion: String(rt.motion || 'WALK').toUpperCase(), segs });
+  }
+  return { width, height, floor, kinds, marks, routes };
 }
 

@@ -209,6 +209,9 @@ export class Mixin {
       tier: n.tier,
       cost: n.cost,
       reward: { ...n.reward },
+      // 候选绑定具体关卡（2026-11-08）：客户端要在**选之前**就能看到「这张图长什么样、出怪从哪来」。
+      // 与 rogueStageFor 走同一个推导函数与同一个 seed（round + node.id），所以预览的图 = 选中后真正打的图。
+      stageId: this.rogueStageForNode(n, r),
       available: n.cost <= st.ap,
     }));
   }
@@ -285,6 +288,21 @@ export class Mixin {
     if (!node) node = nodeInLayer(layer, st.picks[li]);
     if (!node) node = layer.nodes[0];
     if (!node) return null;
+    return this.rogueStageForNode(node, round);
+  }
+
+  /**
+   * 一个**具体节点**在这一回合会落到哪张图（2026-11-08 抽出，供候选预览复用）。
+   *
+   * 抽取只依赖 `(round, node.id, node.tier)` 与种子，所以「预览里显示的那张图」和「选中后真正打的那张图」
+   * 必定是同一张 —— 预览不是广告。
+   * @param {object} node 节点表里的一条（有 id / tier）
+   * @param {number} round 回合号（层号）
+   * @returns {string|null}
+   */
+  rogueStageForNode(node, round) {
+    if (!node) return null;
+    const r = Math.max(1, num(round, 1));
     const tier = str(node.tier);
     if (!tier) return null;
 
@@ -309,7 +327,7 @@ export class Mixin {
       const kept = this.incompleteMaps === true || !scene ? candidates : candidates.filter((sid) => scene.has(sid));
       const cands = kept.length ? kept : candidates;
       if (!cands.length) return null;
-      const rng = createRng(deriveSeed(this.seed, `rogue-stage:${round}:${node.id}`));
+      const rng = createRng(deriveSeed(this.seed, `rogue-stage:${r}:${node.id}`));
       return cands[rng.int(cands.length)] || null;
     };
 

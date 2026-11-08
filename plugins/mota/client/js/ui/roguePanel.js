@@ -109,6 +109,8 @@ export const MAP_COLORS = Object.freeze({
   ranged: '#5ad1a0',
   grid: 'rgba(0, 226, 228, .10)',
   hatch: 'rgba(206, 138, 140, .22)',
+  // 出怪路线（2026-11-08）：橙红，和部署点的黄/绿区分开
+  route: '#e85a1a',
 });
 
 /** 禁入格斜纹图案的 SVG id（一个面板里只有一张缩略图，固定 id 够用）。 */
@@ -268,6 +270,8 @@ export function nodeGraph(nodes) {
       name: String(n.name || ''),
       tier: n.tier == null ? '' : String(n.tier),
       cost: Number(n.cost) || 0,
+      // 候选绑定的具体关卡（服务端 2026-11-08 起下发）：节点图详情据此直接预览这张图与它的出怪路线
+      stageId: n.stageId ? String(n.stageId) : '',
       state: 'future',
       picked: false,
     });
@@ -613,16 +617,26 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const swapPending = relicSwapPending();
 
   const stage = stagesReady && pub && pub.stageId ? data.lookup('stages', pub.stageId) : null;
-  const model = tab === 'map' ? buildMinimapModel(stage) : null;
+  // 出怪路线（2026-11-08）：waves.json 的 routes[].steps 是真实折线，和缩略图一起画出来。
+  const stageWave = stagesReady && pub && pub.stageId ? data.lookup('waves', pub.stageId) : null;
+  const model = tab === 'map' ? buildMinimapModel(stage, stageWave) : null;
   const backdrop = tab === 'map' ? backdropPath(pub && pub.stageId) : null;
   const mapStats = tab === 'map' ? minimapStats(model) : null;
 
-  // 节点图的一次点击：先切详情焦点；只有「下一层候选」才走既有的 pick()（pick 内部已守 canSend / busy）。
+  // 节点图的一次点击（2026-11-08 改）：**只切详情焦点**，不再当场发包 —— 先看清这张图与路线，
+  // 详情栏的「前往此节点」才是提交。以前的「点一下就出发」是这次体验差的主因。
   const selectNode = (n) => {
     setFocusId(String(n.id));
-    if (n.state === 'candidate') pick(n.id);
   };
   const focus = focusId ? graphNode(graph, focusId) : null;
+  // 焦点节点绑定的那张图（服务端下发 stageId）+ 它的出怪路线：详情栏直接预览，选之前就看得到。
+  const focusStageId = focus && focus.node && focus.node.stageId ? focus.node.stageId : '';
+  const focusStage = focusStageId && stagesReady ? data.lookup('stages', focusStageId) : null;
+  const focusWave = focusStageId && stagesReady ? data.lookup('waves', focusStageId) : null;
+  const focusModel = focusStage ? buildMinimapModel(focusStage, focusWave) : null;
+  const focusIsCandidate = !!(focus && focus.node && focus.node.state === 'candidate');
+  const focusPicked = !!(focus && focus.node && focus.node.picked);
+  const canConfirm = focusIsCandidate && !focusPicked && canSend && busy === null && picks.isFinal !== true;
 
   const head = html`<header class="rpn__head">
     <div class="rpn__headline">
@@ -716,7 +730,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
             data-node-id=${n.id} data-type=${n.type} data-picked=${picked ? 'yes' : 'no'}
             disabled=${disabled}
             aria-label=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''} · ${rewardText(n.reward)}`}
-            onClick=${() => pick(n.id)}>
+            onClick=${() => selectNode(n)}>
             <img class="rpn-card__bg" src=${NODE_CARD_BG} alt="" aria-hidden="true" />
             <span class="rpn-card__bar" aria-hidden="true"></span>
             <span class="rpn-card__top">
@@ -749,6 +763,16 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
             <i class="rpn-detail__fmeta">${t('第 {n} 层', { n: focus.layer.index + 1 })}${focus.layer.name ? ` · ${layerTitle(focus.layer.name) || focus.layer.name}` : ''} · ${typeName(focus.node.type)}${focus.node.tier ? ` · ${tierLabel(focus.node.tier)}` : ''}</i>
           </span>
           <span class="rpn-detail__fcost">${focus.node.cost ? `-${focus.node.cost} AP` : t('免费')}</span>
+        </div>` : null}
+        ${focusModel ? html`<div class="rpn-detail__map" data-testid="rpn-focus-map">
+          ${minimap(focusModel)}
+          <p class="rpn-detail__mapnote">${mapLabel(focusStageId) || '—'}${focusModel.routes.length ? ` · ${t('出怪路线 {n} 条', { n: focusModel.routes.length })}` : ` · ${t('无出怪路线')}`}</p>
+        </div>` : null}
+        ${focus && (focusIsCandidate || focusPicked) ? html`<div class="rpn-detail__act">
+          ${focusPicked
+            ? html`<span class="rpn-detail__actdone">${t('已选为下一层')}</span>`
+            : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}
+                onClick=${() => pick(focus.node.id)}>${t('前往此节点')}${focus.node.cost ? `（-${focus.node.cost} AP）` : ''}</button>`}
         </div>` : null}
         <dl class="rpn-detail__rows">
           <div><dt>${t('当前层')}</dt><dd>${currentIndex >= 0
@@ -881,9 +905,12 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
  */
 function minimap(model) {
   const { width, height, kinds, marks } = model;
+  const routes = Array.isArray(model.routes) ? model.routes : [];
   const cell = 10;
   const W = width * cell;
   const H = height * cell;
+  const px = (c) => c * cell + cell / 2;
+  const py = (r) => (height - 1 - r) * cell + cell / 2;
   const cells = [];
   for (let r = 0; r < height; r++) {
     for (let c = 0; c < width; c++) {
@@ -911,5 +938,18 @@ function minimap(model) {
       stroke-width=${p.kind === TERRAIN.HIGH ? 0.7 : 0.3} />`)}
     ${dots.map((d) => html`<circle key=${d.key} cx=${d.cx} cy=${d.cy} r=${cell * 0.26}
       fill=${d.fill} stroke="rgba(6, 12, 20, .85)" stroke-width="0.6" />`)}
+    ${routes.map((rt, ri) => (rt.segs || []).map((seg, si) => {
+      // 出怪折线（2026-11-08）：先画一条深色描边再叠亮线，压在格子上也看得清；起点画一个圈标出怪口。
+      const pts = seg.map((p) => `${px(p.c)},${py(p.r)}`).join(' ');
+      const head = seg[0];
+      return html`<g key=${`rt${ri}-${si}`} class="rpn-map__route">
+        <polyline points=${pts} fill="none" stroke="rgba(6, 12, 20, .78)" stroke-width="2.4"
+          stroke-linejoin="round" stroke-linecap="round" />
+        <polyline points=${pts} fill="none" stroke=${MAP_COLORS.route || '#e85a1a'} stroke-width="1.2"
+          stroke-linejoin="round" stroke-linecap="round" stroke-dasharray=${rt.motion === 'FLY' ? '3 2' : 'none'} />
+        <circle cx=${px(head.c)} cy=${py(head.r)} r=${cell * 0.3} fill="none"
+          stroke=${MAP_COLORS.route || '#e85a1a'} stroke-width="1.1" />
+      </g>`;
+    }))}
   </svg>`;
 }
