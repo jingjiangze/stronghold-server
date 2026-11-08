@@ -690,3 +690,9 @@
 .rpn-focus__map .rpn-graph__col { min-width: 0; }
 .rpn-focus__map .rpn-graph__node { width: 100%; max-width: none; }
 .rpn-focus__note { margin-left: 7px; align-self: center; list-style: none; font-size: 10px; letter-spacing: .04em; color: rgba(223, 230, 226, .58); }
+/* 未到列的占位（2026-11-09）：不剧透节点身份，也不可点 */
+.rpn-graph__node.is-locked {
+  display: grid; place-items: center; min-height: 18px;
+  font-size: 11px; color: rgba(166, 188, 207, .5);
+  border: 1px dashed rgba(166, 188, 207, .3); border-radius: 3px; cursor: default;
+}

@@ -678,7 +678,11 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const pageProps = { role: 'tabpanel', id: `rpn-page-${tab}`, 'aria-labelledby': `rpn-tab-${tab}` };
 
   // 一个图上的节点按钮（两种视图共用；点它只是切详情，发包在右下「前往此节点」）。
-  const nodeBtn = (n, col) => html`<button key=${n.id} type="button"
+  const nodeBtn = (n, col) => (n.state === 'future'
+    // 未到的列只画占位：官方在没走到之前不告诉你下一个节点是什么（也不给点开看地图）
+    ? html`<span key=${n.id} class="rpn-graph__node is-future is-locked" data-node-id=${n.id}
+        data-graph-node="1" data-state="future" data-layer=${col.key} aria-hidden="true">?</span>`
+    : html`<button key=${n.id} type="button"
       class=${cls('rpn-graph__node', `is-${n.state}`, n.picked && 'is-picked',
         n.state === 'candidate' && !canSend && 'is-readonly')}
       style=${`--c:${typeColor(n.type)}`}
@@ -691,7 +695,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       <img class="rpn-graph__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
       <span class="rpn-graph__name">${n.name || typeName(n.type)}</span>
       ${n.state === 'taken' ? html`<span class="rpn-graph__ok" aria-hidden="true">✓</span>` : null}
-    </button>`;
+    </button>`);
 
   // 聚焦视图（默认）：官方是「一个区域 = 一张多列图」。这里按 region 把列拼成当前区域的一整张图，
   // 上方是区域进度（一个圆点一个区域），不会一开局就把全部区域剧透出来。
