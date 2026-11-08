@@ -794,37 +794,31 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
         ${blocked ? html`<span class="rpn-pick__warn">${t('战斗中不可选')}</span>` : null}
         ${!canSend && !blocked ? html`<span class="rpn-pick__warn">${t('只读：拿不到对局网络')}</span>` : null}
       </div>
-      ${picks.list.length ? html`<div class="rpn-cards">
+      ${picks.list.length ? html`<ul class="rpn-rows">
         ${picks.list.map((n) => {
           const picked = picks.picked === n.id;
           const poor = n.available === false;
           const disabled = !canSend || poor || picks.isFinal || busy !== null;
-          return html`<button key=${n.id} type="button"
-            class=${cls('rpn-card', picked && 'is-picked', disabled && 'is-off')}
-            style=${`--c:${typeColor(n.type)}`}
-            data-node-id=${n.id} data-type=${n.type} data-picked=${picked ? 'yes' : 'no'}
-            disabled=${disabled}
-            aria-label=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''} · ${rewardText(n.reward)}`}
-            onClick=${() => selectNode(n)}>
-            <img class="rpn-card__bg" src=${NODE_CARD_BG} alt="" aria-hidden="true" />
-            <span class="rpn-card__bar" aria-hidden="true"></span>
-            <span class="rpn-card__top">
-              <img class="rpn-card__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
-              <span class="rpn-card__type">${typeName(n.type)}</span>
-              <span class="rpn-card__badges">
-                ${picked ? html`<span class="rpn-card__mark">${t('已选')}</span>` : null}
-                ${n.tier && tierLabel(n.tier) !== typeName(n.type) ? html`<span class="rpn-card__tier">${tierLabel(n.tier)}</span>` : null}
-              </span>
-            </span>
-            <span class="rpn-card__name">${n.name || typeName(n.type)}</span>
-            <span class="rpn-card__effect">${rewardText(n.reward)}</span>
-            <span class="rpn-card__foot">
-              <span class="rpn-card__cost">${n.cost ? `-${n.cost} AP` : t('免费')}</span>
-            </span>
-            ${busy === n.id ? html`<span class="rpn-card__busy" aria-hidden="true"></span>` : null}
-          </button>`;
+          const focused = focusId === String(n.id);
+          return html`<li key=${n.id}>
+            <button type="button"
+              class=${cls('rpn-row', picked && 'is-picked', focused && 'is-focus', disabled && 'is-off')}
+              style=${`--c:${typeColor(n.type)}`}
+              data-node-id=${n.id} data-type=${n.type} data-picked=${picked ? 'yes' : 'no'}
+              disabled=${disabled}
+              aria-label=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''} · ${rewardText(n.reward)}`}
+              onClick=${() => selectNode(n)}>
+              <img class="rpn-row__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
+              <span class="rpn-row__name">${n.name || typeName(n.type)}</span>
+              <span class="rpn-row__meta">${typeName(n.type)}${n.tier && tierLabel(n.tier) !== typeName(n.type) ? ` · ${tierLabel(n.tier)}` : ''}</span>
+              <span class="rpn-row__reward">${rewardText(n.reward)}</span>
+              <span class="rpn-row__cost">${n.cost ? `-${n.cost} AP` : t('免费')}</span>
+              ${picked ? html`<span class="rpn-row__mark">${t('已选')}</span>` : null}
+              ${busy === n.id ? html`<span class="rpn-row__busy" aria-hidden="true"></span>` : null}
+            </button>
+          </li>`;
         })}
-      </div>` : html`<p class="rpn-empty">${t('这一层没有候选节点。')}</p>`}
+      </ul>` : html`<p class="rpn-empty">${t('这一层没有候选节点。')}</p>`}
       ${picks.isFinal ? html`<p class="rpn-pick__hint">${t('最终层：本层已开局，选择只作记录，不再改图。')}</p>` : null}
     </section>
 
