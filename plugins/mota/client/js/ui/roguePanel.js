@@ -711,8 +711,13 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
     || regions.find((r) => regionState(r) === 'next') || regions[0] || null;
   const layerNo = currentIndex >= 0 ? currentIndex + 1 : 1;
   const doneCols = Math.max(0, Math.min(currentIndex + 1, graph.layers.length));
-  // 区域视图 = 当前区域的 4–8 列；全部层 = 14 列总览（两种视图共用 graphColumn）
-  const boardCols = graphView === 'all' ? graph.layers : (curRegion ? curRegion.cols : []);
+  // 官方的节点图是**一回合一张**（业主 2026-11-09 第二轮）：只画「当前所在列 + 下一回合候选列」两列，
+  // 节点放大到官方尺寸；进度交给顶部线路图。右上角仍可切「全部回合」看 14 列总览。
+  const nextIdx = currentIndex >= 0 ? currentIndex + 1 : 0;
+  const nextCol = graph.layers[nextIdx] || null;
+  const boardCols = graphView === 'all'
+    ? graph.layers
+    : [curCol, nextCol].filter((c) => !!c);
   const sprite = (f) => `${ROGUE_ASSET}/node/${f}`;
   const railGlyph = (id) => (id === 'map' ? 'expand' : id === 'relics' ? 'box' : 'chevrons');
 
@@ -739,7 +744,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       ${tab === 'nodes' ? html`<button type="button" class=${cls('rpn-top__btn', graphView === 'all' && 'is-on')}
         data-testid="rogue-nodes-view" aria-pressed=${graphView === 'all' ? 'true' : 'false'}
         onClick=${() => setGraphView(graphView === 'all' ? 'focus' : 'all')}>
-        ${graphView === 'all' ? t('区域视图') : t('全部层')}</button>` : null}
+        ${graphView === 'all' ? t('本回合视图') : t('全部回合')}</button>` : null}
       <button type="button" class="rpn-top__close" aria-label=${t('关闭集成战略')} title=${t('关闭')}
         data-testid="rogue-panel-close" onClick=${() => onClose && onClose()}><${Icon} name="close" /></button>
     </div>
@@ -789,7 +794,11 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
     </button>`;
   };
 
-  // 一列：列头（层号）+ 该列节点 + 与下一列的连线（区域视图只连同区的一列，跨区不连）
+  // 一列：列头（回合号 + 本回合/下一回合）+ 该列节点 + 与下一列的连线
+  const colLabel = (col) => (col.state === 'current' ? t('本回合')
+    : col.state === 'next' ? t('下一回合')
+      : col.state === 'done' ? t('已通过')
+        : t('第 {n} 回合', { n: col.index + 1 }));
   const graphColumn = (col, opts = {}) => {
     const link = graph.links.find((l) => l.gap === col.index) || null;
     const next = link ? graph.layers[col.index + 1] : null;
@@ -797,7 +806,10 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
     const drawLink = !!link && !!next && (opts.all === true || sameRegion);
     return html`<div key=${col.key} class=${cls('rpn-col', `is-${col.state}`)}
         data-layer=${col.key} data-layer-state=${col.state}>
-      <div class="rpn-col__head">${String(col.index + 1).padStart(2, '0')}</div>
+      <div class="rpn-col__head">
+        <span class="rpn-col__no">${String(col.index + 1).padStart(2, '0')}</span>
+        <span class="rpn-col__lb">${colLabel(col)}</span>
+      </div>
       <div class="rpn-col__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
         ${drawLink ? graphLink(link, col, next) : null}
         ${col.nodes.map((n) => nodeBtn(n, col))}
@@ -805,11 +817,15 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
     </div>`;
   };
 
-  // —— 区域进度圆点（未到的区域只给序号，不剧透区域名）——
-  const regionPips = html`<ol class="rpn-region" aria-label=${t('区域进度')}>
-    ${regions.map((r, i) => html`<li key=${r.id} class=${cls('rpn-region__pip', `is-${regionState(r)}`)}
-      title=${regionState(r) === 'future' ? t('第 {n} 区', { n: i + 1 }) : r.name}>
-      ${regionState(r) === 'future' ? '?' : String(i + 1).padStart(2, '0')}</li>`)}
+  // —— 本局线路图（官方那种「一条线走完一局」的指示）：14 个回合圆点按区域分段，
+  //    已过 = 金实心、当前 = 白环、下一回合 = 青环、未到 = 暗空心；区域之间留一道分隔。 ——
+  const routeStrip = html`<ol class="rpn-route" aria-label=${t('本局线路')}>
+    ${regions.map((r, ri) => html`<li key=${r.id} class=${cls('rpn-route__seg', `is-${regionState(r)}`)}>
+      ${r.cols.map((c) => html`<i key=${c.key} class=${cls('rpn-route__pip', `is-${c.state}`)}
+        title=${`${t('第 {n} 回合', { n: c.index + 1 })}${c.name ? ` · ${layerTitle(c.name) || c.name}` : ''}`}></i>`)}
+      ${ri < regions.length - 1 ? html`<s class="rpn-route__sep" aria-hidden="true"></s>` : null}
+    </li>`)}
+    <li class="rpn-route__now">${curRegion ? (layerTitle(curRegion.name) || curRegion.name) : ''}</li>
   </ol>`;
 
   // —— 右侧详情栏（方舟的信息页）：被点开的节点优先，没点开就显示当前所在节点 ——
@@ -883,10 +899,10 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
     </div>` : null;
 
   const nodesPage = html`<div class="rpn-page">
-    <div class="rpn-board" data-testid="rogue-nodes" data-layers=${String(graph.layers.length)} data-graph-root="1">
+    <div class="rpn-board" data-testid="rogue-nodes" data-layers=${String(graph.layers.length)} data-graph-root="1"
+      data-view=${graphView === 'all' ? 'all' : 'round'}>
       <div class="rpn-board__head">
-        ${regionPips}
-        <span class="rpn-board__name">${curRegion ? (layerTitle(curRegion.name) || curRegion.name) : ''}</span>
+        ${routeStrip}
         <span class="rpn-board__count">${doneCols}/${graph.layers.length || '—'}</span>
         <ul class="rpn-legend" aria-label=${t('节点图例')}>
           <li><i class="is-past" aria-hidden="true"></i>${t('已通过')}</li>

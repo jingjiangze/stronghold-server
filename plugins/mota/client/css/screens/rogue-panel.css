@@ -179,17 +179,34 @@
   font-size: max(calc(.12 * var(--t)), 10px);
 }
 
-/* 区域进度圆点：一个方块一个区域，未到的只给序号 */
-.rpn-region { display: flex; gap: .05rem; margin: 0; padding: 0; list-style: none; }
-.rpn-region__pip {
-  width: .24rem; height: .24rem; display: grid; place-items: center;
-  font-family: var(--font-mono); font-size: max(calc(.09 * var(--t)), 8px);
-  color: var(--rp-dim-2); border: 1px solid var(--rp-line-2);
+/* 本局线路图（2026-11-09 二轮，官方那种「一条线走完一局」的指示）：
+   14 个回合圆点按区域分段，已过金实心 / 当前白环 / 下一回合青环 / 未到暗空心；区域之间一道斜分隔。 */
+.rpn-route {
+  display: flex; align-items: center; gap: .12rem; flex-wrap: nowrap;
+  margin: 0; padding: 0; list-style: none; min-width: 0; overflow: hidden;
 }
-.rpn-region__pip.is-done { color: #0a0d10; background: var(--rp-gold); border-color: transparent; }
-.rpn-region__pip.is-current { color: #0a0d10; background: #e7ebe8; border-color: transparent; }
-.rpn-region__pip.is-next { color: var(--rp-cyan); border-color: rgba(127, 240, 255, .6); }
-.rpn-region__pip.is-future { border-style: dashed; }
+.rpn-route__seg { display: flex; align-items: center; gap: .05rem; flex: 0 0 auto; }
+.rpn-route__pip {
+  width: .1rem; height: .1rem; border-radius: 50%;
+  border: 1px solid rgba(223, 230, 226, .35); background: transparent;
+}
+.rpn-route__pip.is-done { background: var(--rp-gold); border-color: transparent; }
+.rpn-route__pip.is-current {
+  width: .13rem; height: .13rem; background: #e7ebe8; border-color: transparent;
+  box-shadow: 0 0 0 2px rgba(231, 235, 232, .18);
+}
+.rpn-route__pip.is-next { border-color: rgba(127, 240, 255, .85); background: rgba(127, 240, 255, .25); }
+.rpn-route__pip.is-future { border-style: dashed; border-color: rgba(223, 230, 226, .22); }
+.rpn-route__sep {
+  width: 1px; height: .12rem; margin: 0 .04rem;
+  background: rgba(223, 230, 226, .22); transform: skewX(-18deg);
+}
+.rpn-route__seg.is-current .rpn-route__pip { border-color: rgba(223, 230, 226, .55); }
+.rpn-route__now {
+  margin-left: .12rem; flex: 0 1 auto; min-width: 0;
+  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .06em;
+  color: var(--rp-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* 图例：右下角细线小标 */
 .rpn-legend {
@@ -208,23 +225,27 @@
 .rpn-legend i.is-cand { border-color: rgba(127, 240, 255, .8); background: rgba(127, 240, 255, .2); }
 .rpn-legend i.is-todo { border-style: dashed; }
 
-/* ===== 节点图：区域 = 一张多列图，列内纵排该层节点，列间细线 ===== */
+/* ===== 节点图：官方「一回合一张图」= 当前列 + 下一回合候选列，节点按官方尺寸放大 ===== */
 .rpn-board__map {
-  --rpn-colgap: .22rem;
+  --rpn-colgap: .5rem;
   flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
   display: grid;
-  grid-template-columns: repeat(var(--cols, 4), minmax(.9rem, 1fr));
+  grid-template-columns: repeat(var(--cols, 2), minmax(.9rem, 1fr));
   column-gap: var(--rpn-colgap);
   align-items: stretch;
   padding: .12rem .2rem .18rem;
 }
 .rpn-col { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+/* 本回合视图：两列不要铺满整块板（官方一屏就是「你在这儿 + 三个岔路」），限宽居中 */
+.rpn-board[data-view="round"] .rpn-board__map { width: 100%; max-width: 10.4rem; margin: 0 auto; }
 .rpn-col__head {
-  flex: 0 0 auto; text-align: center;
+  flex: 0 0 auto; display: flex; align-items: baseline; justify-content: center; gap: .08rem;
   font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
   letter-spacing: .12em; color: var(--rp-dim-2);
-  padding-bottom: .04rem;
+  padding-bottom: .06rem;
 }
+.rpn-col__no { color: inherit; }
+.rpn-col__lb { letter-spacing: .1em; }
 .rpn-col.is-current .rpn-col__head { color: #e7ebe8; }
 .rpn-col.is-next .rpn-col__head { color: var(--rp-cyan); }
 .rpn-col.is-done .rpn-col__head { color: rgba(255, 199, 90, .7); }
@@ -251,7 +272,7 @@
 /* ===== 节点：官方精灵拼装（底板 165×94 + 图标 101×48 + 标签 206×21） ===== */
 .rpn-node {
   position: relative; display: block;
-  width: 100%; max-width: 1.9rem; aspect-ratio: 206 / 116;
+  width: 100%; max-width: 2.2rem; aspect-ratio: 206 / 116;
   margin: 0 auto; padding: 0; border: 0; background: none;
   cursor: pointer; z-index: 1;
   transition: opacity .12s ease;
