@@ -78,6 +78,17 @@ RUN set -e; \
     fi; \
     rm -rf /tmp/ice-assets /tmp/ice-assets.zip
 
+# 集成战略（肉鸽）的节点界面图：官方卡面/标签/底板（约 6 MB，随仓库走，不依赖 assets.zip 是否拉成功）
+RUN mkdir -p /ice/icebreaker/assets/skeleton/ui \
+ && cp -a /ice/icebreaker/assets-ui/rogue /ice/icebreaker/assets/skeleton/ui/rogue \
+ && echo "icebreaker: rogue node UI $(find /ice/icebreaker/assets/skeleton/ui/rogue -type f | wc -l) files"
+
+# 集成战略的敌人素材（spine + 图标，约 96 MB 分片，随仓库走）：解包到素材目录后合并索引
+RUN cd /ice/icebreaker/assets/skeleton \
+ && cat /ice/icebreaker/assets-rogue/enemy-pack.tgz.part* | tar -xzf - \
+ && node /ice/icebreaker/tools/merge-rogue-assets.mjs /ice/icebreaker/assets /ice/icebreaker/assets-rogue \
+ && echo "icebreaker: rogue enemy spines $(ls /ice/icebreaker/assets/skeleton/spine | grep -c '^enemy_')"
+
 # ---- 3. runtime ---------------------------------------------------------------------------------------
 FROM ${NODE_IMAGE}
 # 边缘层：普通的 nginx 做分流，素材的判定在 edge-sidecar.mjs（一个 Node 进程）里。
@@ -105,6 +116,7 @@ ENV NODE_ENV=production \
     AUE_ASSETS_DIR=/app/icebreaker/assets \
     AUE_KITS_DIR=/app/icebreaker-kits \
     AUE_MODS_DIR=/app/icebreaker/mods \
+    AUE_ROGUE_LEVELS=/app/icebreaker/data/rogue-levels \
     AUE_NO_BROTLI=1 \
     PORT=3120 \
     HOST=127.0.0.1 \

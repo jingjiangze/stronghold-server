@@ -1,0 +1,5729 @@
+{
+  "source": {
+    "repo": "Kengxxiao/ArknightsGameData",
+    "commit": "63c7cec73c3858d0ae913f85cc89af3cef4d744f",
+    "server": "zh_CN"
+  },
+  "level": {
+    "id": "rogue4_t-7",
+    "width": 12,
+    "height": 8,
+    "options": {
+      "maxLifePoint": 100,
+      "initialCost": 10,
+      "maxCost": 99,
+      "costIncreaseTime": 1,
+      "characterLimit": 6,
+      "moveMultiplier": 0.5
+    },
+    "tiles": [
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_hole",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_telin",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_telout",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_fence_bound",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_telout",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_telin",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_end",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ]
+    ],
+    "routes": [
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 10,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 10,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 15,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 20,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 20,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 26,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 8,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 26,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 26,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 26,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 116,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 8,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 26,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 116,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 26,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 116,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 116,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 136,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 8,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 116,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 136,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 46,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 76,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 96,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 116,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_CURRENT_FRAGMENT_TIME",
+            "row": 0,
+            "col": 0,
+            "time": 136,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 16,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 25,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 20,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 20,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 20,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 10,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 6,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 9,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 10,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 12,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 6,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 9,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 10,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 12,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 10,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 10,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 2
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 10,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 6,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 2,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 6,
+            "col": 4,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 6
+        },
+        "end": {
+          "row": 7,
+          "col": 8
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "DISAPPEAR",
+            "row": 0,
+            "col": 0,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "APPEAR_AT_POS",
+            "row": 3,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 9,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 9,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 8,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "waves": [
+      {
+        "preDelay": 0,
+        "postDelay": 0,
+        "maxWait": -1,
+        "fragments": [
+          {
+            "preDelay": 0,
+            "actions": [
+              {
+                "type": "NONE",
+                "key": "",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 850
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_757_skzbox#1",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 105
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_758_skzmbx#1",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 35
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_759_skzwyx#1",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 15
+              },
+              {
+                "type": "NONE",
+                "key": "",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 850
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_757_skzbox#2",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 105
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_758_skzmbx#2",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 35
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_759_skzwyx#2",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "group": "t1",
+                "weight": 15
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_764_skzshp",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "hidden": "cargo"
+              },
+              {
+                "type": "ACTIVATE",
+                "key": "trap_760_skztzs#2",
+                "route": -1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "hidden": "calamity"
+              }
+            ]
+          },
+          {
+            "preDelay": 1,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_1064_snsbr",
+                "route": 0,
+                "count": 3,
+                "preDelay": 3,
+                "interval": 6
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1068_snmage_2",
+                "route": 1,
+                "count": 2,
+                "preDelay": 19,
+                "interval": 4
+              }
+            ]
+          },
+          {
+            "preDelay": 15,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_1064_snsbr",
+                "route": 2,
+                "count": 2,
+                "preDelay": 0,
+                "interval": 4
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 3,
+                "count": 2,
+                "preDelay": 6,
+                "interval": 16
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1085_sotiwz",
+                "route": 4,
+                "count": 1,
+                "preDelay": 22,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1510_frstar2",
+                "route": 5,
+                "count": 1,
+                "preDelay": 35,
+                "interval": 1
+              }
+            ]
+          },
+          {
+            "preDelay": 50,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_1068_snmage_2",
+                "route": 6,
+                "count": 3,
+                "preDelay": 3,
+                "interval": 10
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1069_icebrk_2",
+                "route": 7,
+                "count": 1,
+                "preDelay": 12,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1069_icebrk_2",
+                "route": 8,
+                "count": 1,
+                "preDelay": 36,
+                "interval": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "preDelay": 0,
+        "postDelay": 0,
+        "maxWait": -1,
+        "fragments": [
+          {
+            "preDelay": 0,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 9,
+                "count": 1,
+                "preDelay": 6,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 10,
+                "count": 1,
+                "preDelay": 6,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 11,
+                "count": 1,
+                "preDelay": 6,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 12,
+                "count": 1,
+                "preDelay": 16,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 13,
+                "count": 1,
+                "preDelay": 16,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 14,
+                "count": 1,
+                "preDelay": 16,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 15,
+                "count": 1,
+                "preDelay": 26,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 16,
+                "count": 1,
+                "preDelay": 26,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 17,
+                "count": 1,
+                "preDelay": 26,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1506_patrt",
+                "route": 18,
+                "count": 1,
+                "preDelay": 54,
+                "interval": 1,
+                "dontBlockWave": true
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1085_sotiwz",
+                "route": 19,
+                "count": 2,
+                "preDelay": 120,
+                "interval": 40
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1067_snslime",
+                "route": 20,
+                "count": 5,
+                "preDelay": 12,
+                "interval": 5
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1069_icebrk_2",
+                "route": 21,
+                "count": 1,
+                "preDelay": 28,
+                "interval": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "preDelay": 0,
+        "postDelay": 0,
+        "maxWait": -1,
+        "fragments": [
+          {
+            "preDelay": 3,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_1067_snslime",
+                "route": 22,
+                "count": 6,
+                "preDelay": 5,
+                "interval": 5
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1069_icebrk_2",
+                "route": 23,
+                "count": 2,
+                "preDelay": 16,
+                "interval": 24
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1068_snmage_2",
+                "route": 24,
+                "count": 1,
+                "preDelay": 40,
+                "interval": 1
+              }
+            ]
+          },
+          {
+            "preDelay": 40,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 25,
+                "count": 2,
+                "preDelay": 3,
+                "interval": 32
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 26,
+                "count": 2,
+                "preDelay": 3,
+                "interval": 32
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2064_skzwdd",
+                "route": 27,
+                "count": 2,
+                "preDelay": 3,
+                "interval": 32
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1085_sotiwz",
+                "route": 28,
+                "count": 2,
+                "preDelay": 24,
+                "interval": 30
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2067_skzcy",
+                "route": 29,
+                "count": 1,
+                "preDelay": 90,
+                "interval": 1,
+                "hidden": "hidden_door"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "branches": {
+      "frstar_frosts": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "ACTIVATE",
+              "key": "trap_010_frosts#1",
+              "route": -1,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "ACTIVATE",
+              "key": "trap_010_frosts#2",
+              "route": -1,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "mbx1": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2069_skzbox",
+              "route": 30,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "mbx2": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2069_skzbox",
+              "route": 31,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ]
+    },
+    "predefines": [
+      {
+        "alias": "trap_757_skzbox#1",
+        "key": "trap_757_skzbox",
+        "hidden": true,
+        "row": 2,
+        "col": 1,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_757_skzbox#2",
+        "key": "trap_757_skzbox",
+        "hidden": true,
+        "row": 1,
+        "col": 6,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_758_skzmbx#1",
+        "key": "trap_758_skzmbx",
+        "hidden": true,
+        "row": 2,
+        "col": 1,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_758_skzmbx#2",
+        "key": "trap_758_skzmbx",
+        "hidden": true,
+        "row": 1,
+        "col": 6,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_759_skzwyx#1",
+        "key": "trap_759_skzwyx",
+        "hidden": true,
+        "row": 2,
+        "col": 1,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_759_skzwyx#2",
+        "key": "trap_759_skzwyx",
+        "hidden": true,
+        "row": 1,
+        "col": 6,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_760_skztzs#1",
+        "key": "trap_760_skztzs",
+        "hidden": false,
+        "row": 4,
+        "col": 2,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_010_frosts#1",
+        "key": "trap_010_frosts",
+        "hidden": true,
+        "row": 3,
+        "col": 7,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_010_frosts#2",
+        "key": "trap_010_frosts",
+        "hidden": true,
+        "row": 2,
+        "col": 6,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_764_skzshp",
+        "key": "trap_764_skzshp",
+        "hidden": true,
+        "row": 6,
+        "col": 8,
+        "dir": "UP"
+      },
+      {
+        "alias": "trap_760_skztzs#2",
+        "key": "trap_760_skztzs",
+        "hidden": true,
+        "row": 2,
+        "col": 2,
+        "dir": "UP"
+      }
+    ],
+    "stages": [],
+    "bgm": "rl4special"
+  },
+  "difficulties": {
+    "NORMAL": {
+      "hiddenGroups": [],
+      "enemyMul": [],
+      "replace": {},
+      "unsupported": []
+    },
+    "FOUR_STAR": {
+      "hiddenGroups": [],
+      "enemyMul": [],
+      "replace": {},
+      "unsupported": []
+    }
+  },
+  "enemies": {
+    "enemy_1064_snsbr": {
+      "name": "雪怪小队",
+      "maxHp": 3400,
+      "atk": 360,
+      "def": 100,
+      "res": 0,
+      "moveSpeed": 1.1,
+      "baseAttackTime": 2,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 1,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "talents": {
+        "atkup": {
+          "atk_scale": 1.5
+        }
+      }
+    },
+    "enemy_1067_snslime": {
+      "name": "冰爆源石虫",
+      "maxHp": 3250,
+      "atk": 300,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 1,
+      "baseAttackTime": 1.7,
+      "rangeRadius": 1.75,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "infection"
+      ],
+      "talents": {
+        "boom": {
+          "atk_scale": 2,
+          "freeze": 10
+        }
+      }
+    },
+    "enemy_1068_snmage_2": {
+      "name": "雪怪术师组长",
+      "maxHp": 8000,
+      "atk": 400,
+      "def": 250,
+      "res": 50,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 4,
+      "rangeRadius": 2.2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 2,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "skills": [
+        {
+          "key": "coldattack",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 2,
+          "bb": {
+            "freeze": 10
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_1069_icebrk_2": {
+      "name": "雪怪小队破冰者",
+      "maxHp": 25000,
+      "atk": 1100,
+      "def": 600,
+      "res": 20,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 3,
+      "rangeRadius": 1.9,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "talents": {
+        "atkup": {
+          "atk_scale": 3
+        }
+      }
+    },
+    "enemy_1085_sotiwz": {
+      "name": "游击队萨卡兹术师",
+      "maxHp": 7000,
+      "atk": 350,
+      "def": 400,
+      "res": 50,
+      "moveSpeed": 0.75,
+      "baseAttackTime": 5,
+      "rangeRadius": 0,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 2,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "sarkaz"
+      ],
+      "talents": {
+        "parasitic": {
+          "": "true"
+        }
+      },
+      "skills": [
+        {
+          "key": "Immo",
+          "cooldown": 5,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 1
+          }
+        },
+        {
+          "key": "Immo[Rage]",
+          "cooldown": 5,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 1
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_1506_patrt": {
+      "name": "爱国者",
+      "maxHp": 60000,
+      "atk": 2000,
+      "def": 500,
+      "res": 45,
+      "moveSpeed": 0.4,
+      "baseAttackTime": 4,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 7,
+      "levelType": "BOSS",
+      "lifePointReduce": 5,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "sarkaz"
+      ],
+      "talents": {
+        "strength": {
+          "atk": 0.2,
+          "def": 200
+        },
+        "shield": {
+          "atk": 0.5,
+          "def": 2,
+          "magic_resistance": 1
+        },
+        "taunt": {
+          "taunt_level": 2
+        },
+        "reborn": {
+          "duration": 60,
+          "patrt_t_state_2[reborn_invincible].duration": 15
+        },
+        "immo_trigger[rage]": {
+          "interval": 0.8,
+          "move_speed": 0.1,
+          "base_attack_time": -0.4,
+          "atk": 0.2,
+          "def": 200
+        }
+      },
+      "skills": [
+        {
+          "key": "Immo[Rage]",
+          "cooldown": 9999,
+          "initCooldown": 9999,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 0.05
+          }
+        }
+      ]
+    },
+    "enemy_1510_frstar2": {
+      "name": "霜星，“冬痕”",
+      "maxHp": 45000,
+      "atk": 530,
+      "def": 440,
+      "res": 50,
+      "moveSpeed": 0.5,
+      "baseAttackTime": 3.7,
+      "rangeRadius": 2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 6,
+      "levelType": "BOSS",
+      "lifePointReduce": 5,
+      "immune": [
+        "stun",
+        "silence",
+        "freeze",
+        "levitate"
+      ],
+      "talents": {
+        "reborn": {
+          "reborn_invincible.duration": 25
+        }
+      },
+      "skills": [
+        {
+          "key": "IceShield",
+          "cooldown": 35,
+          "initCooldown": 35,
+          "sp": 0,
+          "bb": {
+            "max_cnt": 3
+          }
+        },
+        {
+          "key": "IceShield[Reborn]",
+          "cooldown": 35,
+          "initCooldown": 35,
+          "sp": 0,
+          "bb": {
+            "max_cnt": 4
+          }
+        },
+        {
+          "key": "SummonFrosts",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "branch_id": "frstar_frosts"
+          }
+        },
+        {
+          "key": "IceBurst",
+          "cooldown": 10.5,
+          "initCooldown": 10.5,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 1,
+            "frstar2_s.atk_scale": 2,
+            "freeze": 10
+          }
+        },
+        {
+          "key": "IceBurst[Reborn]",
+          "cooldown": 10.5,
+          "initCooldown": 10.5,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 1,
+            "frstar2_s.atk_scale": 2,
+            "freeze": 10
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2064_skzwdd": {
+      "name": "萨卡兹迷宫归乡者",
+      "maxHp": 10000,
+      "atk": 800,
+      "def": 700,
+      "res": 20,
+      "moveSpeed": 0.4,
+      "baseAttackTime": 3.5,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "sarkaz"
+      ]
+    },
+    "enemy_2067_skzcy": {
+      "name": "“门”",
+      "maxHp": 50000,
+      "atk": 1000,
+      "def": 300,
+      "res": 10,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 3.5,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 5,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate"
+      ],
+      "talents": {
+        "1": {
+          "effect_duration": 10
+        }
+      },
+      "dmgType": "arts"
+    },
+    "enemy_2069_skzbox": {
+      "name": "迷珍巧械",
+      "maxHp": 25000,
+      "atk": 1200,
+      "def": 550,
+      "res": 20,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 2,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 2,
+      "levelType": "ELITE",
+      "lifePointReduce": 0,
+      "immune": [
+        "levitate"
+      ]
+    }
+  },
+  "devices": {
+    "trap_757_skzbox": {
+      "name": "宝箱",
+      "maxHp": 5000,
+      "atk": 0,
+      "def": 200,
+      "res": 0,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": -1,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [],
+      "cost": 5
+    },
+    "trap_758_skzmbx": {
+      "name": "停滞巧械",
+      "maxHp": 5000,
+      "atk": 0,
+      "def": 200,
+      "res": 0,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": -1,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [],
+      "cost": 5
+    },
+    "trap_759_skzwyx": {
+      "name": "垂死羽兽",
+      "maxHp": 6000,
+      "atk": 0,
+      "def": 200,
+      "res": 0,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": 0,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [],
+      "cost": 5
+    },
+    "trap_760_skztzs": {
+      "name": "年代之刺",
+      "maxHp": 12000,
+      "atk": 0,
+      "def": 1200,
+      "res": 50,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": 1,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [
+        {}
+      ],
+      "cost": 5
+    },
+    "trap_010_frosts": {
+      "name": "源石冰晶",
+      "maxHp": 100,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": 0,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [],
+      "cost": 5
+    },
+    "trap_764_skzshp": {
+      "name": "驮兽旅行家",
+      "maxHp": 10000,
+      "atk": 500,
+      "def": 500,
+      "res": 0,
+      "blockCnt": 2,
+      "baseAttackTime": 2,
+      "aspd": 100,
+      "tauntLevel": 0,
+      "massLevel": 0,
+      "talentBb": {
+        "interval": 5,
+        "cost": 2
+      },
+      "talents": [
+        {
+          "interval": 5,
+          "cost": 2
+        }
+      ],
+      "cost": 5
+    }
+  },
+  "testing": true
+}

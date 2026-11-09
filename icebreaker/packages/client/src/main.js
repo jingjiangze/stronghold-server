@@ -20,7 +20,7 @@ import { Hand } from './gestures.js';
 import { readSettings, writeSettings, createSettingsPanel, frameGate, fpsMeter } from './settings.js';
 import { LOBBY_KEY, tabKey, localStore } from './session.js';
 import { controlSounds } from './sound.js';
-import { assetsUrl, kitsUrl, modsUrl, moduleUrl, socketUrl, pageNode } from './site.js';
+import { assetsUrl, kitsUrl, modsUrl, moduleUrl, socketUrl, pageNode, siteUrl } from './site.js';
 import { bootCounter, bootDone, bootFail, bootStep } from './boot.js';
 import { createTutorial } from './tutorial.js';
 import { createSignals, loadEmoteArt } from './battlesignals.js';
@@ -32,6 +32,10 @@ startTurn(/** @type {HTMLButtonElement | null} */ (document.getElementById('full
 const ASSETS = assetsUrl();
 
 const params = new URLSearchParams(location.search);
+/** 从肉鸽（/rogue）开出来的对局：打完回探索页。 */
+const ROGUE_BACK = params.get('back') === 'rogue';
+/** 页面侧兜底结算的时间（毫秒）：默认比服务端的 240s 保险晚 5 秒；调试可用 ?limit=。 */
+const ROGUE_LIMIT_MS = Number(params.get('limit')) || 245_000;
 const seat = Math.max(0, Math.min(7, Number(params.get('seat') ?? 0) || 0));
 /** A room's match (房间-6), or null on a server of one match. */
 const MATCH = params.get('match');
@@ -113,12 +117,29 @@ const KIT_BY_LEVEL = Object.freeze({
   'act1multi_fortress_hard-01': 'map_chernobog_b',
 });
 
+/**
+ * 集成战略的主题 → 地图套件。素材包有 13 套 kit，但只给 6 张合作关做了映射，肉鸽图全部落到 default（map_roof，
+ * 整张图是同一块屋顶砖）。这里按关卡 id 的主题前缀回退到最接近的现成套件；只用 7 套 map_*（三类别键齐全，
+ * 不会把远程高台画成洞）。变体 id 形如 rogue1_1-3__s1a2b3c4d，先剥掉 __ 后缀。
+ */
+const ROGUE_KIT = Object.freeze({
+  rogue1: 'map_chernobog_b', rogue2: 'map_wild', rogue3: 'map_chernobog_a',
+  rogue4: 'map_chernobog_b', rogue5: 'map_lungmen', rogue6: 'map_wild',
+});
+/** 一个关卡的肉鸽主题套件；不是肉鸽关卡返回 undefined。 @param {string} level */
+function rogueKit(level) {
+  const topic = /^(rogue\d)_/.exec(level.split('__')[0])?.[1];
+  return topic ? ROGUE_KIT[topic] ?? 'map_wild' : undefined;
+}
+
 /** The map theme's tile kit a level uses (the engine's 渲染-7), or null when the assets have no kit index. @param {string} level */
 async function tileKit(level) {
   const res = await fetch(new URL('kits/index.json', ASSETS)).catch(() => null);
   if (!res?.ok) return null;
   const index = await res.json();
   const levels = { ...KIT_BY_LEVEL, ...(index.levels ?? {}) };
+  const theme = rogueKit(level);
+  if (theme) levels[level] = theme;
   return loadTileKit({ ...index, levels }, new URL('kits/', ASSETS).href, level);
 }
 
@@ -144,8 +165,16 @@ async function effectPack(units) {
  * @param {number} joined the last frame sealed when the page joined (−1 before the battle began)
  * @param {ReturnType<typeof openEarlyUi> | null} opening the original UI the page opened at once, if it did
  */
+/** 肉鸽关卡不进静态 import：用到哪张就从本站取哪张（/rogue/level/<id>.json），其余走官方内容源。 */
+async function contentSource(match) {
+  if (!/^rogue\d/i.test(match.level)) return SOURCE;
+  const res = await fetch(siteUrl(`rogue/level/${match.level}.json`));
+  if (!res.ok) throw new Error(`没有关卡 ${match.level}（${res.status}）`);
+  return { ...SOURCE, levels: { ...SOURCE.levels, [match.level]: await res.json() } };
+}
+
 async function setUp(match, art, changed, joined, opening) {
-  const content = await matchContent(match, { source: SOURCE });
+  const content = await matchContent(match, { source: await contentSource(match) });
   // the original UI opens first: its start panel is the loading screen while the field, the models and the effects load
   // (opened already when the room page left the stage for it)
   const early = opening ?? earlyUi(art, stageOf(match, content, joined)), artOf = fieldArt(art, match, content);
@@ -332,7 +361,7 @@ async function main() {
     workerUrl: moduleUrl('@aue/worker/src/worker.js'),
     // the battle is on its room's node (站点-6): the page's `server` when the room was on another one
     wsUrl: socketUrl(`battle?${MATCH ? `match=${encodeURIComponent(MATCH)}&` : ''}seat=${seat}`, location.href, pageNode()),
-    seat, key, kits: kitsUrl(), mods: modsUrl(),
+    seat, key, kits: kitsUrl(), mods: modsUrl(), levels: new URL('rogue/level/', location.href).href,
     onFrame: (view, events, keys, status) => onFrame(P, { view, events, keys, status }),
     onNet: (s) => {
       P.net = s.state === 'open' || s.state === 'match' ? '已连接' : s.state === 'closed' ? '重连中' : `消息有误：${s.reason}`;
@@ -402,7 +431,7 @@ function onFrame(P, f) {
   const { view, events, status } = f, game = P.game;
   const end = events.find((e) => e['type'] === 'end');
   stampsOf(P.stamps, events);
-  if (end && MATCH) ended(Number(end['result']), P, status);
+  if (end && MATCH && !P.ended) ended(Number(end['result']), P, status);
   for (const [id, k] of Object.entries(f.keys)) P.unitKeys.set(Number(id), k);
   tutorialFrame(P.tutorial, f, end !== undefined);
   frameSound(P, f);
@@ -485,20 +514,26 @@ function lastFrame(P) {
  * wave's damage (the engine's 守御-1). @param {number} result 1: won, 0: lost @param {Page} P @param {import('@aue/worker').Status} status
  */
 function ended(result, P, status) {
+  if (P.ended) return;
+  P.ended = true;
   notice(`比赛结束：${result === 1 ? '胜利' : '失败'}。`);
   const level = /** @type {any} */ (P.game?.content.level)?.id ?? '', bg = lastFrame(P), f = status.fortress, difficulty = P.game?.match.difficulty ?? 'NORMAL';
   const stamps = f ? [f.stamps] : [...P.stamps].map((x) => x ?? 0), fortress = f ? { defended: f.defended, damage: Math.floor(f.damage) } : undefined;
   try { sessionStorage.setItem('ice.result', JSON.stringify({ match: MATCH, result, level, difficulty, stamps, fortress, at: Date.now() })); } catch { /* the room shows no result */ }
   try { if (bg) sessionStorage.setItem('ice.result.bg', bg); } catch { /* the result shows without it */ }
+  // 肉鸽（/rogue）开出的对局打完回探索页；其余回房间（训练场回训练场）
+  const rogue = new URLSearchParams(location.search).get('back') === 'rogue';
   const back = document.createElement('a');
-  back.href = 'room';
+  back.href = rogue ? 'rogue' : 'room';
   back.className = 'back';
-  back.textContent = TRAINING_LEVELS.includes(level) ? '返回训练场' : '返回房间';
+  back.textContent = rogue ? '返回探索' : TRAINING_LEVELS.includes(level) ? '返回训练场' : '返回房间';
   $('notice').append(' ', back);
 }
 
 /** The match's side is ready: its input, its resize, its render loop. @param {Page} P @param {Awaited<ReturnType<typeof setUp>>} g */
 function start(P, g) {
+  // 服务端按超时强制结算时不会带 end 事件（那次结束只发生在服务端），页面侧兜一层，保证能回探索页
+  if (ROGUE_BACK) setTimeout(() => { if (!P.ended) ended(1, P, {}); }, ROGUE_LIMIT_MS);
   if (!g.renderer) return;
   const renderer = g.renderer, field = /** @type {HTMLCanvasElement} */ ($('field'));
   P.tutorial = TRAINING_LEVELS.includes(/** @type {any} */ (g.content.level).id) ? tutorialOn(P, g, field) : null;

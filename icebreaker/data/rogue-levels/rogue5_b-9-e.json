@@ -1,0 +1,8997 @@
+{
+  "source": {
+    "repo": "Kengxxiao/ArknightsGameData",
+    "commit": "63c7cec73c3858d0ae913f85cc89af3cef4d744f",
+    "server": "zh_CN"
+  },
+  "level": {
+    "id": "rogue5_b-9-e",
+    "width": 13,
+    "height": 9,
+    "options": {
+      "maxLifePoint": 150,
+      "initialCost": 0,
+      "maxCost": 99,
+      "costIncreaseTime": 1,
+      "characterLimit": 6,
+      "moveMultiplier": 0.5
+    },
+    "tiles": [
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_dygmny_1",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_dygmny_3",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_end",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_dygmny_1",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_fence_bound",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_dygmny_1",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_wall",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_dygmny_3",
+          "height": "HIGHLAND",
+          "buildable": "RANGED",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_floor",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_road",
+          "height": "LOWLAND",
+          "buildable": "MELEE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_end",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        }
+      ],
+      [
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_start",
+          "height": "LOWLAND",
+          "buildable": "NONE",
+          "passable": "ALL",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        },
+        {
+          "key": "tile_forbidden",
+          "height": "HIGHLAND",
+          "buildable": "NONE",
+          "passable": "FLY_ONLY",
+          "side": "ALL"
+        }
+      ]
+    ],
+    "routes": [
+      {
+        "start": {
+          "row": 1,
+          "col": 8
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 8
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 8
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 11
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 15,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 15,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 15,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 30,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 4,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 2,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 6,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 45,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 3,
+            "col": 11,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3000,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 90,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 3
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 4,
+          "col": 3
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 3
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 5
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 5
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 4,
+          "col": 5
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 7
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 4,
+          "col": 7
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 7
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 4,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 80,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 11
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 3000,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 3,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 5,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          },
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 7,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 8
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 10
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 10
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 5,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 1,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 3
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 5
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 7
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 6
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 6
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 6
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 6
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 9
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 1
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [
+          {
+            "type": "MOVE",
+            "row": 7,
+            "col": 1,
+            "time": 0,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 2
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 10
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [
+          {
+            "type": "WAIT_FOR_SECONDS",
+            "row": 0,
+            "col": 0,
+            "time": 9999,
+            "dx": 0,
+            "dy": 0
+          }
+        ],
+        "motion": "WALK",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 0
+        },
+        "end": {
+          "row": 0,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 0
+        },
+        "end": {
+          "row": 1,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 0
+        },
+        "end": {
+          "row": 2,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 0
+        },
+        "end": {
+          "row": 3,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 4,
+          "col": 0
+        },
+        "end": {
+          "row": 4,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 0
+        },
+        "end": {
+          "row": 5,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 0
+        },
+        "end": {
+          "row": 6,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 0
+        },
+        "end": {
+          "row": 7,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 0
+        },
+        "end": {
+          "row": 8,
+          "col": 12
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 0,
+          "col": 12
+        },
+        "end": {
+          "row": 0,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 1,
+          "col": 12
+        },
+        "end": {
+          "row": 1,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 2,
+          "col": 12
+        },
+        "end": {
+          "row": 2,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 3,
+          "col": 12
+        },
+        "end": {
+          "row": 3,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 4,
+          "col": 12
+        },
+        "end": {
+          "row": 4,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 5,
+          "col": 12
+        },
+        "end": {
+          "row": 5,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 6,
+          "col": 12
+        },
+        "end": {
+          "row": 6,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 7,
+          "col": 12
+        },
+        "end": {
+          "row": 7,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "start": {
+          "row": 8,
+          "col": 12
+        },
+        "end": {
+          "row": 8,
+          "col": 0
+        },
+        "checkpoints": [],
+        "motion": "FLY",
+        "allowDiagonal": true,
+        "spawnOffset": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "waves": [
+      {
+        "preDelay": 0,
+        "postDelay": 0,
+        "maxWait": -1,
+        "fragments": [
+          {
+            "preDelay": 0,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_2113_dyhlg2",
+                "route": 0,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "hidden": "extra_enemy"
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2115_dylbg2",
+                "route": 1,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "hidden": "extra_enemy"
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2111_dyyrz2",
+                "route": 2,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1,
+                "hidden": "extra_enemy"
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2127_dysuih",
+                "route": 3,
+                "count": 1,
+                "preDelay": 10,
+                "interval": 1
+              },
+              {
+                "type": "NONE",
+                "key": "",
+                "route": -1,
+                "count": 1,
+                "preDelay": 20,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2126_dycyue",
+                "route": 4,
+                "count": 1,
+                "preDelay": 15,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 5,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 6,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 7,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 8,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 9,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 10,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 11,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 12,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 13,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 14,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 15,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1301_ymcnon_2",
+                "route": 16,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "preDelay": 0,
+        "postDelay": 0,
+        "maxWait": -1,
+        "fragments": [
+          {
+            "preDelay": 0,
+            "actions": [
+              {
+                "type": "SPAWN",
+                "key": "enemy_2119_dyshhj",
+                "route": 17,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1302_ymtro_2",
+                "route": 18,
+                "count": 1,
+                "preDelay": 5,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1207_sfji_2",
+                "route": 19,
+                "count": 5,
+                "preDelay": 7,
+                "interval": 4
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1302_ymtro_2",
+                "route": 20,
+                "count": 1,
+                "preDelay": 5,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1207_sfji_2",
+                "route": 21,
+                "count": 5,
+                "preDelay": 7,
+                "interval": 4
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1302_ymtro_2",
+                "route": 22,
+                "count": 1,
+                "preDelay": 5,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1207_sfji_2",
+                "route": 23,
+                "count": 5,
+                "preDelay": 7,
+                "interval": 4
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1302_ymtro_2",
+                "route": 24,
+                "count": 3,
+                "preDelay": 5,
+                "interval": 10
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1205_sfpin_2",
+                "route": 25,
+                "count": 3,
+                "preDelay": 5,
+                "interval": 5
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1205_sfpin_2",
+                "route": 26,
+                "count": 3,
+                "preDelay": 5,
+                "interval": 5
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_1205_sfpin_2",
+                "route": 27,
+                "count": 3,
+                "preDelay": 5,
+                "interval": 5
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2118_dylbhm",
+                "route": 28,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2120_dywqgs",
+                "route": 29,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              },
+              {
+                "type": "SPAWN",
+                "key": "enemy_2128_dysuib_sp",
+                "route": 30,
+                "count": 1,
+                "preDelay": 0,
+                "interval": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "branches": {
+      "dycyue_body": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 31,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 32,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "dysuih_body": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 33,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib",
+              "route": 34,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib",
+              "route": 35,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "summon_dysuih": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1299_ymkilr_2",
+              "route": 36,
+              "count": 3,
+              "preDelay": 0,
+              "interval": 5
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1299_ymkilr_2",
+              "route": 37,
+              "count": 3,
+              "preDelay": 0,
+              "interval": 5
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1299_ymkilr_2",
+              "route": 38,
+              "count": 3,
+              "preDelay": 0,
+              "interval": 5
+            }
+          ]
+        }
+      ],
+      "dysuib_relic_branch": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10007_trspsb_2",
+              "route": 39,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10007_trspsb_2",
+              "route": 40,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2102_dytmbr",
+              "route": 41,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2102_dytmbr",
+              "route": 42,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 43,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 44,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 45,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 46,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 47,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 48,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 49,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 50,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 51,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1129_spklr_2",
+              "route": 52,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1209_sfden_2",
+              "route": 53,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1209_sfden_2",
+              "route": 54,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1209_sfden_2",
+              "route": 55,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1207_sfji_2",
+              "route": 56,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1207_sfji_2",
+              "route": 57,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1209_sfden_2",
+              "route": 58,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1207_sfji_2",
+              "route": 59,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1125_spshld_2",
+              "route": 60,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1125_spshld_2",
+              "route": 61,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1125_spshld_2",
+              "route": 62,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1125_spshld_2",
+              "route": 63,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1125_spshld_2",
+              "route": 64,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1125_spshld_2",
+              "route": 65,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10100_crrol_2",
+              "route": 66,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10100_crrol_2",
+              "route": 67,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10100_crrol_2",
+              "route": 68,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10100_crrol_2",
+              "route": 69,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10078_mprein_2",
+              "route": 70,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10078_mprein_2",
+              "route": 71,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10078_mprein_2",
+              "route": 72,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2103_dykens",
+              "route": 73,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2103_dykens",
+              "route": 74,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2103_dykens",
+              "route": 75,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2103_dykens",
+              "route": 76,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 77,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 78,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1205_sfpin_2",
+              "route": 79,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 80,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1205_sfpin_2",
+              "route": 81,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 82,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10084_hlegle",
+              "route": 83,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10084_hlegle",
+              "route": 84,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10085_hllevi_2",
+              "route": 85,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10084_hlegle",
+              "route": 86,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10084_hlegle",
+              "route": 87,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1195_sfyin_2",
+              "route": 88,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1219_mtrbty",
+              "route": 89,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1195_sfyin_2",
+              "route": 90,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1219_mtrbty",
+              "route": 91,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1195_sfyin_2",
+              "route": 92,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1195_sfyin_2",
+              "route": 93,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10086_hltigr_2",
+              "route": 94,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2103_dykens",
+              "route": 95,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10086_hltigr_2",
+              "route": 96,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10086_hltigr_2",
+              "route": 97,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2105_dyrnge",
+              "route": 98,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2105_dyrnge",
+              "route": 99,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2105_dyrnge",
+              "route": 100,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2105_dyrnge",
+              "route": 101,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10114_ymgsld_2",
+              "route": 102,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10114_ymgsld_2",
+              "route": 103,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10114_ymgsld_2",
+              "route": 104,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10114_ymgsld_2",
+              "route": 105,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 106,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 107,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1205_sfpin_2",
+              "route": 108,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 109,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1205_sfpin_2",
+              "route": 110,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 111,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10116_ymgtop_2",
+              "route": 112,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10114_ymgsld_2",
+              "route": 113,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10116_ymgtop_2",
+              "route": 114,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10116_ymgtop_2",
+              "route": 115,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10116_ymgtop_2",
+              "route": 116,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10116_ymgtop_2",
+              "route": 117,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_10086_hltigr_2",
+              "route": 118,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10085_hllevi_2",
+              "route": 119,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10087_hlchgr_2",
+              "route": 120,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10085_hllevi_2",
+              "route": 121,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10088_hlsnip_2",
+              "route": 122,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10087_hlchgr_2",
+              "route": 123,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1415_mmkabi_2",
+              "route": 124,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1414_mmleak_2",
+              "route": 125,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1414_mmleak_2",
+              "route": 126,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1415_mmkabi_2",
+              "route": 127,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1417_mmdudu_2",
+              "route": 128,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1417_mmdudu_2",
+              "route": 129,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1417_mmdudu_2",
+              "route": 130,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1417_mmdudu_2",
+              "route": 131,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1414_mmleak_2",
+              "route": 132,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1409_bdguad_2",
+              "route": 133,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1414_mmleak_2",
+              "route": 134,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 135,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 136,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 137,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1414_mmleak_2",
+              "route": 138,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_10088_hlsnip_2",
+              "route": 139,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 140,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 141,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 142,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1392_dhshld_2",
+              "route": 143,
+              "count": 1,
+              "preDelay": 5,
+              "interval": 1
+            }
+          ]
+        },
+        {
+          "preDelay": 5,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_1205_sfpin_2",
+              "route": 144,
+              "count": 1,
+              "preDelay": 2,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 145,
+              "count": 1,
+              "preDelay": 6,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1205_sfpin_2",
+              "route": 146,
+              "count": 1,
+              "preDelay": 4,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_1201_sfzhi_2",
+              "route": 147,
+              "count": 1,
+              "preDelay": 3,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "dysuih_hp_body_1": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 148,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 149,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "dysuih_hp_body_2": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 150,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 151,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "dysuih_hp_body_3": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 152,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 153,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2125_dylnpp",
+              "route": 154,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2003_rockman",
+              "route": 155,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2002_bearmi",
+              "route": 156,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2034_sythef",
+              "route": 157,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "dysuih_s_body": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 158,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 159,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2128_dysuib_sp",
+              "route": 160,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "yin": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 161,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 162,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 163,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 164,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 165,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 166,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 167,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 168,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd",
+              "route": 169,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ],
+      "yang": [
+        {
+          "preDelay": 0,
+          "actions": [
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 170,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 171,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 172,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 173,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 174,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 175,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 176,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 177,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            },
+            {
+              "type": "SPAWN",
+              "key": "enemy_2122_dybgzd_b",
+              "route": 178,
+              "count": 1,
+              "preDelay": 0,
+              "interval": 1
+            }
+          ]
+        }
+      ]
+    },
+    "predefines": [],
+    "stages": [],
+    "cards": {
+      "operators": [],
+      "tokens": [
+        {
+          "key": "trap_790_dytswd",
+          "alias": "trap_790_dytswd",
+          "count": 0,
+          "hidden": false
+        },
+        {
+          "key": "trap_791_dytfre",
+          "alias": "trap_791_dytfre",
+          "count": 0,
+          "hidden": false
+        }
+      ]
+    },
+    "bgm": "rl5boss5"
+  },
+  "difficulties": {
+    "NORMAL": {
+      "hiddenGroups": [],
+      "enemyMul": [
+        {
+          "mods": {
+            "max_hp": 1.5
+          },
+          "enemy": [
+            "enemy_2131_dyfire"
+          ]
+        },
+        {
+          "mods": {
+            "max_hp": 1.5
+          },
+          "enemy": [
+            "enemy_2130_dyswrd"
+          ]
+        },
+        {
+          "mods": {
+            "atk": 1.2,
+            "def": 1.2,
+            "max_hp": 1.2
+          }
+        }
+      ],
+      "replace": {},
+      "unsupported": [
+        "enemy_skill_cd_mul",
+        "enemy_skill_cd_mul"
+      ]
+    },
+    "FOUR_STAR": {
+      "hiddenGroups": [],
+      "enemyMul": [
+        {
+          "mods": {
+            "max_hp": 1.5
+          },
+          "enemy": [
+            "enemy_2131_dyfire"
+          ]
+        },
+        {
+          "mods": {
+            "max_hp": 1.5
+          },
+          "enemy": [
+            "enemy_2130_dyswrd"
+          ]
+        },
+        {
+          "mods": {
+            "atk": 1.2,
+            "def": 1.2,
+            "max_hp": 1.2
+          }
+        }
+      ],
+      "replace": {},
+      "unsupported": [
+        "enemy_skill_cd_mul",
+        "enemy_skill_cd_mul"
+      ]
+    }
+  },
+  "enemies": {
+    "enemy_10007_trspsb_2": {
+      "name": "陶醉的“酩酊”",
+      "maxHp": 18000,
+      "atk": 700,
+      "def": 800,
+      "res": 20,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 2.3,
+      "rangeRadius": 0.9,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 6,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "Aura": {
+          "duration": 300,
+          "attack_speed": 50,
+          "move_speed": 1.5,
+          "damage_resistance": 0.5,
+          "attack@damage_resistance": 0.4
+        },
+        "Ally": {
+          "def": -1,
+          "max_hp": -0.5
+        }
+      }
+    },
+    "enemy_10078_mprein_2": {
+      "name": "活性源石巨像",
+      "maxHp": 16000,
+      "atk": 1500,
+      "def": 3000,
+      "res": 80,
+      "moveSpeed": 0.3,
+      "baseAttackTime": 7,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 10,
+      "tags": [
+        "origen"
+      ]
+    },
+    "enemy_10084_hlegle": {
+      "name": "“萨科塔之眼”",
+      "maxHp": 5500,
+      "atk": 1000,
+      "def": 150,
+      "res": 30,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 3,
+      "rangeRadius": 1.3,
+      "applyWay": "RANGED",
+      "motion": "FLY",
+      "massLevel": 1,
+      "levelType": "NORMAL",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "talents": {
+        "SelfFear": {
+          "fear": 5,
+          "speed_duration": 5,
+          "move_speed": 1.5
+        },
+        "DamageOrBullet": {
+          "attack@minus_bullet": 1
+        }
+      }
+    },
+    "enemy_10085_hllevi_2": {
+      "name": "“萨科塔昂首”",
+      "maxHp": 80000,
+      "atk": 0,
+      "def": 50,
+      "res": 30,
+      "moveSpeed": 0.4,
+      "baseAttackTime": 1,
+      "rangeRadius": -1,
+      "applyWay": "NONE",
+      "motion": "FLY",
+      "massLevel": 5,
+      "levelType": "ELITE",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "talents": {
+        "SelfFear": {
+          "fear": 5,
+          "speed_duration": 5,
+          "move_speed": 1.5
+        }
+      },
+      "skills": [
+        {
+          "key": "Roar",
+          "cooldown": 40,
+          "initCooldown": 20,
+          "sp": 0,
+          "bb": {
+            "duration": 15,
+            "attack_speed": -30
+          }
+        }
+      ]
+    },
+    "enemy_10086_hltigr_2": {
+      "name": "“萨科塔匍匐”",
+      "maxHp": 30000,
+      "atk": 1950,
+      "def": 350,
+      "res": 30,
+      "moveSpeed": 1.1,
+      "baseAttackTime": 5,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "talents": {
+        "SelfFear": {
+          "fear": 5,
+          "speed_duration": 5,
+          "move_speed": 1.5
+        }
+      }
+    },
+    "enemy_10087_hlchgr_2": {
+      "name": "精锐圣堂剑士",
+      "maxHp": 8000,
+      "atk": 500,
+      "def": 350,
+      "res": 0,
+      "moveSpeed": 1.2,
+      "baseAttackTime": 1.3,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 1,
+      "levelType": "NORMAL",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "talents": {
+        "AttributeStorage": {
+          "move_speed": 1,
+          "atk": 0
+        },
+        "SkillTrigger": {
+          "interval": 6,
+          "max_stack_cnt": 15
+        }
+      },
+      "skills": [
+        {
+          "key": "ForeverEnhance",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 1,
+          "bb": {
+            "move_speed_add": 0.25,
+            "atk_add": 0.25
+          }
+        }
+      ]
+    },
+    "enemy_10088_hlsnip_2": {
+      "name": "精锐圣堂射手",
+      "maxHp": 12500,
+      "atk": 1800,
+      "def": 180,
+      "res": 0,
+      "moveSpeed": 0.9,
+      "baseAttackTime": 3.5,
+      "rangeRadius": 99,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 1,
+      "levelType": "NORMAL",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "talents": {
+        "AddBulletTrigger": {
+          "interval": 8
+        }
+      },
+      "skills": [
+        {
+          "key": "AddBullet",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "duration": 10,
+            "sp": 1
+          }
+        },
+        {
+          "key": "Sniping",
+          "cooldown": 0,
+          "initCooldown": 5,
+          "sp": 1,
+          "bb": {
+            "delay_add_bullet": 4
+          }
+        }
+      ]
+    },
+    "enemy_10100_crrol_2": {
+      "name": "意识自由的假人",
+      "maxHp": 95000,
+      "atk": 2250,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 5,
+      "rangeRadius": -1,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 5,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "talents": {
+        "Rush": {
+          "rush_damage": 1
+        },
+        "stop": {
+          "damage_scale": 1.6
+        },
+        "mode": {
+          "enemy_crrol[lifetime].interval": 1,
+          "enemy_crrol[lifetime].hp_ratio": 0.02,
+          "cnt": 0,
+          "max": 1500
+        }
+      }
+    },
+    "enemy_10114_ymgsld_2": {
+      "name": "绝望的大哥",
+      "maxHp": 20000,
+      "atk": 1200,
+      "def": 1500,
+      "res": 0,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 5,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "talents": {
+        "Shield": {
+          "dynamic": 8000,
+          "range_radius": 0.4
+        },
+        "DefDesc": {
+          "def": -0.5
+        }
+      },
+      "skills": [
+        {
+          "key": "EndShieldSwitchMode",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {}
+        }
+      ]
+    },
+    "enemy_10116_ymgtop_2": {
+      "name": "水遁宗师",
+      "maxHp": 12000,
+      "atk": 750,
+      "def": 550,
+      "res": 20,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 1.5,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 2,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "talents": {
+        "ProtectionTime": {
+          "protection_duration": 1
+        },
+        "EndRotate": {
+          "rotate_duration": 60
+        },
+        "RotateDamage": {
+          "attack@atk_scale": 1.2,
+          "attack@range_radius": 1,
+          "interval": 1
+        }
+      },
+      "skills": [
+        {
+          "key": "SwitchModeTrigger",
+          "cooldown": 60,
+          "initCooldown": 10,
+          "sp": 0,
+          "bb": {}
+        },
+        {
+          "key": "EndAnim",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {}
+        },
+        {
+          "key": "BeginAnim",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {}
+        }
+      ]
+    },
+    "enemy_1125_spshld_2": {
+      "name": "不动的“偷闲”",
+      "maxHp": 18000,
+      "atk": 800,
+      "def": 1300,
+      "res": 60,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 3.8,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "yinyang": {
+          "dynamic": 1,
+          "buff_yinyang[same].atk_scale": 0.6,
+          "buff_yinyang[diff].atk_scale": 1.4
+        },
+        "taunt": {
+          "taunt_level": 1
+        }
+      }
+    },
+    "enemy_1129_spklr_2": {
+      "name": "无羁的“盛怒”",
+      "maxHp": 16000,
+      "atk": 1500,
+      "def": 900,
+      "res": 30,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 3,
+      "rangeRadius": 1.9,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "yinyang": {
+          "dynamic": 1,
+          "buff_yinyang[same].atk_scale": 0.6,
+          "buff_yinyang[diff].atk_scale": 1.4
+        },
+        "atkup": {
+          "atk_scale": 1.8
+        }
+      }
+    },
+    "enemy_1195_sfyin_2": {
+      "name": "明鉴",
+      "maxHp": 3100,
+      "atk": 390,
+      "def": 0,
+      "res": 20,
+      "moveSpeed": 1.5,
+      "baseAttackTime": 1.5,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "DeadSpawn": {
+          "enemy_key": "enemy_1196_msfyin_2",
+          "cnt": 2
+        }
+      }
+    },
+    "enemy_1196_msfyin_2": {
+      "name": "红木瑞印",
+      "maxHp": 3,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 1,
+      "rangeRadius": 0,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ]
+    },
+    "enemy_1201_sfzhi_2": {
+      "name": "心涛",
+      "maxHp": 7600,
+      "atk": 500,
+      "def": 500,
+      "res": 30,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 2.2,
+      "rangeRadius": 2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 2,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "DeadSpawn": {
+          "enemy_key": "enemy_1202_msfzhi_2",
+          "cnt": 15
+        }
+      }
+    },
+    "enemy_1202_msfzhi_2": {
+      "name": "红木镇纸",
+      "maxHp": 4,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.9,
+      "baseAttackTime": 1,
+      "rangeRadius": 0,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ]
+    },
+    "enemy_1205_sfpin_2": {
+      "name": "赤霞",
+      "maxHp": 8000,
+      "atk": 570,
+      "def": 450,
+      "res": 65,
+      "moveSpeed": 0.9,
+      "baseAttackTime": 3,
+      "rangeRadius": 2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 1,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "DeadSpawn": {
+          "enemy_key": "enemy_1206_msfpin_2",
+          "cnt": 1
+        }
+      },
+      "skills": [
+        {
+          "key": "PowerAttack",
+          "cooldown": 5,
+          "initCooldown": 0,
+          "sp": 5,
+          "bb": {
+            "atk_scale_init": 0.3,
+            "atk_scale_add": 0.3,
+            "times": 4,
+            "duration": 20
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_1206_msfpin_2": {
+      "name": "彩瓷花瓶",
+      "maxHp": 15,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 1,
+      "rangeRadius": 0,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ]
+    },
+    "enemy_1207_sfji_2": {
+      "name": "新硎",
+      "maxHp": 14000,
+      "atk": 1350,
+      "def": 750,
+      "res": 30,
+      "moveSpeed": 1.3,
+      "baseAttackTime": 2.2,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "DeadSpawn": {
+          "enemy_key": "enemy_1208_msfji_2",
+          "cnt": 4,
+          "cnt_add": -1
+        },
+        "AtkUp": {
+          "atk": 0.8
+        }
+      }
+    },
+    "enemy_1208_msfji_2": {
+      "name": "铁矛头",
+      "maxHp": 30,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 1,
+      "rangeRadius": 0,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ]
+    },
+    "enemy_1209_sfden_2": {
+      "name": "堂皇",
+      "maxHp": 18000,
+      "atk": 700,
+      "def": 1050,
+      "res": 20,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 3,
+      "rangeRadius": 2,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "DeadSpawn": {
+          "enemy_key": "enemy_1210_msfden_2",
+          "cnt": 1
+        },
+        "InvisibleShield": {
+          "duration": 3
+        }
+      },
+      "skills": [
+        {
+          "key": "InvisibleShield",
+          "cooldown": 15,
+          "initCooldown": 5,
+          "sp": 0,
+          "bb": {
+            "duration": 3
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_1210_msfden_2": {
+      "name": "铁灯盘",
+      "maxHp": 45,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "moveSpeed": 0.5,
+      "baseAttackTime": 1,
+      "rangeRadius": 0,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 0,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ]
+    },
+    "enemy_1219_mtrbty": {
+      "name": "寻路者信使",
+      "maxHp": 17000,
+      "atk": 600,
+      "def": 500,
+      "res": 60,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 2.7,
+      "rangeRadius": 2.5,
+      "applyWay": "ALL",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "talents": {
+        "shotbuff": {
+          "attack@headshot_atk_scale": 1.5,
+          "attack@headshot_disarmed_duration": 15,
+          "attack@headshot_sp": -1,
+          "attack@headshot_trapdamage": 5000
+        }
+      },
+      "dmgType": "arts"
+    },
+    "enemy_1299_ymkilr_2": {
+      "name": "山海众秘使",
+      "maxHp": 11000,
+      "atk": 1000,
+      "def": 300,
+      "res": 20,
+      "moveSpeed": 1.1,
+      "baseAttackTime": 2.5,
+      "rangeRadius": 1.2,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "immune": [
+        "silence"
+      ],
+      "skills": [
+        {
+          "key": "InvisibleCombat",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 2
+          }
+        }
+      ]
+    },
+    "enemy_1301_ymcnon_2": {
+      "name": "“碎壁”",
+      "maxHp": 18000,
+      "atk": 1200,
+      "def": 1200,
+      "res": 10,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 4.5,
+      "rangeRadius": 1.2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "machine"
+      ]
+    },
+    "enemy_1302_ymtro_2": {
+      "name": "“越长尘”",
+      "maxHp": 30000,
+      "atk": 1000,
+      "def": 1500,
+      "res": 10,
+      "moveSpeed": 0.3,
+      "baseAttackTime": 4,
+      "rangeRadius": 1.2,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "machine"
+      ],
+      "talents": {
+        "Bus": {
+          "max_cnt": 4
+        }
+      }
+    },
+    "enemy_1392_dhshld_2": {
+      "name": "厌肮",
+      "maxHp": 12000,
+      "atk": 800,
+      "def": 1500,
+      "res": 20,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 3.8,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "Passive": {
+          "extra_value": 15,
+          "range_radius": 1
+        }
+      }
+    },
+    "enemy_1409_bdguad_2": {
+      "name": "马特奥的近卫",
+      "maxHp": 25000,
+      "atk": 1300,
+      "def": 1200,
+      "res": 30,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 4,
+      "rangeRadius": -1,
+      "applyWay": "ALL",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "talents": {
+        "DmgResist": {
+          "damage_resistance": 0.4
+        }
+      },
+      "skills": [
+        {
+          "key": "CrossBomb",
+          "cooldown": 10,
+          "initCooldown": 2,
+          "sp": 0,
+          "bb": {
+            "projectile_range": 1.1,
+            "times": 2,
+            "atk_scale": 0.7
+          }
+        }
+      ]
+    },
+    "enemy_1414_mmleak_2": {
+      "name": "增强型爆燃厨具巨人",
+      "maxHp": 12000,
+      "atk": 700,
+      "def": 3200,
+      "res": 80,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 6,
+      "rangeRadius": 1,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 5,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "sarkaz"
+      ],
+      "talents": {
+        "TouchedRope": {
+          "hp_ratio": 0.03
+        }
+      }
+    },
+    "enemy_1415_mmkabi_2": {
+      "name": "温顺的武装大驮兽",
+      "maxHp": 75000,
+      "atk": 2200,
+      "def": 50,
+      "res": 50,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 5,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 5,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "talents": {
+        "RopeTriggerAbility": {
+          "stun_duration": 10,
+          "stun_cd": 12,
+          "aoe_scale": 2
+        }
+      }
+    },
+    "enemy_1417_mmdudu_2": {
+      "name": "自由佣兵“主音吉他”",
+      "maxHp": 15000,
+      "atk": 800,
+      "def": 360,
+      "res": 70,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 5,
+      "rangeRadius": 1.6,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "sarkaz"
+      ],
+      "skills": [
+        {
+          "key": "RockYou",
+          "cooldown": 25,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "hit_interval": 1,
+            "dot_value": 200,
+            "dot_ep_value": 80
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2002_bearmi": {
+      "name": "高普尼克",
+      "maxHp": 90000,
+      "atk": 4000,
+      "def": 550,
+      "res": 50,
+      "moveSpeed": 0.5,
+      "baseAttackTime": 3.5,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "ELITE",
+      "lifePointReduce": 0,
+      "immune": [
+        "stun",
+        "freeze",
+        "levitate"
+      ]
+    },
+    "enemy_2003_rockman": {
+      "name": "迷路的巨像",
+      "maxHp": 75000,
+      "atk": 1500,
+      "def": 600,
+      "res": 0,
+      "moveSpeed": 0.5,
+      "baseAttackTime": 4.4,
+      "rangeRadius": 2.5,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "BOSS",
+      "lifePointReduce": 2,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "originiumartscraft"
+      ],
+      "skills": [
+        {
+          "key": "StunAttack",
+          "cooldown": 13,
+          "initCooldown": 13,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 0.7,
+            "stun": 25
+          }
+        }
+      ]
+    },
+    "enemy_2034_sythef": {
+      "name": "流泪小子",
+      "maxHp": 25000,
+      "atk": 600,
+      "def": 150,
+      "res": 20,
+      "moveSpeed": 0.8,
+      "baseAttackTime": 1.8,
+      "rangeRadius": 0,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 2,
+      "levelType": "ELITE",
+      "lifePointReduce": 0,
+      "talents": {
+        "Combat": {
+          "attack@stun": 4
+        }
+      }
+    },
+    "enemy_2101_dyspll": {
+      "name": "便符",
+      "maxHp": 12,
+      "atk": 40,
+      "def": 100,
+      "res": 30,
+      "moveSpeed": 1,
+      "baseAttackTime": 1,
+      "rangeRadius": 0.3,
+      "applyWay": "RANGED",
+      "motion": "FLY",
+      "massLevel": 1,
+      "levelType": "NORMAL",
+      "lifePointReduce": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2102_dytmbr": {
+      "name": "皮书生",
+      "maxHp": 13000,
+      "atk": 350,
+      "def": 50,
+      "res": 10,
+      "moveSpeed": 0.9,
+      "baseAttackTime": 2,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 1,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "Eat": {
+          "hp_ratio": 0.4
+        }
+      },
+      "skills": [
+        {
+          "key": "Eat",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "range_radius": 1.5,
+            "hp_ratio": 0.6
+          }
+        }
+      ]
+    },
+    "enemy_2103_dykens": {
+      "name": "平剑客",
+      "maxHp": 14000,
+      "atk": 500,
+      "def": 400,
+      "res": 30,
+      "moveSpeed": 1,
+      "baseAttackTime": 4,
+      "rangeRadius": 0.8,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "NORMAL",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2105_dyrnge": {
+      "name": "似兽",
+      "maxHp": 35000,
+      "atk": 450,
+      "def": 1500,
+      "res": 40,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 4,
+      "rangeRadius": 0.5,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 5,
+      "levelType": "ELITE",
+      "lifePointReduce": 1,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "Fly": {
+          "def": -1500
+        }
+      },
+      "skills": [
+        {
+          "key": "Devour",
+          "cooldown": -1,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {}
+        }
+      ]
+    },
+    "enemy_2111_dyyrz2": {
+      "name": "桓君",
+      "maxHp": 100000,
+      "atk": 1000,
+      "def": 400,
+      "res": 60,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 5,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "BOSS",
+      "lifePointReduce": 3,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "1": {
+          "damage_scale": 1.5,
+          "lb_damage_scale": 2
+        }
+      },
+      "skills": [
+        {
+          "key": "StartBattle",
+          "cooldown": 999,
+          "initCooldown": 80,
+          "sp": 0,
+          "bb": {}
+        }
+      ]
+    },
+    "enemy_2113_dyhlg2": {
+      "name": "文衡君",
+      "maxHp": 24000,
+      "atk": 600,
+      "def": 600,
+      "res": 60,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 2.5,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "WALK",
+      "massLevel": 4,
+      "levelType": "BOSS",
+      "lifePointReduce": 3,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "WindDamage": {
+          "atk_scale": 0.8,
+          "range_radius": 1.2,
+          "interval": 1
+        }
+      },
+      "skills": [
+        {
+          "key": "StartBattle",
+          "cooldown": 999,
+          "initCooldown": 80,
+          "sp": 0,
+          "bb": {}
+        }
+      ]
+    },
+    "enemy_2115_dylbg2": {
+      "name": "昭烈君",
+      "maxHp": 42000,
+      "atk": 1100,
+      "def": 700,
+      "res": 50,
+      "moveSpeed": 0.7,
+      "baseAttackTime": 4,
+      "rangeRadius": 2.2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 5,
+      "levelType": "BOSS",
+      "lifePointReduce": 3,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "GlobalDyBuff": {
+          "damage_resistance": 0.4
+        }
+      },
+      "skills": [
+        {
+          "key": "StartBattle",
+          "cooldown": 999,
+          "initCooldown": 80,
+          "sp": 0,
+          "bb": {}
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2118_dylbhm": {
+      "name": "易",
+      "maxHp": 150000,
+      "atk": 1200,
+      "def": 1500,
+      "res": 60,
+      "moveSpeed": 0.5,
+      "baseAttackTime": 3.5,
+      "rangeRadius": 2,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 7,
+      "levelType": "BOSS",
+      "lifePointReduce": 5,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "YinYang": {
+          "dynamic": 0,
+          "enemy_dylbhm_buff_yinyang[diff].atk_scale": 1.2,
+          "enemy_dylbhm_buff_yinyang[diff].high_atk_scale": 1.5,
+          "enemy_dylbhm_buff_yinyang[same].atk_scale": 0.8,
+          "enemy_dylbhm_buff_yinyang[same].high_atk_scale": 0.8,
+          "attack@max_target": 2
+        },
+        "Reborn": {
+          "duration": 20,
+          "invincible_duration": 30
+        }
+      },
+      "skills": [
+        {
+          "key": "Reborning",
+          "cooldown": 99999,
+          "initCooldown": 99999,
+          "sp": 0,
+          "bb": {
+            "duration": 20
+          }
+        },
+        {
+          "key": "ChangeYinYang",
+          "cooldown": 20,
+          "initCooldown": 20,
+          "sp": 0,
+          "bb": {
+            "shield_duration": 15,
+            "hp_ratio": 1
+          }
+        },
+        {
+          "key": "SummonEnemy",
+          "cooldown": 25,
+          "initCooldown": 25,
+          "sp": 0,
+          "bb": {
+            "row_cnt": 1,
+            "high_row_cnt": 2,
+            "duration": 18,
+            "interval": 6,
+            "max_cnt": 8
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2119_dyshhj": {
+      "name": "“岁”",
+      "maxHp": 560000,
+      "atk": 800,
+      "def": 800,
+      "res": 50,
+      "moveSpeed": 1,
+      "baseAttackTime": 4,
+      "rangeRadius": -1,
+      "applyWay": "MELEE",
+      "motion": "FLY",
+      "massLevel": 10,
+      "levelType": "BOSS",
+      "lifePointReduce": 5,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate",
+        "disarmedCombat",
+        "fear",
+        "attract"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "TriggerThreeStrikes": {
+          "interval": 3,
+          "duration": 4
+        },
+        "BuildCntCheck": {
+          "cnt": 6,
+          "sp_recovery_per_sec": 1.5
+        },
+        "HpRatioCheck": {
+          "hp_ratio": 0.5
+        }
+      },
+      "skills": [
+        {
+          "key": "ThreeStrikes",
+          "cooldown": 9999,
+          "initCooldown": 9999,
+          "sp": 0,
+          "bb": {
+            "atk_scale": 1
+          }
+        },
+        {
+          "key": "Bombard",
+          "cooldown": 5,
+          "initCooldown": 5,
+          "sp": 50,
+          "bb": {
+            "interval": 20,
+            "respawn_time": 30,
+            "is_override_respawn_time": 1,
+            "duration": 21,
+            "block_duration": 20
+          }
+        },
+        {
+          "key": "SuicideBoombard",
+          "cooldown": 0,
+          "initCooldown": 600,
+          "sp": 0,
+          "bb": {}
+        },
+        {
+          "key": "HpTriggerBoombard",
+          "cooldown": 9999,
+          "initCooldown": 9999,
+          "sp": 0,
+          "bb": {
+            "duration": 11,
+            "interval": 10
+          }
+        },
+        {
+          "key": "FlyToThreeBoombard",
+          "cooldown": 9999,
+          "initCooldown": 9999,
+          "sp": 0,
+          "bb": {}
+        },
+        {
+          "key": "Fly",
+          "cooldown": 9999,
+          "initCooldown": 9999,
+          "sp": 0,
+          "bb": {}
+        }
+      ]
+    },
+    "enemy_2120_dywqgs": {
+      "name": "“望”",
+      "maxHp": 200000,
+      "atk": 800,
+      "def": 1200,
+      "res": 60,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 4,
+      "rangeRadius": 5,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 7,
+      "levelType": "BOSS",
+      "lifePointReduce": 5,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence",
+        "levitate",
+        "fear"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "ActiveChessDamage": {
+          "one_minus_status_resistance": -0.2,
+          "max_stack_cnt": -1,
+          "max_valid_stack_cnt": 4,
+          "hp_ratio": 0.02,
+          "range_radius": 1.6,
+          "temp_damage_resistance": 0.2
+        },
+        "SummonEnemyBetweenTraps": {
+          "enemy_key": "enemy_2101_dyspll",
+          "interval": 20
+        },
+        "Reborn": {
+          "duration": 30,
+          "invincible_duration": 60
+        },
+        "RebornSpawn": {
+          "spawn_duration": 30,
+          "interval": 30
+        },
+        "FinalAttributeUp": {
+          "attack_speed": 100,
+          "attack@atk_scale": 1,
+          "attack@max_target": 3
+        },
+        "ActiveChessDamageS2": {
+          "range_radius": 1.6,
+          "temp_damage_resistance": 0.2
+        },
+        "SummonChessWhenBorn": {
+          "cd_duration": 30
+        }
+      },
+      "skills": [
+        {
+          "key": "SiegeChess1",
+          "cooldown": 25,
+          "initCooldown": 25,
+          "sp": 0,
+          "bb": {}
+        },
+        {
+          "key": "StartBattle",
+          "cooldown": 999999,
+          "initCooldown": 40,
+          "sp": 0,
+          "bb": {}
+        },
+        {
+          "key": "SwitchFinalMode",
+          "cooldown": 1,
+          "initCooldown": 1,
+          "sp": 0,
+          "bb": {
+            "duration": 10
+          }
+        },
+        {
+          "key": "Reborning",
+          "cooldown": 99999,
+          "initCooldown": 99999,
+          "sp": 0,
+          "bb": {
+            "duration": 30
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2122_dybgzd": {
+      "name": "梁",
+      "maxHp": 10,
+      "atk": 800,
+      "def": 400,
+      "res": 20,
+      "moveSpeed": 1.2,
+      "baseAttackTime": 2,
+      "rangeRadius": -1,
+      "applyWay": "NONE",
+      "motion": "FLY",
+      "massLevel": 3,
+      "levelType": "NORMAL",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "Boom": {
+          "atk_scale": 2,
+          "atk_scale_2": 3
+        },
+        "BoomAura": {
+          "range_radius": 0.3
+        },
+        "BoomAura[YinYang]": {
+          "range_radius": 0.3
+        },
+        "YinYang": {
+          "dynamic": 1
+        },
+        "BoomToSame": {
+          "atk_scale": 0.6,
+          "atk_scale_2": 1.8
+        },
+        "BoomToDiff": {
+          "atk_scale": 1.4,
+          "atk_scale_2": 4.2
+        }
+      },
+      "dmgType": "arts"
+    },
+    "enemy_2122_dybgzd_b": {
+      "name": "梁",
+      "maxHp": 10,
+      "atk": 800,
+      "def": 400,
+      "res": 20,
+      "moveSpeed": 1.2,
+      "baseAttackTime": 2,
+      "rangeRadius": -1,
+      "applyWay": "NONE",
+      "motion": "FLY",
+      "massLevel": 3,
+      "levelType": "NORMAL",
+      "lifePointReduce": 0,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "silence"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "Boom": {
+          "atk_scale": 2,
+          "atk_scale_2": 3
+        },
+        "BoomAura": {
+          "range_radius": 0.3
+        },
+        "BoomAura[YinYang]": {
+          "range_radius": 0.3
+        },
+        "YinYang": {
+          "dynamic": 0
+        },
+        "BoomToSame": {
+          "atk_scale": 0.6,
+          "atk_scale_2": 1.8
+        },
+        "BoomToDiff": {
+          "atk_scale": 1.4,
+          "atk_scale_2": 4.2
+        }
+      }
+    },
+    "enemy_2125_dylnpp": {
+      "name": "小八界",
+      "maxHp": 70000,
+      "atk": 900,
+      "def": 500,
+      "res": 30,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 1,
+      "rangeRadius": 0,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 3,
+      "levelType": "ELITE",
+      "lifePointReduce": 0,
+      "talents": {
+        "CircleDamage": {
+          "atk_scale": 3,
+          "stun": 15,
+          "range_radius": 3.5,
+          "take_damage_cnt": 15
+        }
+      },
+      "dmgType": "arts"
+    },
+    "enemy_2126_dycyue": {
+      "name": "朔壳",
+      "maxHp": 500000,
+      "atk": 1800,
+      "def": 2500,
+      "res": 60,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 4.5,
+      "rangeRadius": 2.5,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 9,
+      "levelType": "BOSS",
+      "lifePointReduce": 50,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "BranchData": {
+          "max_index": 1
+        }
+      },
+      "skills": [
+        {
+          "key": "Punch",
+          "cooldown": 30,
+          "initCooldown": 10,
+          "sp": 0,
+          "bb": {
+            "range_radius": 13
+          }
+        },
+        {
+          "key": "SendPunchCard",
+          "cooldown": 36,
+          "initCooldown": 5,
+          "sp": 0,
+          "bb": {
+            "cnt": 1,
+            "max_cards": 8
+          }
+        },
+        {
+          "key": "SummonBody",
+          "cooldown": 54,
+          "initCooldown": 20,
+          "sp": 0,
+          "bb": {
+            "branch_id": "dycyue_body"
+          }
+        }
+      ]
+    },
+    "enemy_2127_dysuih": {
+      "name": "妄躯",
+      "maxHp": 500000,
+      "atk": 2400,
+      "def": 3000,
+      "res": 60,
+      "moveSpeed": 0.75,
+      "baseAttackTime": 5,
+      "rangeRadius": 2.5,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 13,
+      "levelType": "BOSS",
+      "lifePointReduce": 50,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate",
+        "fear",
+        "attract"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "BornSummon": {
+          "action_index": 2
+        },
+        "BranchData": {
+          "max_index": 2
+        }
+      },
+      "skills": [
+        {
+          "key": "SendFireCard",
+          "cooldown": 30,
+          "initCooldown": 15,
+          "sp": 0,
+          "bb": {
+            "cnt": 1,
+            "max_cards": 8
+          }
+        },
+        {
+          "key": "SummonFire",
+          "cooldown": 12,
+          "initCooldown": 5,
+          "sp": 0,
+          "bb": {
+            "range_radius": 15,
+            "max_target": 15
+          }
+        },
+        {
+          "key": "FireToFarthestTile",
+          "cooldown": 40,
+          "initCooldown": 40,
+          "sp": 0,
+          "bb": {
+            "duration": 10,
+            "enemy_dysuih_summon_fire_to_farthest.interval": 0.49
+          }
+        },
+        {
+          "key": "GiantTailStrike",
+          "cooldown": 9999,
+          "initCooldown": 3000,
+          "sp": 0,
+          "bb": {
+            "value": -50
+          }
+        },
+        {
+          "key": "StunAnimation",
+          "cooldown": 0,
+          "initCooldown": 0,
+          "sp": 0,
+          "bb": {
+            "duration": 15
+          }
+        },
+        {
+          "key": "SummonBody",
+          "cooldown": 60,
+          "initCooldown": 20,
+          "sp": 0,
+          "bb": {
+            "Branch_id": "dysuih_s_body"
+          }
+        }
+      ],
+      "dmgType": "arts"
+    },
+    "enemy_2128_dysuib": {
+      "name": "身形",
+      "maxHp": 80000,
+      "atk": 200,
+      "def": 1000,
+      "res": 30,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 5,
+      "rangeRadius": 2.5,
+      "applyWay": "NONE",
+      "motion": "WALK",
+      "massLevel": 13,
+      "levelType": "BOSS",
+      "lifePointReduce": 1,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate",
+        "disarmedCombat",
+        "fear",
+        "palsy",
+        "attract"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "WithdrawAlly": {
+          "attack@respawn_time": 0.15
+        },
+        "DysuihAura": {
+          "damage_resistance": 0.5,
+          "stun": 15
+        },
+        "SecondRelicTalent": {
+          "def": 1500,
+          "enemy_dysuib_second_relic_t[summon_enemy].interval": 30,
+          "active_relic_a": 0,
+          "active_relic_b": 0,
+          "enemy_dysuib_second_relic_t[summon_enemy].branch_id": "dysuib_relic_branch"
+        },
+        "inverseDamage": {
+          "atk_scale": 0.2
+        }
+      }
+    },
+    "enemy_2128_dysuib_sp": {
+      "name": "身形sp",
+      "maxHp": 160000,
+      "atk": 200,
+      "def": 1000,
+      "res": 30,
+      "moveSpeed": 0.6,
+      "baseAttackTime": 5,
+      "rangeRadius": 2.5,
+      "applyWay": "RANGED",
+      "motion": "WALK",
+      "massLevel": 13,
+      "levelType": "BOSS",
+      "lifePointReduce": 1,
+      "epDamageResistance": 0,
+      "epResistance": 0,
+      "immune": [
+        "stun",
+        "silence",
+        "sleep",
+        "freeze",
+        "levitate",
+        "disarmedCombat",
+        "fear",
+        "palsy",
+        "attract"
+      ],
+      "tags": [
+        "animated"
+      ],
+      "talents": {
+        "WithdrawAlly": {
+          "attack@respawn_time": 0.15
+        },
+        "DysuihAura": {
+          "damage_resistance": 0.5,
+          "stun": 15
+        },
+        "SecondRelicTalent": {
+          "def": 1500,
+          "enemy_dysuib_second_relic_t[summon_enemy].interval": 8,
+          "active_relic_a": 0,
+          "active_relic_b": 1,
+          "enemy_dysuib_second_relic_t[summon_enemy].branch_id": "dysuib_relic_branch"
+        },
+        "inverseDamage": {
+          "atk_scale": 0.2
+        }
+      }
+    }
+  },
+  "devices": {
+    "trap_251_buftrp": {
+      "name": "遗物中枢",
+      "maxHp": 500,
+      "atk": 200,
+      "def": 200,
+      "res": 20,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": -1,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [],
+      "cost": 10
+    },
+    "trap_790_dytswd": {
+      "name": "宿傲",
+      "maxHp": 5000,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": 0,
+      "massLevel": 0,
+      "talentBb": {
+        "duration": 45,
+        "def": 1
+      },
+      "talents": [
+        {
+          "duration": 45,
+          "def": 1
+        }
+      ],
+      "cost": 25
+    },
+    "trap_791_dytfre": {
+      "name": "宿怒",
+      "maxHp": 5000,
+      "atk": 0,
+      "def": 0,
+      "res": 0,
+      "blockCnt": 0,
+      "baseAttackTime": 1,
+      "aspd": 100,
+      "tauntLevel": 0,
+      "massLevel": 0,
+      "talentBb": {},
+      "talents": [
+        {}
+      ],
+      "cost": 25
+    }
+  },
+  "testing": true
+}

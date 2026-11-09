@@ -231,6 +231,12 @@ importers:
         specifier: workspace:*
         version: link:../../engine/packages/schema
 
+  packages/mode-rogue:
+    dependencies:
+      '@aue/schema':
+        specifier: workspace:*
+        version: link:../../engine/packages/schema
+
   packages/server:
     dependencies:
       '@aue/content':
@@ -254,6 +260,9 @@ importers:
       '@icebreaker/mode-regular':
         specifier: workspace:*
         version: link:../mode-regular
+      '@icebreaker/mode-rogue':
+        specifier: workspace:*
+        version: link:../mode-rogue
       es-module-lexer:
         specifier: 3.0.3
         version: 3.0.3
