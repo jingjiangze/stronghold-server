@@ -315,7 +315,7 @@
 .rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 4; }
 /* 进入候选节点的官方箭头（img_connector.png，34×12 青色双箭头） */
 .rpn-node__in {
-  left: 2%; top: 32%; width: 17%; height: auto;
+  left: 7%; top: 32%; width: 16%; height: auto;
   transform: translateX(-50%); z-index: 4; opacity: 1;
 }
 .rpn-node__ok {
@@ -333,12 +333,13 @@
 }
 /* 谁投了这里（杀戮尖塔 2 联机：图上直接显示每人的座位色标记） */
 .rpn-node__votes {
-  position: absolute; right: 9%; bottom: 19%; z-index: 6;
-  display: flex; gap: .03rem; align-items: center;
+  position: absolute; right: 13%; bottom: 23%; z-index: 6;
+  display: flex; gap: .035rem; align-items: center;
 }
 .rpn-voter {
-  display: block; width: .09rem; height: .09rem; border-radius: 50%;
-  border: 1px solid rgba(6, 17, 13, .9);
+  display: block; width: .11rem; height: .11rem; border-radius: 50%;
+  border: 1px solid rgba(6, 17, 13, .95);
+  box-shadow: 0 0 0 .015rem rgba(0, 0, 0, .45);
   background: var(--rp-mint);
 }
 .rpn-voter.is-seat-0 { background: #4ed8af; }
