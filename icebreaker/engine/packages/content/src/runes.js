@@ -21,7 +21,7 @@ const BUFF_KEYS = Object.freeze({
 /** @typedef {import('@aue/sim').OperatorDef} OperatorDef */
 /**
  * What one rune does to a unit it applies to.
- * @typedef {{ mask: number, mul?: Record<string, number>, respawn?: number, blockAdd?: number, bornSp?: number, mods?: Record<string, number>,
+ * @typedef {{ mask: number, mul?: Record<string, number>, add?: Record<string, number>, respawn?: number, blockAdd?: number, bornSp?: number, mods?: Record<string, number>,
  *   stack?: import('@aue/sim').TimedTalent, probSp?: { prob: number, sp: number }, rangeSp?: { sp: number, interval: number } }} RuneEffect
  */
 
@@ -57,6 +57,8 @@ function cardOf(r) {
 function effectOf(r) {
   const bb = boardOf(r), mask = r.professions;
   if (r.key === 'char_attribute_mul') return { mask, mul: Object.fromEntries(Object.keys(MUL_FIELDS).filter((k) => k in bb).map((k) => [k, num(bb, k)])) };
+  // 集成战略的藏品用「加算」写属性（+N 而不是 ×N），与剧情关的风格 runes 是两套写法
+  if (r.key === 'char_attribute_add') return { mask, add: Object.fromEntries(Object.keys(MUL_FIELDS).filter((k) => k in bb).map((k) => [k, num(bb, k)])) };
   if (r.key === 'char_respawntime_mul') return { mask, respawn: num(bb, 'scale') };
   if (r.key === 'char_blockcnt_add') return { mask, blockAdd: num(bb, 'value') };
   if (r.key === 'env_gbuff_new' || r.key === 'char_dynamic_ability_new') return keyedEffect(mask, bb);
@@ -101,6 +103,10 @@ function recordChanges(d, e) {
   for (const [k, v] of Object.entries(e.mul ?? {})) {
     const [f, dflt] = /** @type {[string, number]} */ (MUL_FIELDS[/** @type {keyof typeof MUL_FIELDS} */ (k)]);
     out[f] = (d[f] ?? dflt) * v;
+  }
+  for (const [k, v] of Object.entries(e.add ?? {})) {
+    const [f, dflt] = /** @type {[string, number]} */ (MUL_FIELDS[/** @type {keyof typeof MUL_FIELDS} */ (k)]);
+    out[f] = (out[f] ?? d[f] ?? dflt) + v;
   }
   if (e.respawn !== undefined) out.respawnTime = (d.respawnTime ?? 0) * e.respawn;
   if (e.blockAdd !== undefined) out.blockCnt = Math.max(0, (d.blockCnt ?? 0) + e.blockAdd);

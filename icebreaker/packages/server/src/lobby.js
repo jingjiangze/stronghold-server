@@ -5,6 +5,7 @@
 import { WebSocketServer } from 'ws';
 import { TOASTS } from '@icebreaker/mode-regular';
 import { createRooms } from './rooms.js';
+import { createRogue } from './rogue.js';
 import { createMatcher } from './match.js';
 import { addressOf } from './guard.js';
 import { trainingMatch } from './catalog.js';
@@ -41,9 +42,20 @@ const SHAPES = {
   confirm: (m) => isRecord(m.squad) && shortText(m.style, 16),
   pick: (m) => shortText(m.id, 32),
   lineup: (m) => Array.isArray(m.lineup) && m.lineup.length <= 12 && m.lineup.every((x) => isRecord(x) && Object.keys(x).sort().join() === 'id,module,skill'),
+  // 集成战略（肉鸽）：建房/加入/离开/选点/领奖。阵容直接带引擎的 decks 形状（id + build），上限与各席位卡池一致。
+  rogueCreate: (m) => shortText(m.topic, 20) && Number.isInteger(m.grade) && m.grade >= 0 && m.grade <= 15 && (m.squad === undefined || m.squad === '' || shortText(m.squad, 40))
+    && Array.isArray(m.deck) && m.deck.length <= 12 && m.deck.every((x) => isRecord(x) && operatorId(x.id) && isRecord(x.build)),
+  rogueJoin: (m) => shortText(m.code, 12) && (m.deck === undefined || (Array.isArray(m.deck) && m.deck.length <= 12 && m.deck.every((x) => isRecord(x) && operatorId(x.id) && isRecord(x.build)))),
+  rogueLeave: () => true,
+  rogueTopics: () => true,
+  roguePick: (m) => shortText(m.id, 40),
+  rogueReward: (m) => shortText(m.id, 64),
+  rogueBuy: (m) => shortText(m.id, 64),
+  rogueLeaveShop: () => true,
 };
 /** The fields each message has besides `t`. @type {Record<string, string>} */
-const FIELDS = { hello: 'key,name', ping: 'at', train: 'level', profile: 'assist,avatar,tag', join: 'code', project: 'index', prepare: 'on', ready: 'on', confirm: 'squad,style', pick: 'id', lineup: 'lineup', emote: 'id,theme', inverse: 'on', seek: 'classes,inverse,pos,squad,style' };
+const FIELDS = { hello: 'key,name', ping: 'at', train: 'level', profile: 'assist,avatar,tag', join: 'code', project: 'index', prepare: 'on', ready: 'on', confirm: 'squad,style', pick: 'id', lineup: 'lineup', emote: 'id,theme', inverse: 'on', seek: 'classes,inverse,pos,squad,style',
+  rogueCreate: 'deck,grade,squad,topic', rogueJoin: 'code,deck', roguePick: 'id', rogueReward: 'id', rogueBuy: 'id' };
 
 /**
  * Why a lobby message is malformed, or null (room.md): a known type with exactly its fields, each of its kind; the
@@ -96,8 +108,25 @@ export function createLobby(o) {
     send: (id, msg) => { const ws = sockets.get(id); if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); },
     open: (pair, project) => rooms.openMatched(pair, project),
   });
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_LOBBY_MESSAGE });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_LOBBY_MESSAGE, perMessageDeflate: { threshold: 1024, serverMaxWindowBits: 13 } });
+  // 心跳：大厅也会留下半开连接（切后台/断网），30s ping、两次不回就断
+  const beat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.isAlive === false) { ws.terminate(); continue; }
+      ws.isAlive = false;
+      try { ws.ping(); } catch { /* already closed */ }
+    }
+  }, 30_000);
+  wss.on('connection', (ws) => { ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; }); });
   const timer = setInterval(() => { rooms.tick(); matcher.tick(); }, 250);
+  /** 会话的名字（肉鸽建房/加入时显示用）。 @type {Map<number, string>} */
+  const names = new Map();
+  // 集成战略（肉鸽）：与房间并列的一条运行态，走同一个大厅 socket（战斗本身仍是普通对局，结束由 main.js 的 onEnd 回写）
+  const rogue = createRogue({
+    now: o.now ?? (() => Date.now()), random: o.random ?? Math.random, log: o.log, variant: o.variant, forceEnd: o.forceEnd,
+    startMatch: (m, keys) => /** @type {any} */ (o.startMatch)(m, keys),
+    send: (id, msg) => { const ws = sockets.get(id); if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); },
+  });
 
   /** @param {import('ws').WebSocket} ws @param {Record<string, unknown>} msg */
   const reply = (ws, msg) => ws.send(JSON.stringify(msg));
@@ -118,6 +147,14 @@ export function createLobby(o) {
     seek: (id, ws, _a, m) => { if (rooms.inRoom(id)) reply(ws, { t: 'error', msg: '已在房间里，不能匹配' }); else matcher.seek(id, m); },
     unseek: (id) => matcher.cancel(id),
     train: (id, ws, _a, m) => { void train({ o, rooms, matcher, key: keys.get(id) }, id, ws, m.level); },
+    rogueCreate: (id, _ws, _a, m) => { matcher.drop(id); void rogue.create(id, keys.get(id) ?? '', names.get(id) ?? '玩家', m); },
+    rogueJoin: (id, _ws, _a, m) => { matcher.drop(id); rogue.join(id, keys.get(id) ?? '', names.get(id) ?? '玩家', m); },
+    rogueLeave: (id) => rogue.leave(id),
+    rogueTopics: (_id, ws) => reply(ws, { t: 'rogueTopics', topics: rogue.topics() }),
+    roguePick: (id, _ws, _a, m) => { void rogue.pick(id, m); },
+    rogueReward: (id, _ws, _a, m) => rogue.reward(id, m),
+    rogueBuy: (id, _ws, _a, m) => rogue.buy(id, m),
+    rogueLeaveShop: (id) => rogue.leaveShop(id),
   };
 
   /** @param {import('ws').WebSocket} ws @param {string} addr */
@@ -135,22 +172,23 @@ export function createLobby(o) {
       try { m = JSON.parse(String(data)); } catch { m = null; }
       const why = lobbyMessageProblem(m);
       if (why) { ws.close(1008, why.slice(0, 120)); return; }
-      if (m.t === 'hello') { hello = true; keys.set(id, m.key); rooms.hello(id, m.key, String(m.name).trim()); } else if (!hello) ws.close(1008, 'say hello first');
+      if (m.t === 'hello') { hello = true; keys.set(id, m.key); names.set(id, String(m.name).trim()); rooms.hello(id, m.key, String(m.name).trim()); rogue.hello(id, m.key, String(m.name).trim()); } else if (!hello) ws.close(1008, 'say hello first');
       else if (Object.hasOwn(OWN, m.t)) OWN[m.t](id, ws, addr, m);
       else rooms.message(id, m);
     });
-    ws.on('close', () => { sockets.delete(id); addresses.delete(id); keys.delete(id); matcher.drop(id); if (hello) rooms.gone(id); });
+    ws.on('close', () => { sockets.delete(id); addresses.delete(id); keys.delete(id); names.delete(id); matcher.drop(id); if (hello) { rooms.gone(id); rogue.disconnect(id); } });
   }
 
   return {
     rooms,
     matcher,
+    rogue,
     /** Takes over an upgrade for /lobby; false for any other path. @param {import('node:http').IncomingMessage} req @param {import('node:stream').Duplex} socket @param {Buffer} head */
     upgrade(req, socket, head) {
       if (new URL(req.url ?? '/', 'http://x').pathname !== '/lobby') return false;
       wss.handleUpgrade(req, socket, head, (ws) => connect(ws, addressOf(req, !!o.trustProxy)));
       return true;
     },
-    close() { clearInterval(timer); for (const ws of sockets.values()) ws.close(1001, 'server closing'); wss.close(); },
+    close() { clearInterval(timer); clearInterval(beat); for (const ws of sockets.values()) ws.close(1001, 'server closing'); wss.close(); },
   };
 }

@@ -106,7 +106,9 @@ export function levelAt(id, difficulty, attack = () => ({}), levels = LEVELS) {
   if (!raw) throw new RangeError(`no level ${id}`);
   const d = raw.difficulties[difficulty];
   if (!d) throw new RangeError(`level ${id}: no difficulty ${difficulty}`);
-  if (d.unsupported.length > 0) throw new RangeError(`level ${id} at ${difficulty}: runes not supported yet: ${d.unsupported.join(', ')}`);
+  // 集成战略的关卡把随机出怪/环境系统的部分行为写在关卡符文里（level_predefine_tokens_random_spawn_on_tile 等）：
+  // 视为「测试中」的关卡放行，未实现的部分不生效（与敌人能力同一条 TESTING 通道）。
+  if (d.unsupported.length > 0 && !beingTested(id, raw)) throw new RangeError(`level ${id} at ${difficulty}: runes not supported yet: ${d.unsupported.join(', ')}`);
   const { waves, branches } = replacedSpawns(raw.level, d.replace);
   const used = spawnedKeys(waves, branches, raw.enemies);
   const missing = uncoveredAbilities(Object.entries(raw.enemies).filter(([k]) => used.has(k)).map(([k, e]) => withFoeExtras(k, /** @type {EnemyDef} */ (e))));

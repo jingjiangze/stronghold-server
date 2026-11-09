@@ -52,7 +52,10 @@ export function readAction(raw, p, routeOf) {
   const a = asObject(raw, p);
   if (a.isValid === false) return null;
   const kind = asString(field(a, 'actionType', p), `${p}.actionType`);
-  const type = /** @type {Record<string, WaveAction['type']>} */ (ACTION_TYPES)[kind] ?? 'NONE';
+  // 集成战略关卡把随机出怪组的候选行写成空 key（`ACTIVATE_PREDEFINED`/`SPAWN` + `randomSpawnGroupKey`）：那一行的含义是
+  // 「按权重抽到它时什么都不发生」。降成 NONE 后仍保留 group/pack/weight，`sim/src/waves.js` 的 beginWave 照常按权重抽。
+  const bare = a.key === '' || a.key === null || a.key === undefined;
+  const type = /** @type {Record<string, WaveAction['type']>} */ (bare ? 'NONE' : (ACTION_TYPES[kind] ?? 'NONE'));
   /** @type {WaveAction} */
   const out = {
     type,

@@ -27,6 +27,8 @@ function connect(url) {
 
 /** Where the server serves the pinned kits (a URL ending in "/"), or null: none. @type {string | null} */
 let kitBase = null;
+/** 肉鸽关卡按需取的目录（页面在 start 里给，URL 以 / 结尾）；不在引擎静态内容里的关卡靠它补。 @type {string | null} */
+let levelsBase = null;
 /** The content source of the server's mods (mod-10), once fetched; the official content when it serves none. @type {Promise<import('@aue/content').ContentSource> | null} */
 let mods = null;
 
@@ -42,7 +44,13 @@ const text = (url) => fetch(url).then((r) => {
  * @param {import('@aue/schema').Match} match
  */
 async function contentOf(match) {
-  const source = await (mods ?? OFFICIAL_SOURCE);
+  let source = await (mods ?? OFFICIAL_SOURCE);
+  // 集成战略的关卡不进静态内容：按 id 从服务端取这一张（藏品会改变敌方倍率/初始费用，所以每次对局都可能不同）
+  if (levelsBase && /^rogue\d/i.test(match.level) && !Object.hasOwn(source.levels ?? {}, match.level)) {
+    const url = new URL(`${match.level}.json`, levelsBase).href;
+    const doc = JSON.parse(await text(url));
+    source = { ...source, levels: { ...source.levels, [match.level]: doc } };
+  }
   if (!kitBase) return matchContent(match, { source });
   const { kits } = await loadKits(kitBase, match.decks.flat().map((e) => e.id));
   return matchContent(match, { source, kits });
@@ -60,6 +68,7 @@ const session = new BattleSession(skeletonContent, {
 const HANDLERS = {
   start: (m) => {
     kitBase = typeof m.kits === 'string' && m.kits.endsWith('/') ? new URL(m.kits, scope.location.href).href : null;
+    levelsBase = typeof m.levels === 'string' && m.levels.endsWith('/') ? new URL(m.levels, scope.location.href).href : null;
     mods = typeof m.mods === 'string' && m.mods.endsWith('/') ? hostedSource(new URL(m.mods, scope.location.href).href, text) : null;
     session.start({ url: String(m.url), seat: Number(m.seat), key: String(m.key) });
   },

@@ -2,6 +2,7 @@
 // (站点-7) and a health check.
 // The pages: the battle at /play, the lobby and its rooms at /room (docs/spec/room.md), and one of them at / .
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -92,7 +93,9 @@ export function createHttpServer(options) {
   const handlers = [claimManager, modules, kits, mods, ...files.handlers];
   const meta = ASSET_META.replace('assets/skeleton/', assetBase(files.version));
   const withBase = async (/** @type {string} */ html) => pageWithModules(await withBoot(html.replace(ASSET_META, meta), publicDir(rootDir)), modules);
-  const pages = { '/play': join(publicDir(rootDir), 'index.html'), '/room': join(publicDir(rootDir), 'room.html') };
+  const pages = { '/play': join(publicDir(rootDir), 'index.html'), '/room': join(publicDir(rootDir), 'room.html'), '/rogue': join(publicDir(rootDir), 'rogue.html') };
+  // 肉鸽关卡按需取：对局页要用到哪张图就取哪张（635 张不进静态 import）
+  const rogueDir = options.rogueLevelsDir ?? process.env['AUE_ROGUE_LEVELS'] ?? join(rootDir, 'engine', 'packages', 'content', 'data', 'levels');
   const home = pages[`/${options.home ?? 'play'}`];
 
   const server = createServer((req, res) => {
@@ -100,6 +103,19 @@ export function createHttpServer(options) {
     const page = path === '/' ? home : Object.hasOwn(pages, path) ? pages[/** @type {keyof typeof pages} */ (path)] : null;
     if (page) {
       serveFixedFile(req, res, page, 'text/html; charset=utf-8', withBase).catch(() => sendText(res, 500, 'internal error'));
+    } else if (path.startsWith('/rogue/level/') && path.endsWith('.json') && !path.slice('/rogue/level/'.length, -'.json'.length).match(/[^A-Za-z0-9_-]/)) {
+      const id = path.slice('/rogue/level/'.length, -'.json'.length);
+      const variant = options.rogueLevelOf?.(id) ?? null;
+      if (variant) {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache' });
+        res.end(JSON.stringify(variant));
+        return;
+      }
+      try {
+        const body = readFileSync(join(rogueDir, `${id}.json`));
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' });
+        res.end(body);
+      } catch { sendText(res, 404, 'not found'); }
     } else if (path === '/healthz') {
       if (allowReadOnly(req, res)) sendBody(req, res, { body: Buffer.from('{"ok":true}'), type: 'application/json; charset=utf-8' });
     } else if (!handlers.some((h) => h(req, res))) {

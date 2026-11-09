@@ -1,0 +1,12 @@
+{
+  "name": "@icebreaker/mode-rogue",
+  "version": "0.0.0",
+  "private": true,
+  "description": "集成战略（肉鸽）：主题数据、节点图生成与 run 规则",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": { ".": "./src/index.js", "./data/*": "./data/*" },
+  "dependencies": { "@aue/schema": "workspace:*" },
+  "aue": { "node": true }
+}

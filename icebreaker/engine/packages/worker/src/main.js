@@ -31,7 +31,7 @@ export function startBattle(o) {
     else if (m.type === 'marks') marking.shift()?.(m);
     else if (m.type === 'signal') o.onSignal?.(m.seat, m.s);
   };
-  worker.postMessage({ type: 'start', url: o.wsUrl, seat: o.seat, key: o.key, ...(o.kits ? { kits: String(o.kits) } : {}), ...(o.mods ? { mods: String(o.mods) } : {}) });
+  worker.postMessage({ type: 'start', url: o.wsUrl, seat: o.seat, key: o.key, ...(o.kits ? { kits: String(o.kits) } : {}), ...(o.mods ? { mods: String(o.mods) } : {}), ...(o.levels ? { levels: String(o.levels) } : {}) });
   return {
     /** @param {import('@aue/schema').Command} cmd */
     command: (cmd) => worker.postMessage({ type: 'command', cmd }),

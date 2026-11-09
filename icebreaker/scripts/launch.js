@@ -44,6 +44,9 @@ function isLink(p) {
 /** The bundle's assets and kits, unless the environment names others. */
 function pointAtBundle() {
   if (!process.env['AUE_ASSETS_DIR'] && existsSync(join(ROOT, 'assets', 'skeleton'))) process.env['AUE_ASSETS_DIR'] = join(ROOT, 'assets');
+  // 集成战略的关卡：完整包放 data/rogue-levels；源码树里由 main.js 默认指到 engine 的关卡目录
+  const rogueLevels = join(ROOT, 'data', 'rogue-levels');
+  if (!process.env['AUE_ROGUE_LEVELS'] && existsSync(rogueLevels)) process.env['AUE_ROGUE_LEVELS'] = rogueLevels;
   const kits = join(ROOT, 'kits');
   if (process.env['AUE_KITS_DIR'] || !existsSync(kits)) return;
   const pinned = readdirSync(kits).find((d) => existsSync(join(kits, d, 'server', 'sim', 'content')));

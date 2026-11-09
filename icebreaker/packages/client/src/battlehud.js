@@ -83,7 +83,7 @@ export function hudState(o) {
     frame: view.frame, fps: FPS, cost: p.cost, cards: ps.cards, deployed: ps.deployed, slots: ps.slots, summons: ps.summons,
     ...(f ? { counts: f.pools[seat] ?? {}, building: f.phase === 'rest' } : {}),
     costTimer: ps.costTimer, costPeriod: secondsToFrames(o.options.costIncreaseTime), maxCost: o.options.maxCost, selected: o.selected,
-    life: p.life, speed, paused, coop: view.players.length === 2 ? coopState(o, speed, paused) : undefined,
+    life: p.life, speed, paused, coop: view.players.length > 1 ? coopState(o, speed, paused) : undefined,
     states: { result: status.result, down: ps.revive >= 0, offline: !!o.offline },
     stageStart: stageStartOf(status, o.stages ?? [], view.frame, { training: !!o.training, waves: o.waves ?? 0 }),
   };

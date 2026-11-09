@@ -167,6 +167,17 @@ else
     [ -z "$ICE_ASSETS_WHY" ] || rm -rf /tmp/ice-assets /tmp/ice-assets.zip
 fi
 
+# 运行期补拉素材会覆盖 spine/index.json 与 manifest.json：补完再合并一次肉鸽敌人（幂等）
+if [ -d "$ICE_DIR/assets/skeleton/spine" ] && [ -d "$ICE_DIR/assets-rogue" ] && [ -f "$ICE_DIR/tools/merge-rogue-assets.mjs" ]; then
+    node "$ICE_DIR/tools/merge-rogue-assets.mjs" "$ICE_DIR/assets" "$ICE_DIR/assets-rogue" >/dev/null 2>&1 || true
+fi
+
+# 肉鸽节点图（随镜像走）：素材目录在就补一份，幂等（运行期重新拉素材会把它盖掉）
+if [ -d "$ICE_DIR/assets/skeleton/ui" ] && [ -d "$ICE_DIR/assets-ui/rogue" ]; then
+    mkdir -p "$ICE_DIR/assets/skeleton/ui/rogue"
+    cp -a "$ICE_DIR/assets-ui/rogue/." "$ICE_DIR/assets/skeleton/ui/rogue/" 2>/dev/null || true
+fi
+
 # 素材没到位：照常启动（Icebreaker 自己会降级成「无美术但可玩」），但**必须把话说清楚** ——
 # 它的降级原本是完全静默的（服务端日志一个字都不打，只有浏览器里弹一条 notice）。
 if [ -n "$ICE_ASSETS_WHY" ]; then

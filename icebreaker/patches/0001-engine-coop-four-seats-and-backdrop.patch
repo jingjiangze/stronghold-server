@@ -1,0 +1,383 @@
+diff --git a/packages/content/src/devices.js b/packages/content/src/devices.js
+index 78edc94..05061cf 100644
+--- a/packages/content/src/devices.js
++++ b/packages/content/src/devices.js
+@@ -38,6 +38,9 @@ export const DEVICE_PROFILES = Object.freeze({
+   },
+   // 轰隆隆先生：IG-DF-1 的装置卡里有它，张数 0，没有发放它的机制，场上不会出现
+   trap_018_bomb: { profile: () => ({ inert: true }), source: `${PRTS}%E8%BD%B0%E9%9A%86%E9%9A%86%E5%85%88%E7%94%9F&oldid=417968` },
++  // L-44"留声机"：IG-4 / IG-6 场上的留声机。关卡记录里 atk 0、五项天赋全空、talentBb 空，没有可建模的行为，
++  // 就是一件 100 血、会被打掉的场地物。不登记它 levelAt 会以「devices not supported yet」把整张图拒掉。
++  trap_014_tower: { profile: () => ({}), source: `${PRTS}%E7%95%99%E5%A3%B0%E6%9C%BA` },
+   // 地形增伤控制: 位于<玉门天灾工事>中的单位对位于普通地块中的非飞行单位，造成伤害提升至130%，受到伤害降低至70%
+   trap_103_ymdgct: {
+     works: (d) => ({ dealt: d.talentBb['ymdgct_damage_scale[up].damage_scale'], taken: d.talentBb['ymdgct_damage_scale[down].damage_scale'] }),
+diff --git a/packages/content/src/levels.js b/packages/content/src/levels.js
+index 0b02ed0..b6fd40b 100644
+--- a/packages/content/src/levels.js
++++ b/packages/content/src/levels.js
+@@ -5,6 +5,8 @@ import act1multi02 from '../data/levels/act1multi_02.json' with { type: 'json' }
+ import act1multi06 from '../data/levels/act1multi_06.json' with { type: 'json' };
+ import act1multiHard02 from '../data/levels/act1multi_hard-02.json' with { type: 'json' };
+ import act1multiRm07 from '../data/levels/act1multi_rm07.json' with { type: 'json' };
++import act1multi07 from '../data/levels/act1multi_07.json' with { type: 'json' };
++import act1multiRm05 from '../data/levels/act1multi_rm05.json' with { type: 'json' };
+ import act2multiRm01 from '../data/levels/act2multi_rm01.json' with { type: 'json' };
+ import act1multiTr01 from '../data/levels/act1multi_tr01.json' with { type: 'json' };
+ import act1multiFortressRm01 from '../data/levels/act1multi_fortress_rm01.json' with { type: 'json' };
+@@ -19,7 +21,7 @@ import { CARRIED } from './carried.js';
+ /** The extracted levels, by id. @type {Readonly<Record<string, any>>} */
+ export const LEVELS = Object.freeze({
+   act1multi_01: act1multi01, act1multi_02: act1multi02, act1multi_06: act1multi06, 'act1multi_hard-02': act1multiHard02, act1multi_rm07: act1multiRm07,
+-  act2multi_rm01: act2multiRm01, act1multi_tr01: act1multiTr01, act1multi_fortress_rm01: act1multiFortressRm01, 'act1multi_fortress_hard-01': act1multiFortressHard01,
++  act1multi_07: act1multi07, act1multi_rm05: act1multiRm05, act2multi_rm01: act2multiRm01, act1multi_tr01: act1multiTr01, act1multi_fortress_rm01: act1multiFortressRm01, 'act1multi_fortress_hard-01': act1multiFortressHard01,
+ });
+ 
+ /** enemy_attribute_mul's keys and the enemy fields they multiply, with each field's value when the enemy has none. */
+@@ -81,7 +83,10 @@ function optionsAt(options, d) {
+ }
+ 
+ /** The levels being tested (关卡-8): they load with enemy abilities that have no behaviour yet, which do nothing there. */
+-export const TESTING = Object.freeze(['act1multi_fortress_rm01', 'act1multi_fortress_hard-01']);
++// 07 / rm05：关卡数据一直在磁盘上没接进来。它们的敌人有几项能力未实现（lasso / charge / boom 等），
++// 走 TESTING 通道放行 —— 未实现的能力不发动，页面标「测试中」，比整张图玩不到好。
++// hard-03 仍不可用：它的 env_system_new 符文两种难度都不支持，runes 检查在 TESTING 之前就 throw。
++export const TESTING = Object.freeze(['act1multi_fortress_rm01', 'act1multi_fortress_hard-01', 'act1multi_07', 'act1multi_rm05']);
+ 
+ /** Whether a level is being tested (关卡-8): one of TESTING, or its file says so. @param {string} id @param {any} raw */
+ const beingTested = (id, raw) => TESTING.includes(id) || raw.testing === true;
+diff --git a/packages/net/src/host.js b/packages/net/src/host.js
+index c13ba16..bae298b 100644
+--- a/packages/net/src/host.js
++++ b/packages/net/src/host.js
+@@ -2,7 +2,7 @@
+ // arbiter's own simulation, desync recovery, the speed and pause controls, the seats' signals. Transport-agnostic: messages come in through the
+ // methods (already validated with clientMessageProblem) and go out through `send`.
+ import { PROTOCOL_VERSION } from '@aue/schema';
+-import { createWorld, step, stateHash, takeSnapshot, contentHash } from '@aue/sim';
++import { createWorld, step, stateHash, takeSnapshot, contentHash, coop } from '@aue/sim';
+ import { MAX_AHEAD, HASH_HISTORY, HASH_EVERY, framesAt, PAUSE_ASK_MS, RESUME_MS, SIGNAL_RATE } from './constants.js';
+ 
+ /** @typedef {import('@aue/schema').Command} Command @typedef {import('@aue/schema').ServerMessage} ServerMessage */
+@@ -211,10 +211,15 @@ export class LockstepHost {
+   frameCommands(f) {
+     const list = this.pending.get(f) ?? [];
+     this.pending.delete(f);
+-    if (this.o.seats !== 2) return list;
+-    for (const seat of [0, 1]) {
+-      const mate = 1 - seat, asking = this.world.players[mate].ask >= 0 || list.some(([s, c]) => s === mate && c.type === 'ask');
+-      if (!this.connected.has(seat) && asking) list.push([seat, { type: 'answer', accept: 1 }]);
++    // 合作-5：向已离开的伙伴发起的请求自动被同意。伙伴关系见 coop.js 的 partnerOf —— 两个座位时是彼此，
++    // 更多座位时是同侧的一对（0↔2、1↔3），所以按座位数遍历，而不是写死 [0, 1]。
++    const players = this.world.players.length;
++    for (let seat = 0; seat < players; seat++) {
++      if (this.connected.has(seat)) continue;
++      const partner = coop.partnerOf(seat, players);
++      if (partner < 0) continue;
++      const asking = this.world.players[partner].ask >= 0 || list.some(([s, c]) => s === partner && c.type === 'ask');
++      if (asking) list.push([seat, { type: 'answer', accept: 1 }]);
+     }
+     return list;
+   }
+diff --git a/packages/render/src/renderer.js b/packages/render/src/renderer.js
+index 4f662ae..c1b5b3d 100644
+--- a/packages/render/src/renderer.js
++++ b/packages/render/src/renderer.js
+@@ -17,6 +17,55 @@ import { createOverlays } from './overlays.js';
+ import { createPlacing } from './placing.js';
+ import { spineModel } from './spine.js';
+ 
++/** The colour the far terrain fades into; matches the backdrop's lower half so the map edge has no seam. */
++export const SKY_FOG_COLOR = 0x232a30;
++/** Fog starts past the battlefield proper (a 12×9 map sits within ~20 units of the camera) and ends beyond the
++ *  largest one (the 26×16 fortress), so nothing the player reads is tinted — only the map's outer edge fades. */
++export const SKY_FOG_NEAR = 26, SKY_FOG_FAR = 58;
++
++/**
++ * The battle backdrop: a plain vertical gradient, drawn into a 2×N canvas — no asset, no skybox. It replaces the flat
++ * grey the scene used to be washed with; the fog above blends the terrain into its lower half.
++ * @returns {THREE.Texture | null} null where there is no 2D canvas (a headless run without a DOM)
++ */
++function skyBackdrop() {
++  const doc = globalThis.document;
++  if (typeof doc?.createElement !== 'function') return null;
++  const canvas = doc.createElement('canvas');
++  canvas.width = 2; canvas.height = 256;
++  const g = canvas.getContext('2d');
++  if (!g) return null;
++  const grad = g.createLinearGradient(0, 0, 0, 256);
++  grad.addColorStop(0, '#0a0d10');
++  grad.addColorStop(0.55, '#161b1f');
++  grad.addColorStop(1, '#232a30');
++  g.fillStyle = grad;
++  g.fillRect(0, 0, 2, 256);
++  const texture = new THREE.CanvasTexture(canvas);
++  texture.colorSpace = THREE.SRGBColorSpace;
++  return texture;
++}
++
++/** 官方背景图（浅色的虚化场景）压到这个亮度：不压暗的话它比战场还亮，地图的边就没了。 */
++export const SKY_BACKDROP_INTENSITY = 0.16;
++
++/**
++ * Gives the scene its backdrop and the fog that blends the far terrain into it — nothing exists beyond the
++ * battlefield, so a flat colour used to cut the map's edge into a plate.
++ *
++ * `backdrop` is the official scene art (the game's own blurred arena picture); without one the scene falls back to the
++ * built-in gradient. @param {THREE.Scene} scene @param {THREE.Texture | null} backdrop
++ */
++function applySky(scene, backdrop) {
++  if (backdrop) {
++    scene.background = backdrop;
++    scene.backgroundIntensity = SKY_BACKDROP_INTENSITY;
++  } else {
++    scene.background = skyBackdrop() ?? new THREE.Color(SKY_FOG_COLOR);
++  }
++  scene.fog = new THREE.Fog(SKY_FOG_COLOR, SKY_FOG_NEAR, SKY_FOG_FAR);
++}
++
+ /**
+  * @typedef {object} RendererOptions
+  * @property {HTMLCanvasElement} canvas
+@@ -30,6 +79,7 @@ import { spineModel } from './spine.js';
+  *   enemies' colour (渲染-5, 渲染-16)
+  * @property {boolean} [bars] whether the renderer draws the units' bars (渲染-5; default true): false when the page draws
+  *   the battle UI's own (界面-19)
++ * @property {THREE.Texture | null} [backdrop] the battle's background art (the game's own blurred arena picture); without one the scene uses a built-in gradient
+  * @property {import('./kit.js').LoadedKit | null} [kit] the map theme's tile kit (渲染-7); without one the tiles are flat
+  *   textures
+  * @property {import('./fx/player.js').FxPack | null} [effects] the units' attack effects (渲染-10…渲染-12); none without
+@@ -93,7 +143,7 @@ export function createBattleRenderer(o) {
+   // the counts cover a whole frame (the scene and the overlays), reset at its start
+   renderer.info.autoReset = false;
+   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+-  scene.background = new THREE.Color(0x404040);
++  applySky(scene, o.backdrop ?? null);
+   const highlight = createHighlight(o.level), patch = highlight.patch;
+   const terrain = o.kit ? createKitTerrain(o.level, o.kit, terrainTextures(o), patch) : createTerrain(o.level, o.textures, patch);
+   const units = createUnits(o.textures, o.models, o.foeDevices, o.deviceMeshes, o.flyers), field = { ...o.level, highland: o.kit?.kit.highland };
+diff --git a/packages/sim/src/coop.js b/packages/sim/src/coop.js
+index 038ca0e..2c13fca 100644
+--- a/packages/sim/src/coop.js
++++ b/packages/sim/src/coop.js
+@@ -16,20 +16,39 @@ export const REVIVE_FRAMES = secondsToFrames(30);
+ /**
+  * The seats a goal tile belongs to (合作-1): side A to seat 0, side B to seat 1, a shared goal to every seat. A goal
+  * without a side: with one player that player's; with two, the left half of the map to seat 0, the right to seat 1.
++ *
++ * With more than two seats a side is held by a pair, and both of them lose the life (合作-1 read as "a side belongs to
++ * whoever stands on it"): A to seats 0/2, B to seats 1/3, the two halves of an unsided goal likewise. Two seats or
++ * fewer keep the original one-seat-per-side answer, so an existing match behaves exactly as before.
+  * @param {Content} c @param {number} players @param {Cell} end @returns {number[]}
+  */
+ export function goalSeats(c, players, end) {
+   const side = tileAt(c.level, end.row, end.col)?.goal ?? '';
+   if (players === 1) return [0];
+   if (side === 'Shared') return Array.from({ length: players }, (_, i) => i);
+-  if (side === 'A') return [0];
+-  if (side === 'B') return [1];
+-  return [end.col * 2 >= c.level.width ? 1 : 0];
++  /** The seats that hold one side: seat `i` alone with two or fewer, else every seat on that parity. @param {number} i */
++  const holders = (i) => (players <= 2 ? [i] : Array.from({ length: players }, (_, s) => s).filter((s) => s % 2 === i));
++  if (side === 'A') return holders(0);
++  if (side === 'B') return holders(1);
++  return holders(end.col * 2 >= c.level.width ? 1 : 0);
+ }
+ 
+ /** Whether a player is down (合作-4). @param {Player} p */
+ export const isDown = (p) => p.revive >= 0;
+ 
++/**
++ * A seat's partner for the cost request (合作-5): the other seat on the same side. Two seats swap with each other,
++ * exactly as before; with more, the two seats that hold one goal side (see `goalSeats`) pair up — 0↔2, 1↔3 — so a
++ * request never crosses to the opposite side. -1 when the seat has no partner (a lone player, or an odd seat out).
++ * @param {number} seat @param {number} players
++ */
++export function partnerOf(seat, players) {
++  if (players === 2) return 1 - seat;
++  if (players <= 1) return -1;
++  for (let s = 0; s < players; s++) if (s !== seat && s % 2 === seat % 2) return s;
++  return -1;
++}
++
+ /**
+  * A player loses lives (合作-2…合作-4): their life drops, at least 0; at 0 they go down.
+  * @param {World} w @param {number} seat @param {number} n
+@@ -105,7 +124,9 @@ export function enemyAtGoal(w, c, e) {
+       const p = w.players[s];
+       if (!isDown(p)) { hit.push(s); continue; }
+       p.revive = REVIVE_FRAMES;
+-      const mate = n > 1 ? 1 - s : -1;
++      // 倒地的那一席让它的搭档替它吃这一下。搭档按 partnerOf 定义（两座互为搭档，四座同奇偶成对），
++      // 不能写 1 - s：两座以外那会算到 -1 / -2 这种不存在的座位上，与 partnerOf 的配对也自相矛盾。
++      const mate = partnerOf(s, n);
+       if (mate >= 0 && !isDown(w.players[mate])) hit.push(mate);
+     }
+   }
+@@ -135,7 +156,7 @@ export const DEFAULT_COST_TRANSFER = 15;
+  * @param {World} w @param {Content} c @param {number} seat @returns {string | null}
+  */
+ export function askProblem(w, c, seat) {
+-  const p = w.players[seat], mate = w.players.length === 2 ? w.players[1 - seat] : null;
++  const partner = partnerOf(seat, w.players.length), p = w.players[seat], mate = partner < 0 ? null : w.players[partner];
+   if (!p || !mate) return 'no mate';
+   if (isDown(p)) return 'player down';
+   if (p.cost >= c.level.options.maxCost) return 'cost full';
+@@ -160,14 +181,14 @@ export function askCost(w, c, seat) {
+  * @param {World} w @param {Content} c @param {number} seat the answering player @param {boolean} accept
+  */
+ export function answerCost(w, c, seat, accept) {
+-  const mate = w.players[seat], asker = w.players.length === 2 ? w.players[1 - seat] : null;
++  const partner = partnerOf(seat, w.players.length), mate = w.players[seat], asker = partner < 0 ? null : w.players[partner];
+   if (!mate || !asker || asker.ask < 0) return;
+   asker.ask = -1;
+   const room = Math.max(0, c.level.options.maxCost - asker.cost);
+   const amount = accept ? Math.max(0, Math.min(c.level.options.costTransfer ?? DEFAULT_COST_TRANSFER, mate.cost, room)) : 0;
+   mate.cost -= amount;
+   asker.cost += amount;
+-  w.events.push({ type: 'answer', owner: 1 - seat, accept: accept ? 1 : 0, amount });
++  w.events.push({ type: 'answer', owner: partner, accept: accept ? 1 : 0, amount });
+ }
+ 
+ /**
+diff --git a/packages/ui/src/battle/coop.js b/packages/ui/src/battle/coop.js
+index c5c6951..09495dd 100644
+--- a/packages/ui/src/battle/coop.js
++++ b/packages/ui/src/battle/coop.js
+@@ -25,7 +25,7 @@ import { refNode } from '../node.js';
+  * left of this seat's pause request and of the mate's (−1 for none), the stage's task (none before the first), or
+  * 堡垒守御's wave and the rest panel's state (界面-39).
+  * @typedef {{ me: Side, mate: Side, speed: number, paused: boolean, asking: number, confirm?: number, task?: Task | null, fortress?: FortressTask | null,
+- *   resting?: import('./resting.js').Resting | null }} CoopState
++ *   resting?: import('./resting.js').Resting | null, sides?: Side[], score?: { mine: number, theirs: number } }} CoopState
+  */
+ 
+ /** The objectives the task panel has a line for. */
+@@ -42,6 +42,17 @@ export const coopSpeedSprite = (sp, speed) => (speed >= 2 ? sp.x2 : sp.x1);
+ /** A side's countdown text: whole seconds, rounded up. @param {number} s */
+ export const reviveText = (s) => String(Math.max(0, Math.ceil(s)));
+ 
++/** The pack's seat tags, in the order a seat list is shown: this seat, then the others. A 4-player pack has all four. */
++export const SEAT_TAGS = Object.freeze(['[my]', '[you]', '[mate2]', '[mate3]']);
++
++/**
++ * A ref of this seat's node, rewritten for another seat in the list: `[my]` stays, the rest take the pack's tags.
++ * Seats past the tags the pack has give their own `[my]`-less ref, which finds nothing and shows nothing.
++ * @param {string} ref @param {number} i
++ */
++export const seatRef = (ref, i) => (i === 0 ? ref : ref.replace('[my]', SEAT_TAGS[i] ?? '[you]'));
++
++
+ /**
+  * The co-op top bar on a UI; `update` shows a frame's state; taps on speed and pause call the handlers, and the answer
+  * to the mate's pause request `on.confirm(accept)`.
+@@ -52,15 +63,17 @@ export function createCoopTop(ui, c, on) {
+   const scr = ui.open('coop.topbar'), root = scr.root, status = refNode(root, c.status.panel);
+   scr.show('btn_menu', false);
+   if (status) status.active = true;
+-  for (const ref of [c.status.lifeLost, c.status.lifeLost?.replace('[my]', '[you]'), c.lag?.back]) { const n = refNode(root, ref); if (n) n.active = false; }
++  for (const ref of [...SEAT_TAGS.map((t) => c.status.lifeLost?.replace('[my]', t)), c.lag?.back]) { const n = refNode(root, ref); if (n) n.active = false; }
+   scr.show('text_battle_end_time', false);
+   for (const n of ['fortress', 'fortress_lastWave', 'slider_progress_outer']) scr.show(n, false);
++  // 2v2 的比分：素材包里没有这一组（两人局本来也不需要），有才用
++  const score = c.score ? refNode(root, c.score.panel) : null;
++  if (score) score.active = false;
+   const confirm = refNode(root, c.pauseConfirm);
+   if (confirm) {
+     scr.tap('btn_confirm', () => on.confirm?.(true), confirm);
+     scr.tap('btn_cancel/hotspot', () => on.confirm?.(false), confirm);
+   }
+-  const mateRef = (/** @type {string} */ ref) => ref.replace('[my]', '[you]');
+   tapHit(scr, root, '@btn_speed_level/btn_speed_level_icon/hotspot', on.speed);
+   tapHit(scr, root, `${c.pause}/collider`, on.pause);
+   /** @type {CoopState | null} the state shown last */
+@@ -69,11 +82,12 @@ export function createCoopTop(ui, c, on) {
+     screen: scr,
+     /** @param {CoopState} s */
+     update(s) {
+-      showSide(scr, root, c.status.life, s.me);
+-      showSide(scr, root, mateRef(c.status.life), s.mate);
++      const sides = s.sides ?? [s.me, s.mate];
++      sides.forEach((side, i) => showSide(scr, root, seatRef(c.status.life, i), side));
+       if (was) sideEntries(scr, root, c.enter, was, s);
+       showSpeed(scr, root, c.speed, s, was);
+       showPause(scr, root, c, s);
++      if (score) showScore(scr, root, c.score, s, score);
+       if (confirm) showConfirm(scr, root, c, confirm, s);
+       first ||= s.task?.stage ?? 0;
+       if (status && s.fortress) showFortress(scr, status, s.fortress, c.timerWarn ?? TIMER_WARN);
+@@ -236,6 +250,21 @@ function showFortress(scr, status, f, warn) {
+ /** @param {Screen} scr @param {UiNode} root @param {string} ref @param {() => void} fn */
+ function tapHit(scr, root, ref, fn) { const n = refNode(root, ref); if (n) scr.tap('', fn, n); }
+ 
++/**
++ * 2v2 的比分：两队剩余生命合计，夹在四席中间那条官方圆角底板上。只有四席才显示 —— 两人局（以及素材包
++ * 没有这组节点的情形）一个像素都不动，保持原样式。
++ * @param {Screen} scr @param {UiNode} root @param {Record<string, any>} c the pack's score refs
++ * @param {CoopState} s @param {UiNode} group
++ */
++function showScore(scr, root, c, s, group) {
++  const on = !!s.score && (s.sides?.length ?? 2) > 2;
++  if (group.active !== on) group.active = on;
++  if (!on) return;
++  const mine = refNode(root, c.mine), theirs = refNode(root, c.theirs);
++  if (mine) scr.text('', String(s.score?.mine ?? 0), mine);
++  if (theirs) scr.text('', String(s.score?.theirs ?? 0), theirs);
++}
++
+ /**
+  * A side's lives, and its countdown instead while it is down.
+  * @param {Screen} scr @param {UiNode} root @param {string} lifeRef @param {Side} s
+diff --git a/packages/ui/test/battle.test.js b/packages/ui/test/battle.test.js
+index 84c13a8..65ec511 100644
+--- a/packages/ui/test/battle.test.js
++++ b/packages/ui/test/battle.test.js
+@@ -43,7 +43,11 @@ const coopTop = N('coop', {}, [
+   N('btn_speed_level', img(), [N('btn_speed_level_icon', img('sprite/s1'), [N('hotspot', { nodraw: 'raycast' })]), N('pause_on_me', img('sprite/a', { color: [0, 0.6, 0.9, 0] })), N('pause_on_mate', img('sprite/a', { color: [0, 0.6, 0.5, 0] }))]),
+   N('btn_multiplayer_pause', {}, [N('image_pause', img()), N('image_resume', img()), N('slider_pause_waiting', slider('@btn_multiplayer_pause/slider_pause_waiting/Fill'), [N('Fill', img('sprite/a', { type: 3 }))]), N('collider', { nodraw: 'raycast' })]),
+   N('status', img(), [N('[my]icon_life_point', img(), [N('text_life_point', text)]), N('[you]icon_life_point', img(), [N('text_life_point', text)]),
+-    N('[my]revive_timer', {}, [N('timer', text)]), N('[you]revive_timer', {}, [N('timer', text)]), N('[my]life_lost_group', img()), N('[you]life_lost_group', img()), N('task', img())]),
++    N('[my]revive_timer', {}, [N('timer', text)]), N('[you]revive_timer', {}, [N('timer', text)]), N('[my]life_lost_group', img()), N('[you]life_lost_group', img()), N('task', img()),
++    // 四人局（2v2）多出的两席，以及中间那条比分
++    N('[mate2]icon_life_point', img(), [N('text_life_point', text)]), N('[mate2]revive_timer', {}, [N('timer', text)]),
++    N('[mate3]icon_life_point', img(), [N('text_life_point', text)]), N('[mate3]revive_timer', {}, [N('timer', text)]),
++    N('score', {}, [N('mine', text), N('sep', text), N('theirs', text)])]),
+   N('btn_menu', img()),
+ ], R({ amin: [0, 1], amax: [1, 1], size: [0, 1], pivot: [0, 1] }));
+ coopTop.children[2].active = false;
+@@ -67,7 +71,8 @@ const hud = {
+     ...Object.fromEntries(['ready', 'notReady', 'stop', 'auto'].map((k) => [k, `@perspective_root/menu/skill/${k}`])) },
+   coopTop: { pause: '@btn_multiplayer_pause', pauseImage: '@btn_multiplayer_pause/image_pause', resumeImage: '@btn_multiplayer_pause/image_resume',
+     status: { panel: '@status', life: '@status/[my]icon_life_point/text_life_point', lifeLost: '@status/[my]life_lost_group' },
+-    speed: { me: '@btn_speed_level/pause_on_me', mate: '@btn_speed_level/pause_on_mate', image: '@btn_speed_level/btn_speed_level_icon', x1: 'sprite/s1', x2: 'sprite/s2' } },
++    speed: { me: '@btn_speed_level/pause_on_me', mate: '@btn_speed_level/pause_on_mate', image: '@btn_speed_level/btn_speed_level_icon', x1: 'sprite/s1', x2: 'sprite/s2' },
++    score: { panel: '@status/score', mine: '@status/score/mine', theirs: '@status/score/theirs' } },
+ };
+ /** @returns {import('../src/node.js').UiPack} */
+ const pack = () => /** @type {any} */ ({ version: 1, ref: [1920, 1080], sprites: {}, clips: {}, screens: { battle, card, 'coop.topbar': coopTop }, hud });
+@@ -263,6 +268,25 @@ test('[界面-12] the co-op top bar: both lives, a down side\'s countdown, each
+   assert.deepEqual(taps, ['speed', 'pause']);
+ });
+ 
++test('[界面-12] 2v2：四席各画各的生命，中间那条比分是两队合计；两席时比分整组不出现', () => {
++  const { ui, hud } = setup(true);
++  const co = /** @type {NonNullable<typeof hud.coop>} */ (hud.coop), s = co.screen;
++  const side = (/** @type {number} */ life) => ({ life, fast: false, revive: -1 });
++  const four = [side(15), side(12), side(13), side(15)];
++  hud.update(state({ coop: { me: four[0], mate: four[2], sides: four, score: { mine: 28, theirs: 27 }, speed: 1, paused: false, asking: -1 } }));
++  ui.tick(0);
++  // 四席的生命各自落位（[my] = 本座、[mate2] = 搭档、[you]/[mate3] = 对面那队）
++  assert.deepEqual(['[my]', '[mate2]', '[you]', '[mate3]'].map((t) => node(s.one(`${t}icon_life_point/text_life_point`)).txt), ['15', '13', '12', '15']);
++  // 比分在中间那条上：左我队 28、右对方 27
++  assert.deepEqual([node(s.one('score')).active, node(s.one('score/mine')).txt, node(s.one('score/theirs')).txt], [true, '28', '27']);
++
++  // 回到两人局：比分整组隐藏，一个像素都不留
++  hud.update(state({ coop: { me: side(5), mate: side(2), sides: [side(5), side(2)], speed: 1, paused: false, asking: -1 } }));
++  ui.tick(0);
++  assert.equal(node(s.one('score')).active, false);
++  assert.deepEqual([node(s.one('[mate2]icon_life_point/text_life_point')).txt], ['13'], '四人局的席不刷新时保留原值');
++});
++
+ test('[界面-13] the perspective canvas: a projective map through four points, on the ground', () => {
+   const src = [[0, 0], [100, 0], [100, 50], [0, 50]], dst = [[10, 20], [210, 25], [190, 140], [30, 130]];
+   const H = homography(src, dst);

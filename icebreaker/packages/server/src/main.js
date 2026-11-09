@@ -8,7 +8,7 @@
 // --max-battles: fewer on a small machine); behind a reverse proxy that sets X-Real-IP to the address it saw,
 // --trust-proxy takes the address from there. As one node of several (site.md 站点-6) the environment names the node:
 // NCN_GAME_DIGIT and NCN_GAME_PEERS (nodes.js).
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { startHttpServer } from './http.js';
@@ -22,6 +22,8 @@ import { createGuard, guardUpgrades, countOption, LIMITS } from './guard.js';
 import { nodeOf } from './nodes.js';
 import { loadHostMods, modsDir } from './mods.js';
 import { createModManager, loadOwnerKey } from './modManager.js';
+import { withRogueLevels } from './rogueLevels.js';
+import { createHash } from 'node:crypto';
 
 /** @param {string[]} argv @returns {number} */
 export function parsePort(argv) {
@@ -47,23 +49,44 @@ for (const line of mods.lines) console.log(line);
 // the mod manager: reads need no key, writes take --mod-key / AUE_MOD_KEY / mods/.mod-key (created on first start)
 const modKey = loadOwnerKey({ rootDir, modsDir: hostModsDir, argv: args, env: process.env, log });
 const modManager = createModManager({ modsDir: hostModsDir, key: modKey, log, initial: mods });
-const content = { ...kits, getSource: () => modManager.current().source };
+// 肉鸽关卡（635 张官方集成战略图）按需从磁盘读，不进 LEVELS 的静态 import：AUE_ROGUE_LEVELS 可指到别的目录
+const rogueLevelsDir = process.env['AUE_ROGUE_LEVELS'] ?? join(rootDir, 'engine', 'packages', 'content', 'data', 'levels');
+/** 肉鸽一局专用的关卡变体：同 id 复用（藏品/分队变了才另建一份）。 */
+const rogueVariants = new Map();
+const content = { ...kits, getSource: () => withRogueLevels(rogueLevelsDir, modManager.current().source, rogueVariants) };
+function rogueVariant(baseId, scale, cost) {
+  const h = createHash('sha1').update(JSON.stringify([scale, cost])).digest('hex').slice(0, 8), id = `${baseId}__s${h}`;
+  if (!rogueVariants.has(id)) {
+    const doc = JSON.parse(readFileSync(join(rogueLevelsDir, `${baseId}.json`), 'utf8'));
+    const mul = { mods: { max_hp: scale.max_hp, atk: scale.atk, def: scale.def, move_speed: scale.move_speed, attack_speed: scale.attack_speed } };
+    for (const d of Object.values(doc.difficulties ?? {})) (d.enemyMul ??= []).push(mul);
+    doc.id = id;
+    doc.level = { ...doc.level, id, options: { ...doc.level.options, initialCost: Math.max(0, (doc.level.options.initialCost ?? 10) + cost) } };
+    rogueVariants.set(id, doc);
+  }
+  return id;
+}
 
 /** @type {(req: import('node:http').IncomingMessage, socket: import('node:stream').Duplex, head: Buffer) => void} */
 let onUpgrade;
 if (file) {
   onUpgrade = (await createMatchRoom(JSON.parse(readFileSync(file, 'utf8')), { log, ...content })).upgrade;
 } else {
-  const battles = createBattles({ ...content, log, onEnd: (id) => lobby.rooms.ended(id), max: countOption(args, '--max-battles', LIMITS.battles) });
+  const battles = createBattles({ ...content, log, max: countOption(args, '--max-battles', LIMITS.battles),
+    // 一场对局结束时：房间回去「项目调整」，肉鸽把结果回写到它那一次探索（result 1 = 胜；0 负 / -1 引擎失败都算失败）
+    onEnd: (id) => { const r = battles.live.get(id)?.room?.host?.world?.result ?? -1; log(`battle ${id} ended result=${r}`); lobby.rooms.ended(id); lobby.rogue.endHandler(id, r); } });
   const node = nodeOf(process.env, log);
   if (node) console.log(`node ${node.digit} of ${Object.keys(node.peers).length}: room codes begin with ${node.digit}`);
-  const lobby = createLobby({ projects: projectViews(), recruits: await recruits(), startMatch: (m, keys) => battles.start(m, keys), log, guard, trustProxy, node,
+  const lobby = createLobby({ projects: projectViews(), recruits: await recruits(), startMatch: (m, keys) => battles.start(m, keys), log, guard, trustProxy, node, variant: rogueVariant,
+    // 肉鸽的超时保险：直接把对局判成「守住」（result 1），sweep 随后走正常的 onEnd 回写
+    forceEnd: (id) => { const b = battles.live.get(id); if (b && !b.endedAt && b.room.host.world.result < 0) { b.room.host.world.result = 1; b.room.host.world.events.push({ type: 'end', result: 1 }); } },
     startTraining: (m, key) => battles.start(m, [key], { absent: [1] }),
     maxRooms: countOption(args, '--max-rooms', LIMITS.rooms),
     // 房间座位数：默认 2（上游的合作人数），`--seats 4` 开四人房。上限见 rooms.js 的 SEATS_MAX。
     seats: Math.max(1, Math.min(SEATS_MAX, countOption(args, '--seats', 2))) });
   onUpgrade = (req, socket, head) => { if (!lobby.upgrade(req, socket, head) && !battles.upgrade(req, socket, head)) socket.destroy(); };
 }
-const server = await startHttpServer({ rootDir, port: parsePort(args), host: option(args, '--host') ?? '127.0.0.1', onUpgrade: guardUpgrades(guard, trustProxy, onUpgrade), kitsDir, home: file ? 'play' : 'room', mods, modManager });
+const server = await startHttpServer({ rootDir, port: parsePort(args), host: option(args, '--host') ?? '127.0.0.1', onUpgrade: guardUpgrades(guard, trustProxy, onUpgrade), kitsDir, home: file ? 'play' : 'room', mods, modManager,
+  rogueLevelsDir, rogueLevelOf: (id) => rogueVariants.get(id) ?? null });
 const addr = server.address();
 if (addr !== null && typeof addr === 'object') console.log(`http://${addr.address}:${addr.port}/`);

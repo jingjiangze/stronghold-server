@@ -1,0 +1,215 @@
+diff --git a/packages/content/src/devices.js b/packages/content/src/devices.js
+index 78edc94..4410390 100644
+--- a/packages/content/src/devices.js
++++ b/packages/content/src/devices.js
+@@ -38,11 +38,116 @@ export const DEVICE_PROFILES = Object.freeze({
+   },
+   // 轰隆隆先生：IG-DF-1 的装置卡里有它，张数 0，没有发放它的机制，场上不会出现
+   trap_018_bomb: { profile: () => ({ inert: true }), source: `${PRTS}%E8%BD%B0%E9%9A%86%E9%9A%86%E5%85%88%E7%94%9F&oldid=417968` },
++  // L-44"留声机"：IG-4 / IG-6 场上的留声机。关卡记录里 atk 0、五项天赋全空、talentBb 空，没有可建模的行为，
++  // 就是一件 100 血、会被打掉的场地物。不登记它 levelAt 会以「devices not supported yet」把整张图拒掉。
++  trap_014_tower: { profile: () => ({}), source: `${PRTS}%E7%95%99%E5%A3%B0%E6%9C%BA` },
+   // 地形增伤控制: 位于<玉门天灾工事>中的单位对位于普通地块中的非飞行单位，造成伤害提升至130%，受到伤害降低至70%
+   trap_103_ymdgct: {
+     works: (d) => ({ dealt: d.talentBb['ymdgct_damage_scale[up].damage_scale'], taken: d.talentBb['ymdgct_damage_scale[down].damage_scale'] }),
+     source: `${PRTS}%E5%9C%B0%E5%BD%A2%E5%A2%9E%E4%BC%A4%E6%8E%A7%E5%88%B6&oldid=421599`,
+   },
++  // 集成战略通用装置（2026-11-08）：这些装置在 635 张 IS 关卡里出现，但本仓没有它们的行为档案。
++  // 先按「不动的场地物」放行（profile 为空：血量/位置照记录，天赋与技能不生效），避免整张图打不开；
++  // 需要真行为时逐个补 profile 即可，语义与上面的 trap_014_tower 相同。
++  trap_251_buftrp: { profile: () => ({}), source: `` },
++  trap_760_skztzs: { profile: () => ({}), source: `` },
++  trap_764_skzshp: { profile: () => ({}), source: `` },
++  trap_757_skzbox: { profile: () => ({}), source: `` },
++  trap_758_skzmbx: { profile: () => ({}), source: `` },
++  trap_759_skzwyx: { profile: () => ({}), source: `` },
++  trap_222_rgdysm: { profile: () => ({}), source: `` },
++  trap_225_dysbox: { profile: () => ({}), source: `` },
++  trap_223_dynbox: { profile: () => ({}), source: `` },
++  trap_224_dyrbox: { profile: () => ({}), source: `` },
++  trap_024_npcsld: { profile: () => ({}), source: `` },
++  trap_320_shtlbx: { profile: () => ({}), source: `` },
++  trap_322_shrbox: { profile: () => ({}), source: `` },
++  trap_323_shsbox: { profile: () => ({}), source: `` },
++  trap_321_shnbox: { profile: () => ({}), source: `` },
++  trap_065_normbox: { profile: () => ({}), source: `` },
++  trap_066_rarebox: { profile: () => ({}), source: `` },
++  trap_068_badbox: { profile: () => ({}), source: `` },
++  trap_108_smbox: { profile: () => ({}), source: `` },
++  trap_109_smrbox: { profile: () => ({}), source: `` },
++  trap_110_smbbox: { profile: () => ({}), source: `` },
++  trap_079_allydonq: { profile: () => ({}), source: `` },
++  trap_051_vultres: { profile: () => ({}), source: `` },
++  trap_027_stone: { profile: () => ({}), source: `` },
++  trap_344_shadvr: { profile: () => ({}), source: `` },
++  trap_348_shadvr2: { profile: () => ({}), source: `` },
++  trap_037_airsup: { profile: () => ({}), source: `` },
++  trap_086_larva: { profile: () => ({}), source: `` },
++  trap_767_duelcdt: { profile: () => ({}), source: `` },
++  trap_010_frosts: { profile: () => ({}), source: `` },
++  trap_001_crate: { profile: () => ({}), source: `` },
++  trap_211_cjgtow: { profile: () => ({}), source: `` },
++  trap_212_cjbtow: { profile: () => ({}), source: `` },
++  trap_011_ore: { profile: () => ({}), source: `` },
++  trap_238_dydfst: { profile: () => ({}), source: `` },
++  trap_057_wpnsts: { profile: () => ({}), source: `` },
++  trap_013_blower: { profile: () => ({}), source: `` },
++  trap_219_fttreant: { profile: () => ({}), source: `` },
++  trap_790_dytswd: { profile: () => ({}), source: `` },
++  trap_791_dytfre: { profile: () => ({}), source: `` },
++  trap_008_farm: { profile: () => ({}), source: `` },
++  trap_058_gunctrl: { profile: () => ({}), source: `` },
++  trap_239_dyffgd: { profile: () => ({}), source: `` },
++  trap_240_dyffdd: { profile: () => ({}), source: `` },
++  trap_766_duelwal: { profile: () => ({}), source: `` },
++  trap_196_cnnon: { profile: () => ({}), source: `` },
++  trap_005_sensor: { profile: () => ({}), source: `` },
++  trap_092_vgctrl: { profile: () => ({}), source: `` },
++  trap_762_skztxy: { profile: () => ({}), source: `` },
++  trap_761_skzthx: { profile: () => ({}), source: `` },
++  trap_218_fttree: { profile: () => ({}), source: `` },
++  trap_002_emp: { profile: () => ({}), source: `` },
++  trap_111_wdfarm: { profile: () => ({}), source: `` },
++  trap_076_bgarms: { profile: () => ({}), source: `` },
++  trap_480_roadblockxb: { profile: () => ({}), source: `` },
++  trap_183_sheltk: { profile: () => ({}), source: `` },
++  trap_124_eradio: { profile: () => ({}), source: `` },
++  trap_162_lrctrl: { profile: () => ({}), source: `` },
++  trap_226_dychss: { profile: () => ({}), source: `` },
++  trap_015_tree: { profile: () => ({}), source: `` },
++  trap_016_peon: { profile: () => ({}), source: `` },
++  trap_007_ballis: { profile: () => ({}), source: `` },
++  trap_061_creep: { profile: () => ({}), source: `` },
++  trap_106_smtree: { profile: () => ({}), source: `` },
++  trap_107_smpow: { profile: () => ({}), source: `` },
++  trap_763_skzddd: { profile: () => ({}), source: `` },
++  char_505_rcast: { profile: () => ({}), source: `` },
++  trap_258_rgcssm: { profile: () => ({}), source: `` },
++  trap_006_antidr: { profile: () => ({}), source: `` },
++  trap_083_bunker: { profile: () => ({}), source: `` },
++  trap_265_xdice1: { profile: () => ({}), source: `` },
++  trap_025_prison: { profile: () => ({}), source: `` },
++  trap_324_shmbmb: { profile: () => ({}), source: `` },
++  trap_327_shchst: { profile: () => ({}), source: `` },
++  trap_043_dupilr: { profile: () => ({}), source: `` },
++  trap_022_frosts_friend: { profile: () => ({}), source: `` },
++  trap_009_battery: { profile: () => ({}), source: `` },
++  trap_054_dancdol: { profile: () => ({}), source: `` },
++  trap_042_tidectrl: { profile: () => ({}), source: `` },
++  trap_038_dsbell: { profile: () => ({}), source: `` },
++  trap_075_bgarmn: { profile: () => ({}), source: `` },
++  trap_077_rmtarmn: { profile: () => ({}), source: `` },
++  trap_062_magicstart: { profile: () => ({}), source: `` },
++  trap_063_magicturn: { profile: () => ({}), source: `` },
++  trap_050_blizzard: { profile: () => ({}), source: `` },
++  trap_036_storm: { profile: () => ({}), source: `` },
++  trap_032_mound: { profile: () => ({}), source: `` },
++  trap_034_machst: { profile: () => ({}), source: `` },
++  trap_779_skzth: { profile: () => ({}), source: `` },
++  trap_020_roadblock: { profile: () => ({}), source: `` },
++  trap_278_dyfgdd: { profile: () => ({}), source: `` },
++  token_10053_radian_tower3: { profile: () => ({}), source: `` },
++  trap_253_boxnma: { profile: () => ({}), source: `` },
++  trap_078_rmtarms: { profile: () => ({}), source: `` },
++  trap_325_shfort: { profile: () => ({}), source: `` },
++  trap_326_shruin: { profile: () => ({}), source: `` },
++  trap_123_stmbot: { profile: () => ({}), source: `` },
++  trap_345_shadvt: { profile: () => ({}), source: `` },
++  trap_349_shadvt2: { profile: () => ({}), source: `` },
+ });
+ 
+ /**
+diff --git a/packages/content/src/levels.js b/packages/content/src/levels.js
+index 0b02ed0..71d8c8c 100644
+--- a/packages/content/src/levels.js
++++ b/packages/content/src/levels.js
+@@ -5,6 +5,8 @@ import act1multi02 from '../data/levels/act1multi_02.json' with { type: 'json' }
+ import act1multi06 from '../data/levels/act1multi_06.json' with { type: 'json' };
+ import act1multiHard02 from '../data/levels/act1multi_hard-02.json' with { type: 'json' };
+ import act1multiRm07 from '../data/levels/act1multi_rm07.json' with { type: 'json' };
++import act1multi07 from '../data/levels/act1multi_07.json' with { type: 'json' };
++import act1multiRm05 from '../data/levels/act1multi_rm05.json' with { type: 'json' };
+ import act2multiRm01 from '../data/levels/act2multi_rm01.json' with { type: 'json' };
+ import act1multiTr01 from '../data/levels/act1multi_tr01.json' with { type: 'json' };
+ import act1multiFortressRm01 from '../data/levels/act1multi_fortress_rm01.json' with { type: 'json' };
+@@ -19,7 +21,7 @@ import { CARRIED } from './carried.js';
+ /** The extracted levels, by id. @type {Readonly<Record<string, any>>} */
+ export const LEVELS = Object.freeze({
+   act1multi_01: act1multi01, act1multi_02: act1multi02, act1multi_06: act1multi06, 'act1multi_hard-02': act1multiHard02, act1multi_rm07: act1multiRm07,
+-  act2multi_rm01: act2multiRm01, act1multi_tr01: act1multiTr01, act1multi_fortress_rm01: act1multiFortressRm01, 'act1multi_fortress_hard-01': act1multiFortressHard01,
++  act1multi_07: act1multi07, act1multi_rm05: act1multiRm05, act2multi_rm01: act2multiRm01, act1multi_tr01: act1multiTr01, act1multi_fortress_rm01: act1multiFortressRm01, 'act1multi_fortress_hard-01': act1multiFortressHard01,
+ });
+ 
+ /** enemy_attribute_mul's keys and the enemy fields they multiply, with each field's value when the enemy has none. */
+@@ -81,7 +83,10 @@ function optionsAt(options, d) {
+ }
+ 
+ /** The levels being tested (关卡-8): they load with enemy abilities that have no behaviour yet, which do nothing there. */
+-export const TESTING = Object.freeze(['act1multi_fortress_rm01', 'act1multi_fortress_hard-01']);
++// 07 / rm05：关卡数据一直在磁盘上没接进来。它们的敌人有几项能力未实现（lasso / charge / boom 等），
++// 走 TESTING 通道放行 —— 未实现的能力不发动，页面标「测试中」，比整张图玩不到好。
++// hard-03 仍不可用：它的 env_system_new 符文两种难度都不支持，runes 检查在 TESTING 之前就 throw。
++export const TESTING = Object.freeze(['act1multi_fortress_rm01', 'act1multi_fortress_hard-01', 'act1multi_07', 'act1multi_rm05']);
+ 
+ /** Whether a level is being tested (关卡-8): one of TESTING, or its file says so. @param {string} id @param {any} raw */
+ const beingTested = (id, raw) => TESTING.includes(id) || raw.testing === true;
+@@ -101,7 +106,9 @@ export function levelAt(id, difficulty, attack = () => ({}), levels = LEVELS) {
+   if (!raw) throw new RangeError(`no level ${id}`);
+   const d = raw.difficulties[difficulty];
+   if (!d) throw new RangeError(`level ${id}: no difficulty ${difficulty}`);
+-  if (d.unsupported.length > 0) throw new RangeError(`level ${id} at ${difficulty}: runes not supported yet: ${d.unsupported.join(', ')}`);
++  // 集成战略的关卡把随机出怪/环境系统的部分行为写在关卡符文里（level_predefine_tokens_random_spawn_on_tile 等）：
++  // 视为「测试中」的关卡放行，未实现的部分不生效（与敌人能力同一条 TESTING 通道）。
++  if (d.unsupported.length > 0 && !beingTested(id, raw)) throw new RangeError(`level ${id} at ${difficulty}: runes not supported yet: ${d.unsupported.join(', ')}`);
+   const { waves, branches } = replacedSpawns(raw.level, d.replace);
+   const used = spawnedKeys(waves, branches, raw.enemies);
+   const missing = uncoveredAbilities(Object.entries(raw.enemies).filter(([k]) => used.has(k)).map(([k, e]) => withFoeExtras(k, /** @type {EnemyDef} */ (e))));
+diff --git a/packages/content/src/runes.js b/packages/content/src/runes.js
+index 89ebdb5..a8c7694 100644
+--- a/packages/content/src/runes.js
++++ b/packages/content/src/runes.js
+@@ -21,7 +21,7 @@ const BUFF_KEYS = Object.freeze({
+ /** @typedef {import('@aue/sim').OperatorDef} OperatorDef */
+ /**
+  * What one rune does to a unit it applies to.
+- * @typedef {{ mask: number, mul?: Record<string, number>, respawn?: number, blockAdd?: number, bornSp?: number, mods?: Record<string, number>,
++ * @typedef {{ mask: number, mul?: Record<string, number>, add?: Record<string, number>, respawn?: number, blockAdd?: number, bornSp?: number, mods?: Record<string, number>,
+  *   stack?: import('@aue/sim').TimedTalent, probSp?: { prob: number, sp: number }, rangeSp?: { sp: number, interval: number } }} RuneEffect
+  */
+ 
+@@ -57,6 +57,8 @@ function cardOf(r) {
+ function effectOf(r) {
+   const bb = boardOf(r), mask = r.professions;
+   if (r.key === 'char_attribute_mul') return { mask, mul: Object.fromEntries(Object.keys(MUL_FIELDS).filter((k) => k in bb).map((k) => [k, num(bb, k)])) };
++  // 集成战略的藏品用「加算」写属性（+N 而不是 ×N），与剧情关的风格 runes 是两套写法
++  if (r.key === 'char_attribute_add') return { mask, add: Object.fromEntries(Object.keys(MUL_FIELDS).filter((k) => k in bb).map((k) => [k, num(bb, k)])) };
+   if (r.key === 'char_respawntime_mul') return { mask, respawn: num(bb, 'scale') };
+   if (r.key === 'char_blockcnt_add') return { mask, blockAdd: num(bb, 'value') };
+   if (r.key === 'env_gbuff_new' || r.key === 'char_dynamic_ability_new') return keyedEffect(mask, bb);
+@@ -102,6 +104,10 @@ function recordChanges(d, e) {
+     const [f, dflt] = /** @type {[string, number]} */ (MUL_FIELDS[/** @type {keyof typeof MUL_FIELDS} */ (k)]);
+     out[f] = (d[f] ?? dflt) * v;
+   }
++  for (const [k, v] of Object.entries(e.add ?? {})) {
++    const [f, dflt] = /** @type {[string, number]} */ (MUL_FIELDS[/** @type {keyof typeof MUL_FIELDS} */ (k)]);
++    out[f] = (out[f] ?? d[f] ?? dflt) + v;
++  }
+   if (e.respawn !== undefined) out.respawnTime = (d.respawnTime ?? 0) * e.respawn;
+   if (e.blockAdd !== undefined) out.blockCnt = Math.max(0, (d.blockCnt ?? 0) + e.blockAdd);
+   return e.bornSp !== undefined && d.skill ? { ...out, skill: { ...d.skill, init: d.skill.init + e.bornSp } } : out;
+diff --git a/packages/data/src/waves.js b/packages/data/src/waves.js
+index 3b2af0d..72578a7 100644
+--- a/packages/data/src/waves.js
++++ b/packages/data/src/waves.js
+@@ -52,7 +52,10 @@ export function readAction(raw, p, routeOf) {
+   const a = asObject(raw, p);
+   if (a.isValid === false) return null;
+   const kind = asString(field(a, 'actionType', p), `${p}.actionType`);
+-  const type = /** @type {Record<string, WaveAction['type']>} */ (ACTION_TYPES)[kind] ?? 'NONE';
++  // 集成战略关卡把随机出怪组的候选行写成空 key（`ACTIVATE_PREDEFINED`/`SPAWN` + `randomSpawnGroupKey`）：那一行的含义是
++  // 「按权重抽到它时什么都不发生」。降成 NONE 后仍保留 group/pack/weight，`sim/src/waves.js` 的 beginWave 照常按权重抽。
++  const bare = a.key === '' || a.key === null || a.key === undefined;
++  const type = /** @type {Record<string, WaveAction['type']>} */ (bare ? 'NONE' : (ACTION_TYPES[kind] ?? 'NONE'));
+   /** @type {WaveAction} */
+   const out = {
+     type,

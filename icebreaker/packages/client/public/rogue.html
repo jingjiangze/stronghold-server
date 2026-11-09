@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>促融共竞 · 集成战略</title>
+<link rel="icon" href="data:,">
+<meta name="ig-assets" content="assets/skeleton/">
+<link rel="stylesheet" href="static/rogue.css">
+</head>
+<body>
+<main id="rogue-app">
+  <header>
+    <a id="back" class="ghost" href="room">返回大厅</a>
+    <h1>集成战略</h1>
+    <span id="conn" aria-live="polite">连接中</span>
+  </header>
+
+  <section id="setup" aria-label="开始探索" hidden>
+    <p class="hint" id="setup-hint"></p>
+    <div id="topics" class="cards"></div>
+    <div class="row">
+      <label>难度<select id="grade"></select></label>
+      <label>分队<select id="squad"></select></label>
+      <button id="start" type="button" class="primary">开始探索</button>
+    </div>
+    <div class="row join">
+      <label>探索编号<input id="code" inputmode="numeric" maxlength="6" placeholder="6 位数字"></label>
+      <button id="joinbtn" type="button">加入探索</button>
+    </div>
+  </section>
+
+  <section id="run" aria-label="探索地图" hidden>
+    <aside id="hud">
+      <div class="stat"><span class="k">生命</span><b id="hp">-</b></div>
+      <div class="stat"><span class="k">源石锭</span><b id="gold">-</b></div>
+      <div class="stat"><span class="k">藏品</span><b id="relics">-</b></div>
+      <div class="stat"><span class="k">区域</span><b id="zone">-</b></div>
+      <button id="relicbtn" type="button">查看藏品</button>
+      <button id="leavebtn" type="button">放弃探索</button>
+    </aside>
+    <div id="mapwrap"><div id="zonetitle" aria-live="polite"></div><div id="map"><svg id="links" aria-hidden="true"></svg></div></div>
+  </section>
+
+  <div id="shop" hidden><h2>诡意行商</h2><div id="shopcards" class="cards"></div><button id="shopleave" type="button">离开商店</button></div>
+  <div id="reward" hidden><h2>选择一件藏品</h2><div id="rewardcards" class="cards"></div></div>
+  <div id="relicbox" hidden><h2>已获得藏品</h2><ul id="reliclist"></ul><button id="relicclose" type="button">关闭</button></div>
+  <div id="over" hidden><h2 id="overtitle"></h2><p id="overtext"></p><button id="again" type="button" class="primary">再来一次</button></div>
+  <p id="toast" role="status" hidden></p>
+</main>
+<script type="module" src="m/@icebreaker/client/src/rogue.js"></script>
+</body>
+</html>

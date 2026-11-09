@@ -1,0 +1,60 @@
+*, *::before, *::after { box-sizing: border-box; }
+/* 集成战略页（/rogue）：暗色地图、官方节点卡与底板。没有素材时全部降级为纯色块，页面仍可用。 */
+html, body { margin: 0; height: 100%; background: #0c0f0e; color: #e6e2d8; font: 14px/1.5 "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
+#rogue-app { min-height: 100%; display: flex; flex-direction: column; }
+header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #2a2f2c; }
+header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .08em; }
+header .ghost { color: #9fb3a7; text-decoration: none; }
+header #conn { margin-left: auto; color: #7d8b83; font-size: 12px; }
+.hint { color: #9fb3a7; margin: 12px 0; }
+.row { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; margin: 14px 0; }
+.row.join { border-top: 1px dashed #2a2f2c; padding-top: 14px; }
+label { display: flex; flex-direction: column; gap: 6px; color: #9fb3a7; font-size: 12px; }
+select, input { background: #141917; color: #e6e2d8; border: 1px solid #2f3733; border-radius: 6px; padding: 8px 10px; font-size: 14px; }
+button { background: #1a211e; color: #d9e4dd; border: 1px solid #33403a; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
+button:hover { background: #223029; }
+button.primary { background: #2f6f4f; border-color: #3f8a63; }
+button.primary:hover { background: #38805c; }
+section#setup { padding: 0 16px 24px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 8px; }
+.card { position: relative; border: 1px solid #2f3733; border-radius: 8px; padding: 12px 14px; background: #121715; cursor: pointer; }
+.card:hover { border-color: #4b6b5b; }
+.card.on { border-color: #6fbf92; box-shadow: 0 0 0 1px #6fbf92 inset; }
+.card h3 { margin: 0 0 6px; font-size: 15px; }
+.card p { margin: 0; color: #93a39a; font-size: 12px; }
+.card .tag { position: absolute; top: 10px; right: 12px; color: #6fbf92; font-size: 11px; }
+#run { flex: 1; display: flex; min-height: 0; }
+#hud { width: 150px; flex: none; padding: 14px; border-right: 1px solid #2a2f2c; display: flex; flex-direction: column; gap: 10px; }
+.stat { display: flex; justify-content: space-between; font-size: 13px; color: #9fb3a7; }
+.stat b { color: #f0ece2; }
+#hud button { font-size: 12px; padding: 6px 8px; }
+#mapwrap { flex: 1; overflow: auto; position: relative; background: #0a0d0c center / cover no-repeat; }
+#map { position: relative; display: flex; gap: 46px; padding: 40px 48px; min-width: min-content; min-height: 100%; align-items: center; }
+#links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.col { display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; width: 165px; flex: none; }
+.node { position: relative; background-color: #0d1210; background-blend-mode: multiply; width: 165px; height: 94px; flex: none; border: 0; border-radius: 0; background: #141a17 center / 100% 100% no-repeat; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 3px; padding: 0 14px 11px; cursor: pointer; color: inherit; overflow: hidden; }
+.node:hover { border-color: #6fbf92; }
+.node.locked { opacity: .45; cursor: default; }
+.node.done { opacity: .5; filter: grayscale(.7); }
+.node .tagimg { position: absolute; top: 12px; right: 12px; width: 104px; height: 11px; background: right center / contain no-repeat; opacity: .8; }
+.node .wm { position: absolute; right: 8px; top: 14px; width: 101px; height: 48px; background: center / contain no-repeat; opacity: .22; pointer-events: none; }
+.node .t { font-size: 12.5px; color: #e8f0ea; letter-spacing: .05em; text-shadow: 0 1px 2px #000; }
+.node .s { font-size: 11px; color: #a9b8ae; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node.boss { filter: drop-shadow(0 0 6px rgba(191,106,63,.45)); }
+.node.current { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(111,191,146,.0); } 50% { box-shadow: 0 0 0 3px rgba(111,191,146,.35); } }
+#reward, #shop, #relicbox, #over { position: fixed; inset: 0; background: rgba(6,9,8,.86); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; z-index: 20; }
+#reward h2, #relicbox h2, #over h2 { margin: 0; font-size: 20px; letter-spacing: .06em; }
+#rewardcards, #shopcards { max-width: 860px; width: 100%; grid-template-columns: repeat(3, 1fr); }
+#rewardcards .card { text-align: left; }
+#rewardcards .card .rarity { color: #d9b36f; font-size: 11px; }
+#reliclist { max-width: 640px; width: 100%; max-height: 60vh; overflow: auto; padding: 0; list-style: none; }
+#reliclist li { padding: 8px 4px; border-bottom: 1px solid #222a26; }
+#toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: #1b2320; border: 1px solid #33403a; padding: 8px 14px; border-radius: 6px; }
+
+[hidden] { display: none !important; }
+
+#zonetitle { position: sticky; top: 0; left: 0; z-index: 3; padding: 12px 20px 4px; font-size: 15px; letter-spacing: .1em; color: #cfdcd4; text-shadow: 0 1px 3px #000; }
+.node:hover { filter: brightness(1.12); }
+.node.current { filter: drop-shadow(0 0 6px rgba(111,191,146,.55)); }
+@media (max-width: 760px) { #hud { width: 108px; padding: 10px; } .node { width: 138px; height: 80px; } .col { width: 138px; } #map { gap: 30px; padding: 24px; } }

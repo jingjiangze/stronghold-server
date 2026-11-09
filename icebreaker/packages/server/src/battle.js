@@ -11,6 +11,8 @@ import { signalRule } from '@icebreaker/mode-regular';
 /** Largest message a browser may send, in bytes. */
 export const MAX_MESSAGE = 4096;
 const TICK_MS = 1000 / 60;
+/** 单个连接允许积压的字节数（背压阈值）。 */
+const MAX_BUFFERED = 4 * 1024 * 1024;
 
 /** The training of the default decks' operators: elite 0 at level 30, potential 1, no trust, the first skill at level 4. */
 const BUILD = Object.freeze({ elite: 0, level: 30, potential: 1, trust: 0, skill: 0, skillLevel: 4 });
@@ -86,12 +88,23 @@ export function createBattleRoom(o = {}) {
   const keys = new Map((o.keys ?? []).map((k, seat) => [seat, k]));
   const host = new LockstepHost({
     content: o.content ?? skeletonContent, seats, seed: o.seed ?? 1, match: o.match ?? null, ...(o.absent ? { absent: o.absent } : {}), ...(o.signals ? { signals: o.signals } : {}),
-    send: (seat, msg) => { const ws = sockets.get(seat); if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); },
+    // 背压：慢客户端积压太多就断开（它重连时用全量快照续上），别把内存拖垮
+    send: (seat, msg) => { const ws = sockets.get(seat); if (ws?.readyState !== 1) return; if (ws.bufferedAmount > MAX_BUFFERED) { ws.close(1013, 'too slow'); return; } ws.send(JSON.stringify(msg)); },
     onDesync: (d) => log(`desync seat ${d.seat} at frame ${d.frame}: ${d.theirs} != ${d.ours}`),
   });
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE });
+  // 压缩：逐帧小包（~46–120B）压不动，真正受益的是 welcome 的全量快照（几十 KB–数 MB）
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE, perMessageDeflate: { threshold: 1024, serverMaxWindowBits: 13, zlibDeflateOptions: { level: 6 } } });
   const guard = guardOf(log, sockets, () => clearInterval(timer));
   const timer = setInterval(() => guard.run(() => host.tick(now())), TICK_MS);
+  // 心跳：半开连接会让座位一直「有人在」（nginx read timeout 1h），30s 一次 ping，两次没回就断开
+  const beat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.isAlive === false) { ws.terminate(); continue; }
+      ws.isAlive = false;
+      try { ws.ping(); } catch { /* already closed */ }
+    }
+  }, 30_000);
+  wss.on('connection', (ws) => { ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; }); });
 
   /** What a seat's checked message does, besides hello. @type {Record<string, (seat: number, m: any) => void>} */
   const routes = {
@@ -148,6 +161,6 @@ export function createBattleRoom(o = {}) {
         ws.on('close', () => { if (sockets.get(seat) === ws) { sockets.delete(seat); guard.run(() => host.bye(seat, now())); log(`seat ${seat} left`); } });
       });
     },
-    close() { clearInterval(timer); for (const ws of sockets.values()) ws.close(1001, 'server closing'); wss.close(); },
+    close() { clearInterval(timer); clearInterval(beat); for (const ws of sockets.values()) ws.close(1001, 'server closing'); wss.close(); },
   };
 }
