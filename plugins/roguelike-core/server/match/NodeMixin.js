@@ -115,11 +115,11 @@ export class Mixin {
     return this._rogueNodes;
   }
 
-  /** 还活着、能投票的玩家 id（投票门槛用它，不用 connected：掉线的人由回合开始兜底）。 */
+  /** 还活着、能投票的**人类**玩家 id（投票门槛用它：机器人不投票，否则单人+AI 房永远等不到全员投完）。 */
   rogueVoters() {
     const list = typeof this.alivePlayers === 'function' ? this.alivePlayers() : [];
     return (Array.isArray(list) ? list : [])
-      .filter((ps) => ps && ps.alive !== false && ps.playerId != null)
+      .filter((ps) => ps && ps.alive !== false && ps.isBot !== true && ps.playerId != null)
       .map((ps) => String(ps.playerId));
   }
 
