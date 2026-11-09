@@ -60,7 +60,10 @@ export const HOST_DEFAULTS = Object.freeze({
   heartbeatMs: 1000,
   watchdogMs: 10_000,
   idleMs: 10 * 60_000,
-  resourceLimits: Object.freeze({ maxOldGenerationSizeMb: 768, maxYoungGenerationSizeMb: 64, stackSizeMb: 4 }),
+  // 2026-11-09 容量审计：一个内容集的 match host 承载**该内容集的所有对局**。实测一局 187 MB RSS、
+  // 每局增量只有几 MB；768 的堆上限在 ~15-20 局时先撞顶。抬到 1024（仍是**上限**不是预分配，
+  // 机器只剩 1.7 GB 时不会因此多吃内存），配合下面按局数扩容的思路留余量。
+  resourceLimits: Object.freeze({ maxOldGenerationSizeMb: 1024, maxYoungGenerationSizeMb: 64, stackSizeMb: 4 }),
 });
 
 /** An error the lobby turns into a refusal (start). */
