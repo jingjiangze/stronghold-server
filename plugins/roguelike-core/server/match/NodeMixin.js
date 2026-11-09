@@ -332,6 +332,7 @@ export class Mixin {
       box[pid] = node.id;
       const tally = this.rogueTally(li);
       if (tally.resolved) st.picks[li] = tally.winner;
+      try { this.markPrivate?.(ps); } catch { /* best effort */ }
       try { this.markPublic?.(); } catch { /* best effort */ }
       return this.rogueNodeState();
     }
