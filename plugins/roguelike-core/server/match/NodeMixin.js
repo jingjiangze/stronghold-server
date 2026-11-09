@@ -226,6 +226,29 @@ export class Mixin {
     }
     if (num(reward.ap) !== 0) st.ap = Math.min(st.maxAp, st.ap + num(reward.ap));
 
+    // 节点专属交互（2026-11-09 业主：商店 / 休整 / 得偿所愿 不能只发数值）——
+    //   shop → 免费藏品三选一（复用 mota 的 relicOfferOne，draft 卡面）
+    //   wish → 得偿所愿：三选一但卡面标「必须选」（relicOfferOne 的 wish 模式）
+    //   rest → 直接回生命（+3，按 maxLp 封顶）
+    try {
+      const ntype = str(node.type);
+      const alive = typeof this.alivePlayers === "function" ? this.alivePlayers() : [];
+      if (ntype === "rest") {
+        for (const ps of alive) {
+          if (!ps || ps.alive === false) continue;
+          const cap = Math.max(1, num(ps.maxLp, num(ps.lp, 1)));
+          ps.lp = Math.min(cap, Math.max(1, num(ps.lp, 1) + 3));
+        }
+      } else if (ntype === "shop" || ntype === "wish") {
+        if (typeof this.relicOfferOne === "function") {
+          for (const ps of alive) {
+            if (!ps || ps.alive === false) continue;
+            try { this.relicOfferOne(ps, ntype === "wish" ? "wish" : "draft"); } catch (e) { this.reportError?.("rogue node relic", e); }
+          }
+        }
+      }
+    } catch (e) { this.reportError?.("rogue node extra", e); }
+
     // 结局钩子：走到最后一层或到达最终回合。
     const lastRound = num(this.gd && this.gd.lastRound, 14);
     if (li >= layers.length - 1 || round >= lastRound) st.ended = true;
