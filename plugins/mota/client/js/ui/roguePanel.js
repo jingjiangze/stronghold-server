@@ -95,10 +95,21 @@ export const NODE_SPRITE = Object.freeze({
   focus: 'img_focus.png',
   cursor: 'img_cursor.png',
   connector: 'img_connector.png',
+  line: 'img_cursor_long_line.png',
   zoneDesc: 'img_zone_desc.png',
   relic: 'relic.png',
   ap: 'ap_drop.png',
 });
+
+/**
+ * 藏品稀有度底版（官方 `rarity_0..5.png`，169×58 平行四边形 + 星数）：红=6★、蓝=3★、其余 2★。
+ * 只作行底色的**淡色洗**，文字与图标压在上面（`opacity` 走 CSS 的伪元素）。
+ */
+const RARITY_PLATE = { red: 'rarity_5.png', blue: 'rarity_2.png', gold: 'rarity_1.png' };
+function rarityPlate(tier) {
+  const f = RARITY_PLATE[String(tier || '')] || 'rarity_0.png';
+  return `${ROGUE_ASSET}/node/${f}`;
+}
 
 /**
  * 类型 → 官方**英文标签**精灵（`img_tag_*.png`，206×21，白字）。
@@ -624,12 +635,18 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
   const graph = nodeGraph(nodes);
   const picks = choiceList(nodes);
   const relics = relicList(pub, relicCards);
-  // 节点投票（2026-11-09）：票数在 pub.rogue.nodes.votes（按 nodeId），我投的那一票在 priv.rogueVote
+  // 节点投票（2026-11-09，杀戮尖塔 2 联机口径）：票数 + **谁投了谁**（图上直接显示每人的座位色标记），
+  // 我投的那一票另外在 priv.rogueVote（game.js 传进来的 myVote）。
   const voteCounts = nodes && nodes.votes && typeof nodes.votes === 'object' ? nodes.votes : {};
+  const voteBy = nodes && nodes.voteBy && typeof nodes.voteBy === 'object' ? nodes.voteBy : {};
   const voteCast = Number(nodes && nodes.votedCount) || 0;
   const voteTotal = Math.max(Number(nodes && nodes.voterCount) || 0, 1);
   const voteWinner = nodes && nodes.voteWinner ? String(nodes.voteWinner) : '';
   const myVoteId = myVote ? String(myVote) : '';
+  const pubPlayers = pub && Array.isArray(pub.players) ? pub.players : [];
+  const seatOf = new Map(pubPlayers.map((pl) => [String(pl.playerId), Number(pl.seat) || 0]));
+  const nameOf = new Map(pubPlayers.map((pl) => [String(pl.playerId), String(pl.name || pl.playerId || '')]));
+  const votersOf = (nodeId) => Object.keys(voteBy).filter((pid) => String(voteBy[pid]) === String(nodeId));
   const currentIndex = nodes && Number.isFinite(Number(nodes.index)) ? Number(nodes.index) : -1;
   const ap = Number(nodes && nodes.ap) || 0;
   const maxAp = Math.max(Number(nodes && nodes.maxAp) || 0, ap, 1);
@@ -780,6 +797,7 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
     const focused = focusId === String(n.id);
     const votes = Number(voteCounts[n.id]) || 0;
     const mine = myVote && String(myVote) === String(n.id);
+    const voters = n.state === 'candidate' ? votersOf(n.id) : [];
     return html`<button key=${n.id} type="button"
       class=${cls('rpn-node', `is-${n.state}`, n.picked && 'is-picked', focused && 'is-focus',
         mine && 'is-myvote', n.state === 'candidate' && !canSend && 'is-readonly')}
@@ -794,11 +812,16 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
         ? html`<img class="rpn-node__mist" src=${sprite(NODE_SPRITE.focus)} alt="" aria-hidden="true" />` : null}
       ${n.state === 'candidate'
         ? html`<img class="rpn-node__glow" src=${sprite(NODE_SPRITE.selectable)} alt="" aria-hidden="true" />` : null}
+      ${n.state === 'candidate'
+        ? html`<img class="rpn-node__in" src=${sprite(NODE_SPRITE.connector)} alt="" aria-hidden="true" />` : null}
       <img class="rpn-node__plate" src=${sprite(NODE_SPRITE.plate)} alt="" aria-hidden="true" />
       <img class="rpn-node__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
       <img class="rpn-node__tag" src=${typeTag(n.type)} alt="" aria-hidden="true" />
       ${n.state === 'taken' ? html`<span class="rpn-node__ok" aria-hidden="true">✓</span>` : null}
-      ${votes ? html`<span class="rpn-node__vote" aria-hidden="true">${votes}</span>` : null}
+      ${voters.length ? html`<span class="rpn-node__votes" aria-hidden="true">
+        ${voters.map((pid) => html`<i key=${pid} class=${cls('rpn-voter', `is-seat-${seatOf.get(pid) || 0}`)}
+          title=${nameOf.get(pid) || pid}></i>`)}
+      </span>` : (votes ? html`<span class="rpn-node__vote" aria-hidden="true">${votes}</span>` : null)}
       ${focused ? html`<img class="rpn-node__cur" src=${sprite(NODE_SPRITE.cursor)} alt="" aria-hidden="true" />` : null}
     </button>`;
   };
@@ -887,8 +910,16 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
     <div class="rpn-insp__foot">
       ${blocked ? html`<span class="rpn-insp__warn">${t('战斗中不可选')}</span>` : null}
       ${!canSend && !blocked ? html`<span class="rpn-insp__warn">${t('只读：拿不到对局网络')}</span>` : null}
-      ${inspActionable && !voteWinner ? html`<p class="rpn-insp__vote">
-        ${t('投票 {a}/{b}', { a: voteCast, b: voteTotal })}</p>` : null}
+      ${inspActionable && !voteWinner ? html`<div class="rpn-insp__votes">
+        <p class="rpn-insp__vote">${t('投票 {a}/{b}', { a: voteCast, b: voteTotal })}</p>
+        ${Object.keys(voteBy).length ? html`<ul class="rpn-insp__votelist">
+          ${Object.keys(voteBy).map((pid) => html`<li key=${pid}>
+            <i class=${cls('rpn-voter', `is-seat-${seatOf.get(pid) || 0}`)} aria-hidden="true"></i>
+            <span class="rpn-insp__votename">${nameOf.get(pid) || pid}</span>
+            <b class="rpn-insp__votenode">${pickText(voteBy[pid], preview) || voteBy[pid]}</b>
+          </li>`)}
+        </ul>` : null}
+      </div>` : null}
       ${inspActionable
         ? (voteWinner
           ? html`<span class="rpn-insp__done">${t('本回合前往：{n}', { n: pickText(voteWinner, preview) || voteWinner })}</span>`
@@ -991,7 +1022,9 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
         </ul>
       </div>
       ${relics.length ? html`<ul class="rpn-relics">
-        ${relics.map((c) => html`<li key=${c.id} class=${cls('rpn-relic', c.kind === 'negative' && 'is-negative')} data-relic-id=${c.id}>
+        ${relics.map((c) => html`<li key=${c.id}
+          class=${cls('rpn-relic', c.kind === 'negative' && 'is-negative')}
+          style=${`--rarity:url(${rarityPlate(c.tier)})`} data-relic-id=${c.id}>
           <span class="rpn-relic__icon">
             ${c.icon ? html`<img src=${c.icon} alt="" loading="lazy" />` : html`<${Icon} name="box" />`}
           </span>

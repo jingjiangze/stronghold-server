@@ -434,8 +434,16 @@ export class Mixin {
     const round = li + 1;
     const nextRound = li < 0 ? 1 : round + 1;
     const nextChoices = li < 0 || nextRound <= st.layers.length ? this.rogueNodeChoices(nextRound) : [];
-    // 投票（2026-11-09）：pub 只放**票数**，我投了谁在 priv.rogueVote（按玩家不同）。
-    const tally = this.rogueTally(li < 0 ? 0 : li + 1);
+    // 投票（2026-11-09）：pub 放**票数**与**谁投了谁**（杀戮尖塔 2 联机在图上直接显示每人的标记），
+    // 「我投了谁」另外在 priv.rogueVote（按玩家不同）。
+    const voteLi = li < 0 ? 0 : li + 1;
+    const tally = this.rogueTally(voteLi);
+    const voteBy = {};
+    const box = (st.votes && st.votes[voteLi]) || {};
+    for (const pid of Object.keys(box)) {
+      const nid = str(box[pid]);
+      if (nid) voteBy[pid] = nid;
+    }
     return {
       ap: st.ap,
       maxAp: st.maxAp,
@@ -445,6 +453,7 @@ export class Mixin {
       layerName: st.layerName,
       tier: st.tier,
       votes: tally.counts,
+      voteBy,
       votedCount: tally.voted,
       voterCount: tally.voterCount,
       voteWinner: tally.winner,

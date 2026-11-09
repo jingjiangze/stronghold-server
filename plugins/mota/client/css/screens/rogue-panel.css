@@ -182,9 +182,17 @@
 /* 本局线路图（2026-11-09 二轮，官方那种「一条线走完一局」的指示）：
    14 个回合圆点按区域分段，已过金实心 / 当前白环 / 下一回合青环 / 未到暗空心；区域之间一道斜分隔。 */
 .rpn-route {
+  position: relative;
   display: flex; align-items: center; gap: .12rem; flex-wrap: nowrap;
-  margin: 0; padding: 0; list-style: none; min-width: 0; overflow: hidden;
+  margin: 0; padding: .02rem 0; list-style: none; min-width: 0; overflow: hidden;
 }
+/* 线路底纹：官方青色长线（img_cursor_long_line.png，466×10 渐变） */
+.rpn-route::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: .05rem;
+  transform: translateY(-50%); opacity: .45; pointer-events: none;
+  background: url('/assets/local/roguelike/node/img_cursor_long_line.png') left center / 100% 100% no-repeat;
+}
+.rpn-route > li { position: relative; z-index: 1; }
 .rpn-route__seg { display: flex; align-items: center; gap: .05rem; flex: 0 0 auto; }
 .rpn-route__pip {
   width: .1rem; height: .1rem; border-radius: 50%;
@@ -304,6 +312,11 @@
 }
 /* 被点开的节点：官方青色选框 */
 .rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 4; }
+/* 进入候选节点的官方箭头（img_connector.png，34×12 青色双箭头） */
+.rpn-node__in {
+  left: 1%; top: 33%; width: 13%; height: auto;
+  transform: translateX(-50%); z-index: 4; opacity: .9;
+}
 .rpn-node__ok {
   position: absolute; right: 12%; top: 6%; z-index: 5;
   font-size: max(calc(.13 * var(--t)), 10px); line-height: 1;
@@ -317,8 +330,33 @@
   font-family: var(--font-mono); font-size: max(calc(.11 * var(--t)), 9px);
   line-height: 1.35; color: #06110d; background: var(--rp-mint);
 }
+/* 谁投了这里（杀戮尖塔 2 联机：图上直接显示每人的座位色标记） */
+.rpn-node__votes {
+  position: absolute; right: 9%; bottom: 19%; z-index: 6;
+  display: flex; gap: .03rem; align-items: center;
+}
+.rpn-voter {
+  display: block; width: .09rem; height: .09rem; border-radius: 50%;
+  border: 1px solid rgba(6, 17, 13, .9);
+  background: var(--rp-mint);
+}
+.rpn-voter.is-seat-0 { background: #4ed8af; }
+.rpn-voter.is-seat-1 { background: #ffc75a; }
+.rpn-voter.is-seat-2 { background: #7ff0ff; }
+.rpn-voter.is-seat-3 { background: #c79bff; }
 .rpn-node.is-myvote .rpn-node__vote { background: var(--rp-gold); }
 .rpn-node.is-myvote .rpn-node__tag { filter: drop-shadow(0 0 2px rgba(255, 199, 90, .85)); }
+
+/* 详情栏：谁投了谁 */
+.rpn-insp__votes { display: flex; flex-direction: column; gap: .04rem; }
+.rpn-insp__votelist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.rpn-insp__votelist li {
+  display: grid; grid-template-columns: .09rem minmax(0, 1fr) auto;
+  align-items: center; gap: .06rem; padding: .03rem 0;
+  font-size: max(calc(.095 * var(--t)), 8px); color: var(--rp-dim);
+}
+.rpn-insp__votename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rpn-insp__votenode { color: #eef2ef; font-weight: 600; white-space: nowrap; }
 
 /* 状态：已过 / 当前层兄弟 / 未到 / 候选 / 已选 */
 .rpn-node.is-taken .rpn-node__plate { opacity: .38; }
@@ -562,13 +600,19 @@
   gap: .1rem; align-content: start;
 }
 .rpn-relic {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; gap: .1rem; min-width: 0;
   padding: .1rem .12rem;
   border: 1px solid var(--rp-line);
-  border-left: 2px solid var(--rp-gold);
   background: rgba(223, 230, 226, .025);
 }
-.rpn-relic.is-negative { border-left-color: #e2705a; }
+/* 稀有度底版：官方 rarity_N.png（平行四边形 + 星数）作淡色洗，文字与图标压在上面 */
+.rpn-relic::before {
+  content: ""; position: absolute; inset: 0; opacity: .3; pointer-events: none;
+  background: var(--rarity, none) left center / 100% 100% no-repeat;
+}
+.rpn-relic > * { position: relative; z-index: 1; }
+.rpn-relic.is-negative { border-color: rgba(226, 112, 90, .5); }
 .rpn-relic__icon {
   flex: 0 0 auto; width: .38rem; height: .38rem; display: grid; place-items: center;
   border: 1px solid var(--rp-line);
