@@ -261,10 +261,20 @@ export function roundPick(gd, rng, factionsOrSetup, round) {
 export function scaleFor(gd, r) {
   const modeId = String((gd && gd.modeId) || '');
   if (modeId.startsWith('mode_rogue_')) {
-    // 取本局**中段**的那一档当常数：同一局内不再随回合增长，但 N1…N20 之间仍能拉开
-    // （n1 的第 1 回合和第 8 档的第 1 回合同为 0.8，只看首回合会把 N1–N8 抹平）。
+    // 2026-11-09 业主口径：**难度只加数值、不动地图**（地图由节点 tier 决定，这里只改倍率），
+    // 并且随回合从第 1 档线性爬升到本难度的终值 —— 以前整局都是中段那一档常数，导致「第一关就和最后一关一样硬」。
     const last = Math.max(1, Number(gd.lastRound) || 14);
-    return gd.enemyScale(Math.max(1, Math.ceil(last / 2)));
+    // enemyScale 返回的是**逐项修正表**（atk/hp/speed/kAtk/kHp），不是标量：按回合从第 1 档线性爬到本局终值。
+    const first = gd.enemyScale(1) || {};
+    const final = gd.enemyScale(Math.max(1, Math.ceil(last / 2))) || {};
+    const k = last > 1 ? Math.max(0, Math.min(1, (Number(r) - 1) / (last - 1))) : 1;
+    const out = {};
+    for (const key of ['atk', 'hp', 'speed', 'kAtk', 'kHp']) {
+      const a = Number(first[key]);
+      const b = Number(final[key]);
+      out[key] = Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * k : (Number.isFinite(b) ? b : a);
+    }
+    return out;
   }
   return gd.enemyScale(r);
 }

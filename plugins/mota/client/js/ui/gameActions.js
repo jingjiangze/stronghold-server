@@ -117,7 +117,16 @@ const BOUNTY_DETAIL_TEXT = {
  *   not match, the toast is the upstream ERR_TEXT one — so every caller that passes no `detailText` behaves as before.
  * @returns {Promise<boolean>}
  */
+// 同一意图 + 同一参数在 400ms 内只发一次（2026-11-09 诊断：一秒内 6 次 g.buy 全被 NO_FUNDS 拒，
+// 是连点/重复提交）。失败后用户再按仍会发：只拦「刚发过、结果还没回来」的那一小段。
+const lastSent = new Map();
+const DEDUPE_MS = 400;
+
 export async function act(t, fields = {}, opts = {}) {
+  const dedupeKey = t + '|' + JSON.stringify(fields || {});
+  const now = Date.now();
+  if (now - (lastSent.get(dedupeKey) || 0) < DEDUPE_MS) return false;
+  lastSent.set(dedupeKey, now);
   inflight += 1;
   emitBusy();
   try {
