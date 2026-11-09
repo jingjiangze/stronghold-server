@@ -394,6 +394,49 @@ export async function createFieldView(host, options = {}) {
   // 关掉时传 null 给 tiles（渲染层一条都不画），但记住 list 本身，重新打开能立刻回来。
   let lastRoutes = null;
   const applyRoutes = (list) => { lastRoutes = list || null; tiles.setRoutes(settings.showRoutes === false ? null : lastRoutes); };
+
+  /**
+   * 官方口径的路线指示（业主 2026-11-09）：**开局 5 秒内线从出怪点跑到终点，然后消失**。
+   * 渲染层只认静态折线，所以这里按时间把折线截断后逐帧重画（13 条线、每 80ms 一次，开销可忽略），跑完清空。
+   * 肉鸽图 groundPaths 为空，路线由 game.js 从 waves.routes 还原后挂在 st.__lanes 上。
+   */
+  let traceTimer = null;
+  const clipLanes = (list, k) => {
+    if (!(k > 0)) return null;
+    const out = [];
+    for (const lane of list) {
+      for (const seg of (Array.isArray(lane && lane.segments) ? lane.segments : [])) {
+        if (!Array.isArray(seg) || seg.length < 2) continue;
+        const lens = [];
+        let total = 0;
+        for (let i = 1; i < seg.length; i++) { const d = Math.hypot(seg[i].x - seg[i - 1].x, seg[i].y - seg[i - 1].y); lens.push(d); total += d; }
+        if (!(total > 0)) continue;
+        const want = total * k;
+        let acc = 0;
+        const pts = [seg[0]];
+        for (let i = 1; i < seg.length; i++) {
+          const d = lens[i - 1];
+          if (acc + d <= want) { pts.push(seg[i]); acc += d; continue; }
+          const r = d > 0 ? (want - acc) / d : 0;
+          if (r > 0) pts.push({ x: seg[i - 1].x + (seg[i].x - seg[i - 1].x) * r, y: seg[i - 1].y + (seg[i].y - seg[i - 1].y) * r });
+          break;
+        }
+        if (pts.length > 1) out.push({ segments: [pts] });
+      }
+    }
+    return out.length ? out : null;
+  };
+  const traceRoutes = (list, ms = 5000) => {
+    if (traceTimer) { clearInterval(traceTimer); traceTimer = null; }
+    if (!Array.isArray(list) || !list.length) return;
+    const t0 = Date.now();
+    applyRoutes(clipLanes(list, 0.001));
+    traceTimer = setInterval(() => {
+      const k = Math.min(1, (Date.now() - t0) / ms);
+      if (k >= 1) { clearInterval(traceTimer); traceTimer = null; applyRoutes(null); return; }
+      applyRoutes(clipLanes(list, k));
+    }, 80);
+  };
   const fx = new FxSystem({
     P, layers, cam: () => cam, settings, assets, heightAt, redVignette: bg.red, surfaceLayer: ctx.surfaceLayer,
     timeScale: () => ctx.timeScale(),
@@ -834,9 +877,9 @@ export async function createFieldView(host, options = {}) {
     // window: otherwise legal blue tiles outside rows 9–12 / cols 2–10 cancel the drag before pieceDrop
     drag.setGeo(stageDeployRect(st));
     tiles.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null);
-    // prep / scouting: the stage's static ground paths, so the spawn side and the lanes read before the battle (a
-    // battle's own timed routes replace them in enterBattle, right after this)
-    if (mode !== 'battle') applyRoutes(stageGroundRoutes(st));
+    // prep / scouting: 官方口径 —— 开局 5 秒内路线从出怪点跑到终点、跑完消失（肉鸽图靠 st.__lanes，
+    // 普通图靠 stage.groundPaths）；战斗自己的分时路线在 enterBattle 里接管
+    if (mode !== 'battle') traceRoutes(stageGroundRoutes(st), 5000);
     if (board3d) { board3d.setStage(st); board3d.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null); useOfficialScene(st); }
     tiles.project(cam, true);
     // a pen laid out before the stage arrived (setPrep / a scouting board first) used the default zones and the old
