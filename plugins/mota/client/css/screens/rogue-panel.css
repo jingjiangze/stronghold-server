@@ -163,7 +163,7 @@
 }
 /* 详情栏收起（默认）：只有节点图，路径横跨整块板，节点跟着放大 */
 .rpn-page[data-insp="closed"] { grid-template-columns: minmax(0, 1fr); }
-.rpn-page[data-insp="closed"] .rpn-board__map { max-width: 100%; }
+.rpn-page[data-insp="closed"] .rpn-board[data-view] .rpn-board__map { max-width: 100%; }
 .rpn-page[data-insp="closed"] .rpn-node { max-width: 3rem; }
 
 /* ===== 板（节点图 / 地图 / 藏品共用外壳） ===== */
