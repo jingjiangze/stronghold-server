@@ -81,7 +81,8 @@ export class MatchInfra {
    * with a single human (loneHuman: a 同盟 room started alone or with AI teammates only — user playtest #4 item 3):
    * the timers only ever made humans wait on each other; AI seats act at once.
    */
-  get soloUntimed() { return this.isSolo || this.loneHuman; }
+  // 肉鸽（2026-11-09 业主「去掉回合限制，改为不限时」）：所有阶段倒计时一律归零，含 2+ 真人的肉鸽房。
+  get soloUntimed() { return this.isSolo || this.loneHuman || this.isRogue === true; }
 
   /**
    * 协同共竞（`mode_xie_*`）。本模式专属的规则都问这一个判据：每回合换战场、赏金加时。

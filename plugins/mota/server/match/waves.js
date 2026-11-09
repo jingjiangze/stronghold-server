@@ -411,7 +411,9 @@ export function buildNormalWave(gd, rng, factions, round, stageId = null) {
   const rogueTpl = rogueStage ? gd.wave(rogueStage) : null;
   const templateId = rogueTpl ? rogueStage : (rc && typeof rc.template === 'string' ? rc.template : null);
   const tpl = templateId ? gd.wave(templateId) : null;
-  const timeLimit = gd.combatTimeLimit(round);
+  // 肉鸽不限时（2026-11-09）：给一个实际打不满的有限哨兵 —— Infinity 会让 bot 演练算成无上限、
+  // 也会让 setTimeout 溢出后立刻触发，所以用 3600 游戏秒（引擎另有 MAX_BATTLE_TIME / HARD_CAP 兜底）。
+  const timeLimit = String(gd.modeId || "").startsWith("mode_rogue_") ? 3600 : gd.combatTimeLimit(round);
   if (!tpl) return { templateId, spawns: [], routes: [], extraRoutes: [], timeLimit, overrides: {}, pick: null, entries: { ground: null, fly: null }, actions: [] };
   const pick = roundPick(gd, rng, factions, round);
   const { spawns, actions } = templateSpawns(gd, tpl, round, pick);
@@ -644,7 +646,9 @@ export function previewOf(spawns) {
       boss: tag === 'boss',
       source: tag === 'bounty' ? 'bounty' : 'wave',
       tag,
-      ...(tag === 'boss' && Array.isArray(pv.start) && pv.start.length >= 2 && pv.start.every(Number.isFinite) ? { start: [pv.start[0], pv.start[1]] } : {}),
+      // 2026-11-09 业主「开局前也把怪放在地图上」：出生格对**所有**出怪动作都下发（原来只有 boss），
+      // 客户端在「没有预备区的图」（肉鸽图 config 为空）据此把预览怪摆到真实出怪格。
+      ...(Array.isArray(pv.start) && pv.start.length >= 2 && pv.start.every(Number.isFinite) ? { start: [pv.start[0], pv.start[1]] } : {}),
       _seq: seq++,
     });
   }

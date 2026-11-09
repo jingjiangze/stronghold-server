@@ -867,7 +867,8 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
 
   // —— 本局线路图（官方那种「一条线走完一局」的指示）：14 个回合圆点按区域分段，
   //    已过 = 金实心、当前 = 白环、下一回合 = 青环、未到 = 暗空心；区域之间留一道分隔。 ——
-  const routeStrip = html`<ol class="rpn-route" aria-label=${t('本局线路')}>
+  const routePct = Math.round((doneCols / Math.max(1, graph.layers.length)) * 100);
+  const routeStrip = html`<ol class="rpn-route" aria-label=${t('本局线路')} style=${`--p:${routePct}%`}>
     ${regions.map((r, ri) => html`<li key=${r.id} class=${cls('rpn-route__seg', `is-${regionState(r)}`)}>
       ${r.cols.map((c) => html`<i key=${c.key} class=${cls('rpn-route__pip', `is-${c.state}`)}
         title=${`${t('第 {n} 回合', { n: c.index + 1 })}${c.name ? ` · ${layerTitle(c.name) || c.name}` : ''}`}></i>`)}

@@ -120,6 +120,8 @@ export function penEntries(list) {
     out.push({
       enemyKey: e.enemyKey, count, gate: e.gate === 'upper' ? 'upper' : 'lower', t: Number.isFinite(Number(e.t)) ? Number(e.t) : 0,
       fly: !!e.fly, boss: !!e.boss || e.tag === 'boss', elite: !!e.elite || !!e.boss || e.tag === 'boss', i,
+      // 真实出生格（服务端 2026-11-09 起对所有条目下发）：没有预备区的图（肉鸽）用它摆位
+      start: Array.isArray(e.start) && e.start.length >= 2 && e.start.every(Number.isFinite) ? [e.start[0], e.start[1]] : null,
     });
   });
   out.sort((a, b) => a.t - b.t || a.i - b.i);
@@ -128,7 +130,7 @@ export function penEntries(list) {
 
 /** Signature of a preview list (unchanged signature ⇒ the pen is left as it is). */
 export function penSignature(list) {
-  return penEntries(list).map((e) => `${e.enemyKey}:${e.count}:${e.gate[0]}:${e.t}:${e.fly ? 1 : 0}${e.elite ? 1 : 0}${e.boss ? 1 : 0}`).join('|');
+  return penEntries(list).map((e) => `${e.enemyKey}:${e.count}:${e.gate[0]}:${e.t}:${e.fly ? 1 : 0}${e.elite ? 1 : 0}${e.boss ? 1 : 0}${e.start ? '@' + e.start[0] + ',' + e.start[1] : ''}`).join('|');
 }
 
 /**
@@ -188,7 +190,11 @@ export function layoutPen(list, opts = {}) {
       const k = kOf[zoneName]++;
       const len = zone.tiles.length;
       let tile = null;
-      if (len) {
+      // 没有预备区格子的图（肉鸽图 config 为空 ⇒ 0 格）：直接把预览怪摆到它的**真实出怪格**，
+      // 业主 2026-11-09「局内直接在地图上的怪，开局前也放在那」。有预备区的图维持原摆法。
+      if (!allTiles.length && entry.start) {
+        tile = entry.start;
+      } else if (len) {
         const jitter = rand() < 0.5 ? 1 : 0;
         let idx = Math.round((k / totalShowCnt) * len) - jitter;
         idx = Math.max(0, Math.min(len - 1, idx));

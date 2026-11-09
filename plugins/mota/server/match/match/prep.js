@@ -71,7 +71,7 @@ export class MatchPrep {
    */
   prepDeadlineSeconds() {
     // 独立模拟与「只有一个真人」的房（含单人肉鸽）都不计时 —— 没有第二个玩家会来按准备，倒计时只是逼自己。
-    if (this.isSolo || this.loneHuman === true) return null;
+    if (this.isSolo || this.loneHuman === true || this.isRogue === true) return null;
     const declared = this.gd.prepTime(this.round);
     if (declared != null) return declared;
     return this.prepFallbackGuard ? this.gd.timer('infoCheck') : null;
