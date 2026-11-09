@@ -3,7 +3,6 @@ name: branch-sync
 # 分支模型（2026-10-29 翻转：**百度为主**）
 #   baidu = 主干，运行时内容 + deploy/baidu/**
 #   ms    = 由 baidu 派生：baidu 的 tree 去掉 deploy/baidu/**
-#   方向：baidu ──> ms ──> 魔搭（见 push-to-modelscope.yml）
 #
 # 为什么放在 Actions：本机到 GitHub 的 git 协议不通（直连不可达、代理被 reset），
 # 只有 runner 上有真实推送能力。
@@ -22,7 +21,6 @@ on:
 permissions:
   contents: write
   # GITHUB_TOKEN 推的 commit 不会触发下游 workflow（GitHub 防循环），
-  # 所以镜像完 ms 后要显式 dispatch push-to-modelscope
   actions: write
 
 concurrency:
@@ -107,5 +105,3 @@ jobs:
           # ⇒ 必须 force（普通推送会 non-fast-forward 被拒）
           git push --force origin "$NEWCOMMIT:refs/heads/ms"
           # 显式触发下游（GITHUB_TOKEN 推送不触发 push 型 workflow）
-          gh workflow run push-to-modelscope.yml --ref ms
-          echo "已 dispatch push-to-modelscope"
