@@ -190,11 +190,9 @@ export function layoutPen(list, opts = {}) {
       const k = kOf[zoneName]++;
       const len = zone.tiles.length;
       let tile = null;
-      // 没有预备区格子的图（肉鸽图 config 为空 ⇒ 0 格）：直接把预览怪摆到它的**真实出怪格**，
-      // 业主 2026-11-09「局内直接在地图上的怪，开局前也放在那」。有预备区的图维持原摆法。
-      if (!allTiles.length && entry.start) {
-        tile = entry.start;
-      } else if (len) {
+      // 2026-11-09 业主澄清：出怪点里的怪**不显示**（只有「原本就占一个格子」的才在图上），
+      // 所以这里维持原摆法；肉鸽图没有预备区时怪不会画到棋盘上（它们只在开战后从出怪点出来）。
+      if (len) {
         const jitter = rand() < 0.5 ? 1 : 0;
         let idx = Math.round((k / totalShowCnt) * len) - jitter;
         idx = Math.max(0, Math.min(len - 1, idx));

@@ -2543,6 +2543,8 @@ function stageGroundRoutes(st) {
     if (seg.length > 1) list.push({ segments: [seg] });
     if (list.length >= 16) break;
   }
+  // 肉鸽图 groundPaths 是空的（官方图只带 waves.routes）⇒ 由 game.js 预先算好挂在 st.__lanes 上
+  if (!list.length && Array.isArray(st.__lanes)) return st.__lanes.length ? st.__lanes : null;
   return list.length ? list : null;
 }
 

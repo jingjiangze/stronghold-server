@@ -147,6 +147,34 @@ import { battleRunner } from '../battle/runner.js';
 import '../ui/pluginFrame.js';
 import { isClientCombat, observeTarget, teammateProgress, cameraLayers, layerCamera, loneHalf, sidesOf, resumedWatch, followedScout } from '../battle/observe.js';
 import { screenStrip, playerBonds, playerLayer, detailBondOwner, toggleBond, popupView } from '../ui/watchBonds.js';
+/**
+ * 肉鸽图的 groundPaths 是空的（官方包只带 waves.routes）：把每条出怪折线还原成棋盘层认识的
+ * [{ segments: [{ x, y }] }]（x = 列, y = 行），挂在 stage 记录上给 render/app.js 的 stageGroundRoutes 兜底，
+ * 于是「出怪点 → 蓝点」的路线在开局前就画得出来。appear / disappear 会把一条路线切成多段（传送 / 换场）。
+ */
+function waveLanes(sid) {
+  const wave = sid ? data.lookup('waves', sid) : null;
+  const raw = wave && Array.isArray(wave.routes) ? wave.routes : [];
+  const out = [];
+  for (const rt of raw) {
+    let seg = [];
+    for (const st of (rt && Array.isArray(rt.steps) ? rt.steps : [])) {
+      const p = st && Array.isArray(st.p) ? st.p : null;
+      if (st && st.t === 'move' && p) seg.push({ x: Number(p[1]), y: Number(p[0]) });
+      else if (st && st.t === 'appear' && p) {
+        if (seg.length > 1) out.push({ segments: [seg] });
+        seg = [{ x: Number(p[1]), y: Number(p[0]) }];
+      } else if (st && st.t === 'disappear') {
+        if (seg.length > 1) out.push({ segments: [seg] });
+        seg = [];
+      }
+    }
+    if (seg.length > 1) out.push({ segments: [seg] });
+    if (out.length >= 24) break;
+  }
+  return out.length ? out : null;
+}
+
 import { data, getMode } from '../data.js';
 import { audio, resultSpeaker, resultVoiceSlot } from '../audio.js';
 import { useDocClass, FullscreenButton, reducedMotion } from '../ui/device.js';
@@ -754,7 +782,11 @@ function MatchScreen() {
   useEffect(() => {
     if (!view) return;
     const st = ownView ? ownStage : baseStage;
-    if (st) view.setStage(st);
+    if (st) {
+      // 肉鸽图没有 groundPaths：用 waves.routes 还原「出怪点 → 蓝点」的路线（只算一次，挂在 stage 记录上）
+      if (st.__lanes === undefined) st.__lanes = waveLanes(st.id);
+      view.setStage(st);
+    }
   }, [view, ownView, ownStage, baseStage]);
   // the stage behind the board ON SCREEN — the own one (机变 overrides applied) or, while watching a teammate, the plain
   // one — and how a tapped BOARD tile maps to it (GitHub issue #184: tileClick → gameLogic.terrainInfo). Everywhere but a
