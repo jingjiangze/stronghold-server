@@ -231,7 +231,7 @@
 /* 节点堆：等高行（--rows 由组件给实际节点数）+ 居中；第 k 个节点中心 = (k+.5)/行数，
    连线 SVG 用同一条公式，线才落在节点中心。 */
 .rpn-col__stack {
-  position: relative; flex: 0 1 auto; max-height: 4.8rem;
+  position: relative; flex: 0 1 auto; max-height: 5.4rem;
   display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
   align-items: center; justify-items: center;
 }
@@ -425,6 +425,42 @@
 .rpn-insp__tile.is-blocked { --tc: #6a7a88; }
 .rpn-insp__tile.is-melee { --tc: #ffc75a; }
 .rpn-insp__tile.is-ranged { --tc: #5ad1a0; }
+
+/* 详情栏中段：难度条 + 下一层预览（把信息页读满，不留大片空） */
+.rpn-insp__sec { display: flex; flex-direction: column; gap: .06rem; }
+.rpn-insp__h {
+  margin: 0; font-size: max(calc(.09 * var(--t)), 8px);
+  letter-spacing: .18em; color: var(--rp-dim-2);
+}
+.rpn-insp__reward { display: flex; align-items: center; gap: .1rem; }
+.rpn-insp__diff {
+  padding: 0 .06rem; font-family: var(--font-mono); font-weight: 700;
+  font-size: max(calc(.1 * var(--t)), 9px); color: #0a0d10; background: var(--rp-gold);
+}
+.rpn-insp__meter {
+  position: relative; height: .05rem;
+  background: rgba(223, 230, 226, .1);
+}
+.rpn-insp__meter i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--rp-cyan), var(--rp-gold));
+}
+.rpn-insp__next { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.rpn-insp__nextrow {
+  display: grid; grid-template-columns: .07rem minmax(0, 1fr) auto;
+  align-items: center; gap: .07rem;
+  padding: .045rem 0; border-bottom: 1px solid var(--rp-line);
+  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim);
+}
+.rpn-insp__nextrow.is-picked { color: var(--rp-gold); }
+.rpn-insp__dot {
+  width: .07rem; height: .07rem; background: var(--c, var(--rp-mint));
+}
+.rpn-insp__nextname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rpn-insp__nextmap {
+  font-family: var(--font-mono); font-size: max(calc(.09 * var(--t)), 8px);
+  color: var(--rp-cyan); white-space: nowrap;
+}
 
 /* 底部动作区：固定在详情栏底（方舟的确认按钮在右下角） */
 .rpn-insp__foot {

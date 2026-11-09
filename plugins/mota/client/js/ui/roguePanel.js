@@ -643,6 +643,8 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const stageIdNow = (pub && pub.stageId ? String(pub.stageId) : '') || curMapId;
   const mapName = mapLabel(stageIdNow);
   const themeNo = rogueThemeOf(stageIdNow);
+  // 详情栏「下一层预览」：候选的 tier 决定下一回合打哪张图（具体哪张由服务端 seed 定），只给主题 + tier
+  const preview = previewChoices(nodes);
 
   const pick = async (nodeId) => {
     if (!canSend || busy) return;
@@ -838,6 +840,25 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       <div><dt>${t('奖励')}</dt><dd>${rewardText(inspNode && inspNode.reward)}</dd></div>
       <div><dt>${t('藏品')}</dt><dd>${relics.length}</dd></div>
     </dl>
+    <div class="rpn-insp__sec">
+      <h4 class="rpn-insp__h">${t('难度')}</h4>
+      <div class="rpn-insp__reward">
+        <span class="rpn-insp__diff">${inspTier !== '' ? tierLabel(inspTier) : t('未知')}</span>
+        <span class="rpn-insp__cost">${inspCost ? `${t('消耗')} -${inspCost} AP` : t('免费')}</span>
+      </div>
+      <div class="rpn-insp__meter" aria-hidden="true"><i style=${`width:${Math.round(difficultyFrac(inspTier) * 100)}%`}></i></div>
+    </div>
+    <div class="rpn-insp__sec">
+      <h4 class="rpn-insp__h">${t('下一层预览')}</h4>
+      ${preview.length ? html`<ul class="rpn-insp__next">
+        ${preview.map((n) => html`<li key=${n.id} class=${cls('rpn-insp__nextrow', picks.picked === n.id && 'is-picked')}
+            style=${`--c:${typeColor(n.type)}`}>
+          <i class="rpn-insp__dot" aria-hidden="true"></i>
+          <span class="rpn-insp__nextname">${n.name || typeName(n.type)}</span>
+          <span class="rpn-insp__nextmap">${mapTierLabel(n.tier, curMapId || stageIdNow) || '—'}</span>
+        </li>`)}
+      </ul>` : html`<p class="rpn-insp__hint">${t('已是最终层：没有下一层候选。')}</p>`}
+    </div>
     <div class="rpn-insp__foot">
       ${blocked ? html`<span class="rpn-insp__warn">${t('战斗中不可选')}</span>` : null}
       ${!canSend && !blocked ? html`<span class="rpn-insp__warn">${t('只读：拿不到对局网络')}</span>` : null}
