@@ -298,6 +298,8 @@ export class MatchViews {
         role: (typeof this.isRoleRound === 'function' && this.isRoleRound()) ? (this.isAttacker(ps) ? 'attack' : 'defend') : null,
       } : {}),
       name: ps.name,
+      // QQ 头像（2026-11-09 业主：局内/房间/结算全走 QQ 头像 API）
+      ...(ps.avatar ? { avatar: ps.avatar } : {}),
       // 名片代号 (name#tag): the seat's 4 digits, the same one the seat card and the hub chip show. Omitted when the
       // player has none (bots, a page that never sent tag), so an ordinary players[] row keeps its keys.
       ...(ps.tag ? { tag: ps.tag } : {}),

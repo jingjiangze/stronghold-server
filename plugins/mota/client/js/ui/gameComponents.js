@@ -267,7 +267,8 @@ export function RichTip({ text, children, placement = 'top' }) {
  * @param {{ player: any, size?: 'sm'|'md', self?: boolean, class?: string }} props
  */
 export function PlayerAvatar({ player, size = 'md', self = false, class: cls }) {
-  const src = player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null;
+  // 2026-11-09 业主：局内那张卡直接显示 **QQ 头像**（替换原来的分队图标），没有头像才回落分队图标
+  const src = player?.avatar || (player?.bandId ? bandIconUrl(data.get('assets'), player.bandId) : null);
   const glyph = [...(player?.name || '').trim()][0] || '?';
   // 促融共竞 (DESIGN §29): 被救援窗口扣住的座位是 `alive:false + pendingDeath:true` —— 画「等待救援」的沙漏，
   // 不画那个表示出局的 ✕（`pendingDeath` 只在开救援的模式里下发，普通模式没有这个键）。

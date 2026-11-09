@@ -388,6 +388,9 @@ export class Net {
       const tag = globalThis.localStorage?.getItem('sp.tag') || '';
       const nc = globalThis.localStorage?.getItem('sp.cardSkin') || '';
       if (/^[0-9]{4}$/.test(tag)) msg.tag = tag;
+      // QQ 号（本机账号里存的）：服务端据此生成 q1.qlogo.cn 头像，局内/房间/结算都用它
+      const qq = JSON.parse(globalThis.localStorage?.getItem('sp.pref.localAccount') || 'null')?.qq || '';
+      if (/^[0-9]{5,12}$/.test(qq)) msg.qq = qq;
       if (/^[A-Za-z0-9._-]{1,32}$/.test(nc)) msg.nc = nc;
     } catch { /* private mode */ }
     let token = null;

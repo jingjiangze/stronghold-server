@@ -747,6 +747,11 @@ export class Network {
     session.name = name;
     // 名片代号（重名时显示 名字#代号）与卡面 id：都只是短字符串，不带素材
     if (typeof msg.tag === 'string' && /^[0-9]{4}$/.test(msg.tag)) session.tag = msg.tag;
+    // QQ 头像：客户端只报 QQ 号，URL 由服务端按官方接口拼（换号/换图都不用动存储）
+    if (typeof msg.qq === 'string' && /^[0-9]{5,12}$/.test(msg.qq)) {
+      session.qq = msg.qq;
+      session.avatar = 'https://q1.qlogo.cn/g?b=qq&nk=' + encodeURIComponent(msg.qq) + '&s=100';
+    }
     if (typeof msg.nc === 'string' && /^[A-Za-z0-9._-]{1,32}$/.test(msg.nc)) session.nc = msg.nc;
     session.lastSeen = now;
     session.addr = conn.ip;

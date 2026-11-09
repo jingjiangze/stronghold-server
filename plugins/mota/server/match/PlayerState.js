@@ -152,6 +152,8 @@ export class PlayerState {
     /** 名片代号 (name#tag): the seat's 4 digits at the match start, '' = none (bots, or a page that never sent one).
      * Public on purpose (Match.publicView().players[].tag: the team panel shows 名字#代号 like the seat card does). */
     this.tag = typeof seat.tag === 'string' ? seat.tag : '';
+    /** QQ 头像（登录时按 QQ 号拼的 q1.qlogo.cn 地址；机器人/未登录为空串） */
+    this.avatar = typeof seat.avatar === 'string' ? seat.avatar : '';
     this.isBot = !!seat.isBot;
     this.connected = this.isBot ? true : !!seat.connected;
     this.left = false;

@@ -868,6 +868,7 @@ export class Lobby {
     seat.connected = true;
     if (!room.match && seat.name !== session.name) { seat.name = session.name; changed = true; }
     if (!room.match && session.tag && seat.tag !== session.tag) { seat.tag = session.tag; changed = true; }
+    if (!room.match && session.avatar && seat.avatar !== session.avatar) { seat.avatar = session.avatar; changed = true; }
     if (!room.match && session.nc && seat.nc !== session.nc) { seat.nc = session.nc; changed = true; }
     if (!room.hostId) { this.migrateHost(room); changed = true; }
     if (changed) this.broadcastState(room);
@@ -2828,6 +2829,7 @@ export class Lobby {
       card,
       // 名片代号 / 卡面 (业主 2026-11-02)：重名时显示「名字#代号」；卡面只是素材 id
       tag: session.tag || null,
+      avatar: session.avatar || null,
       nc: session.nc || null,
       // the content each was checked for (header "Gameplay plugins": filtered at the match start when it is another)
       loadoutCs: session.loadoutCs ?? null,
