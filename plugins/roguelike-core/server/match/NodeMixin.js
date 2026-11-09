@@ -106,11 +106,71 @@ export class Mixin {
       layerName: null,
       /** layer 下标 → 玩家选中的 nodeId（未选则缺省）。 */
       picks: Object.create(null),
+      /** layer 下标 → { playerId: nodeId }：下一层的投票（2026-11-09，多人房）。 */
+      votes: Object.create(null),
       layers,
       /** 拍平的全部节点：只用于 state.sequence 的向后兼容展示。 */
       seq: layers.flatMap((l) => l.nodes),
     };
     return this._rogueNodes;
+  }
+
+  /** 还活着、能投票的玩家 id（投票门槛用它，不用 connected：掉线的人由回合开始兜底）。 */
+  rogueVoters() {
+    const list = typeof this.alivePlayers === 'function' ? this.alivePlayers() : [];
+    return (Array.isArray(list) ? list : [])
+      .filter((ps) => ps && ps.alive !== false && ps.playerId != null)
+      .map((ps) => String(ps.playerId));
+  }
+
+  /**
+   * 第 `li` 层的票数统计（业主口径：**多数票，平票随机**，参考杀戮尖塔 2 联机）。
+   * 默认要求全员投完才 `resolved`（界面上的「已定」）；`force` 用于回合开始的兜底 —— 有人没投就按
+   * **已投的票**结算。平票用 `deriveSeed(seed, 'rogue-vote:<li>')` 选一个，同一局任何端重算都是同一结果。
+   * @param {number} li
+   * @param {{ force?: boolean }} [opts]
+   * @returns {{ counts: Record<string, number>, voted: number, voterCount: number, resolved: boolean, winner: string|null }}
+   */
+  rogueTally(li, opts = {}) {
+    const st = this._rogueNodes;
+    const layer = st && Array.isArray(st.layers) ? st.layers[li] : null;
+    const empty = { counts: Object.create(null), voted: 0, voterCount: 0, resolved: false, winner: null };
+    if (!layer) return empty;
+    const voters = this.rogueVoters();
+    const box = (st.votes && st.votes[li]) || {};
+    const counts = Object.create(null);
+    let voted = 0;
+    for (const pid of Object.keys(box)) {
+      if (voters.length && !voters.includes(pid)) continue; // 只算还在场的人
+      const nid = str(box[pid]);
+      if (!nid || !nodeInLayer(layer, nid)) continue;
+      counts[nid] = (counts[nid] || 0) + 1;
+      voted += 1;
+    }
+    const ids = Object.keys(counts);
+    const enough = opts.force === true ? ids.length > 0 : voted >= Math.max(1, voters.length);
+    let winner = null;
+    if (ids.length && enough) {
+      const max = Math.max(...ids.map((k) => counts[k]));
+      const top = ids.filter((k) => counts[k] === max).sort();
+      if (top.length === 1) winner = top[0];
+      else {
+        const rng = createRng(deriveSeed(this.seed, `rogue-vote:${li}`));
+        winner = top[rng.int(top.length)] || top[0];
+      }
+    }
+    return { counts, voted, voterCount: Math.max(voters.length, voted), resolved: !!winner, winner };
+  }
+
+  /** 我投了谁（下一层）——给 priv 用，pub 里只有票数。 */
+  rogueVoteOf(ps) {
+    const st = this._rogueNodes;
+    if (!st) return null;
+    const li = Number.isInteger(st.index) && st.index >= 0 ? st.index + 1 : 0;
+    const box = st.votes && st.votes[li];
+    const pid = ps && ps.playerId != null ? String(ps.playerId) : '';
+    const nodeId = box && pid ? str(box[pid]) : '';
+    return nodeId ? { layer: li, nodeId } : null;
   }
 
   /**
@@ -130,6 +190,12 @@ export class Mixin {
     const li = layerIndex(layers, round);
     const layer = layers[li];
     if (!layer) return null;
+    // 投票兜底（2026-11-09）：进本回合时还没落地（有人没投 / 票数打平未结算）就按**已投的票**结算，
+    // 一票没有时保持旧行为（第 0 个）。
+    if (!st.picks[li]) {
+      const tally = this.rogueTally(li, { force: true });
+      if (tally.winner) st.picks[li] = tally.winner;
+    }
     let node = nodeInLayer(layer, st.picks[li]) || layer.nodes[0];
     if (!node) return null;
 
@@ -222,15 +288,17 @@ export class Mixin {
   }
 
   /**
-   * 选中一个节点（g.rogueNode）。只接受**当前层**或**下一层**的候选 id。
-   *   · 下一层：记进 `st.picks`，下一回合 `rogueNodeBegin` 生效（本回合的地图与奖励不变）；
+   * 选 / 投一个节点（g.rogueNode）。只接受**当前层**或**下一层**的候选 id。
    *   · 当前层：改 `st.current/tier`（本回合的地图层级随之改变），但**不重发奖励、不退行动力**
-   *     ——那些在回合开始已经结算过，重复结算会让资金/生命凭空增长。
-   * @param {object} _ps 发起意图的 PlayerState（肉鸽节点是全队共享的，这里只用于保持意图签名）
+   *     ——那些在回合开始已经结算过，重复结算会让资金/生命凭空增长。**不进投票**（已经落地了）。
+   *   · 下一层：记进 `st.votes[li][playerId]`（**投票**，2026-11-09 业主口径：多人房多数票、平票随机）。
+   *     全员投完立即结算写 `st.picks[li]`；没投完就等下一回合 `rogueNodeBegin` 按已有票数结算。
+   *     单人房里一次投票就是全员投完 ⇒ 行为与旧的「直接选中」一致。
+   * @param {object} ps 发起意图的 PlayerState（投票按玩家记账；当前层改选不记账）
    * @param {string} nodeId
    * @returns {object} 状态对象（成功）或 `{error:'BAD_TARGET'}`（非法 id）
    */
-  rogueNodePick(_ps, nodeId) {
+  rogueNodePick(ps, nodeId) {
     if (this.isRogue !== true) return { error: 'BAD_TARGET' };
     const id = str(nodeId);
     if (!id) return { error: 'BAD_TARGET' };
@@ -246,15 +314,24 @@ export class Mixin {
       if (!layer) continue;
       const node = nodeInLayer(layer, id);
       if (!node) continue;
-      st.picks[li] = node.id;
       if (li === cur) {
         // 同层改选：visited 里换成真正生效的那个（奖励/行动力已在回合开始结算，不重算）
+        st.picks[li] = node.id;
         const at = st.visited.lastIndexOf(st.current);
         if (at >= 0) st.visited[at] = node.id;
         else if (!st.visited.includes(node.id)) st.visited.push(node.id);
         st.current = node.id;
         st.tier = node.tier;
+        try { this.markPublic?.(); } catch { /* best effort */ }
+        return this.rogueNodeState();
       }
+      // 下一层：投票（同一个玩家改票 = 覆盖自己那一票）
+      // playerId 缺席（单测的假 PlayerState / 单机壳）按 'solo' 记账：一票即全员投完，行为与旧的直接选中一致。
+      const pid = ps && ps.playerId != null ? String(ps.playerId) : 'solo';
+      const box = st.votes[li] || (st.votes[li] = Object.create(null));
+      box[pid] = node.id;
+      const tally = this.rogueTally(li);
+      if (tally.resolved) st.picks[li] = tally.winner;
       try { this.markPublic?.(); } catch { /* best effort */ }
       return this.rogueNodeState();
     }
@@ -356,6 +433,8 @@ export class Mixin {
     const round = li + 1;
     const nextRound = li < 0 ? 1 : round + 1;
     const nextChoices = li < 0 || nextRound <= st.layers.length ? this.rogueNodeChoices(nextRound) : [];
+    // 投票（2026-11-09）：pub 只放**票数**，我投了谁在 priv.rogueVote（按玩家不同）。
+    const tally = this.rogueTally(li < 0 ? 0 : li + 1);
     return {
       ap: st.ap,
       maxAp: st.maxAp,
@@ -364,6 +443,10 @@ export class Mixin {
       layer: st.layer,
       layerName: st.layerName,
       tier: st.tier,
+      votes: tally.counts,
+      votedCount: tally.voted,
+      voterCount: tally.voterCount,
+      voteWinner: tally.winner,
       picked: li >= 0 ? st.picks[li] || null : null,
       // 当前层（已落地）的 3 个候选；round 是它对应的回合号（UI 用来标「第 N 层」）
       round: li >= 0 ? round : 0,

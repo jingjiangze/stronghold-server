@@ -2250,6 +2250,7 @@ function MatchScreen() {
       onPick=${async (choiceId) => { setRogueBusy(choiceId); try { await net.request('g.roguePick', { choiceId }); } finally { setRogueBusy(null); } }} />` : null}
 
     ${!spectator && alive && pub?.rogue && roguePanel ? html`<${RoguePanel} pub=${pub} relicCards=${priv?.relicCards || null}
+      myVote=${priv?.rogueVote?.nodeId || null}
       open=${roguePanel} blocked=${rogueBlocked} onClose=${() => setRoguePanel(false)}
       onPickNode=${(intent, payload) => net.request(intent, payload)} />` : null}
 

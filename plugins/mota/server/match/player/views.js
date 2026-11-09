@@ -180,6 +180,8 @@ export class PlayerViews {
           tier: String(d.tier || ''), kind: String(d.kind || ''), applied: relicEffectApplied(d.effect),
           icon: String(d.icon || ''), desc: String(d.desc || '') }; });
       })(),
+      // 肉鸽节点投票（2026-11-09）：我这一票投给了谁（pub.rogue.nodes 里只有票数，按玩家不同的在 priv）
+      rogueVote: typeof this.m.rogueVoteOf === 'function' ? this.m.rogueVoteOf(this) : null,
       hexStats: typeof this.m.hexStatsView === 'function' ? this.m.hexStatsView(this) : null,
       hexGrade: this.hexGrade || null,
       hexRerolls: Array.isArray(this.hexRerolls) ? this.hexRerolls.slice() : null,

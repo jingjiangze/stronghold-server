@@ -603,7 +603,7 @@ function graphLink(link, col, next) {
  *   onPickNode?: (intent: string, payload: object) => Promise<unknown>|unknown,
  * }} props
  */
-export function RoguePanel({ pub, relicCards = null, open = false, blocked = false, onClose, onPickNode }) {
+export function RoguePanel({ pub, relicCards = null, myVote = null, open = false, blocked = false, onClose, onPickNode }) {
   const stagesReady = useData('stages');
   // 出怪路线要读 waves 表（rogue_* 关卡 id 就是 waves 的 key）：不订阅的话首次打开可能还没加载
   const wavesReady = useData('waves');
@@ -624,6 +624,12 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const graph = nodeGraph(nodes);
   const picks = choiceList(nodes);
   const relics = relicList(pub, relicCards);
+  // 节点投票（2026-11-09）：票数在 pub.rogue.nodes.votes（按 nodeId），我投的那一票在 priv.rogueVote
+  const voteCounts = nodes && nodes.votes && typeof nodes.votes === 'object' ? nodes.votes : {};
+  const voteCast = Number(nodes && nodes.votedCount) || 0;
+  const voteTotal = Math.max(Number(nodes && nodes.voterCount) || 0, 1);
+  const voteWinner = nodes && nodes.voteWinner ? String(nodes.voteWinner) : '';
+  const myVoteId = myVote ? String(myVote) : '';
   const currentIndex = nodes && Number.isFinite(Number(nodes.index)) ? Number(nodes.index) : -1;
   const ap = Number(nodes && nodes.ap) || 0;
   const maxAp = Math.max(Number(nodes && nodes.maxAp) || 0, ap, 1);
@@ -772,15 +778,17 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       </span>`;
     }
     const focused = focusId === String(n.id);
+    const votes = Number(voteCounts[n.id]) || 0;
+    const mine = myVote && String(myVote) === String(n.id);
     return html`<button key=${n.id} type="button"
       class=${cls('rpn-node', `is-${n.state}`, n.picked && 'is-picked', focused && 'is-focus',
-        n.state === 'candidate' && !canSend && 'is-readonly')}
+        mine && 'is-myvote', n.state === 'candidate' && !canSend && 'is-readonly')}
       style=${`--c:${typeColor(n.type)}`}
       data-node-id=${n.id} data-graph-node="1" data-type=${n.type} data-state=${n.state}
-      data-layer=${col.key}
+      data-layer=${col.key} data-votes=${votes}
       aria-current=${n.state === 'taken' ? 'true' : null}
-      aria-label=${`${t('第 {n} 层', { n: col.index + 1 })} · ${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${n.cost ? ` · -${n.cost} AP` : ''}`}
-      title=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}`}
+      aria-label=${`${t('第 {n} 层', { n: col.index + 1 })} · ${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${n.cost ? ` · -${n.cost} AP` : ''}${votes ? ` · ${t('{n} 票', { n: votes })}` : ''}`}
+      title=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${votes ? ` · ${t('{n} 票', { n: votes })}` : ''}`}
       onClick=${() => selectNode(n)}>
       ${n.state === 'taken' && col.state === 'current'
         ? html`<img class="rpn-node__mist" src=${sprite(NODE_SPRITE.focus)} alt="" aria-hidden="true" />` : null}
@@ -790,6 +798,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       <img class="rpn-node__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
       <img class="rpn-node__tag" src=${typeTag(n.type)} alt="" aria-hidden="true" />
       ${n.state === 'taken' ? html`<span class="rpn-node__ok" aria-hidden="true">✓</span>` : null}
+      ${votes ? html`<span class="rpn-node__vote" aria-hidden="true">${votes}</span>` : null}
       ${focused ? html`<img class="rpn-node__cur" src=${sprite(NODE_SPRITE.cursor)} alt="" aria-hidden="true" />` : null}
     </button>`;
   };
@@ -878,11 +887,15 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
     <div class="rpn-insp__foot">
       ${blocked ? html`<span class="rpn-insp__warn">${t('战斗中不可选')}</span>` : null}
       ${!canSend && !blocked ? html`<span class="rpn-insp__warn">${t('只读：拿不到对局网络')}</span>` : null}
+      ${inspActionable && !focusPicked ? html`<p class="rpn-insp__vote">
+        ${t('投票 {a}/{b}', { a: voteCast, b: voteTotal })}${voteWinner ? ` · ${t('已定：{n}', { n: pickText(voteWinner, preview) || voteWinner })}` : ''}</p>` : null}
       ${inspActionable
         ? (focusPicked
-          ? html`<span class="rpn-insp__done">${t('已选为下一层')}</span>`
-          : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}
-              onClick=${() => pick(focus.node.id)}>${t('前往此节点')}${focus.node.cost ? `（-${focus.node.cost} AP）` : ''}</button>`)
+          ? html`<span class="rpn-insp__done">${t('本回合前往此节点')}</span>`
+          : (myVoteId && myVoteId === String(focus.node.id)
+            ? html`<span class="rpn-insp__done">${t('已投票 · 等待 {a}/{b}', { a: voteCast, b: voteTotal })}</span>`
+            : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}
+                onClick=${() => pick(focus.node.id)}>${t('投票给此节点')}${focus.node.cost ? `（-${focus.node.cost} AP）` : ''}</button>`))
         : html`<p class="rpn-insp__hint">${picks.isFinal ? t('最终层：本局已结算') : t('在图上点节点查看详情')}</p>`}
     </div>
   </aside>`;

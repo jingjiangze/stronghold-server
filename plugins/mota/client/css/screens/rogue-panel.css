@@ -227,7 +227,7 @@
 
 /* ===== 节点图：官方「一回合一张图」= 当前列 + 下一回合候选列，节点按官方尺寸放大 ===== */
 .rpn-board__map {
-  --rpn-colgap: .5rem;
+  --rpn-colgap: .8rem;
   flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
   display: grid;
   grid-template-columns: repeat(var(--cols, 2), minmax(.9rem, 1fr));
@@ -237,7 +237,7 @@
 }
 .rpn-col { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 /* 本回合视图：两列不要铺满整块板（官方一屏就是「你在这儿 + 三个岔路」），限宽居中 */
-.rpn-board[data-view="round"] .rpn-board__map { width: 100%; max-width: 10.4rem; margin: 0 auto; }
+.rpn-board[data-view="round"] .rpn-board__map { width: 100%; max-width: 12rem; margin: 0 auto; }
 .rpn-col__head {
   flex: 0 0 auto; display: flex; align-items: baseline; justify-content: center; gap: .08rem;
   font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
@@ -252,7 +252,7 @@
 /* 节点堆：等高行（--rows 由组件给实际节点数）+ 居中；第 k 个节点中心 = (k+.5)/行数，
    连线 SVG 用同一条公式，线才落在节点中心。 */
 .rpn-col__stack {
-  position: relative; flex: 0 1 auto; max-height: 5.4rem;
+  position: relative; flex: 0 1 auto; max-height: 6.2rem;
   display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
   align-items: center; justify-items: center;
 }
@@ -272,7 +272,7 @@
 /* ===== 节点：官方精灵拼装（底板 165×94 + 图标 101×48 + 标签 206×21） ===== */
 .rpn-node {
   position: relative; display: block;
-  width: 100%; max-width: 2.2rem; aspect-ratio: 206 / 116;
+  width: 100%; max-width: 2.6rem; aspect-ratio: 206 / 116;
   margin: 0 auto; padding: 0; border: 0; background: none;
   cursor: pointer; z-index: 1;
   transition: opacity .12s ease;
@@ -309,6 +309,16 @@
   font-size: max(calc(.13 * var(--t)), 10px); line-height: 1;
   color: var(--rp-gold);
 }
+/* 投票数（多人房）：右下角小方块；我投的那一票是金色 */
+.rpn-node__vote {
+  position: absolute; right: 7%; top: 55%; z-index: 6;
+  min-width: .19rem; padding: 0 .04rem;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: max(calc(.11 * var(--t)), 9px);
+  line-height: 1.35; color: #06110d; background: var(--rp-mint);
+}
+.rpn-node.is-myvote .rpn-node__vote { background: var(--rp-gold); }
+.rpn-node.is-myvote .rpn-node__tag { filter: drop-shadow(0 0 2px rgba(255, 199, 90, .85)); }
 
 /* 状态：已过 / 当前层兄弟 / 未到 / 候选 / 已选 */
 .rpn-node.is-taken .rpn-node__plate { opacity: .38; }
@@ -492,6 +502,10 @@
 .rpn-insp__hint, .rpn-insp__warn {
   margin: 0; font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4;
   color: var(--rp-dim-2);
+}
+.rpn-insp__vote {
+  margin: 0; font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4;
+  color: var(--rp-cyan); font-variant-numeric: tabular-nums;
 }
 .rpn-insp__warn { color: #ffab97; }
 .rpn-insp__done {
