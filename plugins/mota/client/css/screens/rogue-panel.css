@@ -308,7 +308,7 @@
    白色图标才不会糊在白色底板上。 */
 .rpn-node__glow {
   left: 50%; top: -8.5%; height: 98%; width: auto;
-  transform: translateX(-50%); z-index: 1; opacity: .55;
+  transform: translateX(-50%); z-index: 1; opacity: .4;
 }
 /* 当前所在节点：官方雾团垫在最下面 */
 .rpn-node__mist {
@@ -422,7 +422,7 @@
 /* ===== 右侧详情栏 ===== */
 .rpn-insp {
   display: flex; flex-direction: column; gap: .1rem;
-  min-width: 0; min-height: 0; overflow-y: auto;
+  min-width: 0; min-height: 0; overflow: hidden;
   padding: .14rem .18rem .16rem;
   border-left: 1px solid var(--rp-line);
   background: linear-gradient(180deg, rgba(26, 31, 37, .5), rgba(8, 11, 14, .2));
@@ -500,6 +500,9 @@
 .rpn-insp__tile.is-blocked { --tc: #6a7a88; }
 .rpn-insp__tile.is-melee { --tc: #ffc75a; }
 .rpn-insp__tile.is-ranged { --tc: #5ad1a0; }
+
+/* 详情栏中段（说明 + 键值 + 难度 + 下一层）：自己滚动，按钮永远钉在底部 */
+.rpn-insp__body { display: flex; flex-direction: column; gap: .1rem; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
 /* 详情栏中段：难度条 + 下一层预览（把信息页读满，不留大片空） */
 .rpn-insp__sec { display: flex; flex-direction: column; gap: .06rem; }
@@ -655,8 +658,16 @@
 /* ===== 竖屏 / 窄屏：详情栏落到棋盘下方（行高给死 42%，棋盘至少占 58%） ===== */
 @media (max-aspect-ratio: 1/1), (max-width: 900px) {
   .rpn-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 42%); }
-  .rpn-insp { border-left: 0; border-top: 1px solid var(--rp-line); overflow-y: auto; }
-  .rpn-insp__map { display: none; }
+  .rpn-insp {
+    border-left: 0; border-top: 1px solid var(--rp-line);
+    display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr);
+    grid-template-rows: auto minmax(0, 1fr) auto; column-gap: .16rem; row-gap: .05rem;
+  }
+  .rpn-insp__head { grid-column: 1; grid-row: 1; }
+  .rpn-insp__body { grid-column: 1; grid-row: 2; }
+  .rpn-insp__map { grid-column: 2; grid-row: 1 / span 2; margin: 0; align-self: stretch; }
+  .rpn-insp__map .rpn-map__svg { max-height: none; height: 100%; }
+  .rpn-insp__foot { grid-column: 1 / -1; grid-row: 3; }
   .rpn-insp { gap: .06rem; padding: .1rem .14rem .12rem; }
   .rpn-insp__head { padding: .08rem .1rem .06rem; }
   .rpn-top__sub { display: none; }

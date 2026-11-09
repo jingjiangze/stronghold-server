@@ -891,6 +891,7 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
     <div class="rpn-insp__map" data-testid="rpn-focus-map">
       ${inspModel ? minimap(inspModel) : html`<p class="rpn-insp__none">${t('战场缩略图待载入…')}</p>`}
     </div>
+    <div class="rpn-insp__body">
     <p class="rpn-insp__note">${inspStage ? (mapLabel(inspStage) || '—') : '—'}${inspModel && inspModel.routes.length ? ` · ${t('出怪路线 {n} 条', { n: inspModel.routes.length })}` : ''}</p>
     <dl class="rpn-insp__kv">
       <div><dt>${t('进度')}</dt><dd>${graph.layers.length ? `${doneCols} / ${graph.layers.length}` : '—'}</dd></div>
@@ -915,6 +916,7 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
           <span class="rpn-insp__nextmap">${mapTierLabel(n.tier, curMapId || stageIdNow) || '—'}</span>
         </li>`)}
       </ul>` : html`<p class="rpn-insp__hint">${t('已是最终层：没有下一层候选。')}</p>`}
+    </div>
     </div>
     <div class="rpn-insp__foot">
       ${blocked ? html`<span class="rpn-insp__warn">${t('战斗中不可选')}</span>` : null}
