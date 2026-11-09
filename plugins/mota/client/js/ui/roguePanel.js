@@ -777,8 +777,9 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       onClick=${() => selectNode(n)}>
       ${n.state === 'taken' && col.state === 'current'
         ? html`<img class="rpn-node__mist" src=${sprite(NODE_SPRITE.focus)} alt="" aria-hidden="true" />` : null}
-      <img class="rpn-node__plate" alt="" aria-hidden="true"
-        src=${sprite(n.state === 'candidate' ? NODE_SPRITE.selectable : NODE_SPRITE.plate)} />
+      ${n.state === 'candidate'
+        ? html`<img class="rpn-node__glow" src=${sprite(NODE_SPRITE.selectable)} alt="" aria-hidden="true" />` : null}
+      <img class="rpn-node__plate" src=${sprite(NODE_SPRITE.plate)} alt="" aria-hidden="true" />
       <img class="rpn-node__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
       <img class="rpn-node__tag" src=${typeTag(n.type)} alt="" aria-hidden="true" />
       ${n.state === 'taken' ? html`<span class="rpn-node__ok" aria-hidden="true">✓</span>` : null}

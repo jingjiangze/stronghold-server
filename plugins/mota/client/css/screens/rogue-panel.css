@@ -218,7 +218,7 @@
   align-items: stretch;
   padding: .12rem .2rem .18rem;
 }
-.rpn-col { display: flex; flex-direction: column; min-width: 0; }
+.rpn-col { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 .rpn-col__head {
   flex: 0 0 auto; text-align: center;
   font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
@@ -231,7 +231,7 @@
 /* 节点堆：等高行（--rows 由组件给实际节点数）+ 居中；第 k 个节点中心 = (k+.5)/行数，
    连线 SVG 用同一条公式，线才落在节点中心。 */
 .rpn-col__stack {
-  position: relative; flex: 1 1 auto;
+  position: relative; flex: 0 1 auto; max-height: 4.8rem;
   display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
   align-items: center; justify-items: center;
 }
@@ -251,7 +251,7 @@
 /* ===== 节点：官方精灵拼装（底板 165×94 + 图标 101×48 + 标签 206×21） ===== */
 .rpn-node {
   position: relative; display: block;
-  width: 100%; max-width: 1.5rem; aspect-ratio: 206 / 116;
+  width: 100%; max-width: 1.9rem; aspect-ratio: 206 / 116;
   margin: 0 auto; padding: 0; border: 0; background: none;
   cursor: pointer; z-index: 1;
   transition: opacity .12s ease;
@@ -260,20 +260,32 @@
 .rpn-node__icon,
 .rpn-node__tag,
 .rpn-node__mist,
+.rpn-node__glow,
 .rpn-node__cur { position: absolute; pointer-events: none; }
-.rpn-node__plate { left: 50%; top: 0; height: 81%; width: auto; transform: translateX(-50%); z-index: 1; }
-.rpn-node__icon { left: 50%; top: 19%; height: 41%; width: auto; transform: translateX(-50%); z-index: 2; }
-.rpn-node__tag { left: 0; bottom: 0; width: 100%; height: auto; z-index: 2; }
-/* 当前所在节点：官方雾团垫在底板后面 */
+.rpn-node__plate {
+  left: 50%; top: 0; height: 81%; width: auto; transform: translateX(-50%); z-index: 2;
+  /* 官方底板精灵是**浅灰**（均值 RGB≈70 但 alpha≈40%，叠出来偏亮），白色图标压不住 ——
+     压暗到 45% 才是方舟那种深底板 + 白图标。 */
+  filter: brightness(.45);
+}
+.rpn-node__icon { left: 50%; top: 19%; height: 41%; width: auto; transform: translateX(-50%); z-index: 3; }
+.rpn-node__tag { left: 0; bottom: 0; width: 100%; height: auto; z-index: 3; }
+/* 候选：官方 selectable 是**底板后面的光晕**（186×114，比底板大一圈），垫在暗底板之下，
+   白色图标才不会糊在白色底板上。 */
+.rpn-node__glow {
+  left: 50%; top: -8.5%; height: 98%; width: auto;
+  transform: translateX(-50%); z-index: 1; opacity: .55;
+}
+/* 当前所在节点：官方雾团垫在最下面 */
 .rpn-node__mist {
-  left: 50%; top: 46%; width: 210%; height: auto;
-  transform: translate(-50%, -50%); opacity: .6; z-index: 0;
+  left: 50%; top: 40%; width: 132%; height: auto;
+  transform: translate(-50%, -50%); opacity: .38; z-index: 0;
 }
 /* 被点开的节点：官方青色选框 */
-.rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 3; }
+.rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 4; }
 .rpn-node__ok {
-  position: absolute; right: 12%; top: 2%; z-index: 4;
-  font-size: max(calc(.12 * var(--t)), 10px); line-height: 1;
+  position: absolute; right: 12%; top: 6%; z-index: 5;
+  font-size: max(calc(.13 * var(--t)), 10px); line-height: 1;
   color: var(--rp-gold);
 }
 
@@ -283,12 +295,11 @@
 .rpn-node.is-taken .rpn-node__tag { opacity: .45; }
 .rpn-node.is-sibling { opacity: .4; }
 .rpn-node.is-skipped { opacity: .26; }
-.rpn-node.is-future { opacity: .3; }
+.rpn-node.is-future { opacity: .5; }
 .rpn-col.is-current .rpn-node.is-taken { opacity: 1; }
 .rpn-col.is-current .rpn-node.is-taken .rpn-node__plate { opacity: 1; }
 .rpn-col.is-current .rpn-node.is-taken .rpn-node__icon { opacity: 1; }
 .rpn-col.is-current .rpn-node.is-taken .rpn-node__tag { opacity: .95; }
-.rpn-node.is-candidate .rpn-node__plate { filter: drop-shadow(0 0 .05rem rgba(255, 255, 255, .28)); }
 .rpn-node.is-candidate { animation: rpnNodePulse 2.6s ease-in-out infinite; }
 .rpn-node.is-candidate.is-picked { animation: none; }
 /* 已选为下一层：金色方框（方舟「目标已锁定」的读法） */
@@ -309,8 +320,8 @@
 .rpn-node__q {
   position: absolute; left: 0; right: 0; top: 0; height: 81%;
   display: grid; place-items: center;
-  font-family: var(--font-mono); font-size: max(calc(.16 * var(--t)), 12px);
-  color: var(--rp-dim-2);
+  font-family: var(--font-mono); font-size: max(calc(.2 * var(--t)), 14px);
+  color: rgba(223, 230, 226, .8); z-index: 4;
 }
 
 /* 候选条兜底（图上找不到候选时） */
