@@ -165,6 +165,9 @@
 .rpn-page[data-insp="closed"] { grid-template-columns: minmax(0, 1fr); }
 .rpn-page[data-insp="closed"] .rpn-board[data-view] .rpn-board__map { max-width: 100%; }
 .rpn-page[data-insp="closed"] .rpn-node { max-width: 3rem; }
+/* 区域视图 4 列：详情栏展开时节点收一档，列内别挤满 */
+.rpn-page[data-insp="open"] .rpn-board__map { --rpn-colgap: .34rem; }
+.rpn-page[data-insp="open"] .rpn-node { max-width: 2.2rem; }
 
 /* ===== 板（节点图 / 地图 / 藏品共用外壳） ===== */
 .rpn-board { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; }

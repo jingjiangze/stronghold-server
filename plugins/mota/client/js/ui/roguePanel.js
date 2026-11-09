@@ -748,13 +748,14 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
     || regions.find((r) => regionState(r) === 'next') || regions[0] || null;
   const layerNo = currentIndex >= 0 ? currentIndex + 1 : 1;
   const doneCols = Math.max(0, Math.min(currentIndex + 1, graph.layers.length));
-  // 官方的节点图是**一回合一张**（业主 2026-11-09 第二轮）：只画「当前所在列 + 下一回合候选列」两列，
-  // 节点放大到官方尺寸；进度交给顶部线路图。右上角仍可切「全部回合」看 14 列总览。
+  // 官方的节点图 = **一个区域一整张**（4–8 列全画，走过的列高亮、后面的列照样看得见类型）。
+  // 2026-11-09 第七轮业主反馈「第一区显示的节点太少了」：上一版只画了当前列 + 下一列，太窄。
+  // 现在默认画当前区域的全部列；右上角「全部回合」= 14 列总览（那边远景列仍用 ? 不剧透）。
   const nextIdx = currentIndex >= 0 ? currentIndex + 1 : 0;
   const nextCol = graph.layers[nextIdx] || null;
   const boardCols = graphView === 'all'
     ? graph.layers
-    : [curCol, nextCol].filter((c) => !!c);
+    : (curRegion ? curRegion.cols : [nextCol].filter(Boolean));
   const sprite = (f) => `${ROGUE_ASSET}/node/${f}`;
   const railGlyph = (id) => (id === 'map' ? 'expand' : id === 'relics' ? 'box' : 'chevrons');
 
@@ -799,9 +800,10 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
   // 一个图上的节点（两种视图共用；点它只是切详情，发包在右侧「前往此节点」）。
   // 全部由官方精灵拼成：底板 img_node_bkg(.selectable) + 图标 img_*_active + 英文标签 img_tag_*；
   // 当前所在节点背后垫 img_focus 雾团，被点开的节点套 img_cursor 选框。
-  const nodeBtn = (n, col) => {
-    if (n.state === 'future') {
-      // 未到的列只画占位：官方在没走到之前不告诉你下一个节点是什么（也不给点开看地图）
+  // reveal：本区域视图里「还没走到的列」也画真实节点（官方能提前看到整层），只压暗、不可前往；
+  //         全部回合视图里远景列仍是 `?` 占位，不剧透。
+  const nodeBtn = (n, col, reveal = false) => {
+    if (n.state === 'future' && !reveal) {
       return html`<span key=${n.id} class="rpn-node is-future is-locked" data-node-id=${n.id}
         data-graph-node="1" data-state="future" data-layer=${col.key} aria-hidden="true">
         <img class="rpn-node__plate" src=${sprite(NODE_SPRITE.plate)} alt="" />
@@ -858,7 +860,7 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
       </div>
       <div class="rpn-col__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
         ${drawLink ? graphLink(link, col, next) : null}
-        ${col.nodes.map((n) => nodeBtn(n, col))}
+        ${col.nodes.map((n) => nodeBtn(n, col, opts.all !== true))}
       </div>
     </div>`;
   };
