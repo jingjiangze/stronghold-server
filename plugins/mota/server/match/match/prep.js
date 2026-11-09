@@ -239,6 +239,11 @@ export class MatchPrep {
       // 只有「本回合还没做过目标选择」的旧/异常路径才回 CONFRONT 补做（防御性兜底，enterConfront 的 target 分支）。
       if (this._confrontTargetsRound === this.round) this.finishConfront();
       else this.enterConfront();
+    } else if (this.isRogue === true && typeof this.rogueNodeTypeFor === 'function'
+      && !['battle', 'elite', 'boss'].includes(String(this.rogueNodeTypeFor(r) || 'battle'))) {
+      // 肉鸽的非战斗节点（不期而遇 / 沿途集市 / 临时休整 / 得偿所愿）：业主 2026-11-09「事件图为什么也要战斗」——
+      // 不进战斗，整备结束直接结算（combat.js:318 的 settle(null, null) 就是无战斗路径）。
+      this.settle(null, null);
     } else {
       this.startCombat();
     }
