@@ -249,9 +249,11 @@ export class Mixin {
       }
     } catch (e) { this.reportError?.("rogue node extra", e); }
 
-    // 结局钩子：走到最后一层或到达最终回合。
-    const lastRound = num(this.gd && this.gd.lastRound, 14);
-    if (li >= layers.length - 1 || round >= lastRound) st.ended = true;
+    // 结局钩子（2026-11-09 业主「死亡即结束」）：**不再按回合数封顶**，只在
+    //   ① 走完最后一层（节点表用尽），或 ② 全员 LP 归零 时结束。
+    const humans = (typeof this.alivePlayers === "function" ? this.alivePlayers() : []).filter((ps) => ps && ps.isBot !== true);
+    const wiped = humans.length > 0 && humans.every((ps) => num(ps.lp, 1) <= 0);
+    if (li >= layers.length - 1 || wiped) st.ended = true;
 
     try { this.markPublic?.(); } catch { /* best effort */ }
     return this.rogueNodeState();

@@ -832,7 +832,7 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
         ? html`<img class="rpn-node__in" src=${sprite(NODE_SPRITE.connector)} alt="" aria-hidden="true" />` : null}
       <img class="rpn-node__plate" src=${sprite(NODE_SPRITE.plate)} alt="" aria-hidden="true" />
       <img class="rpn-node__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
-      <img class="rpn-node__tag" src=${typeTag(n.type)} alt="" aria-hidden="true" />
+      <span class="rpn-node__tag" aria-hidden="true">${n.name || typeName(n.type)}</span>
       ${n.state === 'taken' ? html`<span class="rpn-node__ok" aria-hidden="true">✓</span>` : null}
       ${voters.length ? html`<span class="rpn-node__votes" aria-hidden="true">
         ${voters.map((pid) => html`<i key=${pid} class=${cls('rpn-voter', `is-seat-${seatOf.get(pid) || 0}`)}
