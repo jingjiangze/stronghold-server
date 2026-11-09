@@ -271,11 +271,12 @@
   width: calc(100% + var(--rpn-colgap));
   overflow: visible; pointer-events: none; z-index: 0;
 }
-.rpn-graph__wire { fill: none; stroke: rgba(223, 230, 226, .18); stroke-width: 1; }
-.rpn-graph__wire.is-candidate { stroke: rgba(127, 240, 255, .5); stroke-dasharray: 3 3; }
-.rpn-graph__wire.is-taken { stroke: rgba(223, 230, 226, .22); }
+.rpn-graph__wire { fill: none; stroke: rgba(223, 230, 226, .16); stroke-width: 1; }
+/* 候选连线：官方青色渐变（左淡右亮），实线不再是虚线 */
+.rpn-graph__wire.is-candidate { stroke: url(#rpn-wire-grad); stroke-width: 1.3; }
+.rpn-graph__wire.is-taken { stroke: rgba(223, 230, 226, .2); }
 .rpn-graph__wire.is-taken.is-active { stroke: var(--rp-gold); stroke-width: 1.4; }
-.rpn-graph__wire.is-trunk { stroke: rgba(223, 230, 226, .1); }
+.rpn-graph__wire.is-trunk { stroke: rgba(223, 230, 226, .1); stroke-dasharray: 2 3; }
 
 /* ===== 节点：官方精灵拼装（底板 165×94 + 图标 101×48 + 标签 206×21） ===== */
 .rpn-node {
@@ -314,8 +315,8 @@
 .rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 4; }
 /* 进入候选节点的官方箭头（img_connector.png，34×12 青色双箭头） */
 .rpn-node__in {
-  left: 1%; top: 33%; width: 13%; height: auto;
-  transform: translateX(-50%); z-index: 4; opacity: .9;
+  left: 2%; top: 32%; width: 17%; height: auto;
+  transform: translateX(-50%); z-index: 4; opacity: 1;
 }
 .rpn-node__ok {
   position: absolute; right: 12%; top: 6%; z-index: 5;

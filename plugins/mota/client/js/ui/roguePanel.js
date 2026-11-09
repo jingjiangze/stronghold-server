@@ -594,8 +594,17 @@ const tabList = () => [
  * @param {object} col 本列 @param {object} next 下一列（行数可能不同）
  */
 function graphLink(link, col, next) {
+  // 官方连线的读法（img_cursor_long_line.png 是「左淡右亮」的青色渐变线）：用同一条渐变描边，
+  // 末端再叠官方的 img_connector 箭头（见 nodeBtn 的 .rpn-node__in），比虚线更像方舟。
   return html`<svg class="rpn-graph__links" viewBox="0 0 100 100" preserveAspectRatio="none"
       aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="rpn-wire-grad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#7ff0ff" stop-opacity=".08" />
+        <stop offset=".55" stop-color="#7ff0ff" stop-opacity=".55" />
+        <stop offset="1" stop-color="#7ff0ff" stop-opacity=".95" />
+      </linearGradient>
+    </defs>
     ${link.segs.map((s, i) => html`<line key=${`${link.key}-${i}`}
       x1="0" y1=${graphRowPct(col, s.fromRow)} x2="100" y2=${graphRowPct(next, s.toRow)}
       class=${cls('rpn-graph__wire', `is-${link.kind}`, s.active && 'is-active')}
