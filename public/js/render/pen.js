@@ -181,6 +181,9 @@ export function layoutPen(list, opts = {}) {
   const key = (t) => `${t[0]},${t[1]}`;
   const has = (t) => (load.get(key(t)) || 0) < perTile;
   const allTiles = [...Z.lower.tiles, ...Z.upper.tiles];
+  // 肉鸽图没有预备区（stages[].config 为空 ⇒ 0 格）：业主口径「主动就绪前不显示怪物」——一只都不画，
+  // 不能让它们挤在兜底格上被当成棋盘上的怪。
+  if (!allTiles.length) return { figures: [], total, shown: 0, sig };
   const placed = [];
   const kOf = { lower: 0, upper: 0 };
   for (const { entry, n } of plan) {

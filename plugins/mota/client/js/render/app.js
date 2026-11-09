@@ -433,7 +433,9 @@ export async function createFieldView(host, options = {}) {
     applyRoutes(clipLanes(list, 0.001));
     traceTimer = setInterval(() => {
       const k = Math.min(1, (Date.now() - t0) / ms);
-      if (k >= 1) { clearInterval(traceTimer); traceTimer = null; applyRoutes(null); return; }
+      // 业主 2026-11-09 追加：路线要在**准备就绪之前一直都在**（不能跑完就没）。
+      // 所以描完一遍后保留静态折线，等战斗自己的分时路线接管（enterBattle 会覆盖）。
+      if (k >= 1) { clearInterval(traceTimer); traceTimer = null; applyRoutes(list); return; }
       applyRoutes(clipLanes(list, k));
     }, 80);
   };
