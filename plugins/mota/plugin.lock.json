@@ -4,6 +4,134 @@
   "version": "0.3.1",
   "generator": "tools/plugin.mjs pack",
   "files": {
+    "client/assets/local/roguelike/node/ap_drop.png": {
+      "sha256": "738737f85df488a3b584eaf17e56727ff249a787553f65d06375063c6d9e3235",
+      "bytes": 15671
+    },
+    "client/assets/local/roguelike/node/img_battle_active.png": {
+      "sha256": "917b29937d242315ba6d12387f7ba9f77c5662d25ba5e5dd92d63d78ae307d4f",
+      "bytes": 3912
+    },
+    "client/assets/local/roguelike/node/img_boss_active.png": {
+      "sha256": "a044408119e5f4c1ac28e26d8704562a43dc027b52c8293e45071bc0b9b4e084",
+      "bytes": 6779
+    },
+    "client/assets/local/roguelike/node/img_connector.png": {
+      "sha256": "d819f8cf92f8eb5c6b57c61ce5659396804d90c7e9e153068676c69d5ec7d5c2",
+      "bytes": 277
+    },
+    "client/assets/local/roguelike/node/img_cursor.png": {
+      "sha256": "ec485e766256b422903028f20053cfa60f6afe91f0e7d6ef373d0519a5da3a62",
+      "bytes": 466
+    },
+    "client/assets/local/roguelike/node/img_elite_active.png": {
+      "sha256": "1c3050aa05600ea2c37da3d666722cdd4615681aa4f9f321632b25c62f52c8ac",
+      "bytes": 6135
+    },
+    "client/assets/local/roguelike/node/img_focus.png": {
+      "sha256": "bc3cf689e327ea743592c15285c797ddf68eb02c1cf18b8003695a25d056c756",
+      "bytes": 95638
+    },
+    "client/assets/local/roguelike/node/img_incident_active.png": {
+      "sha256": "632fc1998b37117a85f51a47ee84328af880e5355523435c51ba845038e63a9d",
+      "bytes": 3517
+    },
+    "client/assets/local/roguelike/node/img_node_bkg.png": {
+      "sha256": "fa742cb14b3169e2f878a0e0aae0c4ac00006ecb103a560ab16b7c1f5eb2ae8a",
+      "bytes": 12087
+    },
+    "client/assets/local/roguelike/node/img_node_bkg_selectable.png": {
+      "sha256": "aa2c2164af11b1e3ddb49afffdb6c8df8da5b5cbcb9607e8be9c9c9ade78f0ca",
+      "bytes": 12002
+    },
+    "client/assets/local/roguelike/node/img_rest_active.png": {
+      "sha256": "4a69e4ae87895897b26674a5ec4afd812de3d1f19546b815893b8c2e6cd59f86",
+      "bytes": 2960
+    },
+    "client/assets/local/roguelike/node/img_shop_active.png": {
+      "sha256": "ac417fcf7bde0c15aeeeccbd6b903b45a92b1a143847ac81f6549ab963fed06b",
+      "bytes": 3534
+    },
+    "client/assets/local/roguelike/node/img_tag_alchemy.png": {
+      "sha256": "35cc136f6a80c58f24c7c62174dc778080fc5727d3553081fbb52025f9d8a06a",
+      "bytes": 773
+    },
+    "client/assets/local/roguelike/node/img_tag_battle.png": {
+      "sha256": "1e8743a650c6dcfd37c2f91898d4e4ef9be0e0e7fc6923aae5743686640994a6",
+      "bytes": 1001
+    },
+    "client/assets/local/roguelike/node/img_tag_boss.png": {
+      "sha256": "b705fa1e783e72ac01d7709987720d4140e7aa905b3a139eee4f1b0f1449c69f",
+      "bytes": 929
+    },
+    "client/assets/local/roguelike/node/img_tag_duel.png": {
+      "sha256": "1913003003235b1f1dc0ae68b88ff2a28fd2cbb0c9d766888df6d8a38df70cda",
+      "bytes": 682
+    },
+    "client/assets/local/roguelike/node/img_tag_elite.png": {
+      "sha256": "5c71c66255e4910c02207512f514975ba5de463c5713a9fbf5ac6892f644d432",
+      "bytes": 1157
+    },
+    "client/assets/local/roguelike/node/img_tag_entertainment.png": {
+      "sha256": "30386f227b1c518357c6ed7953e8354dd6a8fb84f07c764ca72fda9feb7b1f15",
+      "bytes": 982
+    },
+    "client/assets/local/roguelike/node/img_tag_exped.png": {
+      "sha256": "7ca09a6fb7731b4977b383f36a028d8009ccc577f1076e6f5ef10fb2894ef06a",
+      "bytes": 524
+    },
+    "client/assets/local/roguelike/node/img_tag_final_boss.png": {
+      "sha256": "6d29cc20a378e21056456986a987a3f596ff928642f9d9d60ee8f1d0465e3fa2",
+      "bytes": 673
+    },
+    "client/assets/local/roguelike/node/img_tag_incident.png": {
+      "sha256": "421ff24744821cfa25801abea4f9120b706d2a648008524907e5e6215b2e5ed2",
+      "bytes": 892
+    },
+    "client/assets/local/roguelike/node/img_tag_port.png": {
+      "sha256": "c8edc1d43806c0e8d525856128ae3dc62aed956a34cac13723a7f98531b9044f",
+      "bytes": 1238
+    },
+    "client/assets/local/roguelike/node/img_tag_port_2.png": {
+      "sha256": "166f116345b9eadb361a36e89d530ea6679ee071afa71116b13647bcbf59dafc",
+      "bytes": 952
+    },
+    "client/assets/local/roguelike/node/img_tag_rest.png": {
+      "sha256": "5f1eecded38020a78f561e0f849bd69d7abc776b51f5a296b0d6b31cda28b9fc",
+      "bytes": 954
+    },
+    "client/assets/local/roguelike/node/img_tag_sacafri.png": {
+      "sha256": "13c6e539503566b2f2958305b09f7d8e419baffc5ffe5c4b115907d8783a9976",
+      "bytes": 1039
+    },
+    "client/assets/local/roguelike/node/img_tag_shop.png": {
+      "sha256": "dd9101120f4cc46e81ef5fffae71f18fa4af1e071e5ccac24af8c30c4c099769",
+      "bytes": 1048
+    },
+    "client/assets/local/roguelike/node/img_tag_treasure.png": {
+      "sha256": "1083416070df43ddc4491b511be421acff5fef5503284b99cd39c241d37a8220",
+      "bytes": 522
+    },
+    "client/assets/local/roguelike/node/img_tag_unknown.png": {
+      "sha256": "18d6680f188d7744056d41605e408829c592c1823091a36377389f6b08d1a155",
+      "bytes": 907
+    },
+    "client/assets/local/roguelike/node/img_treasure_active.png": {
+      "sha256": "a42dc15f7034d31be8b45919ef3b575cd62e5d4ffaf8c6cfae4efd4f4068ce64",
+      "bytes": 4036
+    },
+    "client/assets/local/roguelike/node/img_unknown.png": {
+      "sha256": "e82e8f2d2cb29fbd6f71b104ec7c0952b7dc2051b7f89253021c8e0e5304486b",
+      "bytes": 3270
+    },
+    "client/assets/local/roguelike/node/img_zone_desc.png": {
+      "sha256": "b98bdd0a1f3aac1ea9be41fbace183d2b9859674ca7bd39d39f31f4e9fb0ffe6",
+      "bytes": 7784
+    },
+    "client/assets/local/roguelike/node/relic.png": {
+      "sha256": "21b2061a3310747b9a81be22dae43678ccbc0cd89bc0761a25086b9ef1b79ce3",
+      "bytes": 11644
+    },
     "client/css/components.css": {
       "sha256": "e1e6bc437dd9ec4102f9503d092e9ab2529dce54943930286baebdb70e5882e6",
       "bytes": 60240
@@ -425,8 +553,8 @@
       "bytes": 1011
     },
     "client/js/ui/roguePanel.js": {
-      "sha256": "2cb2b4e6f5ce9d15be67d4664e86e85a78fd930513e75b1be635ff5062929a09",
-      "bytes": 56225
+      "sha256": "f2ad061e456e73a5907d84c3cdc1d30ca8267ef12b4fde0b4e94ecc82829f2e7",
+      "bytes": 56688
     },
     "client/js/ui/rosterPanel.js": {
       "sha256": "51d39b9e193e0fb664894c9446e6681af7f49e1c79cb14fbb6d425fd74f60c74",

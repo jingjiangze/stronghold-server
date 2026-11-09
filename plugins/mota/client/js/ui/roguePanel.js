@@ -83,6 +83,11 @@ const TYPE_ICON = {
  * 官方节点底板/连线/选框（2026-11-09 三版「照搬方舟」）：节点不再自己画方块，直接用官方精灵拼。
  *   plate 165×94 半透明灰底板；selectable 186×114 亮白底板（候选）；focus 336×208 雾团（当前所在）；
  *   cursor 97×90 青色选框（焦点）；connector 34×12 青色箭头。
+ *
+ * ⚠ 这些精灵在 `public/assets/local/roguelike/node/` 与 `plugins/mota/client/assets/local/roguelike/node/`
+ *   **各放一份**：线上容器没有 `public/assets`（整棵 /assets 靠 CDN 302，而 CDN 没有 assets/local/），
+ *   插件 client/** 会按同路径顶替页面资源（server/http/static.js 的 clientOverlay，先于 302），
+ *   所以真正的取件路径是插件里那份。删掉插件副本 = 节点图只剩空底板。
  */
 export const NODE_SPRITE = Object.freeze({
   plate: 'img_node_bkg.png',
