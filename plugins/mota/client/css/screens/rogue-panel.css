@@ -1,761 +1,534 @@
-/* plugins/mota/client/css/screens/rogue-panel.css — 肉鸽「集成战略」全屏叠加面板（2026-11-04 重做）。
+/* plugins/mota/client/css/screens/rogue-panel.css — 肉鸽「集成战略」全屏叠加面板。
    screens/game.js 首次进对局时按需注入（同 hex.css 的注入法），核心 index.html 不引用它。
-   官方配色：深蓝黑底 + 金色标题 + 青色描边；卡片沿用官方 img_node_bkg.png（165×94）作底。
-   节点页 = 上「列式节点图」（14 层各一列、列内纵排 3 个节点、列间 SVG 连线）+ 下「三选一卡 / 节点详情」；
-   连线几何由 js/ui/roguePanel.js 的 nodeGraph() 给（行号 → 百分比），这里只管线宽、配色与状态。
-   尺寸一律 rem（1rem = 100 设计 px，1280×720 下 1rem≈66.7px），字号 calc(N * var(--t)) 与 --t 同口径。 */
+
+   2026-11-09 三版：**照搬方舟信息页的版式**（业主：前两版「不好看」）。
+     · 版式 = 顶栏（层号块 + 区域名 + 资源条）／左竖排导航／中间区域图／右侧详情栏 四块；
+     · 节点全部用官方精灵：底板 img_node_bkg(.selectable).png + 图标 img_*_active.png + 英文标签 img_tag_*.png，
+       当前所在节点背后垫 img_focus.png 雾团，被点开的节点套 img_cursor.png 选框；
+     · 连线仍是内联 SVG（几何由 js/ui/roguePanel.js 的 nodeGraph() 给），只把线宽与配色改回细线；
+     · 没有卡片、渐变、发光、圆角：1px 细线 + 单色底 + 宽字距小标（方舟的密度）。
+
+   尺寸一律 rem（1rem = 100 设计 px，1920×1080 下 1rem=100px，1280×720 下 ≈66.7px）；
+   字号 calc(N * var(--t))，--t 是「文字大小」放大用的文字根，和布局根 1rem 同口径。 */
 
 .rpn {
-  --rp-gold: #ffb80d;
-  --rp-gold-hi: #ffe6a8;
-  --rp-cyan: #00e2e4;
-  --rp-navy: #050c16;
-  --rp-navy-2: #0a1727;
-  --rp-line: rgba(0, 226, 228, .28);
-  --rp-txt: #cfe2f0;
-  --rp-dim: #a6bccf;
+  --rp-bg: #0b0e11;
+  --rp-bg-2: #12161b;
+  --rp-line: rgba(223, 230, 226, .13);
+  --rp-line-2: rgba(223, 230, 226, .26);
+  --rp-txt: #e7ebe8;
+  --rp-dim: rgba(223, 230, 226, .56);
+  --rp-dim-2: rgba(223, 230, 226, .34);
+  --rp-mint: #4ed8af;
+  --rp-cyan: #7ff0ff;
+  --rp-gold: #ffc75a;
   position: absolute; inset: 0; z-index: 60;
   display: grid; place-items: center;
-  padding: .1rem .2rem;
+  padding: .08rem;
   color: var(--rp-txt);
-  font-size: max(calc(.125 * var(--t)), 11px);
+  font-size: max(calc(.12 * var(--t)), 11px);
 }
 
 /* —— 遮罩 —— */
 .rpn__veil {
   position: absolute; inset: 0;
   background:
-    radial-gradient(62% 56% at 50% 42%, rgba(9, 24, 42, .93), rgba(2, 6, 12, .975) 78%),
-    repeating-linear-gradient(180deg, rgba(0, 226, 228, .03) 0 1px, transparent 1px 4px);
-  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    radial-gradient(64% 60% at 50% 44%, rgba(10, 14, 18, .9), rgba(3, 5, 7, .97) 80%),
+    repeating-linear-gradient(180deg, rgba(223, 230, 226, .022) 0 1px, transparent 1px 4px);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
 
-/* —— 面板 —— */
+/* —— 面板：近全屏（方舟的信息页就是整屏），直角 + 四角刻线 —— */
 .rpn__panel {
   position: relative;
-  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
-  width: min(11.6rem, calc(100vw - .4rem));
-  height: min(6.5rem, calc(100vh - .3rem));
-  background: linear-gradient(180deg, var(--rp-navy-2), var(--rp-navy) 72%);
-  border: 1px solid var(--rp-line);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .7), 0 .12rem .5rem rgba(0, 0, 0, .66), inset 0 0 .5rem rgba(0, 226, 228, .06);
+  display: grid; grid-template-rows: auto minmax(0, 1fr);
+  width: min(18.4rem, calc(100vw - .16rem));
+  height: min(10.2rem, calc(100vh - .16rem));
+  background:
+    linear-gradient(180deg, rgba(22, 27, 33, .97), rgba(8, 11, 14, .985) 62%),
+    var(--rp-bg);
+  border: 1px solid var(--rp-line-2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .85), 0 .08rem .34rem rgba(0, 0, 0, .72);
+  overflow: hidden;
   animation: screen-in var(--t-slow) var(--ease-out);
 }
-.rpn__panel::before {
-  content: ""; position: absolute; inset: .045rem; pointer-events: none;
-  border: 1px solid rgba(255, 184, 13, .12);
+/* 四角刻线：方舟面板的角标，纯装饰 */
+.rpn__panel::before,
+.rpn__panel::after {
+  content: ""; position: absolute; width: .18rem; height: .18rem;
+  border: 1px solid rgba(223, 230, 226, .5); pointer-events: none;
 }
+.rpn__panel::before { left: .05rem; top: .05rem; border-right: 0; border-bottom: 0; }
+.rpn__panel::after { right: .05rem; bottom: .05rem; border-left: 0; border-top: 0; }
 
-/* —— 头部 —— */
-.rpn__head {
-  position: relative; display: flex; align-items: center; gap: .16rem;
-  padding: .1rem .18rem .09rem;
+/* ===== 顶栏：层号块 + 区域名 + 资源条 + 视图切换 + 关闭 ===== */
+.rpn-top {
+  display: flex; align-items: center; gap: .22rem;
+  height: .64rem; padding: 0 .22rem;
   border-bottom: 1px solid var(--rp-line);
-  background: linear-gradient(180deg, rgba(14, 46, 66, .85), rgba(6, 14, 24, 0) 94%);
+  background: linear-gradient(180deg, rgba(32, 38, 45, .92), rgba(14, 18, 22, .5));
 }
-.rpn__headline { display: flex; flex-direction: column; gap: .02rem; min-width: 0; }
-.rpn__micro {
-  font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
-  letter-spacing: .4em; text-indent: .4em; color: rgba(0, 226, 228, .72); white-space: nowrap;
+.rpn-top__id { display: flex; align-items: center; gap: .14rem; min-width: 0; }
+.rpn-top__no {
+  flex: 0 0 auto; width: .46rem; height: .46rem;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: max(calc(.2 * var(--t)), 15px); font-weight: 700;
+  color: #0a0d10; background: #e7ebe8;
 }
-.rpn__micro b { color: var(--rp-gold); font-weight: 600; }
-.rpn__title {
-  margin: 0; font-size: max(calc(.28 * var(--t)), 20px); font-weight: 700;
-  line-height: 1.08; letter-spacing: .12em; text-indent: .12em;
-  background: linear-gradient(96deg, #ffffff, var(--rp-gold-hi) 46%, var(--rp-gold) 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 calc(.1 * var(--t)) rgba(255, 184, 13, .32));
+.rpn-top__names { display: flex; flex-direction: column; gap: .03rem; min-width: 0; }
+.rpn-top__region {
+  font-size: max(calc(.19 * var(--t)), 15px); font-weight: 600;
+  letter-spacing: .06em; line-height: 1.1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.rpn__chips { display: flex; flex-wrap: wrap; align-items: center; gap: .07rem; margin-left: auto; }
-.rpn__chip {
-  padding: .03rem .09rem; border: 1px solid rgba(0, 226, 228, .26);
-  background: rgba(0, 226, 228, .07); color: #bfe8ee;
-  font-size: max(calc(.11 * var(--t)), 10px); letter-spacing: .02em; white-space: nowrap;
+.rpn-top__sub {
+  font-style: normal; font-family: var(--font-mono);
+  font-size: max(calc(.085 * var(--t)), 8px); letter-spacing: .2em;
+  color: var(--rp-dim-2); white-space: nowrap;
 }
-.rpn__chip--layer { color: var(--rp-gold-hi); border-color: rgba(255, 184, 13, .4); background: rgba(255, 184, 13, .08); }
-.rpn__chip--map { color: #bfe8ee; }
-.rpn__chip--map b { color: var(--rp-gold-hi); font-weight: 700; letter-spacing: .04em; }
-.rpn__chip--ap b { color: var(--rp-cyan); font-weight: 700; }
-.rpn__chip--relic { color: var(--rp-gold-hi); }
-.rpn__close {
-  flex: 0 0 auto; width: .42rem; height: .42rem; display: grid; place-items: center;
-  padding: 0; border: 1px solid rgba(0, 226, 228, .32); background: rgba(4, 10, 18, .72);
-  color: var(--rp-dim); cursor: pointer;
-  transition: color var(--t-fast), border-color var(--t-fast);
+.rpn-top__res {
+  display: flex; align-items: center; margin: 0 0 0 auto; padding: 0; list-style: none;
+  height: 100%;
 }
-.rpn__close:hover { color: #fff; border-color: var(--rp-gold); }
-.rpn__close .icon { width: .22rem; height: .22rem; }
+.rpn-res {
+  display: flex; align-items: center; gap: .07rem;
+  height: 100%; padding: 0 .2rem;
+  border-left: 1px solid var(--rp-line);
+}
+.rpn-res__ico { width: .2rem; height: .2rem; object-fit: contain; opacity: .82; }
+.rpn-res__val {
+  font-family: var(--font-mono); font-size: max(calc(.17 * var(--t)), 13px);
+  font-variant-numeric: tabular-nums; color: #f2f5f3; white-space: nowrap;
+}
+.rpn-res__max { color: var(--rp-dim-2); font-size: .82em; }
+.rpn-res__lb {
+  font-size: max(calc(.08 * var(--t)), 8px); letter-spacing: .16em;
+  color: var(--rp-dim-2); white-space: nowrap;
+}
+.rpn-res.is-affix .rpn-res__val { color: var(--rp-gold); font-size: max(calc(.13 * var(--t)), 11px); }
+.rpn-top__act { display: flex; align-items: center; gap: .1rem; flex: 0 0 auto; }
+.rpn-top__btn {
+  padding: .06rem .14rem; font: inherit;
+  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .1em;
+  color: var(--rp-dim); background: transparent;
+  border: 1px solid var(--rp-line-2); cursor: pointer;
+  transition: color .12s ease, border-color .12s ease;
+}
+.rpn-top__btn:hover, .rpn-top__btn.is-on { color: #fff; border-color: rgba(223, 230, 226, .7); }
+.rpn-top__close {
+  width: .36rem; height: .36rem; display: grid; place-items: center; padding: 0;
+  color: var(--rp-dim); background: transparent;
+  border: 1px solid var(--rp-line-2); cursor: pointer;
+  transition: color .12s ease, border-color .12s ease;
+}
+.rpn-top__close:hover { color: #fff; border-color: rgba(223, 230, 226, .8); }
+.rpn-top__close .icon { width: .18rem; height: .18rem; }
 
 /* 入口按钮（screens/game.js 的 .gm__corner 里，沿用 .gm__gear 的尺寸）：展开态金色、战斗中禁用变灰 */
-.gm__gear.gm__rogue[aria-expanded="true"] { color: var(--rp-gold, #ffb80d); border-color: var(--rp-gold, #ffb80d); }
+.gm__gear.gm__rogue[aria-expanded="true"] { color: var(--rp-gold, #ffc75a); border-color: var(--rp-gold, #ffc75a); }
 .gm__gear.gm__rogue:disabled { opacity: .32; cursor: not-allowed; }
 
-/* —— tab —— */
-.rpn__tabs {
-  display: flex; gap: .02rem; padding: 0 .18rem;
-  border-bottom: 1px solid var(--rp-line); background: rgba(4, 10, 18, .55);
+/* ===== 主体：左竖排导航 + 页 ===== */
+.rpn__main { display: grid; grid-template-columns: .72rem minmax(0, 1fr); min-height: 0; }
+.rpn-rail {
+  display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--rp-line);
+  background: rgba(6, 9, 12, .45);
 }
-.rpn__tab {
-  all: unset; cursor: pointer; padding: .08rem .22rem;
-  font-size: max(calc(.15 * var(--t)), 12px); letter-spacing: .16em; text-indent: .08em;
-  color: var(--rp-dim); border-bottom: 2px solid transparent;
-  transition: color var(--t-fast), border-color var(--t-fast);
+.rpn-rail__tab {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: .06rem;
+  padding: .17rem 0; color: var(--rp-dim);
+  border-left: 2px solid transparent;
+  transition: color .12s ease, background .12s ease, border-color .12s ease;
 }
-.rpn__tab:hover { color: #e6f6fb; }
-.rpn__tab.is-on {
-  color: var(--rp-gold-hi); border-bottom-color: var(--rp-gold);
-  text-shadow: 0 0 calc(.1 * var(--t)) rgba(255, 184, 13, .45);
+.rpn-rail__tab:hover { color: #dfe6e2; background: rgba(223, 230, 226, .04); }
+.rpn-rail__tab.is-on {
+  color: #fff; border-left-color: var(--rp-mint);
+  background: linear-gradient(90deg, rgba(78, 216, 175, .12), rgba(78, 216, 175, 0) 88%);
+}
+.rpn-rail__ico { display: grid; place-items: center; }
+.rpn-rail__ico .icon { width: .2rem; height: .2rem; }
+.rpn-rail__lb { font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .14em; }
+
+.rpn__page { display: flex; min-width: 0; min-height: 0; }
+
+/* 页内两栏：左「板」右「详情」 */
+.rpn-page {
+  flex: 1; min-width: 0; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) 3.2rem;
 }
 
-/* —— 主体 —— */
-.rpn__body { flex: 1; min-height: 0; display: flex; padding: .13rem .18rem .15rem; overflow: auto; }
-.rpn-empty { margin: 0; padding: .1rem 0; color: var(--rp-dim); font-size: max(calc(.125 * var(--t)), 11px); }
+/* ===== 板（节点图 / 地图 / 藏品共用外壳） ===== */
+.rpn-board { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rpn-board__head {
+  display: flex; align-items: center; gap: .14rem;
+  padding: .14rem .2rem .1rem;
+  border-bottom: 1px solid var(--rp-line);
+}
+.rpn-board__name {
+  font-size: max(calc(.13 * var(--t)), 11px); font-weight: 600;
+  letter-spacing: .08em; color: #eef2ef; white-space: nowrap;
+}
+.rpn-board__count {
+  font-family: var(--font-mono); font-size: max(calc(.1 * var(--t)), 9px);
+  color: var(--rp-dim-2); letter-spacing: .06em;
+}
+.rpn-empty {
+  margin: 0; padding: .2rem; color: var(--rp-dim);
+  font-size: max(calc(.12 * var(--t)), 10px);
+}
 
-/* ===== 节点页：上「列式节点图」· 下「三选一卡 + 节点详情」 ===== */
-/* 节点图占满正文宽度（官方 IS 的节点图形态），下面一行才是选点卡与详情。
-   图高由内容决定（标题行 + 3 行节点），剩下的高度全给下面一行，卡片不挤。 */
-.rpn-nodes {
-  flex: 1; min-height: 0; display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: .1rem;
+/* 区域进度圆点：一个方块一个区域，未到的只给序号 */
+.rpn-region { display: flex; gap: .05rem; margin: 0; padding: 0; list-style: none; }
+.rpn-region__pip {
+  width: .24rem; height: .24rem; display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: max(calc(.09 * var(--t)), 8px);
+  color: var(--rp-dim-2); border: 1px solid var(--rp-line-2);
 }
-.rpn-nodes__foot {
-  min-height: 0; display: grid;
-  grid-template-columns: 2.9rem minmax(0, 1fr);
-  gap: .16rem;
-}
+.rpn-region__pip.is-done { color: #0a0d10; background: var(--rp-gold); border-color: transparent; }
+.rpn-region__pip.is-current { color: #0a0d10; background: #e7ebe8; border-color: transparent; }
+.rpn-region__pip.is-next { color: var(--rp-cyan); border-color: rgba(127, 240, 255, .6); }
+.rpn-region__pip.is-future { border-style: dashed; }
 
-/* —— 节点图：一层一列，列内纵排该层节点，列间连线 —— */
-.rpn-graph {
-  --rpn-colgap: .1rem; /* 列间距：连线 SVG 的宽度 = 本列宽 + 这个间距，正好画到下一列中心 */
-  min-width: 0; overflow-x: auto; overflow-y: hidden;
-}
-.rpn-graph__bar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: .02rem .1rem;
-  padding-bottom: .05rem; border-bottom: 1px solid rgba(0, 226, 228, .14);
-}
-.rpn-graph__title { font-size: max(calc(.12 * var(--t)), 10px); letter-spacing: .12em; color: var(--rp-gold-hi); }
-.rpn-graph__meta { font-family: var(--font-mono); font-size: max(calc(.09 * var(--t)), 8px); color: var(--rp-dim); }
-.rpn-graph__hint { font-size: max(calc(.085 * var(--t)), 8px); color: var(--rp-dim); opacity: .8; }
-/* 图例：已通过（金实心）/ 当前（金环）/ 候选（青脉冲）/ 未到（灰空心） */
-.rpn-graph__legend {
+/* 图例：右下角细线小标 */
+.rpn-legend {
+  display: flex; align-items: center; gap: .14rem;
   margin: 0 0 0 auto; padding: 0; list-style: none;
-  display: flex; flex-wrap: wrap; gap: .02rem .09rem;
-  font-size: max(calc(.085 * var(--t)), 8px); color: #b6cada;
+  font-size: max(calc(.085 * var(--t)), 8px); color: var(--rp-dim-2);
+  letter-spacing: .04em;
 }
-.rpn-graph__legend li { display: flex; align-items: center; gap: .035rem; }
-.rpn-graph__legend i { flex: 0 0 auto; width: .08rem; height: .08rem; border-radius: 50%; }
-.rpn-graph__legend i.is-past { background: var(--rp-gold); }
-.rpn-graph__legend i.is-now { border: 2px solid var(--rp-gold); box-shadow: 0 0 0 1px rgba(255, 184, 13, .3); }
-.rpn-graph__legend i.is-cand { border: 1px solid var(--rp-cyan); box-shadow: 0 0 0 2px rgba(0, 226, 228, .22); }
-.rpn-graph__legend i.is-todo { border: 1px solid rgba(166, 188, 207, .55); }
+.rpn-legend li { display: flex; align-items: center; gap: .04rem; white-space: nowrap; }
+.rpn-legend i {
+  flex: 0 0 auto; width: .08rem; height: .08rem;
+  border: 1px solid rgba(223, 230, 226, .45);
+}
+.rpn-legend i.is-past { background: var(--rp-gold); border-color: transparent; }
+.rpn-legend i.is-now { background: #e7ebe8; border-color: transparent; }
+.rpn-legend i.is-cand { border-color: rgba(127, 240, 255, .8); background: rgba(127, 240, 255, .2); }
+.rpn-legend i.is-todo { border-style: dashed; }
 
-/* 列宽下限 .42rem：14 列在 11.2rem 正文里排得下；更窄的屏（<720px）横向滚动，不挤成一条线 */
-.rpn-graph__cols {
+/* ===== 节点图：区域 = 一张多列图，列内纵排该层节点，列间细线 ===== */
+.rpn-board__map {
+  --rpn-colgap: .22rem;
+  flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
   display: grid;
-  grid-template-columns: repeat(var(--cols, 14), minmax(.42rem, 1fr));
-  column-gap: var(--rpn-colgap); align-items: stretch;
-  padding-top: .06rem;
+  grid-template-columns: repeat(var(--cols, 4), minmax(.9rem, 1fr));
+  column-gap: var(--rpn-colgap);
+  align-items: stretch;
+  padding: .12rem .2rem .18rem;
 }
-.rpn-graph__col { display: flex; flex-direction: column; gap: .03rem; min-width: 0; }
-.rpn-graph__head { display: flex; align-items: baseline; justify-content: center; gap: .025rem; min-width: 0; }
-.rpn-graph__num { font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px); color: var(--rp-dim); }
-.rpn-graph__lv {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: max(calc(.08 * var(--t)), 7px); color: rgba(166, 188, 207, .72);
+.rpn-col { display: flex; flex-direction: column; min-width: 0; }
+.rpn-col__head {
+  flex: 0 0 auto; text-align: center;
+  font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
+  letter-spacing: .12em; color: var(--rp-dim-2);
+  padding-bottom: .04rem;
 }
-.rpn-graph__col.is-done .rpn-graph__num { color: rgba(255, 184, 13, .78); }
-.rpn-graph__col.is-current .rpn-graph__num { color: var(--rp-gold-hi); font-weight: 700; }
-.rpn-graph__col.is-next .rpn-graph__num { color: var(--rp-cyan); }
-
-/* 节点堆：等高行（`--rows` 由组件给实际节点数）+ 居中；不留行间距，
-   这样第 k 个节点的中心恒等于 (k + .5) / 行数，连线 SVG 用同一条公式才对得上。 */
-.rpn-graph__stack {
+.rpn-col.is-current .rpn-col__head { color: #e7ebe8; }
+.rpn-col.is-next .rpn-col__head { color: var(--rp-cyan); }
+.rpn-col.is-done .rpn-col__head { color: rgba(255, 199, 90, .7); }
+/* 节点堆：等高行（--rows 由组件给实际节点数）+ 居中；第 k 个节点中心 = (k+.5)/行数，
+   连线 SVG 用同一条公式，线才落在节点中心。 */
+.rpn-col__stack {
   position: relative; flex: 1 1 auto;
-  display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(.42rem, 1fr));
+  display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
   align-items: center; justify-items: center;
 }
 
-/* 连线：绝对定位在本列中心 → 下一列中心这一段（左 50%，宽 = 本列宽 + 列间距）。
-   viewBox 0–100 非等比拉伸 + non-scaling-stroke：线宽不随列宽变化。 */
+/* 连线：绝对定位在本列中心 → 下一列中心这一段；viewBox 0–100 非等比拉伸 + non-scaling-stroke */
 .rpn-graph__links {
   position: absolute; left: 50%; top: 0; height: 100%;
   width: calc(100% + var(--rpn-colgap));
   overflow: visible; pointer-events: none; z-index: 0;
 }
-.rpn-graph__wire { fill: none; stroke: rgba(0, 226, 228, .3); stroke-width: 1; }
-.rpn-graph__wire.is-taken { stroke: rgba(0, 226, 228, .26); }
-.rpn-graph__wire.is-taken.is-active {
-  stroke: var(--rp-gold); stroke-width: 1.6;
-  filter: drop-shadow(0 0 .02rem rgba(255, 184, 13, .7));
-}
-.rpn-graph__wire.is-candidate { stroke: rgba(0, 226, 228, .52); stroke-dasharray: 3 3; animation: rpnWire 1.6s linear infinite; }
-.rpn-graph__wire.is-candidate.is-active { stroke: var(--rp-cyan); stroke-width: 1.4; }
-.rpn-graph__wire.is-trunk { stroke: rgba(166, 188, 207, .2); }
-@keyframes rpnWire { to { stroke-dashoffset: -6; } }
+.rpn-graph__wire { fill: none; stroke: rgba(223, 230, 226, .18); stroke-width: 1; }
+.rpn-graph__wire.is-candidate { stroke: rgba(127, 240, 255, .5); stroke-dasharray: 3 3; }
+.rpn-graph__wire.is-taken { stroke: rgba(223, 230, 226, .22); }
+.rpn-graph__wire.is-taken.is-active { stroke: var(--rp-gold); stroke-width: 1.4; }
+.rpn-graph__wire.is-trunk { stroke: rgba(223, 230, 226, .1); }
 
-/* 节点片：小方片 + 类型图标 + 名称，类型色只上在描边/悬停 */
-.rpn-graph__node {
-  --c: #ffffff;
-  position: relative; z-index: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .01rem;
-  width: 100%; max-width: .56rem; height: .42rem; box-sizing: border-box;
-  padding: .01rem .02rem;
-  border: 1px solid rgba(0, 226, 228, .28); border-radius: 3px;
-  background: linear-gradient(180deg, #0b1a2a, #060e18 88%);
-  color: var(--rp-dim); font-size: max(calc(.085 * var(--t)), 8px); line-height: 1.1;
-  overflow: hidden; cursor: pointer; text-align: center;
-  transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast), opacity var(--t-fast);
+/* ===== 节点：官方精灵拼装（底板 165×94 + 图标 101×48 + 标签 206×21） ===== */
+.rpn-node {
+  position: relative; display: block;
+  width: 100%; max-width: 1.5rem; aspect-ratio: 206 / 116;
+  margin: 0 auto; padding: 0; border: 0; background: none;
+  cursor: pointer; z-index: 1;
+  transition: opacity .12s ease;
 }
-.rpn-graph__node:hover, .rpn-graph__node:focus-visible {
-  border-color: var(--c); box-shadow: 0 0 0 1px rgba(255, 255, 255, .18); transform: translateY(-1px);
+.rpn-node__plate,
+.rpn-node__icon,
+.rpn-node__tag,
+.rpn-node__mist,
+.rpn-node__cur { position: absolute; pointer-events: none; }
+.rpn-node__plate { left: 50%; top: 0; height: 81%; width: auto; transform: translateX(-50%); z-index: 1; }
+.rpn-node__icon { left: 50%; top: 19%; height: 41%; width: auto; transform: translateX(-50%); z-index: 2; }
+.rpn-node__tag { left: 0; bottom: 0; width: 100%; height: auto; z-index: 2; }
+/* 当前所在节点：官方雾团垫在底板后面 */
+.rpn-node__mist {
+  left: 50%; top: 46%; width: 210%; height: auto;
+  transform: translate(-50%, -50%); opacity: .6; z-index: 0;
 }
-.rpn-graph__icon {
-  flex: 0 0 auto; height: .16rem; width: auto; max-width: 92%;
-  object-fit: contain; filter: drop-shadow(0 0 .02rem rgba(0, 0, 0, .9));
-}
-.rpn-graph__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; }
-/* 已走过（visited / 当前层之前）：置灰 + 金色描边 + 右上角 ✓ —— 走过的路读得出来，但不抢当前层的亮度 */
-.rpn-graph__node.is-taken {
-  border-color: rgba(255, 184, 13, .45); color: #b9c8d4; opacity: .72;
-  background: linear-gradient(180deg, #0a1622, #060c14 88%);
-}
-.rpn-graph__ok {
-  position: absolute; right: .015rem; top: 0;
-  font-size: max(calc(.1 * var(--t)), 8px); line-height: 1.1;
-  color: var(--rp-gold); text-shadow: 0 0 .02rem rgba(0, 0, 0, .95);
-}
-/* 当前层：金色亮描边 + 光晕（官方「你现在在这里」）—— 只给当前层列里真正在的那个节点 */
-.rpn-graph__col.is-current .rpn-graph__node.is-taken {
-  opacity: 1; color: #fff3d2;
-  border-color: var(--rp-gold-hi);
-  box-shadow: 0 0 0 1px rgba(255, 184, 13, .55), 0 0 .09rem rgba(255, 184, 13, .5);
-}
-/* 当前层里没走到的那两个：压暗但不打勾 */
-.rpn-graph__node.is-sibling { opacity: .42; }
-/* 已过但没走的 / 还没到的：更暗 */
-.rpn-graph__node.is-skipped { opacity: .3; border-color: rgba(166, 188, 207, .2); }
-.rpn-graph__node.is-future { opacity: .5; border-color: rgba(166, 188, 207, .22); }
-/* 下一层候选：青色亮边 + 脉冲（可点 = 真的会改下一回合地图） */
-.rpn-graph__node.is-candidate {
-  border-color: var(--rp-cyan); color: #dffaff;
-  box-shadow: 0 0 0 1px rgba(0, 226, 228, .55), 0 0 .07rem rgba(0, 226, 228, .4);
-  animation: rpnCand 1.8s ease-in-out infinite;
-}
-.rpn-graph__node.is-candidate.is-picked {
-  border-color: var(--rp-gold); color: #ffe6a8;
-  box-shadow: 0 0 0 1px rgba(255, 184, 13, .6), 0 0 .1rem rgba(255, 184, 13, .45);
-  animation: none;
-}
-/* 发不出意图时（战斗中 / 拿不到对局网络）：候选不再装成可点 —— 脉冲停掉、压暗；
-   点它仍然只切详情栏，和「只读」提示同一口径 */
-.rpn-graph__node.is-readonly { animation: none; opacity: .55; cursor: default; border-color: rgba(166, 188, 207, .45); }
-@keyframes rpnCand {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(0, 226, 228, .5), 0 0 .07rem rgba(0, 226, 228, .3); }
-  50% { box-shadow: 0 0 0 2px rgba(0, 226, 228, .26), 0 0 .13rem rgba(0, 226, 228, .62); }
+/* 被点开的节点：官方青色选框 */
+.rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 3; }
+.rpn-node__ok {
+  position: absolute; right: 12%; top: 2%; z-index: 4;
+  font-size: max(calc(.12 * var(--t)), 10px); line-height: 1;
+  color: var(--rp-gold);
 }
 
-/* —— 中：下一层三选一（竖排大卡，宽约 2.9rem / 高约 1.4rem） —— */
-.rpn-pick {
-  min-width: 0; min-height: 0;
-  display: flex; flex-direction: column; gap: .08rem;
-  overflow-y: auto; overflow-x: hidden;
+/* 状态：已过 / 当前层兄弟 / 未到 / 候选 / 已选 */
+.rpn-node.is-taken .rpn-node__plate { opacity: .38; }
+.rpn-node.is-taken .rpn-node__icon { opacity: .6; }
+.rpn-node.is-taken .rpn-node__tag { opacity: .45; }
+.rpn-node.is-sibling { opacity: .4; }
+.rpn-node.is-skipped { opacity: .26; }
+.rpn-node.is-future { opacity: .3; }
+.rpn-col.is-current .rpn-node.is-taken { opacity: 1; }
+.rpn-col.is-current .rpn-node.is-taken .rpn-node__plate { opacity: 1; }
+.rpn-col.is-current .rpn-node.is-taken .rpn-node__icon { opacity: 1; }
+.rpn-col.is-current .rpn-node.is-taken .rpn-node__tag { opacity: .95; }
+.rpn-node.is-candidate .rpn-node__plate { filter: drop-shadow(0 0 .05rem rgba(255, 255, 255, .28)); }
+.rpn-node.is-candidate { animation: rpnNodePulse 2.6s ease-in-out infinite; }
+.rpn-node.is-candidate.is-picked { animation: none; }
+/* 已选为下一层：金色方框（方舟「目标已锁定」的读法） */
+.rpn-node.is-picked::after {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 3%; height: 76%;
+  border: 1px solid rgba(255, 199, 90, .9); z-index: 3; pointer-events: none;
 }
-.rpn-pick__head { display: flex; flex-wrap: wrap; align-items: center; gap: .05rem .08rem; }
-.rpn-pick__head b {
-  font-size: max(calc(.16 * var(--t)), 12px); color: var(--rp-gold-hi); letter-spacing: .06em;
+.rpn-node:hover .rpn-node__icon { transform: translateX(-50%) scale(1.06); }
+.rpn-node.is-readonly { animation: none; cursor: default; }
+.rpn-node.is-readonly .rpn-node__plate { opacity: .5; }
+@keyframes rpnNodePulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.22); }
 }
-.rpn-pick__note {
-  padding: 0 .07rem; font-size: max(calc(.1 * var(--t)), 9px);
-  color: var(--rp-cyan); border: 1px solid rgba(0, 226, 228, .38);
-}
-.rpn-pick__warn { margin-left: auto; font-size: max(calc(.1 * var(--t)), 9px); color: #ffab97; }
-.rpn-pick__hint { margin: 0; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim); }
 
-/* 卡间距收紧（第四轮视觉验收：卡高与卡间隙原来接近 1:1，三张卡像三块孤岛）。
-   卡高改成「内容决定」+ 最小高度：标题 / 效果 / 消耗三行都在卡内，消耗行自带分隔线，不再像卡外游离。 */
-.rpn-cards { display: flex; flex-direction: column; gap: .05rem; }
+/* 未到的占位（不剧透节点身份，也不可点） */
+.rpn-node.is-locked { cursor: default; }
+.rpn-node__q {
+  position: absolute; left: 0; right: 0; top: 0; height: 81%;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: max(calc(.16 * var(--t)), 12px);
+  color: var(--rp-dim-2);
+}
 
-/* 官方节点卡改造（业主 2026-11-04 第三轮）：深蓝黑底 + 金色描边 + 顶部类型色条，
-   不再用类型色整片填充（纯金块读不出信息）；官方 img_node_bkg.png 只作极淡纹理垫底。 */
-.rpn-card {
-  --c: var(--rp-gold);
-  position: relative; flex: 0 0 auto;
-  width: 100%; min-height: 1.16rem; box-sizing: border-box;
-  padding: .1rem .1rem .07rem;
-  display: flex; flex-direction: column; gap: .02rem;
-  border: 1px solid rgba(255, 184, 13, .52);
-  background: linear-gradient(172deg, #0d2236 0%, #071322 58%, #050c16 100%);
-  box-shadow: inset 0 0 .16rem rgba(0, 226, 228, .05);
-  overflow: hidden; cursor: pointer; color: var(--rp-txt); text-align: left;
-  transition: transform var(--t-fast) var(--ease-out), border-color var(--t-fast), box-shadow var(--t-fast);
+/* 候选条兜底（图上找不到候选时） */
+.rpn-fallback {
+  flex: 0 0 auto; display: flex; align-items: center; gap: .1rem;
+  padding: .1rem .2rem; border-top: 1px solid var(--rp-line);
 }
-/* 顶部类型色条 */
-.rpn-card__bar {
-  position: absolute; left: 0; right: 0; top: 0; height: 2px;
-  background: linear-gradient(90deg, var(--c), rgba(255, 184, 13, .2) 92%);
+.rpn-fallback__lb {
+  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .12em; color: var(--rp-dim);
 }
-.rpn-card::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 226, 228, .06), rgba(0, 0, 0, .22) 96%);
+.rpn-fallback__item {
+  font: inherit; font-size: max(calc(.11 * var(--t)), 10px);
+  padding: .05rem .12rem; cursor: pointer; text-align: left;
+  color: var(--rp-txt); background: transparent;
+  border: 1px solid var(--rp-line-2); border-left: 2px solid var(--c, var(--rp-mint));
 }
-.rpn-card__bg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: fill; opacity: .12; mix-blend-mode: screen; pointer-events: none;
+.rpn-fallback__item i {
+  font-style: normal; margin-left: .06rem;
+  color: var(--rp-dim-2); font-size: .9em;
 }
-.rpn-card:hover:not(:disabled) {
-  transform: translateY(-.02rem); border-color: var(--rp-gold-hi);
-  box-shadow: inset 0 0 .16rem rgba(0, 226, 228, .1), 0 0 0 1px rgba(255, 184, 13, .4), 0 .04rem .16rem rgba(0, 0, 0, .6);
-}
-.rpn-card.is-picked {
-  border-color: var(--rp-cyan);
-  box-shadow: inset 0 0 0 1px rgba(0, 226, 228, .55), 0 0 calc(.1 * var(--t)) rgba(0, 226, 228, .35);
-}
-.rpn-card.is-off, .rpn-card:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+.rpn-fallback__item:disabled { opacity: .4; cursor: not-allowed; }
 
-.rpn-card__top { position: relative; z-index: 1; display: flex; align-items: center; gap: .05rem; min-width: 0; }
-/* 官方 _active 图标本身近白：深底上直接亮着用，只加一点描影分开底纹 */
-.rpn-card__icon {
-  flex: 0 0 auto; height: .24rem; width: auto; max-width: 1.05rem;
-  object-fit: contain; object-position: left center;
-  filter: drop-shadow(0 0 .03rem rgba(0, 0, 0, .85));
+/* ===== 右侧详情栏 ===== */
+.rpn-insp {
+  display: flex; flex-direction: column; gap: .1rem;
+  min-width: 0; min-height: 0; overflow-y: auto;
+  padding: .14rem .18rem .16rem;
+  border-left: 1px solid var(--rp-line);
+  background: linear-gradient(180deg, rgba(26, 31, 37, .5), rgba(8, 11, 14, .2));
 }
-.rpn-card__type { font-size: max(calc(.1 * var(--t)), 9px); color: var(--c); letter-spacing: .06em; white-space: nowrap; }
-/* tier 徽章 / 已选标记与消耗、奖励分开：徽章只在顶行右端 */
-.rpn-card__badges { margin-left: auto; display: flex; align-items: center; gap: .04rem; }
-.rpn-card__tier {
-  padding: 0 .05rem; font-family: var(--font-mono);
-  font-size: max(calc(.085 * var(--t)), 8px); line-height: 1.5;
-  color: var(--rp-gold-hi); background: rgba(255, 184, 13, .12); border: 1px solid rgba(255, 184, 13, .45);
+.rpn-insp__head {
+  flex: 0 0 auto;
+  padding: .12rem .12rem .1rem;
+  background: url('/assets/local/roguelike/node/img_zone_desc.png') 0 0 / 100% 100% no-repeat;
 }
-.rpn-card__mark {
-  padding: 0 .05rem; font-size: max(calc(.08 * var(--t)), 8px); line-height: 1.5;
-  color: #04121a; background: var(--rp-cyan);
+.rpn-insp__top { display: flex; align-items: baseline; gap: .08rem; }
+.rpn-insp__kind {
+  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .18em;
+  color: var(--c, var(--rp-mint));
 }
-.rpn-card__name {
-  position: relative; z-index: 1;
-  font-size: max(calc(.155 * var(--t)), 12px); font-weight: 700; letter-spacing: .02em; color: #fff;
+.rpn-insp__cost {
+  margin-left: auto; font-family: var(--font-mono);
+  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-cyan);
+  white-space: nowrap;
+}
+.rpn-insp__name {
+  margin: .05rem 0 0;
+  font-size: max(calc(.2 * var(--t)), 15px); font-weight: 600;
+  letter-spacing: .04em; line-height: 1.2; color: #f4f7f5;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 效果 / 奖励单独一行（标题与效果分行） */
-.rpn-card__effect {
-  position: relative; z-index: 1;
-  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-gold-hi);
+.rpn-insp__meta {
+  margin: .04rem 0 0; font-size: max(calc(.1 * var(--t)), 9px);
+  letter-spacing: .04em; color: var(--rp-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 消耗行：卡内分隔线 + 缩进，读成「这张卡要花多少」，不再像掉在卡外的一行字 */
-.rpn-card__foot {
-  position: relative; z-index: 1; margin-top: auto;
-  display: flex; align-items: baseline; gap: .06rem;
-  padding-top: .04rem; border-top: 1px solid rgba(255, 184, 13, .2);
-  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim);
-}
-.rpn-card__cost { font-family: var(--font-mono); font-weight: 700; color: #bdeff4; }
-.rpn-card__busy {
-  position: absolute; inset: 0; z-index: 2;
-  background: linear-gradient(90deg, transparent, rgba(4, 10, 18, .55), transparent);
-  animation: rpnBusy 900ms linear infinite;
-}
-@keyframes rpnBusy { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-
-/* —— 右：节点详情（当前层 / 下一层预览 / 本局摘要 / 本层奖励·难度） —— */
-/* 详情栏：节点图下方这一行比原来的三列布局宽得多（≈8rem），所以四段改成 2×2 网格，
-   每段 ~4rem（原来一列铺满 8rem 时 dt/dd 会拉得很空）。窄屏在媒体查询里退回单列。 */
-.rpn-detail {
-  min-width: 0; min-height: 0; display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: start; gap: .08rem .2rem;
-  padding-left: .14rem; border-left: 1px solid rgba(0, 226, 228, .12);
-  overflow-y: auto;
-}
-.rpn-detail__sec {
-  display: flex; flex-direction: column; gap: .045rem;
-  padding-bottom: .07rem; border-bottom: 1px solid rgba(0, 226, 228, .1);
-}
-.rpn-detail__sec--last { border-bottom: 0; padding-bottom: 0; }
-.rpn-detail__h {
-  margin: 0; display: flex; align-items: center; gap: .05rem;
-  font-size: max(calc(.11 * var(--t)), 10px); font-weight: 700; letter-spacing: .12em;
-  color: rgba(0, 226, 228, .92);
-}
-.rpn-detail__h::before { content: ""; width: 2px; height: .11rem; background: var(--rp-gold); }
-.rpn-detail__rows { margin: 0; display: flex; flex-direction: column; gap: .035rem; }
-.rpn-detail__rows > div { display: flex; align-items: baseline; justify-content: space-between; gap: .08rem; }
-.rpn-detail__rows dt { flex: 0 0 auto; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim); }
-.rpn-detail__rows dd {
-  margin: 0; min-width: 0; text-align: right;
-  font-size: max(calc(.12 * var(--t)), 10px); color: #e8f6fb;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.rpn-detail__rows dd.is-type { color: var(--c, var(--rp-gold-hi)); font-weight: 600; }
-/* 节点图上点开的那一个（只切详情、不发意图）：类型色左条 + 图标 + 层号/类型/tier + 消耗 */
-.rpn-detail__focus {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .06rem;
-  padding: .045rem .07rem; box-sizing: border-box;
-  border: 1px solid rgba(0, 226, 228, .22); border-left: 2px solid var(--c, var(--rp-cyan));
-  background: rgba(0, 226, 228, .07);
-}
-.rpn-detail__ficon { height: .17rem; width: auto; max-width: .5rem; object-fit: contain; filter: drop-shadow(0 0 .02rem rgba(0, 0, 0, .8)); }
-.rpn-detail__fbody { display: flex; flex-direction: column; gap: .01rem; min-width: 0; }
-.rpn-detail__fbody b {
-  font-size: max(calc(.12 * var(--t)), 10px); color: #eef9fd;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.rpn-detail__fmeta {
-  font-style: normal; font-size: max(calc(.09 * var(--t)), 8px); color: var(--rp-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.rpn-detail__fcost { font-family: var(--font-mono); font-size: max(calc(.09 * var(--t)), 8px); color: #bdeff4; white-space: nowrap; }
-
-.rpn-preview { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .03rem; }
-.rpn-preview__row {
-  display: grid; grid-template-columns: .1rem minmax(0, 1fr) auto;
-  align-items: center; gap: .06rem; padding: .03rem .05rem;
-  border-left: 2px solid transparent;
-  font-size: max(calc(.11 * var(--t)), 10px); color: var(--rp-txt);
-}
-.rpn-preview__row.is-picked { border-left-color: var(--rp-cyan); background: rgba(0, 226, 228, .09); }
-.rpn-preview__dot {
-  width: .09rem; height: .09rem; border-radius: 50%;
-  background: var(--c, var(--rp-gold)); box-shadow: 0 0 .05rem var(--c, var(--rp-gold));
-}
-.rpn-preview__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 预览右列：主题 + tier（`RO5 · T1`），不再拼 `rogue_ro5_1-*` 这种资源前缀 */
-.rpn-preview__map {
-  font-family: var(--font-mono); font-size: max(calc(.095 * var(--t)), 9px);
-  color: var(--rp-gold-hi); white-space: nowrap;
-}
-.rpn-detail__note { margin: 0; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim); }
-.rpn-detail__stats { display: flex; flex-wrap: wrap; gap: .04rem .07rem; font-size: max(calc(.105 * var(--t)), 9px); }
-.rpn-detail__stats span {
-  display: inline-flex; align-items: center; gap: .03rem;
-  padding: .02rem .06rem; color: #dbf2f7;
-  border: 1px solid rgba(0, 226, 228, .22); background: rgba(0, 226, 228, .06);
-}
-.rpn-detail__stats b { color: var(--rp-cyan); font-weight: 700; }
-.rpn-detail__reward {
-  display: flex; flex-wrap: wrap; align-items: center; gap: .04rem .08rem;
-  font-size: max(calc(.105 * var(--t)), 9px);
-}
-.rpn-detail__diff { padding: 0 .05rem; font-family: var(--font-mono); font-weight: 700; color: #1a1204; background: var(--rp-gold); }
-.rpn-detail__rew { color: var(--rp-gold-hi); }
-.rpn-detail__cost { font-family: var(--font-mono); color: #bdeff4; }
-.rpn-detail__meter {
-  position: relative; height: .06rem;
-  background: rgba(255, 255, 255, .08); border: 1px solid rgba(0, 226, 228, .2);
-}
-.rpn-detail__meter i { display: block; height: 100%; background: linear-gradient(90deg, var(--rp-cyan), var(--rp-gold)); }
-
-/* ===== 地图页：地图占正文 64% 宽，图例横排在地图正下方，右侧是「关卡信息」信息卡 ===== */
-.rpn-map {
-  flex: 1; min-height: 0; display: grid;
-  grid-template-columns: minmax(0, 64%) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-areas: "stage side" "legend side";
-  gap: .1rem .18rem;
-}
-.rpn-map__stage {
-  grid-area: stage;
-  position: relative; min-width: 0; min-height: 0; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
+/* 缩略图：1px 细框 + 深底（方舟的战场预览框） */
+.rpn-insp__map {
+  flex: 0 0 auto; position: relative;
+  display: grid; place-items: center;
   padding: .06rem; box-sizing: border-box;
-  border: 1px solid rgba(0, 226, 228, .18);
-  background: radial-gradient(62% 62% at 50% 40%, rgba(10, 34, 52, .92), rgba(3, 8, 14, .97));
+  border: 1px solid var(--rp-line-2);
+  background: radial-gradient(60% 60% at 50% 42%, rgba(14, 20, 26, .9), rgba(4, 6, 8, .95));
 }
-.rpn-map__bg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; opacity: .26; pointer-events: none;
-  filter: saturate(.8);
+.rpn-insp__map .rpn-map__svg { width: 100%; height: auto; max-height: 1.9rem; display: block; }
+.rpn-insp__none { margin: 0; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim-2); }
+.rpn-insp__note {
+  margin: 0; font-size: max(calc(.095 * var(--t)), 8px);
+  line-height: 1.5; letter-spacing: .02em; color: var(--rp-dim-2);
 }
-/* 缩略图铺满这一列（60%+ 正文宽）：box 就是这一列的内容框，`meet` 只按比例居中内缩，
-   元素自身不再留 85px 的横向空槽 */
-.rpn-map__svg { position: relative; display: block; width: 100%; height: 100%; }
-.rpn-map__label {
-  position: absolute; left: .1rem; bottom: .07rem;
-  font-size: max(calc(.11 * var(--t)), 10px); color: #dff4fa;
-  text-shadow: 0 1px .04rem rgba(0, 0, 0, .9);
+.rpn-insp__kv { margin: 0; display: flex; flex-direction: column; }
+.rpn-insp__kv > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: .1rem;
+  padding: .05rem 0; border-bottom: 1px solid var(--rp-line);
 }
-/* 右栏信息卡（第四轮视觉验收：原来 190×305 只挂 4 行键值、ink 1.5%，上下两段全空）。
-   结构：标题 / 关卡·回合·尺寸·主题 四行 / 6 格地图统计（吃满剩余高度）/ 2–3 行规则说明，
-   卡片自身带描边与底色，统计格按行等高撑开，右栏不留大片纯空。 */
-.rpn-map__side { grid-area: side; min-width: 0; min-height: 0; display: flex; }
-.rpn-map__card {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: .09rem;
-  padding: .12rem .12rem .11rem; box-sizing: border-box;
-  border: 1px solid rgba(0, 226, 228, .2);
-  background: linear-gradient(180deg, rgba(12, 34, 52, .92), rgba(5, 12, 20, .92));
-  box-shadow: inset 0 0 .3rem rgba(0, 226, 228, .05);
-}
-.rpn-map__h {
-  flex: 0 0 auto; margin: 0; display: flex; align-items: center; gap: .06rem;
-  padding-bottom: .05rem; border-bottom: 1px solid rgba(255, 184, 13, .28);
-  font-size: max(calc(.13 * var(--t)), 11px); font-weight: 700; letter-spacing: .1em;
-  color: var(--rp-gold-hi);
-}
-.rpn-map__h::before { content: ""; width: 2px; height: .13rem; background: var(--rp-gold); }
-.rpn-map__rows { flex: 0 0 auto; margin: 0; display: flex; flex-direction: column; gap: .045rem; }
-.rpn-map__rows > div {
-  display: flex; align-items: baseline; justify-content: space-between; gap: .08rem;
-  padding-bottom: .035rem; border-bottom: 1px dashed rgba(0, 226, 228, .13);
-}
-.rpn-map__rows > div:last-child { border-bottom: 0; padding-bottom: 0; }
-.rpn-map__rows dt { flex: 0 0 auto; font-size: max(calc(.11 * var(--t)), 10px); color: var(--rp-dim); }
-.rpn-map__rows dd {
+.rpn-insp__kv dt { flex: 0 0 auto; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim-2); }
+.rpn-insp__kv dd {
   margin: 0; min-width: 0; text-align: right;
-  font-size: max(calc(.125 * var(--t)), 10px); font-weight: 600; color: #e8f6fb;
+  font-size: max(calc(.11 * var(--t)), 10px); color: #eef2ef;
+  font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 地图统计：2 列 × 3 行，行高按剩余空间均分（吃满右栏，数字大、标签小） */
-.rpn-map__tiles {
-  flex: 1 1 auto; min-height: 0;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(.32rem, 1fr); gap: .06rem; align-content: stretch;
+.rpn-insp__tiles {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .06rem;
 }
-.rpn-map__tile {
-  display: flex; flex-direction: column; justify-content: center; gap: .01rem; min-width: 0;
-  padding: .04rem .07rem; box-sizing: border-box;
-  border: 1px solid rgba(0, 226, 228, .16); border-left: 2px solid var(--tc, rgba(255, 255, 255, .4));
-  background: rgba(0, 226, 228, .05);
-  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim);
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+.rpn-insp__tile {
+  display: flex; align-items: center; gap: .05rem; min-width: 0;
+  padding: .06rem .08rem;
+  border: 1px solid var(--rp-line); border-left: 2px solid var(--tc, var(--rp-line-2));
+  font-size: max(calc(.095 * var(--t)), 8px); color: var(--rp-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.rpn-map__tile b { font-size: max(calc(.17 * var(--t)), 13px); line-height: 1.1; color: #eaf7fb; font-weight: 700; }
-/* 左侧色条与缩略图上色同口径（地面 / 高台 / 禁入 / 其他 / 两种部署点） */
-.rpn-map__tile.is-ground { --tc: #4f9d6f; }
-.rpn-map__tile.is-high { --tc: #b9cce0; }
-.rpn-map__tile.is-forbidden { --tc: #ce8a8c; }
-.rpn-map__tile.is-blocked { --tc: #6a7a88; }
-.rpn-map__tile.is-melee { --tc: #ffc75a; }
-.rpn-map__tile.is-ranged { --tc: #5ad1a0; }
-.rpn-map__note {
-  flex: 0 0 auto; margin: 0; padding-top: .06rem; border-top: 1px dashed rgba(0, 226, 228, .13);
-  font-size: max(calc(.1 * var(--t)), 9px); line-height: 1.55; color: var(--rp-dim);
+.rpn-insp__tile b {
+  font-family: var(--font-mono); font-size: max(calc(.15 * var(--t)), 12px);
+  color: #f2f5f3; font-weight: 600;
 }
-.rpn-legend {
-  grid-area: legend; margin: 0; padding: 0; list-style: none;
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .04rem .12rem;
-  font-size: max(calc(.1 * var(--t)), 9px); color: #b6cada;
+.rpn-insp__tile .icon { width: .13rem; height: .13rem; }
+.rpn-insp__tile.is-ground { --tc: #4f9d6f; }
+.rpn-insp__tile.is-high { --tc: #b9cce0; }
+.rpn-insp__tile.is-forbidden { --tc: #ce8a8c; }
+.rpn-insp__tile.is-blocked { --tc: #6a7a88; }
+.rpn-insp__tile.is-melee { --tc: #ffc75a; }
+.rpn-insp__tile.is-ranged { --tc: #5ad1a0; }
+
+/* 底部动作区：固定在详情栏底（方舟的确认按钮在右下角） */
+.rpn-insp__foot {
+  margin-top: auto; padding-top: .1rem;
+  display: flex; flex-direction: column; gap: .06rem;
+  border-top: 1px solid var(--rp-line);
 }
-.rpn-legend li { display: flex; align-items: center; gap: .05rem; min-width: 0; }
-.rpn-legend i {
-  flex: 0 0 auto; width: .11rem; height: .11rem; border: 1px solid rgba(255, 255, 255, .22);
+.rpn-insp__hint, .rpn-insp__warn {
+  margin: 0; font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4;
+  color: var(--rp-dim-2);
 }
-.rpn-legend i.is-high { border-color: rgba(0, 226, 228, .8); }
-/* 禁入图例同步带斜纹（和缩略图里的 pattern 一致） */
-.rpn-legend i.is-forbidden {
+.rpn-insp__warn { color: #ffab97; }
+.rpn-insp__done {
+  font-size: max(calc(.11 * var(--t)), 10px); letter-spacing: .06em;
+  color: var(--rp-gold);
+}
+.rpn-confirm {
+  width: 100%; padding: .1rem .12rem;
+  font: inherit; font-size: max(calc(.13 * var(--t)), 11px); font-weight: 600;
+  letter-spacing: .1em; color: #06110d;
+  background: var(--rp-mint); border: 0; cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - .1rem) 0, 100% .1rem, 100% 100%, .1rem 100%, 0 calc(100% - .1rem));
+  transition: filter .12s ease;
+}
+.rpn-confirm:hover:not(:disabled) { filter: brightness(1.1); }
+.rpn-confirm:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ===== 地图页：左侧战场 + 图例，右侧关卡信息 ===== */
+.rpn-stage {
+  position: relative; flex: 1; min-height: 0; margin: .14rem .2rem .06rem;
+  display: flex; align-items: center; justify-content: center;
+  padding: .08rem; box-sizing: border-box;
+  border: 1px solid var(--rp-line-2);
+  background: radial-gradient(62% 62% at 50% 40%, rgba(12, 18, 24, .94), rgba(3, 5, 8, .97));
+  overflow: hidden;
+}
+.rpn-stage__bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: .22; pointer-events: none; filter: saturate(.8);
+}
+.rpn-map__svg { position: relative; display: block; width: 100%; height: 100%; }
+.rpn-stage__label {
+  position: absolute; left: .12rem; bottom: .1rem;
+  font-family: var(--font-mono); font-size: max(calc(.1 * var(--t)), 9px);
+  letter-spacing: .08em; color: #dff4fa;
+}
+.rpn-legend--map {
+  flex: 0 0 auto; margin: 0 .2rem .14rem; padding-top: .1rem;
+  border-top: 1px solid var(--rp-line);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .06rem .12rem;
+}
+.rpn-legend--map i { width: .11rem; height: .11rem; }
+.rpn-legend--map i.is-forbidden {
   background-image: repeating-linear-gradient(45deg, rgba(206, 138, 140, .55) 0 1px, transparent 1px 3px);
 }
-.rpn-legend i.is-dot { border-radius: 50%; }
+.rpn-legend--map i.is-dot { border-radius: 50%; }
 
 /* ===== 藏品页 ===== */
-.rpn-relics { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: .1rem; }
-.rpn-relics__head {
-  display: flex; flex-wrap: wrap; align-items: center; gap: .1rem;
-  padding-bottom: .07rem; border-bottom: 1px solid rgba(0, 226, 228, .16);
-}
-.rpn-relics__head b { font-size: max(calc(.16 * var(--t)), 12px); color: var(--rp-gold-hi); letter-spacing: .04em; }
-.rpn-relics__affix { font-size: max(calc(.11 * var(--t)), 10px); color: #bfe8ee; }
-.rpn-relics__badge {
-  display: inline-flex; align-items: center; gap: .04rem;
-  padding: .02rem .08rem; font-size: max(calc(.1 * var(--t)), 9px);
-  color: #ffe6a8; background: rgba(255, 184, 13, .12); border: 1px solid rgba(255, 184, 13, .4);
-}
-.rpn-relics__badge .icon { width: .14rem; height: .14rem; }
-.rpn-relics__list {
-  margin: 0; padding: 0 0 .04rem; list-style: none;
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(3.3rem, 1fr)); gap: .08rem;
-  align-content: start;
+.rpn-relics {
+  flex: 1; min-height: 0; overflow-y: auto;
+  margin: 0; padding: .14rem .2rem .18rem; list-style: none;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(2.4rem, 1fr));
+  gap: .1rem; align-content: start;
 }
 .rpn-relic {
-  display: flex; align-items: center; gap: .08rem; min-width: 0;
-  padding: .07rem .09rem;
-  background: linear-gradient(180deg, rgba(12, 34, 52, .9), rgba(5, 12, 20, .9));
-  border: 1px solid rgba(0, 226, 228, .22); border-left: 2px solid var(--rp-gold);
+  display: flex; align-items: center; gap: .1rem; min-width: 0;
+  padding: .1rem .12rem;
+  border: 1px solid var(--rp-line);
+  border-left: 2px solid var(--rp-gold);
+  background: rgba(223, 230, 226, .025);
 }
-.rpn-relic.is-negative { border-left-color: #e2705a; color: #f0c3b6; }
+.rpn-relic.is-negative { border-left-color: #e2705a; }
 .rpn-relic__icon {
-  flex: 0 0 auto; width: .34rem; height: .34rem; display: grid; place-items: center;
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+  flex: 0 0 auto; width: .38rem; height: .38rem; display: grid; place-items: center;
+  border: 1px solid var(--rp-line);
 }
 .rpn-relic__icon img { width: 100%; height: 100%; object-fit: contain; }
 .rpn-relic__icon .icon { width: .2rem; height: .2rem; color: var(--rp-dim); }
-.rpn-relic__body { display: flex; flex-direction: column; gap: .01rem; min-width: 0; }
+.rpn-relic__body { display: flex; flex-direction: column; gap: .02rem; min-width: 0; }
 .rpn-relic__body b {
-  font-size: max(calc(.13 * var(--t)), 11px); color: #eef9fd;
+  font-size: max(calc(.12 * var(--t)), 10px); font-weight: 600; color: #eef2ef;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rpn-relic__desc {
-  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim); line-height: 1.35;
+  font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4; color: var(--rp-dim);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .rpn-relic__tier {
   margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono);
-  font-size: max(calc(.09 * var(--t)), 8px); color: var(--rp-gold-hi);
+  font-size: max(calc(.09 * var(--t)), 8px); color: var(--rp-gold);
 }
 .rpn-relic__na {
-  flex: 0 0 auto; padding: 0 .05rem; font-size: max(calc(.09 * var(--t)), 8px);
-  color: var(--rp-dim); border: 1px solid rgba(255, 255, 255, .22);
+  flex: 0 0 auto; padding: 0 .05rem;
+  font-size: max(calc(.085 * var(--t)), 8px); color: var(--rp-dim-2);
+  border: 1px solid var(--rp-line-2);
 }
+.rpn-relic__swap {
+  flex: 0 0 auto; font: inherit; font-size: max(calc(.09 * var(--t)), 8px);
+  padding: .02rem .08rem; cursor: pointer;
+  color: var(--rp-cyan); background: transparent;
+  border: 1px solid rgba(127, 240, 255, .5);
+}
+.rpn-relic__swap:disabled { opacity: .4; cursor: not-allowed; }
 
-/* 窄屏：节点图横向滚动（14 列不挤压），下面「三选一 / 详情」改成上下叠；地图的信息卡落到图例下方（不再整块隐藏） */
-@media (max-width: 720px) {
-  .rpn-nodes { grid-template-rows: auto minmax(0, 1fr); }
-  .rpn-nodes__foot { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .rpn-graph__cols { grid-template-columns: repeat(var(--cols, 14), .5rem); }
-  .rpn-detail { grid-template-columns: minmax(0, 1fr); border-left: 0; padding-left: 0; }
-  .rpn-map {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto auto;
-    grid-template-areas: "stage" "legend" "side";
-  }
-  .rpn-map__card { flex: 0 0 auto; }
-  .rpn-map__tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* ===== 窄屏：详情栏落到下方，节点图横向滚动 ===== */
+@media (max-width: 900px) {
+  .rpn-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .rpn-insp { border-left: 0; border-top: 1px solid var(--rp-line); max-height: 42%; }
+  .rpn-board__map { grid-template-columns: repeat(var(--cols, 4), .9rem); }
+  .rpn-top__sub { display: none; }
+  .rpn-res { padding: 0 .1rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rpn-card { transition: none; }
-  .rpn-card__busy { animation: none; }
-  .rpn-graph__node { transition: none; }
-  .rpn-graph__node.is-candidate { animation: none; }
-  .rpn-graph__wire.is-candidate { animation: none; }
+  .rpn__panel { animation: none; }
+  .rpn-node.is-candidate { animation: none; }
 }
-
-/* ---- 节点详情里的地图预览 + 确认前往（2026-11-08）----
-   以前点节点就直接出发，选之前看不到这张图长什么样、怪从哪来。现在候选与详情分两步：
-   点 = 只看（图 + 出怪路线），「前往此节点」才提交。
-   ⚠ 这里一律用 px：应用把根字号设到 75px，rem 在这块面板里会把按钮放大成方块。 */
-.rpn-detail__map {
-  margin: 6px 0 2px;
-  padding: 5px;
-  border: 1px solid rgba(0, 226, 228, .18);
-  border-radius: 5px;
-  background: rgba(6, 12, 20, .55);
-}
-.rpn-detail__map .rpn-map__svg { width: 100%; height: auto; max-height: 120px; display: block; }
-.rpn-detail__mapnote {
-  margin: 5px 0 0;
-  font-size: 11px;
-  line-height: 1.25;
-  letter-spacing: .02em;
-  color: rgba(223, 230, 226, .58);
-}
-.rpn-detail__act { margin: 6px 0 2px; display: flex; justify-content: flex-end; }
-.rpn-confirm {
-  padding: 5px 13px;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1.3;
-  color: #06121a;
-  background: linear-gradient(180deg, #6ff0d8, #2fbfa4);
-  border: 0;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: filter .12s ease;
-  white-space: nowrap;
-}
-.rpn-confirm:hover:not(:disabled) { filter: brightness(1.08); }
-.rpn-confirm:disabled { opacity: .45; cursor: not-allowed; }
-.rpn-detail__actdone { font-size: 11px; color: #ffc75a; letter-spacing: .02em; }
-
-/* ---- 聚焦视图（2026-11-08）：区域进度 + 「本层 → 下一层」两行 ----
-   官方一局是「区域 → 关卡图」，不是一次摊开 14 层；这里默认聚焦，右上角可切「全部层」。
-   同样一律 px（根字号 75px，rem 会放大）。 */
-.rpn-focus { display: flex; flex-direction: column; gap: 9px; padding: 7px 3px; min-height: 0; overflow-y: auto; }
-.rpn-focus__pips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
-.rpn-focus__pip {
-  width: 19px; height: 19px; display: grid; place-items: center;
-  font-size: 10px; line-height: 1; font-family: var(--font-mono);
-  color: rgba(166, 188, 207, .72); border: 1px solid rgba(166, 188, 207, .35); border-radius: 50%;
-}
-.rpn-focus__pip.is-done { color: #06121a; background: #ffb80d; border-color: transparent; }
-.rpn-focus__pip.is-current { color: #ffd76a; border-color: #ffd76a; box-shadow: 0 0 0 2px rgba(255, 184, 13, .22); }
-.rpn-focus__pip.is-next { color: #7ff0ff; border-color: rgba(0, 226, 228, .7); }
-.rpn-focus__row { display: flex; align-items: flex-start; gap: 9px; }
-.rpn-focus__row .rpn-graph__node { width: 100%; max-width: none; }
-.rpn-focus__label { flex: 0 0 auto; font-size: 10px; letter-spacing: .08em; color: rgba(223, 230, 226, .6); }
-.rpn-focus__nodes { display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; }
-.rpn-focus__none { font-size: 11px; font-style: normal; color: rgba(223, 230, 226, .45); }
-.rpn-focus__arrow { height: 11px; margin-left: 40px; border-left: 1px dashed rgba(0, 226, 228, .45); }
-.rpn-graph__view {
-  margin-left: auto; padding: 3px 9px; font: inherit; font-size: 10px;
-  color: rgba(223, 230, 226, .75); background: transparent;
-  border: 1px solid rgba(0, 226, 228, .3); border-radius: 3px; cursor: pointer;
-}
-.rpn-graph__view:hover { border-color: rgba(0, 226, 228, .65); color: #dfe6e2; }
-
-/* ---- 区域图（2026-11-09）：当前区域的若干列拼成一张图（官方「区域 → 关卡图」口径）---- */
-.rpn-focus__map { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 5px; align-items: start; }
-.rpn-focus__map .rpn-graph__col { min-width: 0; }
-.rpn-focus__map .rpn-graph__node { width: 100%; max-width: none; }
-.rpn-focus__note { margin-left: 7px; align-self: center; list-style: none; font-size: 10px; letter-spacing: .04em; color: rgba(223, 230, 226, .58); }
-/* 未到列的占位（2026-11-09）：不剧透节点身份，也不可点 */
-.rpn-graph__node.is-locked {
-  display: grid; place-items: center; min-height: 18px;
-  font-size: 11px; color: rgba(166, 188, 207, .5);
-  border: 1px dashed rgba(166, 188, 207, .3); border-radius: 3px; cursor: default;
-}
-
-/* ============================================================================
-   方舟式节点面板（2026-11-09）：
-   官方那种「小图标方块 + 1px 细线 + 表格行 + 单色底」——
-   去掉卡面背景图、发光、圆角与渐变，信息改成一行一行读。
-   ============================================================================ */
-
-/* 1) 全局去装饰（只在这个面板内） */
-.rpn, .rpn * { text-shadow: none !important; filter: none !important; }
-.rpn-card__bg, .rpn-card { display: none !important; }           /* 旧卡面彻底退休 */
-.rpn-graph__node, .rpn-confirm, .rpn-focus__pip { border-radius: 0 !important; box-shadow: none !important; }
-.rpn-graph__node {
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
-  background: rgba(10, 16, 15, .85) !important;
-  border: 1px solid rgba(223, 230, 226, .18) !important;
-}
-.rpn-graph__node.is-candidate, .rpn-graph__node.is-picked {
-  border-color: #4ed8af !important; background: rgba(78, 216, 175, .1) !important;
-}
-.rpn-graph__node.is-taken { border-color: rgba(255, 199, 90, .7) !important; color: #ffc75a !important; }
-.rpn-graph__node.is-future, .rpn-graph__node.is-locked {
-  border-style: dashed !important; color: rgba(223, 230, 226, .38) !important;
-}
-
-/* 2) 候选：细线表格行（方舟的列表密度） */
-.rpn-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-width: 0; }
-.rpn-rows > li { margin: 0; min-width: 0; }
-.rpn-row {
-  position: relative; width: 100%; min-width: 0;
-  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto auto;
-  align-items: center; gap: 9px;
-  padding: 6px 8px; font: inherit; font-size: 12px; line-height: 1.3; color: #dfe6e2;
-  background: transparent; border: 0; border-bottom: 1px solid rgba(223, 230, 226, .12);
-  border-left: 2px solid transparent; text-align: left; cursor: pointer;
-  transition: background .1s ease, border-color .1s ease;
-}
-.rpn-row:hover:not(:disabled) { background: rgba(78, 216, 175, .07); border-left-color: #4ed8af; }
-.rpn-row.is-focus { border-left-color: #4ed8af; background: rgba(78, 216, 175, .05); }
-.rpn-row.is-picked { color: #ffc75a; }
-.rpn-row:disabled, .rpn-row.is-off { opacity: .42; cursor: not-allowed; }
-.rpn-row__icon { width: 16px; height: 16px; display: block; }
-.rpn-row__name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rpn-row__meta { font-size: 11px; color: rgba(223, 230, 226, .55); white-space: nowrap; }
-.rpn-row__reward { font-size: 11px; color: rgba(223, 230, 226, .74); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.rpn-row__cost { font-size: 11px; color: #7ff0ff; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.rpn-row__mark { font-size: 11px; color: #ffc75a; }
-.rpn-row__busy { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(78,216,175,.16), transparent); animation: rpn-row-scan 1s linear infinite; }
-@keyframes rpn-row-scan { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-
-/* 3) 详情：去掉卡片块，改成细线定义列表（方舟的信息页） */
-.rpn-detail__sec { border: 0 !important; background: transparent !important; padding: 0 !important; }
-.rpn-detail__h { font-size: 11px !important; letter-spacing: .1em; color: rgba(223, 230, 226, .5) !important; margin: 0 0 3px !important; }
-.rpn-detail__rows > div { border-bottom: 1px solid rgba(223, 230, 226, .1); padding: 3px 0; }
-.rpn-detail__focus { border: 0 !important; border-left: 2px solid var(--c, #4ed8af) !important; background: transparent !important; padding: 2px 0 2px 7px !important; }
-
-/* 节点面板收紧（2026-11-09 二版）：候选行别把名字挤掉，节点方块压成小图标格 */
-.rpn-row { grid-template-columns: 16px minmax(52px, 1fr) auto auto !important; gap: 6px !important; padding: 5px 6px !important; }
-.rpn-row__meta, .rpn-row__cost, .rpn-row__mark { font-size: 10px !important; }
-.rpn-row__reward { display: none; }         /* 奖励并到 title/详情里，行内只留类型·阶级与消耗 */
-.rpn-row__name { font-size: 12px; }
-.rpn-graph__node { min-height: 26px !important; padding: 2px 5px !important; font-size: 11px !important; }
-.rpn-graph__icon { width: 12px !important; height: 12px !important; }
-.rpn-graph__stack { gap: 4px !important; }

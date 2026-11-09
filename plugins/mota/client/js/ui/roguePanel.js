@@ -1,27 +1,28 @@
-// plugins/mota/client/js/ui/roguePanel.js — 肉鸽「集成战略」全屏叠加面板（2026-11-04 重做）。
+// plugins/mota/client/js/ui/roguePanel.js — 肉鸽「集成战略」全屏叠加面板。
 //
-// 形态（业主 2026-11-04「节点和地图改成官方风格叠加面板，近似 1:1，不做局内悬浮窗」）：
+// 形态（业主 2026-11-04「节点和地图改成官方风格叠加面板，近似 1:1，不做局内悬浮窗」；
+//       2026-11-09 三版「照搬方舟的样式」⇒ 版式重搭为方舟信息页）：
 //   · 一层面板 + 半透明遮罩，**不是**局内常驻浮窗；只在非战斗阶段由左上角的「肉鸽」按钮打开，
 //     战斗 / 结算由 screens/game.js 关闭并禁用入口（这里再按 `blocked` 兜一层，防相位切换的那一帧）。
-//   · 三页 tab，官方配色（深蓝黑底 + 金色标题 + 青色描边）：
-//       节点 —— 上「列式节点图」（官方 IS 形态：横轴 14 层各一列，列内纵排该层 3 个节点，层间画连线；
-//               当前层高亮描边、已走节点打勾并置为金色、下一层候选青色脉冲；点候选节点即选中，点其它节点
-//               只切右下详情。连线规则见 nodeGraph() 的注释），下「下一层三选一」大卡（深蓝黑底 + 金色描边
-//               + 顶部类型色条，官方 img_*_active.png 图标）+「节点详情」（当前层 / 类型 / 地图、下一层
-//               预览的 tier + 地图前缀、本局 AP·藏品·词缀、本层奖励 / 难度）；
-//       地图 —— buildMinimapModel(stage) 的当前战场缩略图（按 rogueFrame 裁剪），主题官方底图垫底，
-//               图例横排在地图正下方（3 列 × 2 行），右侧是「关卡信息」信息卡：关卡 / 回合 / 尺寸 / 主题
-//               + 地图统计（地面 / 高台 / 禁入 / 其他格数，近战 / 远程部署点数）+ 2–3 行规则说明（填满右栏）；
-//       藏品 —— 本局藏品列表 / 词缀 / 紧急作战预告。
+//   · 版式四块（方舟信息页）：顶栏（层号块 + 区域名 + AP / 藏品 / 回合资源条 + 视图切换 + 关闭）／
+//     左竖排导航（节点 / 地图 / 藏品）／中间「当前区域的一整张多列节点图」／右侧详情栏（选中节点 +
+//     战场缩略图 + 出怪路线 + 前往此节点）。
+//   · 节点全部由官方精灵拼：底板 `img_node_bkg(.selectable).png` + 图标 `img_*_active.png` +
+//     英文标签 `img_tag_*.png`（官方中文客户端在图上显示的就是这些英文小标）；当前所在节点背后垫
+//     `img_focus.png` 雾团，被点开的节点套 `img_cursor.png` 选框。中文名在右侧详情栏与 aria-label。
+//   · 连线仍是内联 SVG（几何由 nodeGraph() 给：行号 → 百分比），只改细线与配色。
+//     区域视图只画区内连线，全部层视图画全部 14 列。
+//   · 地图页 = 当前战场缩略图（buildMinimapModel 裁剪）+ 出怪路线 + 右侧关卡信息 / 地图统计；
+//     藏品页 = 藏品格 + 右侧词缀与预告。
 //
 // 数据（全部只读，服务端已组装好）：
 //   · `pub.rogue.nodes`（server/match/match/views.js → rogue-core 的 rogueNodeState）：14 层 × 3 候选；
 //   · `pub.rogue` 的 affix / emergency / nextEventRound / nextEmergencyRound；
 //   · `priv.relicCards`（player/views.js）—— 名称/品阶/正负/是否实装；`pub.rogue.relics` 作后备（只有 id 时）；
 //   · `stages` 数据文件（`data.lookup('stages', stageId)`，与 rogueMapDock 同一读法）。
-// 动作：节点卡的点击**不在这里发** —— 组件把意图交给 game.js 注入的 `onPickNode(intent, payload)`，
+// 动作：节点/按钮的点击**不在这里发** —— 组件把意图交给 game.js 注入的 `onPickNode(intent, payload)`，
 //       对局页用 `net.request('g.rogueNode', { nodeId })`（与 g.roguePick / g.hex 同一条通道）。拿不到回调时
-//       卡片禁用并明说「只读」，不编造网络接口。
+//       按钮禁用并明说「只读」，不编造网络接口。
 //
 // ⚠ 界面**不得**出现 `rogue_ro...` 原始资源 ID（2026-11-04 第四轮视觉验收）：`data/stages.json` 里肉鸽图的
 //   `name` 就是 id 本身，直接渲染 `stage.name` 等于把资源路径摆给玩家。凡是要写关卡名的地方一律走 `mapLabel()`
@@ -77,6 +78,45 @@ const TYPE_ICON = {
   incident: 'img_incident_active.png',
   wish: 'img_treasure_active.png',
 };
+
+/**
+ * 官方节点底板/连线/选框（2026-11-09 三版「照搬方舟」）：节点不再自己画方块，直接用官方精灵拼。
+ *   plate 165×94 半透明灰底板；selectable 186×114 亮白底板（候选）；focus 336×208 雾团（当前所在）；
+ *   cursor 97×90 青色选框（焦点）；connector 34×12 青色箭头。
+ */
+export const NODE_SPRITE = Object.freeze({
+  plate: 'img_node_bkg.png',
+  selectable: 'img_node_bkg_selectable.png',
+  focus: 'img_focus.png',
+  cursor: 'img_cursor.png',
+  connector: 'img_connector.png',
+  zoneDesc: 'img_zone_desc.png',
+  relic: 'relic.png',
+  ap: 'ap_drop.png',
+});
+
+/**
+ * 类型 → 官方**英文标签**精灵（`img_tag_*.png`，206×21，白字）。
+ * 官方中文客户端在节点图上显示的就是这些英文小标（COMBAT OPS. / EMERGENCY OPS. / …），
+ * 中文名放到右侧详情栏与 aria-label，不在图上重复一遍。
+ */
+const TYPE_TAG = {
+  battle: 'img_tag_battle.png',
+  elite: 'img_tag_elite.png',
+  boss: 'img_tag_boss.png',
+  shop: 'img_tag_shop.png',
+  rest: 'img_tag_rest.png',
+  event: 'img_tag_incident.png',
+  incident: 'img_tag_incident.png',
+  wish: 'img_tag_treasure.png',
+  unknown: 'img_tag_unknown.png',
+};
+
+/** 类型 → 标签精灵地址（未知类型也有官方 UNKNOWN FOG）。 */
+function typeTag(type) {
+  const f = TYPE_TAG[type];
+  return f ? `${ROGUE_ASSET}/node/${f}` : `${ROGUE_ASSET}/node/img_tag_unknown.png`;
+}
 
 /** 类型 → 中文名（渲染时取，不在模块加载时锁死语言）。 */
 function typeName(type) {
@@ -593,14 +633,11 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const curTaken = curCol ? curCol.nodes.find((n) => n.state === 'taken') || null : null;
   const curType = (cur && cur.type ? String(cur.type) : '') || (curTaken ? curTaken.type : '');
   const curTier = cur && cur.tier != null ? cur.tier : (nodes && nodes.tier != null ? nodes.tier : '');
-  const curCost = cur && Number.isFinite(Number(cur.cost)) ? Number(cur.cost) : 0;
   const curMapId = nodes && nodes.mapId ? String(nodes.mapId) : '';
   // 当前这一局的关卡：`pub.stageId`（缩略图读的那张）优先，其次 `nodes.mapId`；两者都只作 `mapLabel` 的输入
   const stageIdNow = (pub && pub.stageId ? String(pub.stageId) : '') || curMapId;
   const mapName = mapLabel(stageIdNow);
   const themeNo = rogueThemeOf(stageIdNow);
-  const preview = previewChoices(nodes);
-  const diffPct = Math.round(difficultyFrac(curTier) * 100);
 
   const pick = async (nodeId) => {
     if (!canSend || busy) return;
@@ -652,53 +689,7 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   const focusPicked = !!(focus && focus.node && focus.node.picked);
   const canConfirm = focusIsCandidate && !focusPicked && canSend && busy === null && picks.isFinal !== true;
 
-  const head = html`<header class="rpn__head">
-    <div class="rpn__headline">
-      <span class="rpn__micro">ROGUELIKE // <b>INTEGRATED STRATEGIES</b></span>
-      <h2 class="rpn__title" data-text=${t('集成战略')}>${t('集成战略')}</h2>
-    </div>
-    <div class="rpn__chips">
-      <span class="rpn__chip rpn__chip--layer">${layerTitle(layerName)
-        || (currentIndex >= 0 ? t('第 {n} 层', { n: currentIndex + 1 }) : t('第 1 层'))}</span>
-      <span class="rpn__chip">${lastRound ? t('回合 {r}/{last}', { r: round, last: lastRound }) : t('回合 {r}', { r: round })}</span>
-      ${mapName ? html`<span class="rpn__chip rpn__chip--map">${t('地图')} <b>${mapName}</b></span>` : null}
-      <span class="rpn__chip rpn__chip--ap"><b>AP</b> ${ap}/${maxAp}</span>
-      <span class="rpn__chip rpn__chip--relic">${t('藏品 ×{n}', { n: relics.length })}</span>
-    </div>
-    <button type="button" class="rpn__close" aria-label=${t('关闭集成战略')} title=${t('关闭')}
-      data-testid="rogue-panel-close" onClick=${() => onClose && onClose()}><${Icon} name="close" /></button>
-  </header>`;
-
-  const tabs = html`<nav class="rpn__tabs" role="tablist" aria-label=${t('集成战略页面')}>
-    ${tabList().map((tb) => html`<button key=${tb.id} type="button" role="tab" id=${`rpn-tab-${tb.id}`}
-      aria-selected=${tab === tb.id} aria-controls=${`rpn-page-${tb.id}`} data-tab=${tb.id}
-      class=${cls('rpn__tab', tab === tb.id && 'is-on')} onClick=${() => setTab(tb.id)}>${tb.label}</button>`)}
-  </nav>`;
-
-  const pageProps = { role: 'tabpanel', id: `rpn-page-${tab}`, 'aria-labelledby': `rpn-tab-${tab}` };
-
-  // 一个图上的节点按钮（两种视图共用；点它只是切详情，发包在右下「前往此节点」）。
-  const nodeBtn = (n, col) => (n.state === 'future'
-    // 未到的列只画占位：官方在没走到之前不告诉你下一个节点是什么（也不给点开看地图）
-    ? html`<span key=${n.id} class="rpn-graph__node is-future is-locked" data-node-id=${n.id}
-        data-graph-node="1" data-state="future" data-layer=${col.key} aria-hidden="true">?</span>`
-    : html`<button key=${n.id} type="button"
-      class=${cls('rpn-graph__node', `is-${n.state}`, n.picked && 'is-picked',
-        n.state === 'candidate' && !canSend && 'is-readonly')}
-      style=${`--c:${typeColor(n.type)}`}
-      data-node-id=${n.id} data-graph-node="1" data-type=${n.type} data-state=${n.state}
-      data-layer=${col.key}
-      aria-current=${n.state === 'taken' ? 'true' : null}
-      aria-label=${`${t('第 {n} 层', { n: col.index + 1 })} · ${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${n.cost ? ` · -${n.cost} AP` : ''}`}
-      title=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}`}
-      onClick=${() => selectNode(n)}>
-      <img class="rpn-graph__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
-      <span class="rpn-graph__name">${n.name || typeName(n.type)}</span>
-      ${n.state === 'taken' ? html`<span class="rpn-graph__ok" aria-hidden="true">✓</span>` : null}
-    </button>`);
-
-  // 聚焦视图（默认）：官方是「一个区域 = 一张多列图」。这里按 region 把列拼成当前区域的一整张图，
-  // 上方是区域进度（一个圆点一个区域），不会一开局就把全部区域剧透出来。
+  // —— 区域分组（顶栏进度 / 区域图 / 区域圆点共用；官方是「区域 → 一张多列关卡图」）——
   const regions = [];
   for (const c of graph.layers) {
     const key = c.region || c.key;
@@ -711,215 +702,217 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
       : r.cols.every((c) => c.state === 'done') ? 'done' : 'future');
   const curRegion = regions.find((r) => regionState(r) === 'current')
     || regions.find((r) => regionState(r) === 'next') || regions[0] || null;
+  const layerNo = currentIndex >= 0 ? currentIndex + 1 : 1;
+  const doneCols = Math.max(0, Math.min(currentIndex + 1, graph.layers.length));
+  // 区域视图 = 当前区域的 4–8 列；全部层 = 14 列总览（两种视图共用 graphColumn）
+  const boardCols = graphView === 'all' ? graph.layers : (curRegion ? curRegion.cols : []);
+  const sprite = (f) => `${ROGUE_ASSET}/node/${f}`;
+  const railGlyph = (id) => (id === 'map' ? 'expand' : id === 'relics' ? 'box' : 'chevrons');
 
-  // 一列（两种视图共用）：列头 + 该列节点 + 与下一列的连线（只连同区的一列，跨区不连）
-  const graphColumn = (col) => {
+  // —— 顶栏（方舟信息页的头）：层号块 + 区域名 + 资源条 + 视图切换 + 关闭 ——
+  const topBar = html`<header class="rpn-top">
+    <div class="rpn-top__id">
+      <span class="rpn-top__no">${String(layerNo).padStart(2, '0')}</span>
+      <span class="rpn-top__names">
+        <b class="rpn-top__region">${curRegion ? (layerTitle(curRegion.name) || curRegion.name) : t('集成战略')}</b>
+        <i class="rpn-top__sub">INTEGRATED STRATEGIES · ${t('第 {n} 层', { n: layerNo })} / ${graph.layers.length || '—'}</i>
+      </span>
+    </div>
+    <ul class="rpn-top__res">
+      <li class="rpn-res"><img class="rpn-res__ico" src=${sprite(NODE_SPRITE.ap)} alt="" aria-hidden="true" />
+        <b class="rpn-res__val">${ap}<span class="rpn-res__max">/${maxAp}</span></b>
+        <span class="rpn-res__lb">AP</span></li>
+      <li class="rpn-res"><img class="rpn-res__ico" src=${sprite(NODE_SPRITE.relic)} alt="" aria-hidden="true" />
+        <b class="rpn-res__val">${relics.length}</b><span class="rpn-res__lb">${t('藏品')}</span></li>
+      <li class="rpn-res"><b class="rpn-res__val">${round}${lastRound ? html`<span class="rpn-res__max">/${lastRound}</span>` : null}</b>
+        <span class="rpn-res__lb">${t('回合')}</span></li>
+      ${affix ? html`<li class="rpn-res is-affix"><b class="rpn-res__val">${affix}</b><span class="rpn-res__lb">${t('词缀')}</span></li>` : null}
+    </ul>
+    <div class="rpn-top__act">
+      ${tab === 'nodes' ? html`<button type="button" class=${cls('rpn-top__btn', graphView === 'all' && 'is-on')}
+        data-testid="rogue-nodes-view" aria-pressed=${graphView === 'all' ? 'true' : 'false'}
+        onClick=${() => setGraphView(graphView === 'all' ? 'focus' : 'all')}>
+        ${graphView === 'all' ? t('区域视图') : t('全部层')}</button>` : null}
+      <button type="button" class="rpn-top__close" aria-label=${t('关闭集成战略')} title=${t('关闭')}
+        data-testid="rogue-panel-close" onClick=${() => onClose && onClose()}><${Icon} name="close" /></button>
+    </div>
+  </header>`;
+
+  // —— 左竖排导航（方舟的侧栏）：节点 / 地图 / 藏品 ——
+  const railTabs = html`<nav class="rpn-rail" role="tablist" aria-label=${t('集成战略页面')}>
+    ${tabList().map((tb) => html`<button key=${tb.id} type="button" role="tab" id=${`rpn-tab-${tb.id}`}
+      aria-selected=${tab === tb.id} aria-controls=${`rpn-page-${tb.id}`} data-tab=${tb.id}
+      class=${cls('rpn-rail__tab', tab === tb.id && 'is-on')} onClick=${() => setTab(tb.id)}>
+      <span class="rpn-rail__ico" aria-hidden="true"><${Icon} name=${railGlyph(tb.id)} /></span>
+      <span class="rpn-rail__lb">${tb.label}</span></button>`)}
+  </nav>`;
+
+  // 一个图上的节点（两种视图共用；点它只是切详情，发包在右侧「前往此节点」）。
+  // 全部由官方精灵拼成：底板 img_node_bkg(.selectable) + 图标 img_*_active + 英文标签 img_tag_*；
+  // 当前所在节点背后垫 img_focus 雾团，被点开的节点套 img_cursor 选框。
+  const nodeBtn = (n, col) => {
+    if (n.state === 'future') {
+      // 未到的列只画占位：官方在没走到之前不告诉你下一个节点是什么（也不给点开看地图）
+      return html`<span key=${n.id} class="rpn-node is-future is-locked" data-node-id=${n.id}
+        data-graph-node="1" data-state="future" data-layer=${col.key} aria-hidden="true">
+        <img class="rpn-node__plate" src=${sprite(NODE_SPRITE.plate)} alt="" />
+        <span class="rpn-node__q">?</span>
+      </span>`;
+    }
+    const focused = focusId === String(n.id);
+    return html`<button key=${n.id} type="button"
+      class=${cls('rpn-node', `is-${n.state}`, n.picked && 'is-picked', focused && 'is-focus',
+        n.state === 'candidate' && !canSend && 'is-readonly')}
+      style=${`--c:${typeColor(n.type)}`}
+      data-node-id=${n.id} data-graph-node="1" data-type=${n.type} data-state=${n.state}
+      data-layer=${col.key}
+      aria-current=${n.state === 'taken' ? 'true' : null}
+      aria-label=${`${t('第 {n} 层', { n: col.index + 1 })} · ${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}${n.cost ? ` · -${n.cost} AP` : ''}`}
+      title=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''}`}
+      onClick=${() => selectNode(n)}>
+      ${n.state === 'taken' && col.state === 'current'
+        ? html`<img class="rpn-node__mist" src=${sprite(NODE_SPRITE.focus)} alt="" aria-hidden="true" />` : null}
+      <img class="rpn-node__plate" alt="" aria-hidden="true"
+        src=${sprite(n.state === 'candidate' ? NODE_SPRITE.selectable : NODE_SPRITE.plate)} />
+      <img class="rpn-node__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
+      <img class="rpn-node__tag" src=${typeTag(n.type)} alt="" aria-hidden="true" />
+      ${n.state === 'taken' ? html`<span class="rpn-node__ok" aria-hidden="true">✓</span>` : null}
+      ${focused ? html`<img class="rpn-node__cur" src=${sprite(NODE_SPRITE.cursor)} alt="" aria-hidden="true" />` : null}
+    </button>`;
+  };
+
+  // 一列：列头（层号）+ 该列节点 + 与下一列的连线（区域视图只连同区的一列，跨区不连）
+  const graphColumn = (col, opts = {}) => {
     const link = graph.links.find((l) => l.gap === col.index) || null;
     const next = link ? graph.layers[col.index + 1] : null;
     const sameRegion = !!next && (next.region || next.key) === (col.region || col.key);
-    return html`<div key=${col.key} class=${cls('rpn-graph__col', `is-${col.state}`)}
+    const drawLink = !!link && !!next && (opts.all === true || sameRegion);
+    return html`<div key=${col.key} class=${cls('rpn-col', `is-${col.state}`)}
         data-layer=${col.key} data-layer-state=${col.state}>
-      <div class="rpn-graph__head">
-        <span class="rpn-graph__num">${col.index + 1}</span>
-        ${col.name ? html`<span class="rpn-graph__lv">${col.state === 'future' ? '· · ·' : (layerTitle(col.name) || col.name)}</span>` : null}
-      </div>
-      <div class="rpn-graph__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
-        ${link && next && sameRegion ? graphLink(link, col, next) : null}
+      <div class="rpn-col__head">${String(col.index + 1).padStart(2, '0')}</div>
+      <div class="rpn-col__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
+        ${drawLink ? graphLink(link, col, next) : null}
         ${col.nodes.map((n) => nodeBtn(n, col))}
       </div>
     </div>`;
   };
 
-  const focusView = html`<div class="rpn-focus" data-testid="rogue-nodes-focus">
-    <ol class="rpn-focus__pips" aria-label=${t('区域进度')}>
-      ${regions.map((r, i) => html`<li key=${r.id}
-        class=${cls('rpn-focus__pip', `is-${regionState(r)}`)}
-        title=${regionState(r) === 'future' ? t('第 {n} 区', { n: i + 1 }) : r.name}>
-        ${regionState(r) === 'future' ? '?' : i + 1}
-      </li>`)}
-      <li class="rpn-focus__note">${curRegion ? (layerTitle(curRegion.name) || curRegion.name) : ''}</li>
-    </ol>
-    <div class="rpn-focus__map" style=${`--cols:${Math.max(1, curRegion ? curRegion.cols.length : 1)}`}>
-      ${curRegion ? curRegion.cols.map((c) => graphColumn(c)) : html`<em class="rpn-focus__none">${t('尚未开局')}</em>`}
-    </div>
-  </div>`;
+  // —— 区域进度圆点（未到的区域只给序号，不剧透区域名）——
+  const regionPips = html`<ol class="rpn-region" aria-label=${t('区域进度')}>
+    ${regions.map((r, i) => html`<li key=${r.id} class=${cls('rpn-region__pip', `is-${regionState(r)}`)}
+      title=${regionState(r) === 'future' ? t('第 {n} 区', { n: i + 1 }) : r.name}>
+      ${regionState(r) === 'future' ? '?' : String(i + 1).padStart(2, '0')}</li>`)}
+  </ol>`;
 
-  const nodesPage = html`<div class="rpn-nodes" ...${pageProps}>
-    <section class="rpn-graph" aria-label=${t('节点图')} data-testid="rogue-nodes"
-      data-layers=${String(graph.layers.length)} data-graph-root="1">
-      <div class="rpn-graph__bar">
-        <b class="rpn-graph__title">${t('节点图')}</b>
-        <span class="rpn-graph__meta">${graph.layers.length
-          ? t('{done}/{total} 层', { done: Math.max(0, Math.min(currentIndex + 1, graph.layers.length)), total: graph.layers.length })
-          : '—'}</span>
-        <span class="rpn-graph__hint">${t('点节点看详情；青色的是下一层候选，确认后在右侧「前往此节点」出发')}</span>
-        <button type="button" class=${cls('rpn-graph__view', graphView === 'all' && 'is-on')}
-          data-testid="rogue-nodes-view" aria-pressed=${graphView === 'all' ? 'true' : 'false'}
-          onClick=${() => setGraphView(graphView === 'all' ? 'focus' : 'all')}>
-          ${graphView === 'all' ? t('本层视图') : t('全部层')}
-        </button>
-        <ul class="rpn-graph__legend" aria-label=${t('节点图例')}>
+  // —— 右侧详情栏（方舟的信息页）：被点开的节点优先，没点开就显示当前所在节点 ——
+  const inspNode = focus ? focus.node : (curTaken || null);
+  const inspLayer = focus ? focus.layer : curCol;
+  const inspType = inspNode && inspNode.type ? String(inspNode.type) : curType;
+  const inspStage = focus ? focusStageId : stageIdNow;
+  const inspModel = focus ? focusModel
+    : (tab === 'nodes' && stage ? buildMinimapModel(stage, stageWave) : null);
+  const inspTier = inspNode && inspNode.tier != null ? inspNode.tier : curTier;
+  const inspCost = inspNode && Number(inspNode.cost) ? Number(inspNode.cost) : 0;
+  const inspActionable = !!(focus && (focusIsCandidate || focusPicked));
+  const inspector = html`<aside class="rpn-insp" aria-label=${t('节点详情')} data-insp=${focus ? 'focus' : 'current'}>
+    <div class="rpn-insp__head" style=${`--c:${typeColor(inspType)}`}>
+      <div class="rpn-insp__top">
+        <span class="rpn-insp__kind">${inspType ? typeName(inspType) : '—'}</span>
+        <span class="rpn-insp__cost">${inspCost ? `-${inspCost} AP` : t('免费')}</span>
+      </div>
+      <h3 class="rpn-insp__name">${inspNode ? (inspNode.name || typeName(inspNode.type)) : t('尚未开局')}</h3>
+      <p class="rpn-insp__meta">${inspLayer ? t('第 {n} 层', { n: inspLayer.index + 1 }) : '—'}${inspLayer && inspLayer.name ? ` · ${layerTitle(inspLayer.name) || inspLayer.name}` : ''}${inspTier !== '' ? ` · ${tierLabel(inspTier)}` : ''}</p>
+    </div>
+    <div class="rpn-insp__map" data-testid="rpn-focus-map">
+      ${inspModel ? minimap(inspModel) : html`<p class="rpn-insp__none">${t('战场缩略图待载入…')}</p>`}
+    </div>
+    <p class="rpn-insp__note">${inspStage ? (mapLabel(inspStage) || '—') : '—'}${inspModel && inspModel.routes.length ? ` · ${t('出怪路线 {n} 条', { n: inspModel.routes.length })}` : ''}</p>
+    <dl class="rpn-insp__kv">
+      <div><dt>${t('进度')}</dt><dd>${graph.layers.length ? `${doneCols} / ${graph.layers.length}` : '—'}</dd></div>
+      <div><dt>${t('奖励')}</dt><dd>${rewardText(inspNode && inspNode.reward)}</dd></div>
+      <div><dt>${t('藏品')}</dt><dd>${relics.length}</dd></div>
+    </dl>
+    <div class="rpn-insp__foot">
+      ${blocked ? html`<span class="rpn-insp__warn">${t('战斗中不可选')}</span>` : null}
+      ${!canSend && !blocked ? html`<span class="rpn-insp__warn">${t('只读：拿不到对局网络')}</span>` : null}
+      ${inspActionable
+        ? (focusPicked
+          ? html`<span class="rpn-insp__done">${t('已选为下一层')}</span>`
+          : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}
+              onClick=${() => pick(focus.node.id)}>${t('前往此节点')}${focus.node.cost ? `（-${focus.node.cost} AP）` : ''}</button>`)
+        : html`<p class="rpn-insp__hint">${picks.isFinal ? t('最终层：本局已结算') : t('在图上点节点查看详情')}</p>`}
+    </div>
+  </aside>`;
+
+  // 候选条兜底：候选在图上找不到（服务端没下发 sequence，或 nextRound 对不上）时至少还能选
+  const graphCandCount = graph.layers.reduce((s, c) => s + c.nodes.filter((n) => n.state === 'candidate').length, 0);
+  const fallbackStrip = (picks.list.length && !graphCandCount && !picks.isFinal)
+    ? html`<div class="rpn-fallback">
+      <b class="rpn-fallback__lb">${picks.label}</b>
+      ${picks.list.map((n) => html`<button key=${n.id} type="button" class="rpn-fallback__item"
+        style=${`--c:${typeColor(n.type)}`} disabled=${!canSend || busy !== null}
+        onClick=${() => selectNode(n)}>${n.name || typeName(n.type)}
+        <i>${typeName(n.type)}${n.cost ? ` · -${n.cost} AP` : ''}</i></button>`)}
+    </div>` : null;
+
+  const nodesPage = html`<div class="rpn-page">
+    <div class="rpn-board" data-testid="rogue-nodes" data-layers=${String(graph.layers.length)} data-graph-root="1">
+      <div class="rpn-board__head">
+        ${regionPips}
+        <span class="rpn-board__name">${curRegion ? (layerTitle(curRegion.name) || curRegion.name) : ''}</span>
+        <span class="rpn-board__count">${doneCols}/${graph.layers.length || '—'}</span>
+        <ul class="rpn-legend" aria-label=${t('节点图例')}>
           <li><i class="is-past" aria-hidden="true"></i>${t('已通过')}</li>
           <li><i class="is-now" aria-hidden="true"></i>${t('当前')}</li>
           <li><i class="is-cand" aria-hidden="true"></i>${t('候选')}</li>
           <li><i class="is-todo" aria-hidden="true"></i>${t('未到')}</li>
         </ul>
       </div>
-      ${!graph.layers.length ? html`<p class="rpn-empty">${t('本局没有节点数据：服务端未安装 roguelike-core。')}</p>`
-        : graphView === 'focus' ? focusView
-        : html`<div class="rpn-graph__cols" style=${`--cols:${graph.layers.length}`}>
-        ${graph.layers.map((col) => {
-          const link = graph.links.find((l) => l.gap === col.index) || null;
-          const next = link ? graph.layers[col.index + 1] : null;
-          return html`<div key=${col.key} class=${cls('rpn-graph__col', `is-${col.state}`)}
-              data-layer=${col.key} data-layer-state=${col.state}>
-            <div class="rpn-graph__head">
-              <span class="rpn-graph__num">${col.index + 1}</span>
-              ${col.name ? html`<span class="rpn-graph__lv">${layerTitle(col.name) || col.name}</span>` : null}
-            </div>
-            <div class="rpn-graph__stack" style=${`--rows:${Math.max(col.nodes.length, 1)}`}>
-              ${link && next ? graphLink(link, col, next) : null}
-              ${col.nodes.map((n) => nodeBtn(n, col))}
-            </div>
-          </div>`;
-        })}
-      </div>`}
-    </section>
-
-    <div class="rpn-nodes__foot">
-    <section class="rpn-pick">
-      <div class="rpn-pick__head">
-        <b>${picks.label}${picks.round ? ` · ${t('第 {n} 层', { n: picks.round })}` : ''}</b>
-        <span class="rpn-pick__note">${picks.isFinal ? t('已结算') : t('三选一')}</span>
-        ${blocked ? html`<span class="rpn-pick__warn">${t('战斗中不可选')}</span>` : null}
-        ${!canSend && !blocked ? html`<span class="rpn-pick__warn">${t('只读：拿不到对局网络')}</span>` : null}
-      </div>
-      ${picks.list.length ? html`<ul class="rpn-rows">
-        ${picks.list.map((n) => {
-          const picked = picks.picked === n.id;
-          const poor = n.available === false;
-          const disabled = !canSend || poor || picks.isFinal || busy !== null;
-          const focused = focusId === String(n.id);
-          return html`<li key=${n.id}>
-            <button type="button"
-              class=${cls('rpn-row', picked && 'is-picked', focused && 'is-focus', disabled && 'is-off')}
-              style=${`--c:${typeColor(n.type)}`}
-              data-node-id=${n.id} data-type=${n.type} data-picked=${picked ? 'yes' : 'no'}
-              disabled=${disabled}
-              aria-label=${`${n.name || typeName(n.type)} · ${typeName(n.type)}${n.tier ? ` · ${tierLabel(n.tier)}` : ''} · ${rewardText(n.reward)}`}
-              onClick=${() => selectNode(n)}>
-              <img class="rpn-row__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
-              <span class="rpn-row__name">${n.name || typeName(n.type)}</span>
-              <span class="rpn-row__meta">${typeName(n.type)}${n.tier && tierLabel(n.tier) !== typeName(n.type) ? ` · ${tierLabel(n.tier)}` : ''}</span>
-              <span class="rpn-row__reward">${rewardText(n.reward)}</span>
-              <span class="rpn-row__cost">${n.cost ? `-${n.cost} AP` : t('免费')}</span>
-              ${picked ? html`<span class="rpn-row__mark">${t('已选')}</span>` : null}
-              ${busy === n.id ? html`<span class="rpn-row__busy" aria-hidden="true"></span>` : null}
-            </button>
-          </li>`;
-        })}
-      </ul>` : html`<p class="rpn-empty">${t('这一层没有候选节点。')}</p>`}
-      ${picks.isFinal ? html`<p class="rpn-pick__hint">${t('最终层：本层已开局，选择只作记录，不再改图。')}</p>` : null}
-    </section>
-
-    <section class="rpn-detail" aria-label=${t('节点详情')}>
-      <div class="rpn-detail__sec">
-        <h3 class="rpn-detail__h">${t('节点详情')}</h3>
-        ${focus ? html`<div class="rpn-detail__focus" style=${`--c:${typeColor(focus.node.type)}`} data-focus-id=${focus.node.id}>
-          <img class="rpn-detail__ficon" src=${typeIcon(focus.node.type)} alt="" aria-hidden="true" />
-          <span class="rpn-detail__fbody">
-            <b>${focus.node.name || typeName(focus.node.type)}</b>
-            <i class="rpn-detail__fmeta">${t('第 {n} 层', { n: focus.layer.index + 1 })}${focus.layer.name ? ` · ${layerTitle(focus.layer.name) || focus.layer.name}` : ''} · ${typeName(focus.node.type)}${focus.node.tier ? ` · ${tierLabel(focus.node.tier)}` : ''}</i>
-          </span>
-          <span class="rpn-detail__fcost">${focus.node.cost ? `-${focus.node.cost} AP` : t('免费')}</span>
-        </div>` : null}
-        ${focus && (focusIsCandidate || focusPicked) ? html`<div class="rpn-detail__act">
-          ${focusPicked
-            ? html`<span class="rpn-detail__actdone">${t('已选为下一层')}</span>`
-            : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}
-                onClick=${() => pick(focus.node.id)}>${t('前往此节点')}${focus.node.cost ? `（-${focus.node.cost} AP）` : ''}</button>`}
-        </div>` : null}
-        ${focusModel ? html`<div class="rpn-detail__map" data-testid="rpn-focus-map">
-          ${minimap(focusModel)}
-          <p class="rpn-detail__mapnote">${mapLabel(focusStageId) || '—'}${focusModel.routes.length ? ` · ${t('出怪路线 {n} 条', { n: focusModel.routes.length })}` : ` · ${t('无出怪路线')}`}</p>
-        </div>` : null}
-        <dl class="rpn-detail__rows">
-          <div><dt>${t('当前层')}</dt><dd>${currentIndex >= 0
-            ? (layerTitle(layerName) || t('第 {n} 层', { n: currentIndex + 1 }))
-            : t('尚未开局')}</dd></div>
-          <div><dt>${t('类型')}</dt><dd class="is-type" style=${`--c:${typeColor(curType)}`}>${curType ? typeName(curType) : '—'}</dd></div>
-          <div><dt>${t('地图')}</dt><dd>${mapName || '—'}</dd></div>
-          <div><dt>${t('进度')}</dt><dd>${graph.layers.length ? `${Math.max(1, currentIndex + 1)} / ${graph.layers.length}` : '—'}</dd></div>
-        </dl>
-      </div>
-      <div class="rpn-detail__sec">
-        <h3 class="rpn-detail__h">${t('下一层预览')}</h3>
-        ${preview.length ? html`<ul class="rpn-preview">
-          ${preview.map((n) => html`<li key=${n.id}
-            class=${cls('rpn-preview__row', picks.picked === n.id && 'is-picked')}
-            style=${`--c:${typeColor(n.type)}`}>
-            <span class="rpn-preview__dot" aria-hidden="true"></span>
-            <span class="rpn-preview__name">${n.name || typeName(n.type)}</span>
-            <span class="rpn-preview__map">${mapTierLabel(n.tier, curMapId || stageIdNow) || '—'}</span>
-          </li>`)}
-        </ul>` : html`<p class="rpn-detail__note">${t('已是最终层：没有下一层候选。')}</p>`}
-      </div>
-      <div class="rpn-detail__sec">
-        <h3 class="rpn-detail__h">${t('本局摘要')}</h3>
-        <div class="rpn-detail__stats">
-          <span><b>AP</b>${ap}/${maxAp}</span>
-          <span><b>${t('藏品')}</b>${relics.length}</span>
-          <span><b>${t('词缀')}</b>${affix || t('无')}</span>
-        </div>
-      </div>
-      <div class="rpn-detail__sec rpn-detail__sec--last">
-        <h3 class="rpn-detail__h">${t('本层奖励 / 难度')}</h3>
-        <div class="rpn-detail__reward">
-          <span class="rpn-detail__diff">${curTier !== '' ? tierLabel(curTier) : t('难度未知')}</span>
-          <span class="rpn-detail__rew">${rewardText(cur && cur.reward)}</span>
-          ${curCost ? html`<span class="rpn-detail__cost">${t('消耗')} -${curCost} AP</span>` : null}
-        </div>
-        <div class="rpn-detail__meter" aria-hidden="true"><i style=${`width:${diffPct}%`}></i></div>
-      </div>
-    </section>
+      ${!graph.layers.length
+        ? html`<p class="rpn-empty">${t('本局没有节点数据：服务端未安装 roguelike-core。')}</p>`
+        : html`<div class="rpn-board__map" data-testid="rogue-nodes-focus"
+            style=${`--cols:${Math.max(1, boardCols.length)}`}>
+          ${boardCols.map((c) => graphColumn(c, { all: graphView === 'all' }))}
+        </div>`}
+      ${fallbackStrip}
     </div>
+    ${inspector}
   </div>`;
 
-  const mapPage = html`<div class="rpn-map" ...${pageProps}>
-    <div class="rpn-map__stage">
-      ${backdrop ? html`<img class="rpn-map__bg" src=${backdrop} alt="" aria-hidden="true" />` : null}
-      ${model ? minimap(model) : html`<p class="rpn-empty">${t('战场缩略图待载入…')}</p>`}
-      <span class="rpn-map__label">${mapName || t('未知战场')}</span>
-    </div>
-    <ul class="rpn-legend" aria-label=${t('地图图例')}>
-      <li><i style=${`background:${MAP_COLORS.ground}`}></i>${t('地面')}</li>
-      <li><i class="is-high" style=${`background:${MAP_COLORS.high}`}></i>${t('高台 / 墙')}</li>
-      <li><i class="is-forbidden" style=${`background:${MAP_COLORS.forbidden}`}></i>${t('禁入')}</li>
-      <li><i style=${`background:${MAP_COLORS.blocked}`}></i>${t('其他')}</li>
-      <li><i class="is-dot" style=${`background:${MAP_COLORS.melee}`}></i>${t('可部署（近战）')}</li>
-      <li><i class="is-dot" style=${`background:${MAP_COLORS.ranged}`}></i>${t('可部署（远程）')}</li>
-    </ul>
-    <aside class="rpn-map__side" aria-label=${t('关卡信息')}>
-      <div class="rpn-map__card">
-        <h3 class="rpn-map__h">${t('关卡信息')}</h3>
-        <dl class="rpn-map__rows">
-          <div><dt>${t('关卡')}</dt><dd>${mapName || '—'}</dd></div>
-          <div><dt>${t('回合')}</dt><dd>${lastRound ? `${round}/${lastRound}` : String(round)}</dd></div>
-          <div><dt>${t('尺寸')}</dt><dd>${model
-            ? t('{w}×{h} 格', { w: model.width, h: model.height })
-            : '—'}</dd></div>
-          <div><dt>${t('主题')}</dt><dd>${themeNo ? themeNo.slice(2) : '—'}</dd></div>
-        </dl>
-        ${mapStats ? html`<div class="rpn-map__tiles">
-          <span class="rpn-map__tile is-ground"><b class="num">${mapStats.ground}</b>${t('地面')}</span>
-          <span class="rpn-map__tile is-high"><b class="num">${mapStats.high}</b>${t('高台 / 墙')}</span>
-          <span class="rpn-map__tile is-forbidden"><b class="num">${mapStats.forbidden}</b>${t('禁入')}</span>
-          <span class="rpn-map__tile is-blocked"><b class="num">${mapStats.blocked}</b>${t('其他')}</span>
-          <span class="rpn-map__tile is-melee"><b class="num">${mapStats.melee}</b>${t('近战部署点')}</span>
-          <span class="rpn-map__tile is-ranged"><b class="num">${mapStats.ranged}</b>${t('远程部署点')}</span>
-        </div>` : null}
-        <p class="rpn-map__note">${t('地面格可通行；高台 / 墙要近战干员踩上去才可部署。禁入格（红纹）不可进入、也不可部署。黄点是近战部署点，绿点是远程部署点。')}</p>
+  const mapPage = html`<div class="rpn-page">
+    <div class="rpn-board rpn-board--stage">
+      <div class="rpn-stage">
+        ${backdrop ? html`<img class="rpn-stage__bg" src=${backdrop} alt="" aria-hidden="true" />` : null}
+        ${model ? minimap(model) : html`<p class="rpn-empty">${t('战场缩略图待载入…')}</p>`}
+        <span class="rpn-stage__label">${mapName || t('未知战场')}</span>
       </div>
+      <ul class="rpn-legend rpn-legend--map" aria-label=${t('地图图例')}>
+        <li><i style=${`background:${MAP_COLORS.ground}`}></i>${t('地面')}</li>
+        <li><i class="is-high" style=${`background:${MAP_COLORS.high}`}></i>${t('高台 / 墙')}</li>
+        <li><i class="is-forbidden" style=${`background:${MAP_COLORS.forbidden}`}></i>${t('禁入')}</li>
+        <li><i style=${`background:${MAP_COLORS.blocked}`}></i>${t('其他')}</li>
+        <li><i class="is-dot" style=${`background:${MAP_COLORS.melee}`}></i>${t('可部署（近战）')}</li>
+        <li><i class="is-dot" style=${`background:${MAP_COLORS.ranged}`}></i>${t('可部署（远程）')}</li>
+      </ul>
+    </div>
+    <aside class="rpn-insp" aria-label=${t('关卡信息')}>
+      <div class="rpn-insp__head">
+        <div class="rpn-insp__top">
+          <span class="rpn-insp__kind">${t('关卡')}</span>
+          <span class="rpn-insp__cost">${model ? `${model.width}×${model.height}` : '—'}</span>
+        </div>
+        <h3 class="rpn-insp__name">${mapName || t('未知战场')}</h3>
+        <p class="rpn-insp__meta">${lastRound ? t('回合 {r}/{last}', { r: round, last: lastRound }) : t('回合 {r}', { r: round })}${themeNo ? ` · ${themeNo.toUpperCase()}` : ''}</p>
+      </div>
+      ${mapStats ? html`<div class="rpn-insp__tiles">
+        <span class="rpn-insp__tile is-ground"><b>${mapStats.ground}</b>${t('地面')}</span>
+        <span class="rpn-insp__tile is-high"><b>${mapStats.high}</b>${t('高台 / 墙')}</span>
+        <span class="rpn-insp__tile is-forbidden"><b>${mapStats.forbidden}</b>${t('禁入')}</span>
+        <span class="rpn-insp__tile is-blocked"><b>${mapStats.blocked}</b>${t('其他')}</span>
+        <span class="rpn-insp__tile is-melee"><b>${mapStats.melee}</b>${t('近战部署点')}</span>
+        <span class="rpn-insp__tile is-ranged"><b>${mapStats.ranged}</b>${t('远程部署点')}</span>
+      </div>` : null}
+      <p class="rpn-insp__note">${t('地面格可通行；高台 / 墙要近战干员踩上去才可部署。禁入格（红纹）不可进入、也不可部署。黄点是近战部署点，绿点是远程部署点。')}</p>
     </aside>
   </div>`;
 
@@ -931,37 +924,63 @@ export function RoguePanel({ pub, relicCards = null, open = false, blocked = fal
   // 失与得进行中：提示「点一件换出」，并给每件藏品开一个换出入口（见下方 data-swap-id）
   if (swapPending) badges.push({ icon: 'refresh', text: t('失与得：点一件换出') });
 
-  const relicsPage = html`<div class="rpn-relics" ...${pageProps}>
-    <div class="rpn-relics__head">
-      <b>${t('本局藏品 ×{n}', { n: relics.length })}</b>
-      ${affix ? html`<span class="rpn-relics__affix">${t('词缀：')}${affix}</span>` : null}
-      ${badges.map((b) => html`<span key=${b.text} class="rpn-relics__badge"><${Icon} name=${b.icon} />${b.text}</span>`)}
+  const relicsPage = html`<div class="rpn-page">
+    <div class="rpn-board rpn-board--relics">
+      <div class="rpn-board__head">
+        <b class="rpn-board__name">${t('本局藏品')}</b>
+        <span class="rpn-board__count">${relics.length}</span>
+        <ul class="rpn-legend" aria-label=${t('藏品图例')}>
+          <li><i class="is-past" aria-hidden="true"></i>${t('已生效')}</li>
+          <li><i class="is-todo" aria-hidden="true"></i>${t('未实装')}</li>
+        </ul>
+      </div>
+      ${relics.length ? html`<ul class="rpn-relics">
+        ${relics.map((c) => html`<li key=${c.id} class=${cls('rpn-relic', c.kind === 'negative' && 'is-negative')} data-relic-id=${c.id}>
+          <span class="rpn-relic__icon">
+            ${c.icon ? html`<img src=${c.icon} alt="" loading="lazy" />` : html`<${Icon} name="box" />`}
+          </span>
+          <span class="rpn-relic__body">
+            <b>${c.name}</b>
+            ${c.desc ? html`<span class="rpn-relic__desc">${c.desc}</span>` : null}
+          </span>
+          ${c.tier ? html`<span class="rpn-relic__tier">${c.tier}</span>` : null}
+          ${c.applied === false ? html`<span class="rpn-relic__na" title=${t('这条藏品的效果还没接进引擎：本局只记录、不生效')}>${t('未实装')}</span>` : null}
+          ${swapPending ? html`<button type="button" class="rpn-relic__swap" data-swap-id=${c.id}
+            disabled=${!canSend || !!busy} title=${t('失与得：换出这一件')}
+            onClick=${() => swapOut(c.id)}>${t('换出')}</button>` : null}
+        </li>`)}
+      </ul>` : html`<p class="rpn-empty">${t('还没有藏品：开局与每 2 回合各有一次三选一。')}</p>`}
     </div>
-    ${relics.length ? html`<ul class="rpn-relics__list">
-      ${relics.map((c) => html`<li key=${c.id} class=${cls('rpn-relic', c.kind === 'negative' && 'is-negative')} data-relic-id=${c.id}>
-        <span class="rpn-relic__icon">
-          ${c.icon ? html`<img src=${c.icon} alt="" loading="lazy" />` : html`<${Icon} name="box" />`}
-        </span>
-        <span class="rpn-relic__body">
-          <b>${c.name}</b>
-          ${c.desc ? html`<span class="rpn-relic__desc">${c.desc}</span>` : null}
-        </span>
-        ${c.tier ? html`<span class="rpn-relic__tier">${c.tier}</span>` : null}
-        ${c.applied === false ? html`<span class="rpn-relic__na" title=${t('这条藏品的效果还没接进引擎：本局只记录、不生效')}>${t('未实装')}</span>` : null}
-        ${swapPending ? html`<button type="button" class="rpn-relic__swap" data-swap-id=${c.id}
-          disabled=${!canSend || !!busy} title=${t('失与得：换出这一件')}
-          onClick=${() => swapOut(c.id)}>${t('换出')}</button>` : null}
-      </li>`)}
-    </ul>` : html`<p class="rpn-empty">${t('还没有藏品：开局与每 2 回合各有一次三选一。')}</p>`}
+    <aside class="rpn-insp" aria-label=${t('藏品概况')}>
+      <div class="rpn-insp__head">
+        <div class="rpn-insp__top">
+          <span class="rpn-insp__kind">${t('藏品')}</span>
+          <span class="rpn-insp__cost">${relics.length}</span>
+        </div>
+        <h3 class="rpn-insp__name">${affix || t('本局无词缀')}</h3>
+        <p class="rpn-insp__meta">${t('第 {n} 层', { n: layerNo })} · ${t('回合 {r}', { r: round })}</p>
+      </div>
+      <dl class="rpn-insp__kv">
+        <div><dt>${t('藏品')}</dt><dd>${relics.length}</dd></div>
+        <div><dt>${t('未实装')}</dt><dd>${relics.filter((c) => c.applied === false).length}</dd></div>
+        <div><dt>${t('词缀')}</dt><dd>${affix || t('无')}</dd></div>
+      </dl>
+      ${badges.length ? html`<div class="rpn-insp__tiles">
+        ${badges.map((b) => html`<span key=${b.text} class="rpn-insp__tile"><${Icon} name=${b.icon} />${b.text}</span>`)}
+      </div>` : null}
+      <p class="rpn-insp__note">${t('藏品在开局与每 2 回合的三选一里获得；标「未实装」的只记录、不生效。')}</p>
+    </aside>
   </div>`;
 
   return html`<div class="rpn" id="rogue-panel" role="dialog" aria-modal="true" aria-label=${t('集成战略')} data-testid="rogue-panel">
     <div class="rpn__veil" aria-hidden="true" onClick=${() => onClose && onClose()}></div>
     <div class="rpn__panel" data-tab=${tab}>
-      ${head}
-      ${tabs}
-      <div class="rpn__body">
-        ${tab === 'map' ? mapPage : tab === 'relics' ? relicsPage : nodesPage}
+      ${topBar}
+      <div class="rpn__main">
+        ${railTabs}
+        <div class="rpn__page" role="tabpanel" id=${`rpn-page-${tab}`} aria-labelledby=${`rpn-tab-${tab}`}>
+          ${tab === 'map' ? mapPage : tab === 'relics' ? relicsPage : nodesPage}
+        </div>
       </div>
     </div>
   </div>`;
