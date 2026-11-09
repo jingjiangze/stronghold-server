@@ -631,11 +631,13 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
   const [busy, setBusy] = useState(null);
   // 节点图上「被点开看详情」的节点 id（只影响右下详情栏，不发送任何意图）
   const [focusId, setFocusId] = useState(null);
+  // 右侧详情栏是否展开（2026-11-09 六轮）：官方默认只给节点图，点节点才出信息，× 收起。
+  const [inspOpen, setInspOpen] = useState(false);
   // 节点图视图（2026-11-08）：'focus' = 只画「本层 + 下一层」并配一条区域进度（官方就是这个节奏，
   // 也避免一开局就把 14 层全剧透）；'all' = 原来的 14 层总览，随时可切回。
   const [graphView, setGraphView] = useState('focus');
   // 关掉面板时清忙态与详情焦点：下一次打开不该继承上一张卡片的 spinner / 上一局的选中项
-  useEffect(() => { if (!open) { setBusy(null); setFocusId(null); } }, [open]);
+  useEffect(() => { if (!open) { setBusy(null); setFocusId(null); setInspOpen(false); } }, [open]);
 
   const rogue = pub && pub.rogue ? pub.rogue : null;
   if (!open || !rogue) return null;
@@ -715,9 +717,12 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
 
   // 节点图的一次点击（2026-11-08 改）：**只切详情焦点**，不再当场发包 —— 先看清这张图与路线，
   // 详情栏的「前往此节点」才是提交。以前的「点一下就出发」是这次体验差的主因。
+  // 2026-11-09 六轮（业主：默认只有节点图、面板可收缩）：点节点顺带把右侧详情栏展开；关掉它回到纯地图。
   const selectNode = (n) => {
     setFocusId(String(n.id));
+    setInspOpen(true);
   };
+  const closeInsp = () => { setInspOpen(false); setFocusId(null); };
   const focus = focusId ? graphNode(graph, focusId) : null;
   // 焦点节点绑定的那张图（服务端下发 stageId）+ 它的出怪路线：详情栏直接预览，选之前就看得到。
   const focusStageId = focus && focus.node && focus.node.stageId ? focus.node.stageId : '';
@@ -884,6 +889,8 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
       <div class="rpn-insp__top">
         <span class="rpn-insp__kind">${inspType ? typeName(inspType) : '—'}</span>
         <span class="rpn-insp__cost">${inspCost ? `-${inspCost} AP` : t('免费')}</span>
+        <button type="button" class="rpn-insp__x" aria-label=${t('收起详情')} title=${t('收起详情')}
+          data-testid="rogue-insp-close" onClick=${() => closeInsp()}>×</button>
       </div>
       <h3 class="rpn-insp__name">${inspNode ? (inspNode.name || typeName(inspNode.type)) : t('尚未开局')}</h3>
       <p class="rpn-insp__meta">${inspLayer ? t('第 {n} 层', { n: inspLayer.index + 1 }) : '—'}${inspLayer && inspLayer.name ? ` · ${layerTitle(inspLayer.name) || inspLayer.name}` : ''}${inspTier !== '' ? ` · ${tierLabel(inspTier)}` : ''}</p>
@@ -953,12 +960,13 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
         <i>${typeName(n.type)}${n.cost ? ` · -${n.cost} AP` : ''}</i></button>`)}
     </div>` : null;
 
-  const nodesPage = html`<div class="rpn-page">
+  const nodesPage = html`<div class="rpn-page" data-insp=${inspOpen ? 'open' : 'closed'}>
     <div class="rpn-board" data-testid="rogue-nodes" data-layers=${String(graph.layers.length)} data-graph-root="1"
       data-view=${graphView === 'all' ? 'all' : 'round'}>
       <div class="rpn-board__head">
         ${routeStrip}
         <span class="rpn-board__count">${doneCols}/${graph.layers.length || '—'}</span>
+        ${!inspOpen ? html`<span class="rpn-board__hint">${t('点节点查看详情')}</span>` : null}
         <ul class="rpn-legend" aria-label=${t('节点图例')}>
           <li><i class="is-past" aria-hidden="true"></i>${t('已通过')}</li>
           <li><i class="is-now" aria-hidden="true"></i>${t('当前')}</li>
@@ -974,7 +982,7 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
         </div>`}
       ${fallbackStrip}
     </div>
-    ${inspector}
+    ${inspOpen ? inspector : null}
   </div>`;
 
   const mapPage = html`<div class="rpn-page">
