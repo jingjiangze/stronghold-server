@@ -887,11 +887,11 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
     <div class="rpn-insp__foot">
       ${blocked ? html`<span class="rpn-insp__warn">${t('战斗中不可选')}</span>` : null}
       ${!canSend && !blocked ? html`<span class="rpn-insp__warn">${t('只读：拿不到对局网络')}</span>` : null}
-      ${inspActionable && !focusPicked ? html`<p class="rpn-insp__vote">
-        ${t('投票 {a}/{b}', { a: voteCast, b: voteTotal })}${voteWinner ? ` · ${t('已定：{n}', { n: pickText(voteWinner, preview) || voteWinner })}` : ''}</p>` : null}
+      ${inspActionable && !voteWinner ? html`<p class="rpn-insp__vote">
+        ${t('投票 {a}/{b}', { a: voteCast, b: voteTotal })}</p>` : null}
       ${inspActionable
-        ? (focusPicked
-          ? html`<span class="rpn-insp__done">${t('本回合前往此节点')}</span>`
+        ? (voteWinner
+          ? html`<span class="rpn-insp__done">${t('本回合前往：{n}', { n: pickText(voteWinner, preview) || voteWinner })}</span>`
           : (myVoteId && myVoteId === String(focus.node.id)
             ? html`<span class="rpn-insp__done">${t('已投票 · 等待 {a}/{b}', { a: voteCast, b: voteTotal })}</span>`
             : html`<button type="button" class="rpn-confirm" disabled=${!canConfirm}

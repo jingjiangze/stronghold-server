@@ -311,7 +311,7 @@
 }
 /* 投票数（多人房）：右下角小方块；我投的那一票是金色 */
 .rpn-node__vote {
-  position: absolute; right: 7%; top: 55%; z-index: 6;
+  position: absolute; right: 12%; top: 55%; z-index: 6;
   min-width: .19rem; padding: 0 .04rem;
   display: grid; place-items: center;
   font-family: var(--font-mono); font-size: max(calc(.11 * var(--t)), 9px);
