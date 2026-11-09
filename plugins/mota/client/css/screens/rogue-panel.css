@@ -42,8 +42,7 @@
 .rpn__panel {
   position: relative;
   display: grid; grid-template-rows: auto minmax(0, 1fr);
-  width: min(18.4rem, calc(100vw - .16rem));
-  height: min(10.2rem, calc(100vh - .16rem));
+  width: 100%; height: 100%; min-width: 0; min-height: 0;
   background:
     linear-gradient(180deg, rgba(22, 27, 33, .97), rgba(8, 11, 14, .985) 62%),
     var(--rp-bg);
@@ -129,7 +128,10 @@
 .gm__gear.gm__rogue:disabled { opacity: .32; cursor: not-allowed; }
 
 /* ===== 主体：左竖排导航 + 页 ===== */
-.rpn__main { display: grid; grid-template-columns: .72rem minmax(0, 1fr); min-height: 0; }
+.rpn__main {
+  display: grid; grid-template-columns: .72rem minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+  min-width: 0; min-height: 0;
+}
 .rpn-rail {
   display: flex; flex-direction: column; min-height: 0;
   border-right: 1px solid var(--rp-line);
@@ -151,16 +153,17 @@
 .rpn-rail__ico .icon { width: .2rem; height: .2rem; }
 .rpn-rail__lb { font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .14em; }
 
-.rpn__page { display: flex; min-width: 0; min-height: 0; }
+.rpn__page { display: grid; grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; }
 
 /* 页内两栏：左「板」右「详情」 */
 .rpn-page {
-  flex: 1; min-width: 0; min-height: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) 3.2rem;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(2.2rem, 22%, 4.4rem);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0; min-height: 0;
 }
 
 /* ===== 板（节点图 / 地图 / 藏品共用外壳） ===== */
-.rpn-board { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rpn-board { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
 .rpn-board__head {
   display: flex; align-items: center; gap: .14rem;
   padding: .14rem .2rem .1rem;
@@ -235,8 +238,8 @@
 
 /* ===== 节点图：官方「一回合一张图」= 当前列 + 下一回合候选列，节点按官方尺寸放大 ===== */
 .rpn-board__map {
-  --rpn-colgap: .8rem;
-  flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
+  --rpn-colgap: .6rem;
+  min-height: 0; overflow: hidden;
   display: grid;
   grid-template-columns: repeat(var(--cols, 2), minmax(.9rem, 1fr));
   column-gap: var(--rpn-colgap);
@@ -245,7 +248,8 @@
 }
 .rpn-col { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 /* 本回合视图：两列不要铺满整块板（官方一屏就是「你在这儿 + 三个岔路」），限宽居中 */
-.rpn-board[data-view="round"] .rpn-board__map { width: 100%; max-width: 12rem; margin: 0 auto; }
+.rpn-board[data-view="round"] .rpn-board__map { width: 100%; max-width: min(100%, 10.5rem); margin: 0 auto; }
+.rpn-board[data-view="all"] .rpn-board__map { overflow-x: auto; overflow-y: hidden; }
 .rpn-col__head {
   flex: 0 0 auto; display: flex; align-items: baseline; justify-content: center; gap: .08rem;
   font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
@@ -260,7 +264,7 @@
 /* 节点堆：等高行（--rows 由组件给实际节点数）+ 居中；第 k 个节点中心 = (k+.5)/行数，
    连线 SVG 用同一条公式，线才落在节点中心。 */
 .rpn-col__stack {
-  position: relative; flex: 0 1 auto; max-height: 6.2rem;
+  position: relative; flex: 0 1 auto; max-height: min(6.2rem, 100%);
   display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
   align-items: center; justify-items: center;
 }
@@ -308,8 +312,8 @@
 }
 /* 当前所在节点：官方雾团垫在最下面 */
 .rpn-node__mist {
-  left: 50%; top: 40%; width: 132%; height: auto;
-  transform: translate(-50%, -50%); opacity: .38; z-index: 0;
+  left: 50%; top: 40%; width: 114%; height: auto;
+  transform: translate(-50%, -50%); opacity: .42; z-index: 0;
 }
 /* 被点开的节点：官方青色选框 */
 .rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 4; }
@@ -333,7 +337,7 @@
 }
 /* 谁投了这里（杀戮尖塔 2 联机：图上直接显示每人的座位色标记） */
 .rpn-node__votes {
-  position: absolute; right: 13%; bottom: 23%; z-index: 6;
+  position: absolute; right: 18%; bottom: 26%; z-index: 6;
   display: flex; gap: .035rem; align-items: center;
 }
 .rpn-voter {
@@ -564,6 +568,7 @@
 .rpn-confirm:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ===== 地图页：左侧战场 + 图例，右侧关卡信息 ===== */
+.rpn-board--stage { grid-template-rows: minmax(0, 1fr) auto; }
 .rpn-stage {
   position: relative; flex: 1; min-height: 0; margin: .14rem .2rem .06rem;
   display: flex; align-items: center; justify-content: center;
@@ -647,13 +652,35 @@
 }
 .rpn-relic__swap:disabled { opacity: .4; cursor: not-allowed; }
 
-/* ===== 窄屏：详情栏落到下方，节点图横向滚动 ===== */
-@media (max-width: 900px) {
-  .rpn-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
-  .rpn-insp { border-left: 0; border-top: 1px solid var(--rp-line); max-height: 42%; }
-  .rpn-board__map { grid-template-columns: repeat(var(--cols, 4), .9rem); }
+/* ===== 竖屏 / 窄屏：详情栏落到棋盘下方（行高给死 42%，棋盘至少占 58%） ===== */
+@media (max-aspect-ratio: 1/1), (max-width: 900px) {
+  .rpn-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 42%); }
+  .rpn-insp { border-left: 0; border-top: 1px solid var(--rp-line); overflow-y: auto; }
+  .rpn-insp__map { display: none; }
+  .rpn-insp { gap: .06rem; padding: .1rem .14rem .12rem; }
+  .rpn-insp__head { padding: .08rem .1rem .06rem; }
   .rpn-top__sub { display: none; }
   .rpn-res { padding: 0 .1rem; }
+  .rpn-route__now { display: none; }
+}
+
+/* 中等宽度：资源条只留数值、图例收起（顶栏别挤成两行） */
+@media (max-width: 1100px) {
+  .rpn-top { gap: .12rem; padding: 0 .12rem; }
+  .rpn-res { padding: 0 .1rem; }
+  .rpn-res__lb { display: none; }
+  .rpn-legend { display: none; }
+}
+
+/* 矮屏：详情栏的难度/下一层预览收起，先保按钮可见 */
+@media (max-height: 640px) {
+  .rpn-insp__sec { display: none; }
+}
+
+/* 很窄：词缀与层号块收小 */
+@media (max-width: 760px) {
+  .rpn-res.is-affix { display: none; }
+  .rpn-top__no { width: .38rem; height: .38rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
