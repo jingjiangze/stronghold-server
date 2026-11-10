@@ -52,14 +52,16 @@ export const NODE_CARD_BG = `${ROGUE_ASSET}/node/img_node_bkg.png`;
  * 两者在同一张节点图里不会看混。
  */
 export const TYPE_COLOR = Object.freeze({
-  battle: '#FFB80D',
-  elite: '#F37E00',
-  boss: '#FF5201',
-  shop: '#0DB28D',
-  rest: '#00B4FF',
-  event: '#00E2E4',
-  incident: '#00E2E4',
-  wish: '#FFD76A',
+  // 2026-11-10 照搬官方配色：官方节点图不按类型换青绿，功能色只有金 #FFD800 家族 + 生命蓝 + 危险橙红。
+  battle: '#FFD800',
+  elite: '#FFC000',
+  boss: '#FF7900',
+  final_boss: '#E8402A',
+  shop: '#C6C6C6',
+  rest: '#00B1FF',
+  event: '#C6C6C6',
+  incident: '#C6C6C6',
+  wish: '#FFD300',
   unknown: '#FFFFFF',
 });
 
@@ -72,6 +74,7 @@ const TYPE_ICON = {
   battle: 'img_battle_active.png',
   elite: 'img_elite_active.png',
   boss: 'img_boss_active.png',
+  final_boss: 'img_boss_active.png',
   shop: 'img_shop_active.png',
   rest: 'img_rest_active.png',
   event: 'img_incident_active.png',
@@ -92,6 +95,7 @@ const TYPE_ICON = {
 export const NODE_SPRITE = Object.freeze({
   plate: 'img_node_bkg.png',
   selectable: 'img_node_bkg_selectable.png',
+  blur: 'img_node_bkg_blur.png',
   focus: 'img_focus.png',
   cursor: 'img_cursor.png',
   connector: 'img_connector.png',
@@ -99,6 +103,10 @@ export const NODE_SPRITE = Object.freeze({
   zoneDesc: 'img_zone_desc.png',
   relic: 'relic.png',
   ap: 'ap_drop.png',
+  // 官方 dungeon_node 的两张叠图与「下一层」标：image_boss 273×164、终局标 220×227、img_next 17×19
+  boss: 'img_boss.png',
+  finalBoss: 'img_final_boss.png',
+  next: 'img_next.png',
 });
 
 /**
@@ -140,6 +148,7 @@ function typeName(type) {
     case 'battle': return t('战斗');
     case 'elite': return t('精英');
     case 'boss': return t('首领');
+    case 'final_boss': return t('终局首领');
     case 'shop': return t('商店');
     case 'rest': return t('休整');
     case 'event':
@@ -161,7 +170,7 @@ export const MAP_COLORS = Object.freeze({
   high: '#b9cce0',
   forbidden: '#4a2b31',
   blocked: '#0c1118',
-  melee: '#ffc75a',
+  melee: '#ffd800',
   ranged: '#5ad1a0',
   grid: 'rgba(0, 226, 228, .10)',
   hatch: 'rgba(206, 138, 140, .22)',
@@ -594,21 +603,26 @@ const tabList = () => [
  * @param {object} col 本列 @param {object} next 下一列（行数可能不同）
  */
 function graphLink(link, col, next) {
-  // 官方连线的读法（img_cursor_long_line.png 是「左淡右亮」的青色渐变线）：用同一条渐变描边，
-  // 末端再叠官方的 img_connector 箭头（见 nodeBtn 的 .rpn-node__in），比虚线更像方舟。
+  // 官方连线是**曲线**（dungeon_node 里 panel_curve 200×76 + curve_1..4 的 _degreeX/_degreeY 求值），
+  // 不是折线：这里用三次贝塞尔，控制点落在两列之间的中点，读起来和官方那条弧线一致。
+  // 颜色走官方金色渐变（左淡右亮）；已走过的路另由 CSS 叠红线。
   return html`<svg class="rpn-graph__links" viewBox="0 0 100 100" preserveAspectRatio="none"
       aria-hidden="true" focusable="false">
     <defs>
       <linearGradient id="rpn-wire-grad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#7ff0ff" stop-opacity=".08" />
-        <stop offset=".55" stop-color="#7ff0ff" stop-opacity=".55" />
-        <stop offset="1" stop-color="#7ff0ff" stop-opacity=".95" />
+        <stop offset="0" stop-color="#ffd800" stop-opacity=".1" />
+        <stop offset=".55" stop-color="#ffd800" stop-opacity=".55" />
+        <stop offset="1" stop-color="#ffd800" stop-opacity=".95" />
       </linearGradient>
     </defs>
-    ${link.segs.map((s, i) => html`<line key=${`${link.key}-${i}`}
-      x1="0" y1=${graphRowPct(col, s.fromRow)} x2="100" y2=${graphRowPct(next, s.toRow)}
-      class=${cls('rpn-graph__wire', `is-${link.kind}`, s.active && 'is-active')}
-      vector-effect="non-scaling-stroke" />`)}
+    ${link.segs.map((s, i) => {
+      const y1 = graphRowPct(col, s.fromRow);
+      const y2 = graphRowPct(next, s.toRow);
+      const d = `M0,${y1} C50,${y1} 50,${y2} 100,${y2}`;
+      return html`<path key=${`${link.key}-${i}`} d=${d}
+        class=${cls('rpn-graph__wire', `is-${link.kind}`, s.active && 'is-active')}
+        vector-effect="non-scaling-stroke" />`;
+    })}
   </svg>`;
 }
 
@@ -826,12 +840,19 @@ export function RoguePanel({ pub, relicCards = null, myVote = null, open = false
       onClick=${() => selectNode(n)}>
       ${n.state === 'taken' && col.state === 'current'
         ? html`<img class="rpn-node__mist" src=${sprite(NODE_SPRITE.focus)} alt="" aria-hidden="true" />` : null}
+      <img class="rpn-node__blur" src=${sprite(NODE_SPRITE.blur)} alt="" aria-hidden="true" />
       ${n.state === 'candidate'
         ? html`<img class="rpn-node__glow" src=${sprite(NODE_SPRITE.selectable)} alt="" aria-hidden="true" />` : null}
+      ${n.type === 'boss'
+        ? html`<img class="rpn-node__boss" src=${sprite(NODE_SPRITE.boss)} alt="" aria-hidden="true" />` : null}
+      ${n.type === 'final_boss'
+        ? html`<img class="rpn-node__final" src=${sprite(NODE_SPRITE.finalBoss)} alt="" aria-hidden="true" />` : null}
       ${n.state === 'candidate'
         ? html`<img class="rpn-node__in" src=${sprite(NODE_SPRITE.connector)} alt="" aria-hidden="true" />` : null}
       <img class="rpn-node__plate" src=${sprite(NODE_SPRITE.plate)} alt="" aria-hidden="true" />
       <img class="rpn-node__icon" src=${typeIcon(n.type)} alt="" aria-hidden="true" />
+      ${n.picked
+        ? html`<img class="rpn-node__next" src=${sprite(NODE_SPRITE.next)} alt="" aria-hidden="true" />` : null}
       <span class="rpn-node__tag" aria-hidden="true">${n.name || typeName(n.type)}</span>
       ${n.state === 'taken' ? html`<span class="rpn-node__ok" aria-hidden="true">✓</span>` : null}
       ${voters.length ? html`<span class="rpn-node__votes" aria-hidden="true">

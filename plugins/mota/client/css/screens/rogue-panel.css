@@ -1,27 +1,39 @@
 /* plugins/mota/client/css/screens/rogue-panel.css — 肉鸽「集成战略」全屏叠加面板。
    screens/game.js 首次进对局时按需注入（同 hex.css 的注入法），核心 index.html 不引用它。
 
-   2026-11-09 三版：**照搬方舟信息页的版式**（业主：前两版「不好看」）。
-     · 版式 = 顶栏（层号块 + 区域名 + 资源条）／左竖排导航／中间区域图／右侧详情栏 四块；
-     · 节点全部用官方精灵：底板 img_node_bkg(.selectable).png + 图标 img_*_active.png + 英文标签 img_tag_*.png，
-       当前所在节点背后垫 img_focus.png 雾团，被点开的节点套 img_cursor.png 选框；
-     · 连线仍是内联 SVG（几何由 js/ui/roguePanel.js 的 nodeGraph() 给），只把线宽与配色改回细线；
-     · 没有卡片、渐变、发光、圆角：1px 细线 + 单色底 + 宽字距小标（方舟的密度）。
+   2026-11-10 四版：**照搬官方游戏内样式**（业主：照搬官方游戏内样式来做）。
+     数值全部来自官方客户端解包的 prefab/精灵（见 _tmp/official-style-audit-2026-11-10/官方游戏内样式-规格表.md）：
+       · 节点卡 `dungeon_node`：底板 img_node_bkg 165×94、可发光晕 186×114、虚影 177×99@y-20 α0.13、
+         类型图标 img_*_active 127×48、Boss 叠图 273×164、终局标 220×227 α0.3、
+         标签条 img_tag 206×21（黑底 206×22 + 彩底 492×22）、下一层 img_next 17×19；
+       · 连线官方是**曲线**（panel_curve + curve_1..4），线体 34×12、虚影 49×30 α0.13；
+       · 配色：强调金 #FFD800（数字 #FFD300）、生命 #00B1FF、经验 #FFC000、警示 #FF7900、
+         正文 #C6C6C6、弱化 #919191/#6E6E6E、玻璃底 rgba(15,15,15,.8)、面板 #1A1A1A、走过红线 #E8402A；
+       · 字号 12（节点标签）/15/16/19/20/25/26/31（大数字）；
+       · 详情栏宽 484/1560 ≈ 31%（遮罩 600、点击拦截 517.2×720 的同一比例）；
+       · 官方 9-slice 只有 9 张（节点卡/标签/底板都不是）⇒ 卡面只按原比例缩放，不做拉伸拼贴。
+     保留中文节点标签（2026-11-09 业主要求本地化）：官方那 206×21 的 img_tag_* 精灵是烧死英文，
+     这里用同尺寸同位置的渐变条 + 中文 12px 居中；要切回官方英文精灵把节点渲染改回 typeTag() 一行即可。
 
    尺寸一律 rem（1rem = 100 设计 px，1920×1080 下 1rem=100px，1280×720 下 ≈66.7px）；
    字号 calc(N * var(--t))，--t 是「文字大小」放大用的文字根，和布局根 1rem 同口径。 */
 
 .rpn {
-  --rp-bg: #0b0e11;
-  --rp-bg-2: #12161b;
-  --rp-line: rgba(223, 230, 226, .13);
-  --rp-line-2: rgba(223, 230, 226, .26);
-  --rp-txt: #e7ebe8;
-  --rp-dim: rgba(223, 230, 226, .56);
-  --rp-dim-2: rgba(223, 230, 226, .34);
-  --rp-mint: #4ed8af;
-  --rp-cyan: #7ff0ff;
-  --rp-gold: #ffc75a;
+  /* —— 官方配色（取自 prefab 的 Image.m_Color / Text.m_Color） —— */
+  --rp-bg: #0f0f0f;
+  --rp-bg-2: #1a1a1a;
+  --rp-line: rgba(255, 255, 255, .1);
+  --rp-line-2: rgba(255, 255, 255, .2);
+  --rp-txt: #ffffff;
+  --rp-txt-2: #c6c6c6;
+  --rp-dim: #919191;
+  --rp-dim-2: #6e6e6e;
+  --rp-gold: #ffd800;
+  --rp-gold-2: #ffd300;
+  --rp-hp: #00b1ff;
+  --rp-exp: #ffc000;
+  --rp-warn: #ff7900;
+  --rp-red: #e8402a;
   position: absolute; inset: 0; z-index: 60;
   display: grid; place-items: center;
   padding: .08rem;
@@ -29,102 +41,104 @@
   font-size: max(calc(.12 * var(--t)), 11px);
 }
 
-/* —— 遮罩 —— */
+/* —— 遮罩：官方浮层是压暗背景 + 极轻渐变，不发光不开滤镜 —— */
 .rpn__veil {
   position: absolute; inset: 0;
   background:
-    radial-gradient(64% 60% at 50% 44%, rgba(10, 14, 18, .9), rgba(3, 5, 7, .97) 80%),
-    repeating-linear-gradient(180deg, rgba(223, 230, 226, .022) 0 1px, transparent 1px 4px);
+    radial-gradient(72% 66% at 50% 46%, rgba(10, 10, 10, .88), rgba(3, 3, 3, .97) 82%),
+    var(--rp-bg);
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
 
-/* —— 面板：近全屏（方舟的信息页就是整屏），直角 + 四角刻线 —— */
+/* —— 面板：整屏直角，1px 细线 + 四角刻线（官方信息页的角标） —— */
 .rpn__panel {
   position: relative;
   display: grid; grid-template-rows: auto minmax(0, 1fr);
   width: 100%; height: 100%; min-width: 0; min-height: 0;
-  background:
-    linear-gradient(180deg, rgba(22, 27, 33, .97), rgba(8, 11, 14, .985) 62%),
-    var(--rp-bg);
+  background: linear-gradient(180deg, rgba(26, 26, 26, .97), rgba(12, 12, 12, .985) 62%), var(--rp-bg);
   border: 1px solid var(--rp-line-2);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .85), 0 .08rem .34rem rgba(0, 0, 0, .72);
   overflow: hidden;
   animation: screen-in var(--t-slow) var(--ease-out);
 }
-/* 四角刻线：方舟面板的角标，纯装饰 */
 .rpn__panel::before,
 .rpn__panel::after {
   content: ""; position: absolute; width: .18rem; height: .18rem;
-  border: 1px solid rgba(223, 230, 226, .5); pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, .45); pointer-events: none;
 }
 .rpn__panel::before { left: .05rem; top: .05rem; border-right: 0; border-bottom: 0; }
 .rpn__panel::after { right: .05rem; bottom: .05rem; border-left: 0; border-top: 0; }
 
 /* ===== 顶栏：层号块 + 区域名 + 资源条 + 视图切换 + 关闭 ===== */
 .rpn-top {
-  display: flex; align-items: center; gap: .22rem;
-  height: .64rem; padding: 0 .22rem;
+  display: flex; align-items: center; gap: .2rem;
+  height: .66rem; padding: 0 .2rem;
   border-bottom: 1px solid var(--rp-line);
-  background: linear-gradient(180deg, rgba(32, 38, 45, .92), rgba(14, 18, 22, .5));
+  background: linear-gradient(180deg, rgba(26, 26, 26, .94), rgba(10, 10, 10, .55));
 }
 .rpn-top__id { display: flex; align-items: center; gap: .14rem; min-width: 0; }
+/* 层号块：官方左上角是「01」大数字 + 白底黑字 */
 .rpn-top__no {
   flex: 0 0 auto; width: .46rem; height: .46rem;
   display: grid; place-items: center;
-  font-family: var(--font-mono); font-size: max(calc(.2 * var(--t)), 15px); font-weight: 700;
-  color: #0a0d10; background: #e7ebe8;
+  font-family: var(--font-mono); font-size: max(calc(.31 * var(--t)), 20px); font-weight: 700;
+  color: #0f0f0f; background: #ffffff;
 }
 .rpn-top__names { display: flex; flex-direction: column; gap: .03rem; min-width: 0; }
 .rpn-top__region {
-  font-size: max(calc(.19 * var(--t)), 15px); font-weight: 600;
-  letter-spacing: .06em; line-height: 1.1;
+  font-size: max(calc(.2 * var(--t)), 15px); font-weight: 600;
+  letter-spacing: .04em; line-height: 1.1; color: var(--rp-txt);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rpn-top__sub {
   font-style: normal; font-family: var(--font-mono);
-  font-size: max(calc(.085 * var(--t)), 8px); letter-spacing: .2em;
+  font-size: max(calc(.12 * var(--t)), 9px); letter-spacing: .14em;
   color: var(--rp-dim-2); white-space: nowrap;
 }
 .rpn-top__res {
   display: flex; align-items: center; margin: 0 0 0 auto; padding: 0; list-style: none;
   height: 100%;
 }
+/* 资源项：官方资金条 189×27 / 人口 217×27 / 等级 149×52 / 生命 177×52 的同一节奏 —— 左竖线分隔 */
 .rpn-res {
-  display: flex; align-items: center; gap: .07rem;
+  display: flex; align-items: center; gap: .08rem;
   height: 100%; padding: 0 .2rem;
   border-left: 1px solid var(--rp-line);
 }
-.rpn-res__ico { width: .2rem; height: .2rem; object-fit: contain; opacity: .82; }
+.rpn-res__ico { width: .2rem; height: .2rem; object-fit: contain; opacity: .9; }
 .rpn-res__val {
-  font-family: var(--font-mono); font-size: max(calc(.17 * var(--t)), 13px);
-  font-variant-numeric: tabular-nums; color: #f2f5f3; white-space: nowrap;
+  font-family: var(--font-mono); font-size: max(calc(.26 * var(--t)), 16px);
+  font-variant-numeric: tabular-nums; color: var(--rp-txt); white-space: nowrap;
 }
-.rpn-res__max { color: var(--rp-dim-2); font-size: .82em; }
+.rpn-res__max { color: var(--rp-dim); font-size: .62em; }
 .rpn-res__lb {
-  font-size: max(calc(.08 * var(--t)), 8px); letter-spacing: .16em;
-  color: var(--rp-dim-2); white-space: nowrap;
+  font-size: max(calc(.15 * var(--t)), 9px); letter-spacing: .06em;
+  color: var(--rp-dim); white-space: nowrap;
 }
-.rpn-res.is-affix .rpn-res__val { color: var(--rp-gold); font-size: max(calc(.13 * var(--t)), 11px); }
+/* 资金阅读优先：AP 那一项走官方金 #FFD300 */
+.rpn-res:first-child .rpn-res__val { color: var(--rp-gold-2); }
+.rpn-res.is-affix .rpn-res__val { color: var(--rp-gold); font-size: max(calc(.15 * var(--t)), 11px); }
 .rpn-top__act { display: flex; align-items: center; gap: .1rem; flex: 0 0 auto; }
 .rpn-top__btn {
   padding: .06rem .14rem; font: inherit;
-  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .1em;
-  color: var(--rp-dim); background: transparent;
+  font-size: max(calc(.15 * var(--t)), 9px); letter-spacing: .06em;
+  color: var(--rp-txt-2); background: transparent;
   border: 1px solid var(--rp-line-2); cursor: pointer;
   transition: color .12s ease, border-color .12s ease;
 }
-.rpn-top__btn:hover, .rpn-top__btn.is-on { color: #fff; border-color: rgba(223, 230, 226, .7); }
+.rpn-top__btn:hover, .rpn-top__btn.is-on { color: #fff; border-color: rgba(255, 255, 255, .7); }
+.rpn-top__btn.is-on { color: var(--rp-gold); border-color: rgba(255, 216, 0, .6); }
 .rpn-top__close {
   width: .36rem; height: .36rem; display: grid; place-items: center; padding: 0;
-  color: var(--rp-dim); background: transparent;
+  color: var(--rp-txt-2); background: transparent;
   border: 1px solid var(--rp-line-2); cursor: pointer;
   transition: color .12s ease, border-color .12s ease;
 }
-.rpn-top__close:hover { color: #fff; border-color: rgba(223, 230, 226, .8); }
+.rpn-top__close:hover { color: #fff; border-color: rgba(255, 255, 255, .8); }
 .rpn-top__close .icon { width: .18rem; height: .18rem; }
 
 /* 入口按钮（screens/game.js 的 .gm__corner 里，沿用 .gm__gear 的尺寸）：展开态金色、战斗中禁用变灰 */
-.gm__gear.gm__rogue[aria-expanded="true"] { color: var(--rp-gold, #ffc75a); border-color: var(--rp-gold, #ffc75a); }
+.gm__gear.gm__rogue[aria-expanded="true"] { color: var(--rp-gold, #ffd800); border-color: var(--rp-gold, #ffd800); }
 .gm__gear.gm__rogue:disabled { opacity: .32; cursor: not-allowed; }
 
 /* ===== 主体：左竖排导航 + 页 ===== */
@@ -135,7 +149,7 @@
 .rpn-rail {
   display: flex; flex-direction: column; min-height: 0;
   border-right: 1px solid var(--rp-line);
-  background: rgba(6, 9, 12, .45);
+  background: rgba(10, 10, 10, .55);
 }
 .rpn-rail__tab {
   all: unset; box-sizing: border-box; cursor: pointer;
@@ -144,20 +158,21 @@
   border-left: 2px solid transparent;
   transition: color .12s ease, background .12s ease, border-color .12s ease;
 }
-.rpn-rail__tab:hover { color: #dfe6e2; background: rgba(223, 230, 226, .04); }
+.rpn-rail__tab:hover { color: var(--rp-txt-2); background: rgba(255, 255, 255, .04); }
+/* 选中：官方用白字 + 左侧金色竖条（不是青绿高亮） */
 .rpn-rail__tab.is-on {
-  color: #fff; border-left-color: var(--rp-mint);
-  background: linear-gradient(90deg, rgba(78, 216, 175, .12), rgba(78, 216, 175, 0) 88%);
+  color: #fff; border-left-color: var(--rp-gold);
+  background: linear-gradient(90deg, rgba(255, 216, 0, .1), rgba(255, 216, 0, 0) 88%);
 }
 .rpn-rail__ico { display: grid; place-items: center; }
 .rpn-rail__ico .icon { width: .2rem; height: .2rem; }
-.rpn-rail__lb { font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .14em; }
+.rpn-rail__lb { font-size: max(calc(.15 * var(--t)), 9px); letter-spacing: .1em; }
 
 .rpn__page { display: grid; grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; }
 
-/* 页内两栏：左「板」右「详情」 */
+/* 页内两栏：左「板」右「详情」—— 官方详情栏 484 / 画布 1560 ≈ 31% */
 .rpn-page {
-  display: grid; grid-template-columns: minmax(0, 1fr) clamp(2.2rem, 22%, 4.4rem);
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(3.2rem, 31%, 4.84rem);
   grid-template-rows: minmax(0, 1fr);
   min-width: 0; min-height: 0;
 }
@@ -167,7 +182,7 @@
 .rpn-page[data-insp="closed"] .rpn-node { max-width: 3rem; }
 /* 区域视图 4 列：详情栏展开时节点收一档，列内别挤满 */
 .rpn-page[data-insp="open"] .rpn-board__map { --rpn-colgap: .34rem; }
-.rpn-page[data-insp="open"] .rpn-node { max-width: 2.2rem; }
+.rpn-page[data-insp="open"] .rpn-node { max-width: 2.06rem; }
 
 /* ===== 板（节点图 / 地图 / 藏品共用外壳） ===== */
 .rpn-board { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
@@ -177,57 +192,54 @@
   border-bottom: 1px solid var(--rp-line);
 }
 .rpn-board__name {
-  font-size: max(calc(.13 * var(--t)), 11px); font-weight: 600;
-  letter-spacing: .08em; color: #eef2ef; white-space: nowrap;
+  font-size: max(calc(.16 * var(--t)), 11px); font-weight: 600;
+  letter-spacing: .04em; color: var(--rp-txt); white-space: nowrap;
 }
 .rpn-board__count {
-  font-family: var(--font-mono); font-size: max(calc(.1 * var(--t)), 9px);
-  color: var(--rp-dim-2); letter-spacing: .06em;
+  font-family: var(--font-mono); font-size: max(calc(.15 * var(--t)), 9px);
+  color: var(--rp-dim); letter-spacing: .04em;
 }
 .rpn-board__hint {
-  font-size: max(calc(.09 * var(--t)), 8px); letter-spacing: .06em;
+  font-size: max(calc(.13 * var(--t)), 8px); letter-spacing: .04em;
   color: var(--rp-dim-2); white-space: nowrap;
 }
 .rpn-empty {
   margin: 0; padding: .2rem; color: var(--rp-dim);
-  font-size: max(calc(.12 * var(--t)), 10px);
+  font-size: max(calc(.15 * var(--t)), 10px);
 }
 
-/* 本局线路图（2026-11-09 二轮，官方那种「一条线走完一局」的指示）：
-   14 个回合圆点按区域分段，已过金实心 / 当前白环 / 下一回合青环 / 未到暗空心；区域之间一道斜分隔。 */
+/* 本局线路图：官方「一条红线走完一局」的指示，14 个回合点按区域分段 */
 .rpn-route {
   position: relative;
   display: flex; align-items: center; gap: .12rem; flex-wrap: nowrap;
   margin: 0; padding: .02rem 0; list-style: none; min-width: 0; overflow: hidden;
 }
-/* 线路底纹：官方青色长线（img_cursor_long_line.png，466×10 渐变） */
 .rpn-route::before {
   content: ""; position: absolute; left: 0; right: 0; top: 50%; height: .05rem;
-  transform: translateY(-50%); opacity: .45; pointer-events: none;
-  /* 官方：走过的路线是一条红线 —— 进度按 --p 截断，走过亮红、未走暗红 */
-  background: linear-gradient(90deg, #e8402a 0 var(--p, 0%), rgba(232, 64, 42, .22) var(--p, 0%) 100%);
+  transform: translateY(-50%); opacity: .5; pointer-events: none;
+  background: linear-gradient(90deg, var(--rp-red) 0 var(--p, 0%), rgba(232, 64, 42, .2) var(--p, 0%) 100%);
 }
 .rpn-route > li { position: relative; z-index: 1; }
 .rpn-route__seg { display: flex; align-items: center; gap: .05rem; flex: 0 0 auto; }
 .rpn-route__pip {
   width: .1rem; height: .1rem; border-radius: 50%;
-  border: 1px solid rgba(223, 230, 226, .35); background: transparent;
+  border: 1px solid rgba(255, 255, 255, .32); background: transparent;
 }
-.rpn-route__pip.is-done { background: var(--rp-gold); border-color: transparent; }
+.rpn-route__pip.is-done { background: var(--rp-red); border-color: transparent; }
 .rpn-route__pip.is-current {
-  width: .13rem; height: .13rem; background: #e7ebe8; border-color: transparent;
-  box-shadow: 0 0 0 2px rgba(231, 235, 232, .18);
+  width: .13rem; height: .13rem; background: #fff; border-color: transparent;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .18);
 }
-.rpn-route__pip.is-next { border-color: rgba(127, 240, 255, .85); background: rgba(127, 240, 255, .25); }
-.rpn-route__pip.is-future { border-style: dashed; border-color: rgba(223, 230, 226, .22); }
+.rpn-route__pip.is-next { border-color: rgba(255, 216, 0, .9); background: rgba(255, 216, 0, .25); }
+.rpn-route__pip.is-future { border-style: dashed; border-color: rgba(255, 255, 255, .2); }
 .rpn-route__sep {
   width: 1px; height: .12rem; margin: 0 .04rem;
-  background: rgba(223, 230, 226, .22); transform: skewX(-18deg);
+  background: rgba(255, 255, 255, .2); transform: skewX(-18deg);
 }
-.rpn-route__seg.is-current .rpn-route__pip { border-color: rgba(223, 230, 226, .55); }
+.rpn-route__seg.is-current .rpn-route__pip { border-color: rgba(255, 255, 255, .55); }
 .rpn-route__now {
   margin-left: .12rem; flex: 0 1 auto; min-width: 0;
-  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .06em;
+  font-size: max(calc(.13 * var(--t)), 9px); letter-spacing: .04em;
   color: var(--rp-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -235,20 +247,20 @@
 .rpn-legend {
   display: flex; align-items: center; gap: .14rem;
   margin: 0 0 0 auto; padding: 0; list-style: none;
-  font-size: max(calc(.085 * var(--t)), 8px); color: var(--rp-dim-2);
-  letter-spacing: .04em;
+  font-size: max(calc(.12 * var(--t)), 8px); color: var(--rp-dim-2);
+  letter-spacing: .02em;
 }
 .rpn-legend li { display: flex; align-items: center; gap: .04rem; white-space: nowrap; }
 .rpn-legend i {
   flex: 0 0 auto; width: .08rem; height: .08rem;
-  border: 1px solid rgba(223, 230, 226, .45);
+  border: 1px solid rgba(255, 255, 255, .42);
 }
-.rpn-legend i.is-past { background: var(--rp-gold); border-color: transparent; }
-.rpn-legend i.is-now { background: #e7ebe8; border-color: transparent; }
-.rpn-legend i.is-cand { border-color: rgba(127, 240, 255, .8); background: rgba(127, 240, 255, .2); }
+.rpn-legend i.is-past { background: var(--rp-red); border-color: transparent; }
+.rpn-legend i.is-now { background: #fff; border-color: transparent; }
+.rpn-legend i.is-cand { border-color: rgba(255, 216, 0, .85); background: rgba(255, 216, 0, .2); }
 .rpn-legend i.is-todo { border-style: dashed; }
 
-/* ===== 节点图：官方「一回合一张图」= 当前列 + 下一回合候选列，节点按官方尺寸放大 ===== */
+/* ===== 节点图：官方「一回合一张图」= 当前列 + 下一回合候选列 ===== */
 .rpn-board__map {
   --rpn-colgap: .6rem;
   min-height: 0; overflow: hidden;
@@ -259,45 +271,45 @@
   padding: .12rem .2rem .18rem;
 }
 .rpn-col { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-/* 本回合视图：两列不要铺满整块板（官方一屏就是「你在这儿 + 三个岔路」），限宽居中 */
 .rpn-board[data-view="round"] .rpn-board__map { width: 100%; max-width: min(100%, 10.5rem); margin: 0 auto; }
 .rpn-board[data-view="all"] .rpn-board__map { overflow-x: auto; overflow-y: hidden; }
 .rpn-col__head {
   flex: 0 0 auto; display: flex; align-items: baseline; justify-content: center; gap: .08rem;
-  font-family: var(--font-mono); font-size: max(calc(.085 * var(--t)), 8px);
-  letter-spacing: .12em; color: var(--rp-dim-2);
+  font-family: var(--font-mono); font-size: max(calc(.13 * var(--t)), 8px);
+  letter-spacing: .1em; color: var(--rp-dim-2);
   padding-bottom: .06rem;
 }
 .rpn-col__no { color: inherit; }
-.rpn-col__lb { letter-spacing: .1em; }
-.rpn-col.is-current .rpn-col__head { color: #e7ebe8; }
-.rpn-col.is-next .rpn-col__head { color: var(--rp-cyan); }
-.rpn-col.is-done .rpn-col__head { color: rgba(255, 199, 90, .7); }
-/* 节点堆：等高行（--rows 由组件给实际节点数）+ 居中；第 k 个节点中心 = (k+.5)/行数，
-   连线 SVG 用同一条公式，线才落在节点中心。 */
+.rpn-col__lb { letter-spacing: .06em; }
+.rpn-col.is-current .rpn-col__head { color: var(--rp-txt); }
+.rpn-col.is-next .rpn-col__head { color: var(--rp-gold); }
+.rpn-col.is-done .rpn-col__head { color: rgba(232, 64, 42, .75); }
 .rpn-col__stack {
   position: relative; flex: 0 1 auto; max-height: min(6.2rem, 100%);
   display: grid; grid-template-rows: repeat(var(--rows, 3), minmax(0, 1fr));
   align-items: center; justify-items: center;
 }
 
-/* 连线：绝对定位在本列中心 → 下一列中心这一段；viewBox 0–100 非等比拉伸 + non-scaling-stroke */
+/* 连线：绝对定位在本列中心 → 下一列中心；几何由 nodeGraph() 给，官方是**曲线** */
 .rpn-graph__links {
   position: absolute; left: 50%; top: 0; height: 100%;
   width: calc(100% + var(--rpn-colgap));
   overflow: visible; pointer-events: none; z-index: 0;
 }
-.rpn-graph__wire { fill: none; stroke: rgba(223, 230, 226, .16); stroke-width: 1; }
-/* 候选连线：官方青色渐变（左淡右亮），实线不再是虚线 */
-.rpn-graph__wire.is-candidate { stroke: url(#rpn-wire-grad); stroke-width: 1.3; }
-.rpn-graph__wire.is-taken { stroke: rgba(223, 230, 226, .2); }
-.rpn-graph__wire.is-taken.is-active { stroke: #e8402a; stroke-width: 2; }  /* 走过的路 = 红线（官方口径） */
-.rpn-graph__wire.is-trunk { stroke: rgba(223, 230, 226, .1); stroke-dasharray: 2 3; }
+.rpn-graph__wire { fill: none; stroke: rgba(255, 255, 255, .16); stroke-width: 1; }
+/* 候选连线：官方金色渐变（左淡右亮） */
+.rpn-graph__wire.is-candidate { stroke: url(#rpn-wire-grad); stroke-width: 1.4; }
+.rpn-graph__wire.is-taken { stroke: rgba(255, 255, 255, .18); }
+.rpn-graph__wire.is-taken.is-active { stroke: var(--rp-red); stroke-width: 2; }
+.rpn-graph__wire.is-trunk { stroke: rgba(255, 255, 255, .1); stroke-dasharray: 2 3; }
 
-/* ===== 节点：官方精灵拼装（底板 165×94 + 图标 101×48 + 标签 206×21） ===== */
+/* ===== 节点：官方 `dungeon_node` 逐层解剖 =====
+   卡框 206×101（= 标签 206 宽 / 底板 94 + 标签下探 43.1-47 后的总高）；
+   底板 165×94（宽 80.1%、高 93.1%）、图标 127×48（宽 61.7%、高 47.5%）、
+   标签条 206×21（高 20.8%，压在底板下沿）、光晕 186×114（113% 高）、虚影 177×99。 */
 .rpn-node {
   position: relative; display: block;
-  width: 100%; max-width: 2.6rem; aspect-ratio: 206 / 116;
+  width: 100%; max-width: 2.06rem; aspect-ratio: 206 / 103;
   margin: 0 auto; padding: 0; border: 0; background: none;
   cursor: pointer; z-index: 1;
   transition: opacity .12s ease;
@@ -307,70 +319,102 @@
 .rpn-node__tag,
 .rpn-node__mist,
 .rpn-node__glow,
-.rpn-node__cur { position: absolute; pointer-events: none; }
+.rpn-node__cur,
+.rpn-node__blur,
+.rpn-node__boss,
+.rpn-node__final,
+.rpn-node__next { position: absolute; pointer-events: none; }
 .rpn-node__plate {
-  left: 50%; top: 0; height: 81%; width: auto; transform: translateX(-50%); z-index: 2;
-  /* 官方底板精灵是**浅灰**（均值 RGB≈70 但 alpha≈40%，叠出来偏亮），白色图标压不住 ——
-     压暗到 45% 才是方舟那种深底板 + 白图标。 */
+  left: 50%; top: 4.4%; height: 91.3%; width: 80.1%; transform: translateX(-50%); z-index: 2;
+  object-fit: fill;
+  /* 官方底板精灵本身是浅灰 + 半透明（叠出来后靠运行时 tint 压暗），压到 45% 才是官方的深板 + 白图标 */
   filter: brightness(.45);
 }
-.rpn-node__icon { left: 50%; top: 19%; height: 41%; width: auto; transform: translateX(-50%); z-index: 3; }
-/* 节点标签：中文文字（2026-11-09 搬 icebreaker 的节点图样式，不用 img_tag_* 英文精灵） */
+.rpn-node__icon {
+  left: 50%; top: 26.7%; height: 46.6%; width: auto; transform: translateX(-50%); z-index: 3;
+}
+/* 节点标签条：官方 206×21 半透明黑条 + 类型色描边；中文 12px 居中（本地化，见文件头） */
 .rpn-node__tag {
-  left: 0; right: 0; bottom: 0; z-index: 3;
+  left: 0; right: 0; top: 81.6%; height: 20.4%; z-index: 4;
+  display: grid; place-items: center;
+  padding: 0 .02rem; box-sizing: border-box;
   text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: max(calc(.095 * var(--t)), 9px); letter-spacing: .04em; line-height: 1.3;
-  color: rgba(231, 235, 232, .92);
+  font-size: max(calc(.12 * var(--t)), 9px); letter-spacing: .02em; line-height: 1;
+  color: #f1f1f1;
+  background: linear-gradient(180deg, rgba(12, 12, 12, .62), rgba(6, 6, 6, .92));
+  border-top: 1px solid rgba(255, 255, 255, .16);
+  border-top: 1px solid color-mix(in srgb, var(--c, #ffffff) 62%, rgba(255, 255, 255, .18));
   text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
 }
-/* 候选：官方 selectable 是**底板后面的光晕**（186×114，比底板大一圈），垫在暗底板之下，
-   白色图标才不会糊在白色底板上。 */
+/* 底板虚影：官方 img_node_bkg_blur 177×99 @y-20，alpha .133（垫在底板下，做出深度） */
+.rpn-node__blur {
+  left: 50%; top: 21.4%; width: 85.9%; height: 96.1%;
+  transform: translateX(-50%); z-index: 1; opacity: .133;
+}
+/* 候选：官方 selectable 是底板后面的光晕（186×114，比底板大一圈） */
 .rpn-node__glow {
-  left: 50%; top: -8.5%; height: 98%; width: auto;
+  left: 50%; top: -5.3%; height: 110.7%; width: 90.3%;
   transform: translateX(-50%); z-index: 1; opacity: .4;
 }
 /* 当前所在节点：官方雾团垫在最下面 */
 .rpn-node__mist {
-  left: 50%; top: 40%; width: 114%; height: auto;
+  left: 50%; top: -51%; width: 163%; height: auto;
   transform: translate(-50%, -50%); opacity: .42; z-index: 0;
 }
-/* 被点开的节点：官方青色选框 */
-.rpn-node__cur { left: 50%; top: 4%; width: 62%; height: auto; transform: translateX(-50%); z-index: 4; }
-/* 进入候选节点的官方箭头（img_connector.png，34×12 青色双箭头） */
+/* 被点开的节点：官方青色选框 img_cursor 97×90（相对卡宽 47%、卡高 89%） */
+.rpn-node__cur {
+  left: 50%; top: 6.3%; width: 47.1%; height: auto; transform: translateX(-50%); z-index: 5;
+}
+/* Boss / 精英叠图：官方 image_boss 273×164（底板的 1.65 倍） */
+.rpn-node__boss {
+  left: 50%; top: -24.2%; width: 132.5%; height: auto; transform: translateX(-50%);
+  z-index: 1; opacity: .92;
+}
+/* 终局 Boss 标：官方 220×227 @y+107，alpha .3 */
+.rpn-node__final {
+  left: 50%; top: -164.4%; width: 106.8%; height: auto; transform: translateX(-50%);
+  z-index: 1; opacity: .3;
+}
+/* 进入候选节点的官方箭头（img_connector 34×12） */
 .rpn-node__in {
   left: 7%; top: 32%; width: 16%; height: auto;
-  transform: translateX(-50%); z-index: 4; opacity: 1;
+  transform: translateX(-50%); z-index: 6;
+}
+/* 「下一层」标记：官方 img_next 17×19 在节点上方居中 */
+.rpn-node__next {
+  left: 50%; top: 21.5%; width: 8.3%; height: auto;
+  transform: translateX(-50%); z-index: 6;
 }
 .rpn-node__ok {
-  position: absolute; right: 12%; top: 6%; z-index: 5;
-  font-size: max(calc(.13 * var(--t)), 10px); line-height: 1;
+  position: absolute; right: 12%; top: 6%; z-index: 6;
+  font-size: max(calc(.15 * var(--t)), 10px); line-height: 1;
   color: var(--rp-gold);
 }
 /* 投票数（多人房）：右下角小方块；我投的那一票是金色 */
 .rpn-node__vote {
-  position: absolute; right: 12%; top: 55%; z-index: 6;
+  position: absolute; right: 12%; top: 55%; z-index: 7;
   min-width: .19rem; padding: 0 .04rem;
   display: grid; place-items: center;
-  font-family: var(--font-mono); font-size: max(calc(.11 * var(--t)), 9px);
-  line-height: 1.35; color: #06110d; background: var(--rp-mint);
+  font-family: var(--font-mono); font-size: max(calc(.15 * var(--t)), 9px);
+  line-height: 1.35; color: #0f0f0f; background: var(--rp-gold);
 }
-/* 谁投了这里（杀戮尖塔 2 联机：图上直接显示每人的座位色标记） */
+/* 谁投了这里：图上直接显示每人的座位色标记 */
 .rpn-node__votes {
-  position: absolute; right: 18%; bottom: 26%; z-index: 6;
+  position: absolute; right: 18%; bottom: 26%; z-index: 7;
   display: flex; gap: .035rem; align-items: center;
 }
 .rpn-voter {
   display: block; width: .11rem; height: .11rem; border-radius: 50%;
-  border: 1px solid rgba(6, 17, 13, .95);
+  border: 1px solid rgba(10, 10, 10, .95);
   box-shadow: 0 0 0 .015rem rgba(0, 0, 0, .45);
-  background: var(--rp-mint);
+  background: #fff;
 }
-.rpn-voter.is-seat-0 { background: #4ed8af; }
-.rpn-voter.is-seat-1 { background: #ffc75a; }
-.rpn-voter.is-seat-2 { background: #7ff0ff; }
-.rpn-voter.is-seat-3 { background: #c79bff; }
+.rpn-voter.is-seat-0 { background: #ffd800; }
+.rpn-voter.is-seat-1 { background: #00b1ff; }
+.rpn-voter.is-seat-2 { background: #ff7900; }
+.rpn-voter.is-seat-3 { background: #c6c6c6; }
 .rpn-node.is-myvote .rpn-node__vote { background: var(--rp-gold); }
-.rpn-node.is-myvote .rpn-node__tag { filter: drop-shadow(0 0 2px rgba(255, 199, 90, .85)); }
+.rpn-node.is-myvote .rpn-node__tag { box-shadow: inset 0 -1px 0 rgba(255, 216, 0, .9); }
 
 /* 详情栏：谁投了谁 */
 .rpn-insp__votes { display: flex; flex-direction: column; gap: .04rem; }
@@ -378,10 +422,10 @@
 .rpn-insp__votelist li {
   display: grid; grid-template-columns: .09rem minmax(0, 1fr) auto;
   align-items: center; gap: .06rem; padding: .03rem 0;
-  font-size: max(calc(.095 * var(--t)), 8px); color: var(--rp-dim);
+  font-size: max(calc(.15 * var(--t)), 8px); color: var(--rp-dim);
 }
 .rpn-insp__votename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rpn-insp__votenode { color: #eef2ef; font-weight: 600; white-space: nowrap; }
+.rpn-insp__votenode { color: var(--rp-txt); font-weight: 600; white-space: nowrap; }
 
 /* 状态：已过 / 当前层兄弟 / 未到 / 候选 / 已选 */
 .rpn-node.is-taken .rpn-node__plate { opacity: .38; }
@@ -396,10 +440,10 @@
 .rpn-col.is-current .rpn-node.is-taken .rpn-node__tag { opacity: .95; }
 .rpn-node.is-candidate { animation: rpnNodePulse 2.6s ease-in-out infinite; }
 .rpn-node.is-candidate.is-picked { animation: none; }
-/* 已选为下一层：金色方框（方舟「目标已锁定」的读法） */
+/* 已选为下一层：金色方框（官方「目标已锁定」的读法） */
 .rpn-node.is-picked::after {
   content: ""; position: absolute; left: 10%; right: 10%; top: 3%; height: 76%;
-  border: 1px solid rgba(255, 199, 90, .9); z-index: 3; pointer-events: none;
+  border: 1px solid rgba(255, 216, 0, .9); z-index: 3; pointer-events: none;
 }
 .rpn-node:hover .rpn-node__icon { transform: translateX(-50%) scale(1.06); }
 .rpn-node.is-readonly { animation: none; cursor: default; }
@@ -412,10 +456,10 @@
 /* 未到的占位（不剧透节点身份，也不可点） */
 .rpn-node.is-locked { cursor: default; }
 .rpn-node__q {
-  position: absolute; left: 0; right: 0; top: 0; height: 81%;
+  position: absolute; left: 0; right: 0; top: 0; height: 91%;
   display: grid; place-items: center;
   font-family: var(--font-mono); font-size: max(calc(.2 * var(--t)), 14px);
-  color: rgba(223, 230, 226, .8); z-index: 4;
+  color: rgba(255, 255, 255, .8); z-index: 4;
 }
 
 /* 候选条兜底（图上找不到候选时） */
@@ -424,13 +468,13 @@
   padding: .1rem .2rem; border-top: 1px solid var(--rp-line);
 }
 .rpn-fallback__lb {
-  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .12em; color: var(--rp-dim);
+  font-size: max(calc(.15 * var(--t)), 9px); letter-spacing: .06em; color: var(--rp-dim);
 }
 .rpn-fallback__item {
-  font: inherit; font-size: max(calc(.11 * var(--t)), 10px);
+  font: inherit; font-size: max(calc(.15 * var(--t)), 10px);
   padding: .05rem .12rem; cursor: pointer; text-align: left;
-  color: var(--rp-txt); background: transparent;
-  border: 1px solid var(--rp-line-2); border-left: 2px solid var(--c, var(--rp-mint));
+  color: var(--rp-txt-2); background: transparent;
+  border: 1px solid var(--rp-line-2); border-left: 2px solid var(--c, var(--rp-gold));
 }
 .rpn-fallback__item i {
   font-style: normal; margin-left: .06rem;
@@ -438,13 +482,13 @@
 }
 .rpn-fallback__item:disabled { opacity: .4; cursor: not-allowed; }
 
-/* ===== 右侧详情栏 ===== */
+/* ===== 右侧详情栏（官方 focus_view：面板宽 484、徽记 156×128、标题底 431×59、分隔线 452×1） ===== */
 .rpn-insp {
   display: flex; flex-direction: column; gap: .1rem;
   min-width: 0; min-height: 0; overflow: hidden;
-  padding: .14rem .18rem .16rem;
+  padding: .14rem .16rem .16rem;
   border-left: 1px solid var(--rp-line);
-  background: linear-gradient(180deg, rgba(26, 31, 37, .5), rgba(8, 11, 14, .2));
+  background: linear-gradient(180deg, rgba(26, 26, 26, .55), rgba(10, 10, 10, .25));
 }
 .rpn-insp__head {
   flex: 0 0 auto;
@@ -453,56 +497,56 @@
 }
 .rpn-insp__top { display: flex; align-items: baseline; gap: .08rem; }
 .rpn-insp__kind {
-  font-size: max(calc(.1 * var(--t)), 9px); letter-spacing: .18em;
-  color: var(--c, var(--rp-mint));
+  font-size: max(calc(.15 * var(--t)), 9px); letter-spacing: .12em;
+  color: var(--c, var(--rp-gold));
 }
 .rpn-insp__x {
   margin-left: .08rem; width: .24rem; height: .24rem; flex: 0 0 auto;
   display: grid; place-items: center; padding: 0; cursor: pointer;
-  font-size: max(calc(.13 * var(--t)), 11px); line-height: 1;
+  font-size: max(calc(.15 * var(--t)), 11px); line-height: 1;
   color: var(--rp-dim); background: transparent;
   border: 1px solid var(--rp-line-2);
 }
-.rpn-insp__x:hover { color: #fff; border-color: rgba(223, 230, 226, .7); }
+.rpn-insp__x:hover { color: #fff; border-color: rgba(255, 255, 255, .7); }
 .rpn-insp__cost {
   margin-left: auto; font-family: var(--font-mono);
-  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-cyan);
+  font-size: max(calc(.15 * var(--t)), 9px); color: var(--rp-gold-2);
   white-space: nowrap;
 }
 .rpn-insp__name {
   margin: .05rem 0 0;
   font-size: max(calc(.2 * var(--t)), 15px); font-weight: 600;
-  letter-spacing: .04em; line-height: 1.2; color: #f4f7f5;
+  letter-spacing: .02em; line-height: 1.2; color: var(--rp-txt);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rpn-insp__meta {
-  margin: .04rem 0 0; font-size: max(calc(.1 * var(--t)), 9px);
-  letter-spacing: .04em; color: var(--rp-dim);
+  margin: .04rem 0 0; font-size: max(calc(.15 * var(--t)), 9px);
+  letter-spacing: .02em; color: var(--rp-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 缩略图：1px 细框 + 深底（方舟的战场预览框） */
+/* 缩略图：官方 153×104 按钮里的 98×59 预览，1px 细框 + 深底 */
 .rpn-insp__map {
   flex: 0 0 auto; position: relative;
   display: grid; place-items: center;
   padding: .06rem; box-sizing: border-box;
   border: 1px solid var(--rp-line-2);
-  background: radial-gradient(60% 60% at 50% 42%, rgba(14, 20, 26, .9), rgba(4, 6, 8, .95));
+  background: radial-gradient(60% 60% at 50% 42%, rgba(14, 14, 14, .9), rgba(4, 4, 4, .95));
 }
 .rpn-insp__map .rpn-map__svg { width: 100%; height: auto; max-height: 1.9rem; display: block; }
-.rpn-insp__none { margin: 0; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim-2); }
+.rpn-insp__none { margin: 0; font-size: max(calc(.15 * var(--t)), 9px); color: var(--rp-dim-2); }
 .rpn-insp__note {
-  margin: 0; font-size: max(calc(.095 * var(--t)), 8px);
-  line-height: 1.5; letter-spacing: .02em; color: var(--rp-dim-2);
+  margin: 0; font-size: max(calc(.15 * var(--t)), 8px);
+  line-height: 1.5; letter-spacing: .02em; color: var(--rp-dim);
 }
 .rpn-insp__kv { margin: 0; display: flex; flex-direction: column; }
 .rpn-insp__kv > div {
   display: flex; align-items: baseline; justify-content: space-between; gap: .1rem;
   padding: .05rem 0; border-bottom: 1px solid var(--rp-line);
 }
-.rpn-insp__kv dt { flex: 0 0 auto; font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim-2); }
+.rpn-insp__kv dt { flex: 0 0 auto; font-size: max(calc(.15 * var(--t)), 9px); color: var(--rp-dim); }
 .rpn-insp__kv dd {
   margin: 0; min-width: 0; text-align: right;
-  font-size: max(calc(.11 * var(--t)), 10px); color: #eef2ef;
+  font-size: max(calc(.16 * var(--t)), 10px); color: var(--rp-txt);
   font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -513,88 +557,88 @@
   display: flex; align-items: center; gap: .05rem; min-width: 0;
   padding: .06rem .08rem;
   border: 1px solid var(--rp-line); border-left: 2px solid var(--tc, var(--rp-line-2));
-  font-size: max(calc(.095 * var(--t)), 8px); color: var(--rp-dim);
+  font-size: max(calc(.15 * var(--t)), 8px); color: var(--rp-dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .rpn-insp__tile b {
-  font-family: var(--font-mono); font-size: max(calc(.15 * var(--t)), 12px);
-  color: #f2f5f3; font-weight: 600;
+  font-family: var(--font-mono); font-size: max(calc(.19 * var(--t)), 12px);
+  color: var(--rp-txt); font-weight: 600;
 }
 .rpn-insp__tile .icon { width: .13rem; height: .13rem; }
 .rpn-insp__tile.is-ground { --tc: #4f9d6f; }
 .rpn-insp__tile.is-high { --tc: #b9cce0; }
 .rpn-insp__tile.is-forbidden { --tc: #ce8a8c; }
 .rpn-insp__tile.is-blocked { --tc: #6a7a88; }
-.rpn-insp__tile.is-melee { --tc: #ffc75a; }
+.rpn-insp__tile.is-melee { --tc: #ffd800; }
 .rpn-insp__tile.is-ranged { --tc: #5ad1a0; }
 
 /* 详情栏中段（说明 + 键值 + 难度 + 下一层）：自己滚动，按钮永远钉在底部 */
 .rpn-insp__body { display: flex; flex-direction: column; gap: .1rem; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
-/* 详情栏中段：难度条 + 下一层预览（把信息页读满，不留大片空） */
 .rpn-insp__sec { display: flex; flex-direction: column; gap: .06rem; }
 .rpn-insp__h {
-  margin: 0; font-size: max(calc(.09 * var(--t)), 8px);
-  letter-spacing: .18em; color: var(--rp-dim-2);
+  margin: 0; font-size: max(calc(.15 * var(--t)), 8px);
+  letter-spacing: .12em; color: var(--rp-dim-2);
 }
 .rpn-insp__reward { display: flex; align-items: center; gap: .1rem; }
 .rpn-insp__diff {
   padding: 0 .06rem; font-family: var(--font-mono); font-weight: 700;
-  font-size: max(calc(.1 * var(--t)), 9px); color: #0a0d10; background: var(--rp-gold);
+  font-size: max(calc(.15 * var(--t)), 9px); color: #0f0f0f; background: var(--rp-gold);
 }
 .rpn-insp__meter {
   position: relative; height: .05rem;
-  background: rgba(223, 230, 226, .1);
+  background: rgba(255, 255, 255, .1);
 }
 .rpn-insp__meter i {
   display: block; height: 100%;
-  background: linear-gradient(90deg, var(--rp-cyan), var(--rp-gold));
+  background: linear-gradient(90deg, var(--rp-exp), var(--rp-gold));
 }
 .rpn-insp__next { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 .rpn-insp__nextrow {
   display: grid; grid-template-columns: .07rem minmax(0, 1fr) auto;
   align-items: center; gap: .07rem;
   padding: .045rem 0; border-bottom: 1px solid var(--rp-line);
-  font-size: max(calc(.1 * var(--t)), 9px); color: var(--rp-dim);
+  font-size: max(calc(.15 * var(--t)), 9px); color: var(--rp-dim);
 }
 .rpn-insp__nextrow.is-picked { color: var(--rp-gold); }
 .rpn-insp__dot {
-  width: .07rem; height: .07rem; background: var(--c, var(--rp-mint));
+  width: .07rem; height: .07rem; background: var(--c, var(--rp-gold));
 }
 .rpn-insp__nextname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rpn-insp__nextmap {
-  font-family: var(--font-mono); font-size: max(calc(.09 * var(--t)), 8px);
-  color: var(--rp-cyan); white-space: nowrap;
+  font-family: var(--font-mono); font-size: max(calc(.15 * var(--t)), 8px);
+  color: var(--rp-gold-2); white-space: nowrap;
 }
 
-/* 底部动作区：固定在详情栏底（方舟的确认按钮在右下角） */
+/* 底部动作区：固定在详情栏底（官方确认按钮在右下） */
 .rpn-insp__foot {
   margin-top: auto; padding-top: .1rem;
   display: flex; flex-direction: column; gap: .06rem;
   border-top: 1px solid var(--rp-line);
 }
 .rpn-insp__hint, .rpn-insp__warn {
-  margin: 0; font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4;
+  margin: 0; font-size: max(calc(.15 * var(--t)), 8px); line-height: 1.4;
   color: var(--rp-dim-2);
 }
 .rpn-insp__vote {
-  margin: 0; font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4;
-  color: var(--rp-cyan); font-variant-numeric: tabular-nums;
+  margin: 0; font-size: max(calc(.15 * var(--t)), 8px); line-height: 1.4;
+  color: var(--rp-gold-2); font-variant-numeric: tabular-nums;
 }
 .rpn-insp__warn { color: #ffab97; }
 .rpn-insp__done {
-  font-size: max(calc(.11 * var(--t)), 10px); letter-spacing: .06em;
+  font-size: max(calc(.16 * var(--t)), 10px); letter-spacing: .04em;
   color: var(--rp-gold);
 }
+/* 前往按钮：官方 button_confirm 502×208 的「满宽大按钮」读法，金底黑字 */
 .rpn-confirm {
   width: 100%; padding: .1rem .12rem;
-  font: inherit; font-size: max(calc(.13 * var(--t)), 11px); font-weight: 600;
-  letter-spacing: .1em; color: #06110d;
-  background: var(--rp-mint); border: 0; cursor: pointer;
+  font: inherit; font-size: max(calc(.19 * var(--t)), 11px); font-weight: 700;
+  letter-spacing: .08em; color: #0f0f0f;
+  background: var(--rp-gold); border: 0; cursor: pointer;
   clip-path: polygon(0 0, calc(100% - .1rem) 0, 100% .1rem, 100% 100%, .1rem 100%, 0 calc(100% - .1rem));
   transition: filter .12s ease;
 }
-.rpn-confirm:hover:not(:disabled) { filter: brightness(1.1); }
+.rpn-confirm:hover:not(:disabled) { filter: brightness(1.08); }
 .rpn-confirm:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ===== 地图页：左侧战场 + 图例，右侧关卡信息 ===== */
@@ -604,7 +648,7 @@
   display: flex; align-items: center; justify-content: center;
   padding: .08rem; box-sizing: border-box;
   border: 1px solid var(--rp-line-2);
-  background: radial-gradient(62% 62% at 50% 40%, rgba(12, 18, 24, .94), rgba(3, 5, 8, .97));
+  background: radial-gradient(62% 62% at 50% 40%, rgba(12, 12, 12, .94), rgba(3, 3, 3, .97));
   overflow: hidden;
 }
 .rpn-stage__bg {
@@ -614,8 +658,8 @@
 .rpn-map__svg { position: relative; display: block; width: 100%; height: 100%; }
 .rpn-stage__label {
   position: absolute; left: .12rem; bottom: .1rem;
-  font-family: var(--font-mono); font-size: max(calc(.1 * var(--t)), 9px);
-  letter-spacing: .08em; color: #dff4fa;
+  font-family: var(--font-mono); font-size: max(calc(.15 * var(--t)), 9px);
+  letter-spacing: .06em; color: #e6f4f8;
 }
 .rpn-legend--map {
   flex: 0 0 auto; margin: 0 .2rem .14rem; padding-top: .1rem;
@@ -641,7 +685,7 @@
   display: flex; align-items: center; gap: .1rem; min-width: 0;
   padding: .1rem .12rem;
   border: 1px solid var(--rp-line);
-  background: rgba(223, 230, 226, .025);
+  background: rgba(255, 255, 255, .025);
 }
 /* 稀有度底版：官方 rarity_N.png（平行四边形 + 星数）作淡色洗，文字与图标压在上面 */
 .rpn-relic::before {
@@ -658,27 +702,27 @@
 .rpn-relic__icon .icon { width: .2rem; height: .2rem; color: var(--rp-dim); }
 .rpn-relic__body { display: flex; flex-direction: column; gap: .02rem; min-width: 0; }
 .rpn-relic__body b {
-  font-size: max(calc(.12 * var(--t)), 10px); font-weight: 600; color: #eef2ef;
+  font-size: max(calc(.16 * var(--t)), 10px); font-weight: 600; color: var(--rp-txt);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rpn-relic__desc {
-  font-size: max(calc(.095 * var(--t)), 8px); line-height: 1.4; color: var(--rp-dim);
+  font-size: max(calc(.15 * var(--t)), 8px); line-height: 1.4; color: var(--rp-dim);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .rpn-relic__tier {
   margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono);
-  font-size: max(calc(.09 * var(--t)), 8px); color: var(--rp-gold);
+  font-size: max(calc(.15 * var(--t)), 8px); color: var(--rp-gold);
 }
 .rpn-relic__na {
   flex: 0 0 auto; padding: 0 .05rem;
-  font-size: max(calc(.085 * var(--t)), 8px); color: var(--rp-dim-2);
+  font-size: max(calc(.15 * var(--t)), 8px); color: var(--rp-dim-2);
   border: 1px solid var(--rp-line-2);
 }
 .rpn-relic__swap {
-  flex: 0 0 auto; font: inherit; font-size: max(calc(.09 * var(--t)), 8px);
+  flex: 0 0 auto; font: inherit; font-size: max(calc(.15 * var(--t)), 8px);
   padding: .02rem .08rem; cursor: pointer;
-  color: var(--rp-cyan); background: transparent;
-  border: 1px solid rgba(127, 240, 255, .5);
+  color: var(--rp-gold-2); background: transparent;
+  border: 1px solid rgba(255, 211, 0, .5);
 }
 .rpn-relic__swap:disabled { opacity: .4; cursor: not-allowed; }
 
