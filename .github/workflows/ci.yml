@@ -140,3 +140,42 @@ jobs:
 
       - name: Full Golden regression check
         run: npm run golden
+
+  # The deploy contract as CI: boots the server exactly like the box does and runs deploy/probes/post-deploy.mjs —
+  # the same probe sync.sh's blue-green runs before swapping traffic. --skip-audio: a CI checkout has no
+  # public/assets (git-ignored), so the disk-completeness and audio-sample checks belong to the box probes only.
+  probe:
+    name: deploy probe (boot + deploy contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (npm ci → postinstall copies public/vendor)
+        run: npm ci --no-audit --no-fund
+
+      - name: Boot the server
+        shell: bash
+        run: |
+          SP_VERSION_DEFAULT=act2autochess node server/index.js > server.log 2>&1 &
+          echo $! > server.pid
+          ok=
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3000/healthz; then ok=1; break; fi
+            sleep 1
+          done
+          echo
+          [ -n "$ok" ] || { cat server.log; exit 1; }
+
+      - name: Deploy probe (healthz / versions / act3 / plugins)
+        run: node deploy/probes/post-deploy.mjs --base http://127.0.0.1:3000 --sample 12 --skip-audio
+
+      - name: Stop the server (always)
+        if: always()
+        shell: bash
+        run: kill "$(cat server.pid)" 2>/dev/null || true

@@ -115,6 +115,22 @@ bg_swap() {
   fi
   systemctl reload nginx
   say "5c. 已切流到 $idle（在线玩家与进行中的对局都留在旧实例 $act，不受影响）"
+  # 5c+. 部署后探针（deploy/probes/post-deploy.mjs，与 CI 的 probe job 同一口径）：
+  #   healthz 契约 / 版本集 / 规程端点 / 前端 bundle / 资产完整性（清单 vs 磁盘）/ 音频抽样。
+  #   探针 FAIL ⇒ 切回旧一色并停掉新一色，返回 2 —— 调用方必须终止（旧版继续服务），不得退回直接重启。
+  say "5c+. 部署后探针（$idle）"
+  : > /root/probe-latest.log
+  if ! PATH="$NODE_DIR/bin:$PATH" node "$APP_DIR/deploy/probes/post-deploy.mjs" \
+      --base "http://127.0.0.1:$idle" --app-dir "$APP_DIR" --sample 40 >> /root/probe-latest.log 2>&1; then
+    say "     探针 FAIL → 切回 $act，停掉新一色（旧版继续服务）"
+    printf 'server 127.0.0.1:%s;\n' "$act" > "$UPSTREAM_CONF"
+    systemctl reload nginx
+    systemctl stop "$idleunit" >/dev/null 2>&1
+    while IFS= read -r l; do say "     probe| $l"; done < <(grep '^FAIL\|^SUMMARY' /root/probe-latest.log | head -8)
+    say "     完整探针日志：/root/probe-latest.log"
+    return 2
+  fi
+  while IFS= read -r l; do say "     probe| $l"; done < <(grep '^SUMMARY' /root/probe-latest.log)
   wait=0
   while [ "$wait" -lt "${SP_DRAIN_MAX:-1800}" ]; do
     left=$(counts_at "$act")
@@ -182,6 +198,14 @@ fi
 say "3. 应用 $(git rev-parse --short "$NEW")（$([ "$NEED_RESTART" = 1 ] && echo 需重启 || echo 无需重启)）"
 git reset --hard FETCH_HEAD
 
+# 3c. 数据清单变更 ⇒ 后台自动补资产（fetch-assets --add-only 只补缺、不动已有文件、不重写字体；
+#     日志 /root/fetch-assets-auto.log）。2026-11-15 教训：v0.4.0 音频清单引用 15,465 个文件而磁盘只有
+#     3,376 个 ⇒ 游戏全程无声音；部署自动补齐才不用人工跑抓取器。
+if printf '%s\n' "$CHANGED" | grep -q '^data/assets.json$'; then
+  say "3c. data/assets.json 变更 → 后台 fetch-assets --add-only 自动补资产"
+  nohup env PATH="$NODE_DIR/bin:$PATH" node "$APP_DIR/tools/fetch-assets.mjs" --add-only >> /root/fetch-assets-auto.log 2>&1 &
+fi
+
 # --- 配置类产物落 /etc（与是否重启进程无关） ---
 UNIT_CHANGED=0
 for u in stronghold.service stronghold-sync.service stronghold-sync.timer 'stronghold@.service'; do
@@ -230,8 +254,13 @@ chown -R stronghold:stronghold "$APP_DIR"
 
 # 蓝绿热更新：/etc/stronghold-bluegreen 存在即启用（改它不需要重启任何东西）。
 # 失败退回下面的直接重启路径 —— 旧实例全程在线，最坏就是「这次没更新」。
+# 返回 2 = 探针未过（新代码已接流又被切回）：旧版正在服务，必须终止，不得退回直接重启。
 if [ -f /etc/stronghold-bluegreen ] && command -v nginx >/dev/null 2>&1; then
-  if bg_swap; then exit 0; fi
+  bg_swap; bg_rc=$?
+  if [ "$bg_rc" -eq 0 ]; then exit 0; fi
+  if [ "$bg_rc" -eq 2 ]; then
+    die "探针未过，已切回旧版继续服务（新代码仍在树上，排查 /root/probe-latest.log 后重跑 sync.sh）"
+  fi
   say "WARN: 蓝绿未完成 → 退回直接重启（旧实例仍在服务）"
 fi
 
@@ -240,8 +269,18 @@ systemctl restart $SERVICE
 for i in 1 2 3 4 5 6; do sleep 5; curl -sf -m 5 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break; done
 
 if health_ok; then
-  say "PASS: 已应用 $(git log -1 --format='%h %s')"
-  exit 0
+  say "5e. 部署后探针（$PORT）"
+  : > /root/probe-latest.log
+  if PATH="$NODE_DIR/bin:$PATH" node "$APP_DIR/deploy/probes/post-deploy.mjs" \
+      --base "http://127.0.0.1:$PORT" --app-dir "$APP_DIR" --sample 40 >> /root/probe-latest.log 2>&1; then
+    while IFS= read -r l; do say "     probe| $l"; done < <(grep '^SUMMARY' /root/probe-latest.log)
+    say "PASS: 已应用 $(git log -1 --format='%h %s')"
+    exit 0
+  fi
+  while IFS= read -r l; do say "     probe| $l"; done < <(grep '^FAIL\|^SUMMARY' /root/probe-latest.log | head -8)
+  say "FAIL: 探针未过 → 回滚到 $(git rev-parse --short "$OLD")"
+else
+  say "FAIL: 重启后健康检查不过 → 回滚到 $(git rev-parse --short "$OLD")"
 fi
 
 say "FAIL: 重启后健康检查不过 → 回滚到 $(git rev-parse --short "$OLD")"
