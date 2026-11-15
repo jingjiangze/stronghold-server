@@ -64,6 +64,13 @@ export const SKIPPED_CI_STEPS = [
   { uses: 'actions/setup-node', why: 'GitHub runner: the Node.js of this machine is used' },
   { name: 'Install (npm ci → postinstall copies public/vendor)', why: 'run `npm ci` yourself; it is not a check' },
   { job: 'golden', name: 'Full Golden regression check', run: 'npm run golden', why: 'run `npm run golden` separately for the full corpus' },
+  // The probe job (deploy/probes/post-deploy.mjs) = the deploy contract as CI: it boots the server and asserts
+  // healthz / versions / act3 / plugins the way the box's sync.sh blue-green does before swapping traffic. Locally
+  // run it directly (`node deploy/probes/post-deploy.mjs --base …`); --skip-audio because a checkout has no
+  // public/assets. The stop step carries `if: always()` — a per-step config local ci.mjs does not mirror.
+  { job: 'probe', name: 'Boot the server', why: 'local ci.mjs does not boot a server; the probe is run directly against a base URL' },
+  { job: 'probe', name: 'Deploy probe (healthz / versions / act3 / plugins)', run: 'node deploy/probes/post-deploy.mjs --base http://127.0.0.1:3000 --sample 12 --skip-audio', why: 'run `node deploy/probes/post-deploy.mjs --base … --skip-audio` against a running server' },
+  { job: 'probe', name: 'Stop the server (always)', why: 'CI-only cleanup (if: always()); local ci.mjs never owns the process' },
 ];
 
 /**
