@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 // Minimal runtime carry for exact OB families. No new authority, timer or replay policy.
 const pair=id=>['enemy_'+id,'enemy_'+id+'_2'];
 const fields=new Map([

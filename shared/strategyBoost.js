@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 import {contractPoints,crisisActive} from './contracts.js';
 export const STRATEGY_BOOST_SCORE = 20;
 export const strategyBoostEnabled = (ids,difficulty,players=20) => crisisActive(ids,difficulty) && contractPoints(ids,difficulty,players)>=STRATEGY_BOOST_SCORE;

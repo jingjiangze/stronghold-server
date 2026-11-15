@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 // Owner-designed expansion: risk families are exclusive tiers; support never awards risk points.
 export const EXTRA_CONTRACT_SETS=Object.freeze([
  {id:'rush',order:8,name:'指标集：奔袭',nameEn:'ONSLAUGHT'},

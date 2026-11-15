@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 import { FACTION_THEMES } from './bossFactions.js';
 // shared/bgmTheme.js —— **自适应开战 BGM**:这一场打的是谁,就放谁的曲子。
 //

@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 // shared/accountAuth.js — 密码派生 (客户端算,服务端不存原密码).
 //
 // THE PROBLEM

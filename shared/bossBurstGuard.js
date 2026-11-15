@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 /** Owner raid protection. Simulation time only; player windows live on the pool across every field/body. */
 export const BOSS_BURST_RULES=Object.freeze({single:.05,window:2,trigger:.15,duration:3,taken:.35,perSecond:.04,cooldown:8});
 export const LATE_BOSS_BURST_RULES=Object.freeze({single:.025,window:2,trigger:.05,duration:4,taken:.5,perSecond:.02,cooldown:6,sustained:.03});

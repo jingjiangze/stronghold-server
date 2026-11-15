@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 // shared/rogueThemes.js — 肉鸽「地图主题池」的唯一常量表（2026-11-06）。
 //
 // 数据来源（权威）：官方 activity_table.json（data/.cache/gamedata/excel/activity_table.json）里

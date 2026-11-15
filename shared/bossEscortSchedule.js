@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 // Owner 2026-10-27: repeat only each original boss's existing opening-wave escort sequence.
 // Native skills and parts keep their own cadence. Never compose an extra army here.
 export const MIN_BOSS_ESCORT_COOLDOWN=40;

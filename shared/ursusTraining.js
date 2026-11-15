@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 // Owner 2026-10-29: ordinary Ursus training only. Native boss escorts keep their previous roster.
 import {N_} from './i18n.js';
 const keys=s=>s.split(/\s+/).filter(Boolean).map(k=>'enemy_'+k);

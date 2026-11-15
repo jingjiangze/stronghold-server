@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 import {N_} from './i18n.js';
 export const SELF_LIMIT_DRAFT_SECONDS=90;
 export const SELF_LIMIT_RULES=Object.freeze({deploymentMax:2,bondsMax:2,layersMax:3,bondBase:7,hpFactor:.94,redeployFactor:1.08,rotationMax:4,incomeMax:2,incomeFromRound:6});

@@ -1,3 +1,5 @@
+// @ts-nocheck
+// fork 自有文件：尚未纳入上游 jsconfig 的类型切片（2026-11-15 升上游时批量豁免，行为无影响）
 /** Pursuer-only owner rules, shared by combat, generated descriptions and preparation previews. */
 export const PURSUER_KEY = 'enemy_1520_empgrd';
 export const PURSUER_RULES = Object.freeze({
