@@ -5,8 +5,10 @@
 //
 //   start()                                  the worker creates the match and starts it (the worker may still be booting:
 //                                            the host queues the messages; the match exists for the lobby at once)
-//   handle / setLoadout / requestSetupReroll / cancelSetupReroll → Promise of the match's answer ({ ok } | { error, detail })
-//                                            — the lobby answers the request when it settles (server/net.js)
+//   handle / setLoadout / requestSetupReroll / cancelSetupReroll / aiHandoverView / acceptAiHandover
+//                                            → Promise of the match's answer ({ ok } | { error, detail })
+//                                            — the lobby answers the request when it settles (server/net.js).
+//                                            aiHandoverView's ok result also carries the eligibility snapshot.
 //   onDisconnect / onReconnect / onLeave / addSpectator / removeSpectator → posted, no answer
 //   dispose()                                posted; nothing of this match reaches the lobby afterwards
 //   diag()                                   → Promise of the match's diagnostics (verifyStats, errors, fields — tests,
@@ -128,7 +130,7 @@ export class MatchProxy {
 
   handle(playerId, msg) { return this._request('handle', [playerId, msg]); }
   /**
-   * 观战接管 AI（潜入）：插件对局跑在 worker 里，lobby 这边没有 players / phase / round，
+   * fork: 观战接管 AI（潜入）：插件对局跑在 worker 里，lobby 这边没有 players / phase / round，
    * 所以投票流程与「直接接管」都要经这两个 RPC 问对端。
    * ⚠️ 这两条原先只存在于 `plugins/mota/server/match/host/proxy.js` 的**镜像副本**里，活的核心 proxy 没有
    * ⇒ `server/aiTakeover.js` 的 `matchState()` 一调就 `m.takeoverSeatState is not a function`，
@@ -136,6 +138,15 @@ export class MatchProxy {
    */
   takeoverSeatState() { return this._request('takeoverSeatState', []); }
   takeoverSeat(botId, applicantId, name) { return this._request('takeoverSeat', [botId, applicantId, name]); }
+  // upstream 0.4.0: official-version rooms hand over via the view RPC; the fork passes the applicant id along
+  // (3rd, optional) so the child stamps the result's ownerId (ps.aiTakeoverFrom, results.js).
+  /** Eligibility snapshot for a spectator AI handover. @returns {Promise<any>} */
+  aiHandoverView() { return this._request('aiHandoverView', []); }
+  /**
+   * Match half of inheriting a bot seat. @param {string} botId @param {string} name @param {string} [applicantId]
+   * @returns {Promise<{ ok?: boolean, error?: string, detail?: string }>}
+   */
+  acceptAiHandover(botId, name, applicantId) { return this._request('acceptAiHandover', [botId, name, applicantId]); }
   setLoadout(playerId, loadout, ops) { return this._request('setLoadout', [playerId, loadout, ops]); }
   requestSetupReroll(playerId, revision) { return this._request('requestSetupReroll', [playerId, revision]); }
   cancelSetupReroll(playerId, voteId) { return this._request('cancelSetupReroll', [playerId, voteId]); }

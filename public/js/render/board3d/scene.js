@@ -29,7 +29,7 @@ import { buildBoard, objToBoard, boxProjectUV, ROWS, COLS, DEVICE_H, AREAS } fro
 import { surfaceUV } from './atlas.js';
 import {
   focusUniforms, makeTexture, boardMaterial, glassMaterial, decalMaterial, pipeMaterial, unlitMaterial, gateMaterial, glowMaterial,
-  waterMaterial, mireMaterial, infectionMaterial, smogMaterial, dashTexture, environmentMap, sceneMaterial, sceneWaterDecalMaterial,
+  waterMaterial, mireMaterial, infectionMaterial, smogMaterial, duelGrassMaterial, dashTexture, environmentMap, sceneMaterial, sceneWaterDecalMaterial,
   sceneEnvTexture, applyWaterMaterial, trapMaterial,
 } from './materials.js';
 import { syncThreeCamera } from '../projection.js';
@@ -179,8 +179,15 @@ export function translateRect(r, f) {
  * The group rects in `pack.groups` are SCENE-LOCAL (load.js `sceneGroupRects` takes them from the chunks' bounds), so
  * translate them with `translateRect(rect, stage.rogueFrame)` before comparing: a rogue scene is drawn shifted by
  * (col, row) (`_buildScene`).
+ * `inactive` is never shown. scenes.py tags that group on a GameObject the client saved disabled and that no
+ * MapSubGraphicHolder turns on (fog_1 / fog_2, the same quads a later extract names mapeff_survival_shadow_*).
+ * Their centre is the origin, which lies in the boss field and outside a normal / 联防 field, so the centre test
+ * alone draws them as white patches under the boss ground (GitHub #918). [ASSUMED] the battle never turns that
+ * object on for a phase: nothing in the extracted scene lists it under a sub-graphic, and mapeff are already
+ * left undrawn. A HIDDEN part is a different group and still follows the field.
  */
-export function sceneGroupVisible(rect, areas) {
+export function sceneGroupVisible(rect, areas, group = '') {
+  if (group === 'inactive') return false;
   if (!Array.isArray(rect) || rect.length < 4) return true;
   const cx = (rect[0] + rect[2]) / 2, cy = (rect[1] + rect[3]) / 2;
   return (areas || []).some((a) => cx >= a.c0 - 0.5 && cx <= a.c1 + 0.5 && cy >= a.r0 - 0.5 && cy <= a.r1 + 0.5);
@@ -309,6 +316,7 @@ export class BoardScene {
       mire: mireMaterial(T, this.tex, this.focus),
       infection: infectionMaterial(T, this.tex, this.focus),
       smog: smogMaterial(T, this.tex, this.focus),
+      duelGrass: duelGrassMaterial(T, this.focus),
       shadowCatcher: new T.ShadowMaterial({ opacity: 0.32, color: 0x000000 }),
       platform: this.tex.platform ? trapMaterial(T, this.tex.platform, this.focus, pack?.materials?.trap?.MT_trap_1106_achplat || null, LIGHTING.key.dir) : null,
       crate: this.tex.crate ? trapMaterial(T, this.tex.crate, this.focus, pack?.materials?.trap?.MT_trap_1105_accrate
@@ -523,7 +531,8 @@ export class BoardScene {
 
   /**
    * The official scene's meshes: the base plus the fields of the built areas, one mesh per material and lightmap
-   * page (`mergeSceneChunks`). A switched-off HIDDEN part is left out before the merge.
+   * page (`mergeSceneChunks`). A switched-off HIDDEN part, and a group the client saved disabled
+   * (`inactive`), are left out before the merge.
    */
   _buildScene(pack) {
     const T = this.THREE;
@@ -546,7 +555,7 @@ export class BoardScene {
       const c = f && fw > 0 && fh > 0 ? clipSceneChunkToFrame(c0, fw, fh) : c0;
       if (!c) continue;
       // group 矩形是场景局部坐标（load.js sceneGroupRects 取自 chunk.bounds），先平移到画框原点再比 stage 的 area
-      if (c.group && !sceneGroupVisible(translateRect(pack.groups?.[c.group], f), this.area)) continue;
+      if (c.group && !sceneGroupVisible(translateRect(pack.groups?.[c.group], f), this.area, c.group)) continue;
       const info = infos[c.material] || null;
       const mk = sceneMaterialKey(c, info);
       let bucket = buckets.get(mk);
@@ -703,6 +712,7 @@ export class BoardScene {
     // The infection (活性源石) glow is our own flat patch; an official scene already carries that floor in its own
     // geometry and textures, so drawing ours on top just overlaps it (#549).
     if (T.infection.length && !this.official) this.meshes.infection = this._mesh(quads(T.infection, 0.007, 0.02), this.mat.infection, opt);
+    if (T.duelGrass.length) this.meshes.duelGrass = this._mesh(quads(T.duelGrass, 0.009, 0.015), this.mat.duelGrass, opt);
     if (T.smog.length) {
       // two crossed haze cards per grille tile, standing up
       const pos = [], uv = [], idx = [];
@@ -872,7 +882,7 @@ export class BoardScene {
     let flash = 0;
     for (let i = this.flashes.length - 1; i >= 0; i--) { const f = this.flashes[i]; f.t += dt; if (f.t > 1.2) this.flashes.splice(i, 1); else flash = Math.max(flash, 1 - f.t / 1.2); }
     for (const m of [this.mat.gateEndAdd, this.mat.gateEndAb]) if (m) m.uniforms.uFlash.value.setRGB(flash, flash * 0.12, flash * 0.1);
-    for (const k of ['water', 'mire', 'infection', 'smog']) this.mat[k].uniforms.uTime.value = t;
+    for (const k of ['water', 'mire', 'infection', 'smog', 'duelGrass']) this.mat[k].uniforms.uTime.value = t;
     if (this.official) for (const m of this.sceneWater || []) m.uniforms.uTime.value = t;
     this.renderer.render(this.scene, this.camera);
     this.frames++;

@@ -38,10 +38,11 @@
 //                                               aggroSeq precedes ordinary initial operators; deploySeq stays the runtime spawn
 // Prep-only bands (economy / shop / grants / layers at prep end or round start) live in bands/meta.js.
 
-import { num, buffsOf, bandRecord, isOp, onField, isElite, tierOf, unitBonds, activeBondIds, playerOps, passiveBuff, fxOn, matchBands, gainLayers, alliesAround, N4, baseChessId, isGroundOp, directMods } from '../support/index.js';
+import { num, buffsOf, bandRecord, isOp, onField, isElite, tierOf, unitBonds, activeBondIds, playerOps, passiveBuff, fxOn, matchBands, gainLayers, alliesAround, N4, baseChessId, isGroundOp, directMods, isVersionData } from '../support/index.js';
 import { weaknessRetype, addShieldLayer, PRIO_RESPAWN, reviveNow } from '../items/battle.js';
 import { spawnMapChar } from '../tokens.js';
 import {boostedStrategy} from '../../../../shared/strategyBoost.js';
+import { installCommandMarks } from './commands.js';
 
 export const AMEDIC_BAND = 'band_amedic';
 /**
@@ -57,6 +58,13 @@ const deployedOps = (battle, pid) => playerOps(battle, pid, { fieldOnly: true })
 // band buff behaviours: (battle, ps, params, bandId)
 
 const BY_KEY = {
+  attr_common_global_buff(battle, ps, p, bandId) {
+    if (!ps.input.commandEffectId && battle.data.raw.config?.version?.family !== 'regulation') return;
+    for (const u of playerOps(battle, ps.playerId)) {
+      if (p.filter_autochess_golden && !isElite(u)) continue;
+      passiveBuff(battle, u, `${keyOf(bandId)}:attributes`, { ...directMods({ atk: num(p.atk), hp: num(p.max_hp) }), aspd: num(p.attack_speed) });
+    }
+  },
   // 阿米娅 众志合一
   act1autochess_band2_buff(battle, ps, p, bandId) {
     const n = activeBondIds(battle, ps.playerId).length;
@@ -176,6 +184,7 @@ const BY_KEY = {
     battle.on('hit', (c) => {
       const s = c.source;
       if (!isOp(s) || s.ownerId !== ps.playerId || !c.target || c.target.side !== 'enemy') return;
+      if (isVersionData() && battle.data.raw.config?.version?.family !== 'regulation' && s.def?.position !== 'RANGED') return;
       weaknessRetype(c.dmg, s, c.target);
     }, { priority: 5 });
   },
@@ -316,7 +325,8 @@ export function hasBattlePart(bandId) {
 
 export function install(battle) {
   for (const ps of battle.players) {
-    const band = ps.bandId ? boostedStrategy(bandRecord(ps.bandId),!!ps.input?.contentInfo?.strategyBoost) : null;
+    const band = ps.input.commandEffectId ? battle.data.raw.effects?.[ps.input.commandEffectId]
+      : ps.bandId ? boostedStrategy(bandRecord(ps.bandId),!!ps.input?.contentInfo?.strategyBoost) : null;
     if (!band) continue;
     for (const b of buffsOf(band)) {
       const f = b.bbKey ? BY_KEY[b.bbKey] : null;
@@ -325,4 +335,5 @@ export function install(battle) {
     }
   }
   installMapChars(battle);
+  installCommandMarks(battle);
 }

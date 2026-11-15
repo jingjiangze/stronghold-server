@@ -24,7 +24,8 @@
 /**
  * Per-match disabled bond set D and banned chess (research 01 A2): D = uniform sample of `core` core bonds and `addon`
  * add-on bonds among weight > 0 bonds that are active in the mode. A visible chess is banned iff every one of its
- * bonds is in D ∪ mode.inactiveBondIds.
+ * bonds is in D ∪ mode.inactiveBondIds. Regulation's profile switches to two core groups (solo) / half grey (multi)
+ * and core-priority exclusion via GameData.bondsExclude (only coreless operators follow all add-ons).
  *
  * 0.4.3 (owner 2026-10-18) adds `config.bans.<difficulty>.extraChess` extra bans per mode (7 in every difficulty but
  * TRAINING): 先按上面的债券规则禁人，再从未被禁的 visible 干员里均匀追加抽 `extraChess` 名，`banned` = 债券规则禁的
@@ -32,8 +33,9 @@
  * 干员的 charId，抽不到）与第一个 1 费干员（排序后第一个 tier 1），保证开局仍有 1 费可买；已在 off（债券规则禁）的不重复抽。
  * @param {import('./gamedata.js').GameData} gd
  * @param {Function} rng seeded rng (createRng)
- * @returns {{ drawn: string[], staticOff: string[], banned: string[], extra: string[] }} extra = the chess banned
- *          beyond the bond rule this match
+ * @returns {{ drawn: string[], staticOff: string[], banned: string[], extra: string[],
+ *          choice?: { groups: string[][], picked: number|null } }} extra = the chess banned beyond the bond rule
+ *          this match; choice = a solo regulation group pick still open
  */
 export function drawDisabledBonds(gd, rng) {
   const { core: nCore, addon: nAddon } = gd.bans(gd.difficulty);
@@ -45,23 +47,42 @@ export function drawDisabledBonds(gd, rng) {
   });
   const core = eligible.filter((b) => gd.bond(b).isCore);
   const addon = eligible.filter((b) => !gd.bond(b).isCore);
-  const drawn = [...sample(core, nCore, rng), ...sample(addon, nAddon, rng)].sort();
-  const off = new Set([...drawn, ...staticOff]);
-  // 额外禁人：跳过已禁、受保护的核心干员与第一个 1 费开局干员。保护名单写的是干员 charId（如 char_2015_dusk），
-  // 而 visibleChess 的键是 chess_char_*_a，所以 id 与 chess.charId 都比对。
+  // 额外禁人（fork 0.4.3）：跳过已禁、受保护的核心干员与第一个 1 费开局干员。保护名单写的是干员 charId
+  // （如 char_2015_dusk），而 visibleChess 的键是 chess_char_*_a，所以 id 与 chess.charId 都比对。
   const protectedIds = new Set(Array.isArray(gd.config?.bans?.extraProtectedCoreChars) ? gd.config.bans.extraProtectedCoreChars : []);
   const isProtected = (id) => protectedIds.has(id) || protectedIds.has(gd.chess(id)?.charId);
   const firstTier1 = gd.visibleChess.find((id) => gd.tierOf(id) === 1) || null;
-  const extra = sample(gd.visibleChess.filter((id) => !off.has(id) && !isProtected(id) && id !== firstTier1), extraN, rng);
-  const extraSet = new Set(extra);
-  // banned = 债券规则禁的 ∪ 额外禁的：额外禁的即使没有 bonds（债券规则不禁）也要出池。
-  const banned = [];
-  for (const id of gd.visibleChess) {
-    const c = gd.chess(id);
-    const bonds = Array.isArray(c.bonds) ? c.bonds : [];
-    if ((bonds.length > 0 && bonds.every((b) => off.has(b))) || extraSet.has(id)) banned.push(id);
+  const drawExtra = (drawn) => {
+    const off = new Set([...drawn, ...staticOff]);
+    return sample(gd.visibleChess.filter((id) => !off.has(id) && !isProtected(id) && id !== firstTier1), extraN, rng);
+  };
+  if (gd.regulationBondDraw) {
+    // Solo: two groups of half the core bonds (owner's level 1: 4 + 4; recordings: 规程等级1 / 极速 4 + 4, 规程等级20 5 + 5);
+    // an odd leftover stays active. Co-op greys the profile's `bans.core` (recordings 2026-11-12: 标准 0 of 8 in two
+    // matches of BV11NW869ELq, 险境 / 绝境 / 终极 5 of 10); LOCAL training keeps its configured counts too.
+    const half = Math.floor(core.length / 2);
+    const shuffled = sample(core, core.length, rng);
+    const choice = gd.isSolo ? { groups: [shuffled.slice(0, half), shuffled.slice(half, half * 2)], picked: null } : null;
+    const coreOff = choice ? [] : shuffled.slice(0, nCore);
+    const drawn = [...coreOff, ...sample(addon, nAddon, rng)].sort();
+    const extra = drawExtra(drawn);
+    return { drawn, staticOff, banned: bannedChessForBonds(gd, drawn, staticOff, extra), extra, ...(choice ? { choice } : {}) };
   }
-  return { drawn, staticOff, banned, extra };
+  const drawn = [...sample(core, nCore, rng), ...sample(addon, nAddon, rng)].sort();
+  const extra = drawExtra(drawn);
+  return { drawn, staticOff, banned: bannedChessForBonds(gd, drawn, staticOff, extra), extra };
+}
+
+/**
+ * Shared by the initial draw and a solo group's choice; no RNG or stock is consumed. `extra` is the fork's additional
+ * per-mode ban list (config.bans.<difficulty>.extraChess, sampled by drawDisabledBonds): those chess stay out even
+ * when the bond rule alone would keep them.
+ */
+export function bannedChessForBonds(gd, drawn, staticOff, extra = null) {
+  const off = new Set([...drawn, ...staticOff]);
+  const extraSet = new Set(Array.isArray(extra) ? extra : []);
+  // banned = 债券规则禁的（GameData.bondsExclude：规程下核心优先）∪ 额外禁的：额外禁的即使没有 bonds 也要出池。
+  return gd.visibleChess.filter((id) => gd.bondsExclude(gd.chess(id), off) || extraSet.has(id));
 }
 
 function sample(arr, n, rng) {
@@ -119,20 +140,21 @@ export class SharedPool {
 
   /**
    * Remaining copies of eligible chess (tier ≤ maxTier, or exactly `tier`): the pool's entries, then `extra` ([id, entry]
-   * pairs of the same shape — a player's 自选 stock) under the same filters.
+   * pairs of the same shape — a player's 自选 stock) under the same filters. Explicit extra tierExempt entries bypass
+   * maxTier only, retaining their real tier; exact-tier draws and ordinary pool entries never bypass the gate.
    */
   _eligible({ maxTier = 6, tier = null, filter = null, extra = null, ignoreCounts = false } = {}) {
     const out = [];
-    const scan = (list) => {
+    const scan = (list, extraEntries = false) => {
       for (const [id, e] of list) {
         if (!ignoreCounts && e.left <= 0) continue;
-        if (tier != null ? e.tier !== tier : e.tier > maxTier) continue;
+        if (tier != null ? e.tier !== tier : e.tier > maxTier && !(extraEntries && e.tierExempt === true)) continue;
         if (filter && !filter(id, e)) continue;
         out.push([id, ignoreCounts ? 1 : e.left]);
       }
     };
     scan(this.entries);
-    if (extra) scan(extra);
+    if (extra) scan(extra, true);
     return out;
   }
 
@@ -140,7 +162,7 @@ export class SharedPool {
    * Copy-weighted roll: one copy uniformly among remaining copies of eligible chess. Returns a base id or null.
    * @param {Function} rng
    * @param {{ maxTier?: number, tier?: number|null, filter?: (id: string, e: object) => boolean,
-   *   extra?: Iterable<[string, { left: number, tier: number }]>|null }} [opts]
+   *   extra?: Iterable<[string, { left: number, tier: number, tierExempt?: boolean }]>|null }} [opts]
    */
   roll(rng, opts = {}) {
     const el = this._eligible(opts);

@@ -6,7 +6,7 @@ import { EXTRA_EMOTE_THEMES } from './emoteExtraPack.js';
 export const PROTOCOL_VERSION = 1;
 /** Release version shown to players (title screen, server banner, /healthz). Kept equal to package.json "version"
  * (test/version.test.js); PROTOCOL_VERSION above is the separate wire-format number. */
-export const APP_VERSION = '0.4.3';
+export const APP_VERSION = '0.4.0';
 /** A development build (the public `dev` branch): the title screen, the boot banner and the README say so, and
  * tools/package.mjs refuses to build a release zip from it without --allow-dev. */
 export const DEV_BUILD = /-dev$/.test(APP_VERSION);
@@ -79,7 +79,13 @@ export const MAX_DRAFT_CARDS = MAX_SEATS + 2;
  */
 export const MAX_SPECTATORS = 10;
 /**
- * 分组拦截 (联防) tunables.
+ * The most candidate layouts one bot prep rehearses (server/match/bot.js arrangeSteps): up to 8 of its own plus the
+ * other lineups' (Final Assault damage lineups and spaced plans, co-op alternatives); a delegated rehearsal's answer
+ * names one of them (protocol 'b.rehearsalResult').
+ */
+export const REHEARSAL_MAX_CANDIDATES = 16;
+/**
+ * 分组拦截 (联防) tunables — fork R14。
  *
  * `UNITE_ABANDON_RATIO` is the share of LIVING players that must agree before the current defence group is pulled off
  * its zone early (the owner's rule: 80 %). It is a ratio rather than a head count so the same rule reads the same in a
@@ -130,7 +136,8 @@ export const PHASE = Object.freeze({
   LOBBY: 'LOBBY',
   INFO_CHECK: 'INFO_CHECK',
   BAND_DRAFT: 'BAND_DRAFT',
-  SELF_LIMIT_DRAFT: 'SELF_LIMIT_DRAFT',
+  SELF_LIMIT_DRAFT: 'SELF_LIMIT_DRAFT', // fork: 自限抉择（插件线阶段）
+  CUSTOM_CHECK: 'CUSTOM_CHECK', // 上游 0.4.0: 规程「选择自编」
   BATTLE_CHECK: 'BATTLE_CHECK',
   ROUND_START: 'ROUND_START',
   SP_DRAFT: 'SP_DRAFT',
@@ -145,7 +152,7 @@ export const PHASE = Object.freeze({
 });
 
 export const PHASE_NAMES = {
-  LOBBY: N_('等待中'), INFO_CHECK: N_('确认本局信息'), BAND_DRAFT: N_('选择策略'), SELF_LIMIT_DRAFT:N_('自限抉择'), BATTLE_CHECK: N_('协议启动'),
+  LOBBY: N_('等待中'), INFO_CHECK: N_('确认本局信息'), BAND_DRAFT: N_('选择策略'), SELF_LIMIT_DRAFT: N_('自限抉择'), CUSTOM_CHECK: N_('选择自编'), BATTLE_CHECK: N_('协议启动'),
   ROUND_START: N_('回合开始'), SP_DRAFT: N_('机变阶段'), PREP: N_('休整期'), WAVE_PREVIEW: N_('准备迎敌'), COMBAT: N_('作战中'), UNITE: N_('联防阶段'),
   SETTLE: N_('结算'), FINAL_ASSAULT: N_('最终攻势'), HIDDEN_CORE: N_('隐秘核心'), RESULT: N_('模拟结束'),
 };
@@ -191,6 +198,30 @@ export const SKILL_SUMMON_START_DEPLOY = true;
  * per N layers (远见, 奇迹, 维多利亚 …) stop with the count. 0 / Infinity = no cap.
  */
 export const BOND_LAYER_CAP = 999;
+
+/** Preview pen upper zone anchor row ((18,7); the lower anchor is (15,7)) and the client's row offsets. */
+const PEN_UPPER_ROW = 18;
+const PREVIEW_ROW_OFFSET = 6;
+const PREVIEW_ROW_OFFSET_LEADER = 13;
+
+/**
+ * 'upper' | 'lower' preview zone of a route start (client `AutoChessEnemyPreviewManager`, research 08 §4.2) — the
+ * enemy previews (server/match/waves.js) and 鸭爵's lower-lane rule (content/bands/meta.js, GitHub #839): target row =
+ * start row + 6 (leader rounds: + 13); the zone is the Manhattan-nearest anchor among those with anchor row ≤ target
+ * row — (18,7) upper, (15,7) lower — so only a target row ≥ 18 reaches the upper zone: normal fields row 12 (upper
+ * gate (12,10); rows 9–11 lower), boss fields row 5 (rows 2–4 lower: the leaders at (3,x)/(4,x) and the (2,10) gate).
+ * A target below row 15 has no zone (the client picks a random pen tile) and is reported 'lower'.
+ * @param {number[]|null} start [row, col]
+ * @param {boolean} [leader] leader / hidden round (default: a boss-field row, ≤ 8)
+ */
+export function gateOf(start, leader) {
+  const r = Array.isArray(start) ? start[0] : null;
+  if (!Number.isFinite(r)) return 'lower';
+  const lead = typeof leader === 'boolean' ? leader : r <= 8;
+  const target = r + (lead ? PREVIEW_ROW_OFFSET_LEADER : PREVIEW_ROW_OFFSET);
+  // both anchors share col 7, so with target ≥ 18 the upper one is always the nearer; below it only (15,7) qualifies
+  return target >= PEN_UPPER_ROW ? 'upper' : 'lower';
+}
 
 /**
  * The layers a gain of `n` actually adds to a bond holding `before` under the cap: min(n, cap − before), never
@@ -336,6 +367,9 @@ export const ERR_TEXT = {
   TEST_CONFIRM: N_('这是测试房间，不计入任何记录。确认加入？'),
   TEST_DISABLED: N_('测试模式未开启'),
   TEST_FORBIDDEN: N_('这不是测试房间'),
+  VERSION_UNKNOWN: N_('本服务器没有启用该版本'),
+  VERSION_UNSUPPORTED: N_('该版本不能用于当前房间，请检查模拟方式与插件支持的版本'),
+  VERSION_VOTE: N_('切换版本投票进行中，请等投票结束'),
 };
 
 // ---- Emotes (交流, research 09 §4) -----------------------------------------------------------------------------

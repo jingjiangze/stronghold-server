@@ -13,6 +13,7 @@
 //   after the change, a field opened mid-battle, draws it: render/units.js FORMS)
 //   dir = 'UP'|'RIGHT'|'DOWN'|'LEFT' (allies: the deploy direction, sim/dir.js); facing = its horizontal sign (±1).
 //   items = an ally operator's equipped item ids (absent without any).
+//   itemProgress? = [{uid,id,current,total}], display-only counters captured at prep end; not in b.snap tuples.
 // flags bits & anim codes come from shared/constants.js (UF / ANIM); an enemy's stealth bit = its 隐匿 is on (not while it
 // is blocked or revealed, nor in the seconds after a block before it hides again — targeting.js enemyStealthed), an
 // ally's = 隐匿 / 迷彩 whatever it blocks.
@@ -37,6 +38,9 @@ export function unitInfo(u) {
    * 表现就是「休息期有皮肤、一进战斗变原皮」。
    */
   const spine = u.spine ?? d.spine ?? d.charId ?? u.defId;
+  // The unit's OWN attack interval in game seconds — units.js `s.interval` (bat × batPct × 100 / aspd, buffs included);
+  // absent (undefined, dropped by JSON.stringify) when the unit has none.
+  const atkInterval = Number.isFinite(u.s?.interval) && u.s.interval > 0 ? u.s.interval : undefined;
   return {
     id: u.id,
     kind: u.kind,
@@ -49,9 +53,21 @@ export function unitInfo(u) {
     name: u.name,
     tier: d.tier ?? (d.rank === 'BOSS' ? 3 : d.rank === 'ELITE' ? 2 : 1),
     golden: !!d.golden,
+    // The unit's OWN attack interval in game seconds (units.js `s.interval`: bat × batPct × 100 / aspd, i.e. with the buffs
+    // this record carries). The renderer stretches the attack clip over it (render/attackRate.js): without it a view started
+    // from the operator's base-record guess and swung in slow motion until two attacks had been measured.
+    atkInterval,
     spine,
     ...(u.side==='enemy'&&Number.isFinite(d.raw?.renderScale)?{renderScale:Math.max(.25,Math.min(2,d.raw.renderScale))}:{}),
     ...(['enemy_1081_sotisd','enemy_1081_sotisd_2'].includes(u.defId)&&Number.isFinite(u.mods?.patriotGuardScale)?{renderScale:Math.max(.5,Math.min(1,u.mods.patriotGuardScale))}:{}),
+    // 皮肤 (docs/SKINS.md): the owning player's chosen skinId. `undefined` (not null) on purpose — JSON.stringify drops
+    // it, so an install with no skins produces the exact same wire format as before and the §8.2 contract holds; the key
+    // only appears where a skin is actually in play.
+    skin: u.skin ?? undefined,
+    // 召唤物皮肤 (docs/SKINS.md): the owner operator's charId, so a client can re-read the live public choice; display
+    // only, absent for a non-token.
+    ownerCharId: u.kind === 'token' && u.ownerUnit
+      ? (u.ownerUnit.def?.loadout?.diy?.charId || u.ownerUnit.def?.charId || undefined) : undefined,
     avatar: d.avatar ?? d.charId ?? u.defId,
       ...(d.raw?.nativeParticleOnly?{nativeParticleOnly:true}:{}),
     ...(d.voice ? { voice: d.voice } : {}),
@@ -78,6 +94,7 @@ export function unitInfo(u) {
     // an ally operator's equipped item ids (display: a 变形同构体 wearer counts for the bond it grants — the bond popup's
     // member list and the detail card's bond chips of a teammate's unit)
     items: u.side === 'ally' && u.kind === 'op' && Array.isArray(u.items) && u.items.length ? [...u.items] : undefined,
+    itemProgress: u.itemProgress?.map(p => ({ ...p })),
     // 补位: the replaced operator's charId when the chess fights as its stand-in (spine / avatar are the stand-in's; the
     // detail card composes the stand-in record, shared/standIn.js standInRecord)
     standInFor: u.side === 'ally' && u.kind === 'op' && typeof d.standInFor === 'string' ? d.standInFor : undefined,
@@ -141,6 +158,7 @@ export function animOf(u, t) {
   if (t < (u.skillAnimUntil ?? -1)) return ANIM.SKILL;
   if (t - u.lastAttackAt < ATTACK_ANIM_TIME) return u.skill && u.skill.active && u.skill.kind !== 'passive' ? ANIM.SKILL : ANIM.ATTACK;
   if (u.side === 'enemy' && u.moving && !u.blockedBy) return ANIM.MOVE;
+  if (u.side === 'ally' && u.kind === 'token' && u.mem.lethaniaPursuit && u.moving && !u.blocking.length) return ANIM.MOVE;
   return ANIM.IDLE;
 }
 

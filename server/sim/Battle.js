@@ -43,6 +43,7 @@ import { installContractSupports } from './contractSupport.js';
 //   displacement.js  push / pull / displace (受力等级 = force − weight); pushTiles
 //   economy.js       DP, IN_BATTLE bond layers, bounty coins
 //   events.js        client events, snapshot, field meta, fx, the sim log
+//   leaderHits.js    per-operator damage taken off the current leader pool (boss / hidden only; not in BattleResult)
 //   util.js          fin / clone
 
 import { TICK, ROWS, COLS, DP_DEFAULTS, MAX_HOOK_DEPTH, AUTO_OP_COOLDOWN } from './constants.js';
@@ -68,6 +69,7 @@ import { BattleDisplacement } from './battle/displacement.js';
 import { BattleEconomy } from './battle/economy.js';
 import { BattleEvents } from './battle/events.js';
 import {prepareRoundSpawns} from './roundEvents.js';
+import { BattleLeaderHits } from './battle/leaderHits.js';
 
 export { pushTiles } from './battle/displacement.js';
 
@@ -237,7 +239,7 @@ export class Battle {
 }
 
 // the method modules, in this order (a name defined twice is an error, never a silent override)
-for (const part of [BattlePlayers, BattleLifecycle, BattleHooks, BattleSpawns, BattleDeploy, BattleBlocking, BattleStatus, BattleCombat, BattleQueries, BattleSummons, BattleTiles, BattleDisplacement, BattleEconomy, BattleEvents]) {
+for (const part of [BattlePlayers, BattleLifecycle, BattleHooks, BattleSpawns, BattleDeploy, BattleBlocking, BattleStatus, BattleCombat, BattleQueries, BattleSummons, BattleTiles, BattleDisplacement, BattleEconomy, BattleEvents, BattleLeaderHits]) {
   for (const key of Reflect.ownKeys(part.prototype)) {
     if (key === 'constructor') continue;
     if (Object.prototype.hasOwnProperty.call(Battle.prototype, key)) throw new Error(`Battle.${String(key)} is defined twice`);
