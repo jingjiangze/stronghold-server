@@ -3,7 +3,7 @@
 
 import { canTargetAlly, enemyStealthed } from '../../targeting.js';
 import { ALLY_COLLIDER_RADIUS } from '../../constants.js';
-import { T, elem, hurt, targetsNear, byPriority, auraBuff, castSlot } from './helpers.js';
+import { T, elem, hurt, targetsNear, byPriority, auraBuff, castSlot, attackSkillOf } from './helpers.js';
 import { stealth, onHitStatus, skill, kitStealth } from './archetypes.js';
 import { hypot } from '../../detmath.js';
 

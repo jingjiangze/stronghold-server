@@ -166,6 +166,40 @@ export function unbalancedNow(b, e) { return !!(b && e && b.time < e.unbalanceUn
 /** Can enemy `e` use a skill now: alive, on the field, not stunned, not silenced (`sil`), not in its 失衡 state (`b` given). */
 export function canCast(e, sil, b = null) { return e.alive && !e.hidden && !e.s.flags.stun && !(sil && e.s.flags.silence) && !unbalancedNow(b, e); }
 
+/**
+ * `ChargeAttack`, “自在” `ShieldBurst` / `ShieldBurstReborn`, 扎罗 `FearCage` MeleeAttack (no clip); “自在” `CrossAttack`
+ * RangedAttackWithExtraActions (Skill_01_02); 锏 `CircleAttack` MeleeAttack (A_Skill2) / `CircleAttack2` MultiMeleeAttack
+ * (B_Skill2); 节日爵士乐手 `fire` RangedAttack (no clip). Each one takes the attack's turn (enemies.js attackTurnSkill —
+ * PRTS 「大多数技能自动触发会占用攻击间隔」) and its cooldown counts from its clip's end. Not here: 暴鸰's `boomb` (its one
+ * bomb is its attack: no normal attack to share a turn with) and the SP attacks (粉碎攻坚手, 澪, 杰斯顿 …: the attack itself).
+ */
+export const ENEMY_ATTACK_SKILL_CLIP = Object.freeze({
+  enemy_1404_msnip: { CrossAttack: 0 },
+  enemy_1275_dwlock_2: { DeathEye: 0 },
+  enemy_9009_acfort: { FireWeapon: 2 },
+  enemy_1273_stmgun_2: { Cannon: 10 },
+  enemy_1504_cqbw: { C4: 4.8 },
+  enemy_1509_mousek: { DriftSand: 2.333, SandStorm: 1.333 },
+  enemy_1513_dekght: { ChargeAttack: 0 },
+  enemy_1513_dekght_2: { TripleAttack: 1.667 },
+  enemy_2003_rockman: { StunAttack: 2.333 },
+  enemy_2050_smsha: { ChainBuff: 1.667 },
+  enemy_1517_xi: { CrossAttack: 1.333, ShieldBurst: 0, ShieldBurstReborn: 0 },
+  enemy_1525_blkswb: { CircleAttack: 2.067, CircleAttack2: 2.067 },
+  enemy_1535_wlfmster: { FearCage: 0 },
+  enemy_10034_cnvsax: { fire: 0 },
+});
+
+/**
+ * The attack-turn fields (`atk`, `clip`, `own`) of skill `prefabKey` of enemy key `key` (ENEMY_ATTACK_SKILL_CLIP), {} when
+ * it is no attack-class skill. `own` (default true): its trigger is a selector of its own (`cond`), so it also takes a
+ * ready attack's turn with no swing (enemies.js onTick); false when the trigger is the attack's target (its blocker).
+ */
+export function attackSkillOf(key, prefabKey, own = true) {
+  const clip = ENEMY_ATTACK_SKILL_CLIP[key]?.[prefabKey];
+  return clip == null ? {} : { atk: true, clip, own };
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // helpers (exported for bosses.js)
 

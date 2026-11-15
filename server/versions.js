@@ -35,7 +35,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LEGACY_DIFFICULTIES, difficultiesFor, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, LEGACY_DIFFICULTIES, difficultiesFor, modeIdFor } from '../shared/constants.js';
 import { DEFAULT_VERSION, VERSIONS, versionById, versionSlug } from '../shared/versions.js';
 import { canonicalJson, csUrlPart } from '../shared/plugins/identity.js';
 import { officialBoundsOf } from '../shared/plugins/officialBounds.js';
