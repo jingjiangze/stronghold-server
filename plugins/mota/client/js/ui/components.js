@@ -405,6 +405,59 @@ export function Countdown({ deadline, seconds, total, warnAt = 10, label = 'COUN
 const modalStack = []; // open modals, topmost last: only the topmost handles keyboard focus / Escape
 
 /**
+ * Share keyboard/focus ownership between Modal and custom cards using the same stack.
+ * @param {boolean} open @param {Function} onClose @param {{ current: any }} boxRef
+ */
+export function useModalFocus(open, onClose, boxRef) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const token = {};
+    modalStack.push(token);
+    const prevFocus = typeof document !== 'undefined' ? document.activeElement : null;
+    const box = boxRef.current;
+    const topmost = () => modalStack[modalStack.length - 1] === token && !document.querySelector('.guide');
+    const available = (el) => !el.matches(':disabled') && !el.closest('[inert]') && el.getClientRects().length > 0
+      && getComputedStyle(el).visibility !== 'hidden';
+    const tabbable = () => [...box.querySelectorAll('button, [href], input, select, textarea, [tabindex], summary')]
+      .filter((el) => el.tabIndex >= 0 && available(el));
+    const focusFirst = () => (tabbable()[0] || box).focus();
+    const onKey = (e) => {
+      if (!topmost()) return;
+      if (e.key === 'Escape' && closeRef.current) {
+        e.stopPropagation();
+        closeRef.current();
+      } else if (e.key === 'Tab') {
+        const els = tabbable();
+        const first = els[0] || box, last = els[els.length - 1] || box;
+        if (!els.includes(document.activeElement) || document.activeElement === (e.shiftKey ? first : last)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        }
+      }
+    };
+    const onFocus = (e) => {
+      if (topmost() && !box.contains(e.target)) focusFirst();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('focusin', onFocus);
+    const autofocus = box.querySelector('[data-autofocus]');
+    if (topmost()) {
+      if (autofocus && available(autofocus)) autofocus.focus();
+      else focusFirst();
+    }
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('focusin', onFocus);
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      prevFocus?.focus?.();
+    };
+  }, [open]);
+}
+
+/**
  * Modal dialog (declarative). Esc / backdrop click call onClose.
  * @param {{ open: boolean, title?: any, micro?: string, tone?: string, onClose?: Function, actions?: any,
  *   width?: string, closeOnBackdrop?: boolean, class?: string, veilClass?: string, children?: any }} props

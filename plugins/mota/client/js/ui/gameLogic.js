@@ -52,3 +52,5 @@ export { STATUS_META, UF, attackInterval, bossFrac, bossPctText, fmtNum, hasFlag
 export { DEFAULT_HOTKEYS, HOTKEY_ACTIONS, actionForKey, captureHotkey, closesOnFieldPress, facingEnter, facingSwallows, hotkeyLabel, hotkeyOf, isBindableCode, isDefaultHotkeys, prepShortcutsSuspended, rebindHotkey, sanitizeHotkeys, shortcutBlocked, shortcutFor } from './gameLogic/shortcuts.js';
 
 export { DEFAULT_SETTINGS, VOICE_LANGS, TEXT_SIZES, sanitizeSettings } from './gameLogic/settings.js';
+
+export { pregameStepCount, pregameStepIndex } from './gameLogic/phases.js'; // 上游 0.4.0（mota overlay 同步补齐）

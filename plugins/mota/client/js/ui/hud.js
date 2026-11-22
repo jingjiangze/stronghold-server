@@ -28,10 +28,10 @@
 // (user playtest #3 item 3; the row's own label is ui/underframe.js TempRowNotice).
 
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { PHASE, TEAM_NAMES } from '../../../shared/constants.js';
+import { PHASE, TEAM_NAMES , DIFFICULTY_NAMES } from '../../../shared/constants.js';
 import { html, Button, Icon, PingPill, Countdown, Tooltip, MicroLabel, DifficultyTag, Modal, useTicker } from './components.js';
 import { Sprite, LpTower, GIcon, LocalSprite, Img, RichText } from './gameComponents.js';
-import { data, localAsset } from '../data.js';
+import { data, getMode, localAsset } from '../data.js';
 import { uiUrl, effectIconUrl } from './assetUrls.js';
 import { reducedMotion } from './device.js';
 import { serverNow } from '../store.js';
@@ -626,4 +626,10 @@ export function useLatest(v) {
   const r = useRef(v);
   r.current = v;
   return r;
+}
+
+/** 上游 0.4.0：规程的官方模式名（modeId 有名字且不同于难度名时返回），否则 null。 */
+export function ladderName(pub) {
+  const name = pub?.modeId ? getMode(pub.modeId)?.name : null;
+  return typeof name === 'string' && name && name !== (DIFFICULTY_NAMES[pub.difficulty] ? t(DIFFICULTY_NAMES[pub.difficulty]) : null) ? name : null;
 }
